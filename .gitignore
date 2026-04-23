@@ -1,0 +1,96 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Go
+vendor/
+*.out
+go.work
+go.work.sum
+
+# Backend specific
+backend/.air.toml
+backend/tmp/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+frontend/dist/
+frontend/.vercel/
+
+# Node / pnpm
+pnpm-lock.yaml
+npm-debug.log
+yarn-error.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+.env.local
+.history/
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+postgresql_data/
+
+# Build artifacts
+*.o
+*.a
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+*.tar.gz
+
+# OS
+Thumbs.db
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+logs/
+*.logg
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Workspace
+/tmp/mypaas/
+/var/lib/mypaas/
+
+# Caddy
+.caddy/
+caddy_storage/
+
+# Test coverage
+*.cover
+coverage.out
+*.coverprofile
+
+# Local config
+settings.local.json

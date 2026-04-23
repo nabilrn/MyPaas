@@ -1,0 +1,43 @@
+# Caddyfile for development
+# Local development with auto-reload and debug logging
+
+{
+	admin 127.0.0.1:2019
+	log default {
+		level debug
+		format json
+	}
+	http_port 80
+	https_port 443
+}
+
+# Main dashboard
+localhost:80 {
+	encode gzip
+
+	# Reverse proxy to SvelteKit frontend
+	reverse_proxy localhost:5173 {
+		header_uri /api/* {
+			-User-Agent
+		}
+	}
+
+	# API routes
+	reverse_proxy /api/* localhost:8080 {
+		header_uri -User-Agent
+	}
+
+	log {
+		level debug
+	}
+}
+
+# Development wildcard (for testing project subdomains)
+*.localhost:80 {
+	reverse_proxy localhost:8080 {
+		header_uri -User-Agent
+	}
+	log {
+		level debug
+	}
+}

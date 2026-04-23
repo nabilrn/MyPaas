@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS webhook_events;
+DROP TABLE IF EXISTS metrics;
+DROP TABLE IF EXISTS deployment_logs;
+DROP TABLE IF EXISTS port_registry;
+DROP TABLE IF EXISTS env_vars;
+DROP TABLE IF EXISTS deployments;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS users;

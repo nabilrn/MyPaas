@@ -1,0 +1,69 @@
+# Caddyfile for production
+# Production config with Cloudflare Tunnel + auto-renewal SSL
+
+{
+	admin 127.0.0.1:2019
+	log default {
+		level info
+		format json
+		output file /var/log/caddy/access.log {
+			roll_size 100mb
+			roll_keep 10
+		}
+	}
+}
+
+# Main dashboard (via Cloudflare Tunnel)
+{$PUBLIC_DOMAIN} {
+	encode gzip
+
+	# Reverse proxy to SvelteKit dashboard
+	reverse_proxy dashboard:3000 {
+		header_uri -User-Agent
+		header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	# API routes
+	reverse_proxy /api/* api:8080 {
+		header_uri -User-Agent
+		header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	# Security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+	}
+
+	log {
+		level info
+	}
+}
+
+# Wildcard subdomains for deployed projects (*.domain.com)
+*.{$PUBLIC_DOMAIN} {
+	encode gzip
+
+	# Route to user container via API bridge
+	reverse_proxy api:8080 {
+		uri /project/{host}/
+		header_uri -User-Agent
+		header_down Strict-Transport-Security "max-age=31536000"
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+	}
+
+	log {
+		level info
+		output file /var/log/caddy/projects.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}

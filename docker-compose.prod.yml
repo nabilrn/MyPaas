@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mypaas-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mypaas-api
+    restart: always
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      DOCKER_SOCKET: ${DOCKER_SOCKET}
+      CADDY_ADMIN: caddy:2019
+      LOG_LEVEL: info
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ${DOCKER_SOCKET}:${DOCKER_SOCKET}
+      - /var/lib/mypaas/volumes:/var/lib/mypaas/volumes
+      - /var/lib/mypaas/compose:/var/lib/mypaas/compose
+      - /tmp/mypaas/builds:/tmp/mypaas/builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mypaas-dashboard
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      ORIGIN: https://${PUBLIC_DOMAIN}
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mypaas-caddy-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:2019:2019"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CADDY_ADMIN: "127.0.0.1:2019"
+    depends_on:
+      - api
+      - dashboard
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    name: mypaas-prod
