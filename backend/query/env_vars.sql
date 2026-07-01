@@ -1,28 +1,27 @@
--- name: GetEnvVarsByProject :many
-SELECT id, project_id, key, value_encrypted, created_at, updated_at
+-- name: ListEnvVarsByProject :many
+SELECT id, project_id, key, value_encrypted, value_nonce, created_at, updated_at
 FROM env_vars
 WHERE project_id = $1
 ORDER BY key;
 
 -- name: GetEnvVar :one
-SELECT id, project_id, key, value_encrypted, created_at, updated_at
+SELECT id, project_id, key, value_encrypted, value_nonce, created_at, updated_at
 FROM env_vars
 WHERE project_id = $1 AND key = $2;
 
--- name: CreateEnvVar :one
-INSERT INTO env_vars (project_id, key, value_encrypted)
-VALUES ($1, $2, $3)
-RETURNING id, project_id, key, value_encrypted, created_at, updated_at;
-
--- name: UpdateEnvVar :exec
-UPDATE env_vars
-SET value_encrypted = $3, updated_at = CURRENT_TIMESTAMP
-WHERE project_id = $1 AND key = $2;
+-- name: UpsertEnvVar :one
+INSERT INTO env_vars (project_id, key, value_encrypted, value_nonce)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (project_id, key) DO UPDATE
+    SET value_encrypted = EXCLUDED.value_encrypted,
+        value_nonce     = EXCLUDED.value_nonce,
+        updated_at      = NOW()
+RETURNING id, project_id, key, value_encrypted, value_nonce, created_at, updated_at;
 
 -- name: DeleteEnvVar :exec
 DELETE FROM env_vars
 WHERE project_id = $1 AND key = $2;
 
--- name: DeleteEnvVarsByProject :exec
+-- name: DeleteAllEnvVars :exec
 DELETE FROM env_vars
 WHERE project_id = $1;

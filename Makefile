@@ -3,7 +3,7 @@
 # Variables
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
-DOCKER_COMPOSE := docker-compose -f docker-compose.dev.yml
+DOCKER_COMPOSE := docker compose -f docker-compose.dev.yml
 
 help:
 	@echo "MyPaas — Available targets:"
@@ -19,9 +19,10 @@ help:
 	@echo "  help             Show this help message"
 
 # Development
-dev: migrate-up
+dev:
 	@echo "Starting development environment..."
 	$(DOCKER_COMPOSE) up -d
+	$(MAKE) migrate-up
 	@echo ""
 	@echo "Backend services started. Run in separate terminals:"
 	@echo "  make backend-dev    — Start Go API with live reload"

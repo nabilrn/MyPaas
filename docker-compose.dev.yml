@@ -1,38 +1,36 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: mypaas-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-mypaas_dev}
+      PGTZ: UTC
+      TZ: UTC
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mypaas_dev}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
 
   caddy:
     image: caddy:2-alpine
-    container_name: mypaas-caddy
+    container_name: mypaas-caddy-dev
+    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "2019:2019"
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:2019:2019"
     volumes:
-      - ./Caddyfile.dev:/etc/caddy/Caddyfile
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    environment:
-      CADDY_ADMIN: "0.0.0.0:2019"
-    depends_on:
-      - postgres
 
 volumes:
   postgres_data:

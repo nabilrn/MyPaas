@@ -1,1 +1,1 @@
--- Rollback seed migration (no-op since we don't pre-populate ports)
+DELETE FROM port_registry WHERE status = 'available' AND project_id IS NULL;

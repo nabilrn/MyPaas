@@ -15,14 +15,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-api cmd/api/main.go
 ## Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates docker-cli git tzdata
 
 WORKDIR /app
 
 COPY --from=builder /build/bin/mypaas-api /app/mypaas-api
 
 EXPOSE 8080
-
-USER nobody
 
 ENTRYPOINT ["/app/mypaas-api"]

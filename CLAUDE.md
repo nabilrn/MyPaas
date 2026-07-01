@@ -266,7 +266,8 @@ Error: `{ "error": { "code": "...", "message": "...", "details": { ... } } }`
 ```bash
 cd backend
 
-go run cmd/api/main.go            # Run dev
+go run ./cmd/api                  # Run dev
+go run ./backend/cmd/api          # Run dev from repo root (requires go.work)
 air                               # Live reload
 go test ./...                     # Tests
 go test -cover ./...              # Coverage
@@ -274,7 +275,7 @@ golangci-lint run                 # Lint
 sqlc generate                     # Generate query code
 migrate -path migrations -database "$DATABASE_URL" up       # Migrate
 migrate create -ext sql -dir migrations -seq name           # New migration
-go build -o bin/mypaas-api cmd/api/main.go                  # Build
+go build -o bin/mypaas-api ./cmd/api                        # Build
 ```
 
 ### Frontend

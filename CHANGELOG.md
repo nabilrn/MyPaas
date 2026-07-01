@@ -9,8 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial project structure and setup
+- Rollback endpoint and dashboard action for Dockerfile deployments
+- Webhook secret regeneration endpoint and settings UI action
+- GitHub webhook endpoint with HMAC signature verification, branch filtering, rate limiting, delivery logging, and Dockerfile deployment trigger
+- Deployment startup recovery that marks interrupted queued/building deployments as failed and resets stuck project build states
+- Per-user quota endpoint and enforcement for project count, configured memory, and configured CPU limits
+- Dockerfile container metrics endpoint and dashboard chart for CPU, memory, and uptime
 
 ### Changed
+- Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
+- Include `git` and Docker CLI in the backend production runtime image
+- Dockerfile deploy and rollback now start a replacement container on a fresh port before switching Caddy and removing the previous stable container
+- Manual and webhook deploy triggers now reuse an active deployment for the same project instead of creating duplicate concurrent work
+- Dashboard project list now shows quota usage bars for memory, CPU, and project count
 
 ### Deprecated
 

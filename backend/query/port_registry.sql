@@ -1,29 +1,41 @@
--- name: AllocatePort :one
--- Allocate next available port in range 3001-9999 with row-level locking
--- FOR UPDATE SKIP LOCKED ensures no conflicts even under concurrent load
-INSERT INTO port_registry (project_id, port)
-VALUES ($1, (
-    SELECT num FROM generate_series(3001, 9999) AS num
-    WHERE num NOT IN (SELECT port FROM port_registry WHERE port > 0)
-    LIMIT 1
-))
-RETURNING id, project_id, port, allocated_at;
-
--- name: GetPortByProject :one
-SELECT id, project_id, port, allocated_at
+-- name: AcquireAvailablePort :one
+-- Lock one available port for atomic allocation. Must be called inside a transaction.
+-- Caller updates the row with SetPortInUse immediately after.
+SELECT port
 FROM port_registry
+WHERE status = 'available'
+ORDER BY port
+LIMIT 1
+FOR UPDATE SKIP LOCKED;
+
+-- name: SetPortInUse :exec
+UPDATE port_registry
+SET status      = 'in_use',
+    project_id  = $2,
+    assigned_at = NOW()
+WHERE port = $1;
+
+-- name: ReleasePortByProject :exec
+UPDATE port_registry
+SET status      = 'available',
+    project_id  = NULL,
+    assigned_at = NULL
 WHERE project_id = $1;
 
 -- name: ReleasePort :exec
-DELETE FROM port_registry
+UPDATE port_registry
+SET status      = 'available',
+    project_id  = NULL,
+    assigned_at = NULL
+WHERE port = $1;
+
+-- name: GetPortByProject :one
+SELECT port, project_id, status, assigned_at
+FROM port_registry
 WHERE project_id = $1;
 
--- name: GetAllAllocatedPorts :many
-SELECT id, project_id, port, allocated_at
+-- name: ListInUsePorts :many
+SELECT port, project_id, status, assigned_at
 FROM port_registry
+WHERE status = 'in_use'
 ORDER BY port;
-
--- name: IsPortAvailable :one
-SELECT COUNT(*) as count
-FROM port_registry
-WHERE port = $1;

@@ -16,15 +16,11 @@ localhost:80 {
 	encode gzip
 
 	# Reverse proxy to SvelteKit frontend
-	reverse_proxy localhost:5173 {
-		header_uri /api/* {
-			-User-Agent
-		}
-	}
+	reverse_proxy localhost:5173
 
 	# API routes
 	reverse_proxy /api/* localhost:8080 {
-		header_uri -User-Agent
+		header_up -User-Agent
 	}
 
 	log {
@@ -35,7 +31,7 @@ localhost:80 {
 # Development wildcard (for testing project subdomains)
 *.localhost:80 {
 	reverse_proxy localhost:8080 {
-		header_uri -User-Agent
+		header_up -User-Agent
 	}
 	log {
 		level debug

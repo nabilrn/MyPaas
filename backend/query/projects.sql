@@ -1,40 +1,103 @@
 -- name: GetProjectByID :one
-SELECT id, owner_id, name, git_url, mode, port, main_service, description, created_at, updated_at
+SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+       status, active_deployment_id, created_at, updated_at, deleted_at
 FROM projects
-WHERE id = $1;
+WHERE id = $1 AND deleted_at IS NULL;
 
--- name: ListProjectsByOwner :many
-SELECT id, owner_id, name, git_url, mode, port, main_service, description, created_at, updated_at
+-- name: GetProjectByName :one
+SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+       status, active_deployment_id, created_at, updated_at, deleted_at
 FROM projects
-WHERE owner_id = $1
+WHERE name = $1 AND deleted_at IS NULL;
+
+-- name: ListProjectsByUser :many
+SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+       status, active_deployment_id, created_at, updated_at, deleted_at
+FROM projects
+WHERE user_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
--- name: ListAllProjects :many
-SELECT id, owner_id, name, git_url, mode, port, main_service, description, created_at, updated_at
+-- name: CountProjectsByUser :one
+SELECT COUNT(*)
 FROM projects
-ORDER BY created_at DESC;
+WHERE user_id = $1
+  AND deleted_at IS NULL;
 
 -- name: CreateProject :one
-INSERT INTO projects (owner_id, name, git_url, mode, port, main_service, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, owner_id, name, git_url, mode, port, main_service, description, created_at, updated_at;
+INSERT INTO projects (
+    user_id, name, repo_url, branch, subdomain, deploy_mode,
+    main_service, app_port, webhook_secret, memory_limit_mb, cpu_limit
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+          app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+          status, active_deployment_id, created_at, updated_at, deleted_at;
 
 -- name: UpdateProject :exec
 UPDATE projects
-SET name = COALESCE($2, name),
-    git_url = COALESCE($3, git_url),
-    mode = COALESCE($4, mode),
-    port = COALESCE($5, port),
-    main_service = COALESCE($6, main_service),
-    description = COALESCE($7, description),
-    updated_at = CURRENT_TIMESTAMP
+SET name            = $2,
+    subdomain       = $3,
+    branch          = $4,
+    memory_limit_mb = $5,
+    cpu_limit       = $6,
+    updated_at      = NOW()
+WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: UpdateProjectStatus :exec
+UPDATE projects
+SET status     = $2,
+    updated_at = NOW()
 WHERE id = $1;
 
--- name: DeleteProject :exec
-DELETE FROM projects
+-- name: ResetBuildingProjects :exec
+UPDATE projects
+SET status     = 'pending',
+    updated_at = NOW()
+WHERE status = 'building'
+  AND deleted_at IS NULL;
+
+-- name: UpdateProjectWebhookSecret :one
+UPDATE projects
+SET webhook_secret = $2,
+    updated_at     = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+RETURNING webhook_secret;
+
+-- name: SetProjectActiveDeployment :exec
+UPDATE projects
+SET active_deployment_id = $2,
+    status               = $3,
+    updated_at           = NOW()
 WHERE id = $1;
 
--- name: GetProjectByName :one
-SELECT id, owner_id, name, git_url, mode, port, main_service, description, created_at, updated_at
+-- name: SetProjectAllocatedPort :exec
+UPDATE projects
+SET allocated_port = $2,
+    updated_at     = NOW()
+WHERE id = $1;
+
+-- name: SoftDeleteProject :exec
+UPDATE projects
+SET deleted_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: GetTotalResourcesByUser :one
+SELECT
+    COALESCE(SUM(memory_limit_mb), 0)::INT      AS total_memory_mb,
+    COALESCE(SUM(cpu_limit), 0.0)::NUMERIC(6,2) AS total_cpu
 FROM projects
-WHERE owner_id = $1 AND name = $2;
+WHERE user_id = $1
+  AND deleted_at IS NULL;
+
+-- name: GetTotalResourcesByUserExcludingProject :one
+SELECT
+    COALESCE(SUM(memory_limit_mb), 0)::INT      AS total_memory_mb,
+    COALESCE(SUM(cpu_limit), 0.0)::NUMERIC(6,2) AS total_cpu
+FROM projects
+WHERE user_id = $1
+  AND id <> $2
+  AND deleted_at IS NULL;
