@@ -7,13 +7,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type DockerCLI struct{}
+type DockerCLI struct {
+	bindHost string
+}
 
 type Metrics struct {
 	Service       string
@@ -34,8 +38,12 @@ type RunOptions struct {
 	EnvFile       string
 }
 
-func NewDockerCLI() *DockerCLI {
-	return &DockerCLI{}
+func NewDockerCLI(bindHost string) *DockerCLI {
+	bindHost = strings.TrimSpace(bindHost)
+	if bindHost == "" {
+		bindHost = "127.0.0.1"
+	}
+	return &DockerCLI{bindHost: bindHost}
 }
 
 func (d *DockerCLI) Build(ctx context.Context, dir, image string, log func(string)) error {
@@ -46,7 +54,7 @@ func (d *DockerCLI) Run(ctx context.Context, opts RunOptions, log func(string)) 
 	args := []string{
 		"run", "-d",
 		"--name", opts.Name,
-		"-p", fmt.Sprintf("127.0.0.1:%d:%d", opts.HostPort, opts.ContainerPort),
+		"-p", d.portMapping(opts),
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
 		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
 		"--restart", "unless-stopped",
@@ -58,8 +66,12 @@ func (d *DockerCLI) Run(ctx context.Context, opts RunOptions, log func(string)) 
 	return runLogged(ctx, "", log, "docker", args...)
 }
 
+func (d *DockerCLI) portMapping(opts RunOptions) string {
+	return fmt.Sprintf("%s:%d:%d", d.bindHost, opts.HostPort, opts.ContainerPort)
+}
+
 func (d *DockerCLI) Stop(ctx context.Context, name string) error {
-	return runIgnoreNotFound(ctx, "docker", "stop", "--time", "30", name)
+	return runIgnoreNotFound(ctx, "docker", "stop", "--timeout", "30", name)
 }
 
 func (d *DockerCLI) Start(ctx context.Context, name string) error {
@@ -79,9 +91,13 @@ func (d *DockerCLI) Remove(ctx context.Context, name string) error {
 }
 
 func (d *DockerCLI) Logs(ctx context.Context, name string, tail int) ([]string, error) {
-	out, err := exec.CommandContext(ctx, "docker", "logs", "--tail", fmt.Sprint(tail), name).CombinedOutput()
+	out, err := commandContext(ctx, "docker", "logs", "--tail", fmt.Sprint(tail), name).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("docker logs: %w: %s", err, strings.TrimSpace(string(out)))
+		msg := strings.TrimSpace(string(out))
+		if isNoContainerMessage(msg) {
+			return nil, ErrNoContainer
+		}
+		return nil, fmt.Errorf("docker logs: %w: %s", err, msg)
 	}
 	if len(out) == 0 {
 		return nil, nil
@@ -94,7 +110,7 @@ func (d *DockerCLI) Logs(ctx context.Context, name string, tail int) ([]string, 
 }
 
 func (d *DockerCLI) Stats(ctx context.Context, name string) (Metrics, error) {
-	out, err := exec.CommandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}", name).CombinedOutput()
+	out, err := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}", name).CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if isNoContainerMessage(msg) {
@@ -122,7 +138,7 @@ func (d *DockerCLI) Stats(ctx context.Context, name string) (Metrics, error) {
 }
 
 func (d *DockerCLI) startedAt(ctx context.Context, name string) (time.Time, error) {
-	out, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.State.StartedAt}}", name).CombinedOutput()
+	out, err := commandContext(ctx, "docker", "inspect", "--format", "{{.State.StartedAt}}", name).CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if isNoContainerMessage(msg) {
@@ -268,7 +284,7 @@ func formatUptime(duration time.Duration) string {
 }
 
 func runLogged(ctx context.Context, dir string, log func(string), name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := commandContext(ctx, name, args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -307,7 +323,7 @@ func scanPipe(r io.Reader, log func(string), done chan<- struct{}) {
 }
 
 func runSimple(ctx context.Context, name string, args ...string) error {
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	out, err := commandContext(ctx, name, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
@@ -331,3 +347,28 @@ func isNoContainerMessage(msg string) bool {
 }
 
 var ErrNoContainer = errors.New("container not found")
+
+func commandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	if name == "docker" {
+		cmd.Env = dockerEnv()
+	}
+	return cmd
+}
+
+func dockerEnv() []string {
+	env := os.Environ()
+	if runtime.GOOS != "windows" {
+		return env
+	}
+
+	out := make([]string, 0, len(env))
+	for _, item := range env {
+		key, value, ok := strings.Cut(item, "=")
+		if ok && strings.EqualFold(key, "DOCKER_HOST") && value == "unix:///var/run/docker.sock" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}

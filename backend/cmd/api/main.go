@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +35,8 @@ import (
 	"mypaas/internal/user"
 	"mypaas/internal/webhook"
 )
+
+var processStartedAt = time.Now()
 
 func main() {
 	if err := run(); err != nil {
@@ -121,7 +126,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	envService := envvar.NewService(queries, cipher)
 	portService := port.NewService(pool)
 	quotaService := quota.NewService(queries, cfg)
-	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin), container.NewDockerCLI())
+	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost), container.NewDockerCLI(cfg.DockerBindHost))
 	projectHandler := project.NewHandler(project.NewService(queries, cfg.PublicDomain, quotaService), func(r *http.Request, id uuid.UUID) error {
 		return deploymentService.CleanupProject(r.Context(), id)
 	})
@@ -136,8 +141,10 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(corsMiddleware(cfg))
+	r.Use(timeoutExceptStreams(60 * time.Second))
 
+	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
 	registerRoutes(r, pool, authMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, quotaHandler, userHandler, webhookHandler)
 	r.Route("/api", func(r chi.Router) {
 		registerRoutes(r, pool, authMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, quotaHandler, userHandler, webhookHandler)
@@ -191,6 +198,7 @@ func registerRoutes(
 			r.Get("/{id}/env", envHandler.List)
 			r.Put("/{id}/env", envHandler.BulkUpdate)
 			r.Delete("/{id}/env/{key}", envHandler.Delete)
+			r.Get("/{id}/stream", deploymentHandler.Stream)
 			r.Get("/{id}/logs", deploymentHandler.Logs)
 			r.Get("/{id}/metrics", deploymentHandler.Metrics)
 		})
@@ -205,6 +213,109 @@ func registerRoutes(
 			r.Delete("/users/{id}", userHandler.Remove)
 		})
 	})
+}
+
+func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	allowed := allowedOrigins(cfg)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+			if origin != "" {
+				if _, ok := allowed[origin]; !ok {
+					if r.Method == http.MethodOptions {
+						http.Error(w, "CORS origin is not allowed", http.StatusForbidden)
+						return
+					}
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					w.Header().Add("Vary", "Origin")
+				}
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func allowedOrigins(cfg *config.Config) map[string]struct{} {
+	origins := make(map[string]struct{})
+	addOrigin := func(origin string) {
+		origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+		if origin != "" {
+			origins[origin] = struct{}{}
+		}
+	}
+	addOrigin(cfg.FrontendURL)
+	if cfg.PublicDomain != "" && cfg.PublicDomain != "localhost" {
+		addOrigin("https://" + cfg.PublicDomain)
+		addOrigin("https://dashboard." + cfg.PublicDomain)
+	}
+	if cfg.IsDevelopment() {
+		addOrigin("http://localhost:3000")
+		addOrigin("http://localhost:5173")
+	}
+	return origins
+}
+
+func timeoutExceptStreams(timeout time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		wrapped := middleware.Timeout(timeout)(next)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/stream") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			wrapped.ServeHTTP(w, r)
+		})
+	}
+}
+
+func handleMetrics(cfg *config.Config, startedAt time.Time) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !metricsAuthConfigured(cfg) && !cfg.IsDevelopment() {
+			http.Error(w, "metrics basic auth is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		if metricsAuthConfigured(cfg) && !metricsAuthOK(cfg, r) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="mypaas metrics"`)
+			http.Error(w, "metrics authentication required", http.StatusUnauthorized)
+			return
+		}
+
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		uptime := time.Since(startedAt).Seconds()
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_api_up Whether the MyPaas API process is serving requests.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_api_up gauge\nmypaas_api_up 1\n")
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_api_uptime_seconds Seconds since the API process started.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_api_uptime_seconds counter\nmypaas_api_uptime_seconds %.0f\n", uptime)
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_go_goroutines Current goroutine count.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_goroutines gauge\nmypaas_go_goroutines %d\n", runtime.NumGoroutine())
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_go_heap_alloc_bytes Current heap allocation in bytes.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_heap_alloc_bytes gauge\nmypaas_go_heap_alloc_bytes %d\n", mem.HeapAlloc)
+	}
+}
+
+func metricsAuthConfigured(cfg *config.Config) bool {
+	return cfg.MetricsUsername != "" && cfg.MetricsPassword != ""
+}
+
+func metricsAuthOK(cfg *config.Config, r *http.Request) bool {
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(cfg.MetricsUsername)) == 1
+	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.MetricsPassword)) == 1
+	return userOK && passOK
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {

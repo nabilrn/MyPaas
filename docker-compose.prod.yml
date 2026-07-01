@@ -36,7 +36,9 @@ services:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
       DOCKER_SOCKET: ${DOCKER_SOCKET}
+      DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
       CADDY_ADMIN: caddy:2019
+      CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-host.docker.internal}
       LOG_LEVEL: info
     ports:
       - "127.0.0.1:8080:8080"
@@ -64,6 +66,8 @@ services:
     image: caddy:2-alpine
     container_name: mypaas-caddy-prod
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "127.0.0.1:2019:2019"

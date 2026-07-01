@@ -2,7 +2,7 @@
 # Production config for Cloudflare Tunnel. Cloudflare terminates public TLS.
 
 {
-	admin 127.0.0.1:2019
+	admin 0.0.0.0:2019
 	log default {
 		level info
 		format json
@@ -40,30 +40,5 @@ http://{$PUBLIC_DOMAIN} {
 
 	log {
 		level info
-	}
-}
-
-# Wildcard subdomains for deployed projects (*.domain.com)
-http://*.{$PUBLIC_DOMAIN} {
-	encode gzip
-
-	# Route to user container via API bridge
-	reverse_proxy api:8080 {
-		rewrite /project/{host}{uri}
-		header_up -User-Agent
-		header_down Strict-Transport-Security "max-age=31536000"
-	}
-
-	header {
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
-	}
-
-	log {
-		level info
-		output file /var/log/caddy/projects.log {
-			roll_size 50mb
-			roll_keep 5
-		}
 	}
 }

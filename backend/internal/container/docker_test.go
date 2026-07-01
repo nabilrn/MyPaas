@@ -67,6 +67,30 @@ func TestFormatUptime(t *testing.T) {
 	}
 }
 
+func TestIsNoContainerMessage(t *testing.T) {
+	tests := []string{
+		"Error response from daemon: No such container: mypaas-static-test",
+		"No such container: mypaas-demo",
+		"container mypaas-demo not found",
+	}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			if !isNoContainerMessage(input) {
+				t.Fatalf("isNoContainerMessage(%q) = false, want true", input)
+			}
+		})
+	}
+}
+
+func TestDockerCLIPortMappingUsesConfiguredBindHost(t *testing.T) {
+	cli := NewDockerCLI("0.0.0.0")
+	got := cli.portMapping(RunOptions{HostPort: 3001, ContainerPort: 80})
+	if got != "0.0.0.0:3001:80" {
+		t.Fatalf("portMapping() = %q, want 0.0.0.0:3001:80", got)
+	}
+}
+
 func assertFloat(t *testing.T, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 0.001 {

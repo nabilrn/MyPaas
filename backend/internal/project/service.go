@@ -43,6 +43,7 @@ type UpdateInput struct {
 	ID            uuid.UUID
 	Name          string
 	Branch        string
+	AppPort       int32
 	MemoryLimitMb int32
 	CPULimit      float64
 }
@@ -151,6 +152,12 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (db.Project, er
 	if input.Branch == "" {
 		input.Branch = existing.Branch
 	}
+	if input.AppPort == 0 {
+		input.AppPort = existing.AppPort
+	}
+	if input.AppPort < 0 || input.AppPort > 65535 {
+		return db.Project{}, fmt.Errorf("%w: app port must be between 1 and 65535", errs.ErrValidation)
+	}
 	if input.MemoryLimitMb <= 0 {
 		input.MemoryLimitMb = existing.MemoryLimitMb
 	}
@@ -168,6 +175,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (db.Project, er
 		Name:          name,
 		Subdomain:     name,
 		Branch:        strings.TrimSpace(input.Branch),
+		AppPort:       input.AppPort,
 		MemoryLimitMb: input.MemoryLimitMb,
 		CpuLimit:      numericFromFloat(input.CPULimit),
 	}); err != nil {

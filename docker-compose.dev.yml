@@ -24,6 +24,8 @@ services:
     image: caddy:2-alpine
     container_name: mypaas-caddy-dev
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:80:80"
       - "127.0.0.1:2019:2019"

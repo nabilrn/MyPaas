@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
+	import { projectHost } from '$lib/utils/urls';
 
 	let step = 1;
 	let submitting = false;
@@ -19,6 +21,7 @@
 
 	function next() { step = Math.min(step + 1, 3); }
 	function back() { step = Math.max(step - 1, 1); }
+	$: previewHost = projectHost(form.name || 'your-app', $page.url.hostname);
 
 	async function handleSubmit() {
 		submitting = true;
@@ -221,7 +224,7 @@
 					</select>
 				</div>
 				<div class="rounded-lg bg-gray-50 p-3 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-					Subdomain will be: <span class="font-mono font-medium text-gray-900 dark:text-white">{form.name || 'your-app'}.nabilrizkinavisa.me</span>
+					Subdomain will be: <span class="font-mono font-medium text-gray-900 dark:text-white">{previewHost}</span>
 				</div>
 			</div>
 		{/if}

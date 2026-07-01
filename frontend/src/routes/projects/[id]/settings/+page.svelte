@@ -5,11 +5,13 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { Project } from '$types';
+	import { projectHost, webhookURL } from '$lib/utils/urls';
 
 	let project: Project | null = null;
 
 	let name        = '';
 	let branch      = '';
+	let appPort     = 3000;
 	let memoryMb    = 512;
 	let cpuLimit    = 0.5;
 	let deleteInput = '';
@@ -17,7 +19,10 @@
 	let regeneratingSecret = false;
 
 	$: nameChanged = project && (name !== project.name || branch !== project.branch ||
+	                 appPort !== project.appPort ||
 	                 memoryMb !== project.memoryLimitMb || cpuLimit !== project.cpuLimit);
+	$: changedProjectHost = projectHost(name || 'your-app', $page.url.hostname);
+	$: publicWebhookURL = project ? webhookURL(project.id, $page.url.origin) : '';
 
 	onMount(load);
 
@@ -25,6 +30,7 @@
 		project = await api.projects.get($page.params.id);
 		name = project.name;
 		branch = project.branch;
+		appPort = project.appPort;
 		memoryMb = project.memoryLimitMb;
 		cpuLimit = project.cpuLimit;
 	}
@@ -35,6 +41,7 @@
 			project = await api.projects.update(project.id, {
 				name,
 				branch,
+				appPort: Number(appPort),
 				memoryLimitMb: Number(memoryMb),
 				cpuLimit: Number(cpuLimit)
 			});
@@ -59,7 +66,7 @@
 	}
 
 	function copyWebhookURL(projectId: string) {
-		navigator.clipboard?.writeText(`https://webhook.nabilrizkinavisa.me/${projectId}`);
+		navigator.clipboard?.writeText(webhookURL(projectId, $page.url.origin));
 		toast.success('Copied!');
 	}
 
@@ -102,7 +109,7 @@
 				/>
 				{#if name !== project.name}
 					<p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-						Subdomain will change to <span class="font-mono">{name}.nabilrizkinavisa.me</span>
+						Subdomain will change to <span class="font-mono">{changedProjectHost}</span>
 					</p>
 				{/if}
 			</div>
@@ -117,6 +124,23 @@
 					class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500
 						   dark:border-gray-700 dark:bg-gray-800 dark:text-white"
 				/>
+			</div>
+			<div>
+				<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300" for="appPort">
+					App port
+				</label>
+				<input
+					id="appPort"
+					type="number"
+					min="1"
+					max="65535"
+					bind:value={appPort}
+					class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500
+						   dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+				/>
+				<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+					Use 80 for nginx/static sites.
+				</p>
 			</div>
 		</div>
 	</div>
@@ -178,7 +202,7 @@
 				<p class="mb-1 font-medium text-gray-700 dark:text-gray-300">Webhook URL</p>
 				<div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
 					<code class="flex-1 text-xs text-gray-600 dark:text-gray-400">
-						https://webhook.nabilrizkinavisa.me/{project.id}
+						{publicWebhookURL}
 					</code>
 					<button
 						on:click={() => copyWebhookURL(project?.id ?? '')}

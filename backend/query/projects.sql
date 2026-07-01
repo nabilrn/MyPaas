@@ -40,8 +40,9 @@ UPDATE projects
 SET name            = $2,
     subdomain       = $3,
     branch          = $4,
-    memory_limit_mb = $5,
-    cpu_limit       = $6,
+    app_port        = $5,
+    memory_limit_mb = $6,
+    cpu_limit       = $7,
     updated_at      = NOW()
 WHERE id = $1 AND deleted_at IS NULL;
 
@@ -81,8 +82,11 @@ WHERE id = $1;
 
 -- name: SoftDeleteProject :exec
 UPDATE projects
-SET deleted_at = NOW(),
-    updated_at = NOW()
+SET allocated_port       = NULL,
+    active_deployment_id = NULL,
+    status               = 'stopped',
+    deleted_at           = NOW(),
+    updated_at           = NOW()
 WHERE id = $1;
 
 -- name: GetTotalResourcesByUser :one

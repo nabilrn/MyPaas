@@ -2,7 +2,11 @@ package deployment
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -11,6 +15,13 @@ import (
 	"mypaas/internal/errs"
 	"mypaas/internal/httpx"
 	"mypaas/internal/project"
+)
+
+const (
+	streamPollInterval = 5 * time.Second
+	streamHeartbeat    = 30 * time.Second
+	streamLogTail      = 200
+	streamDefaultSvc   = "app"
 )
 
 type Handler struct {
@@ -104,6 +115,10 @@ func (h *Handler) Logs(w http.ResponseWriter, r *http.Request) {
 	}
 	lines, err := h.service.ContainerLogs(r.Context(), id, int(project.IntQuery(r, "tail", 500)))
 	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			httpx.JSON(w, http.StatusOK, map[string]any{"lines": []string{}})
+			return
+		}
 		httpx.DomainError(w, err)
 		return
 	}
@@ -121,6 +136,54 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, MetricsSnapshotFromContainer(metrics))
+}
+
+func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
+	id, ok := projectID(w, r)
+	if !ok {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		httpx.Error(w, http.StatusInternalServerError, "STREAM_UNSUPPORTED", "Streaming is not supported by this response writer.", nil)
+		return
+	}
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	stream := &projectStream{
+		handler:   h,
+		projectID: id,
+		writer:    w,
+		flusher:   flusher,
+	}
+	if !stream.emitSnapshot(r.Context()) {
+		return
+	}
+
+	poll := time.NewTicker(streamPollInterval)
+	defer poll.Stop()
+	heartbeat := time.NewTicker(streamHeartbeat)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-heartbeat.C:
+			if !stream.heartbeat() {
+				return
+			}
+		case <-poll.C:
+			if !stream.emitSnapshot(r.Context()) {
+				return
+			}
+		}
+	}
 }
 
 func (h *Handler) lifecycle(w http.ResponseWriter, r *http.Request, fn func(context.Context, uuid.UUID) error) {
@@ -142,4 +205,96 @@ func projectID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 		return uuid.UUID{}, false
 	}
 	return id, true
+}
+
+type projectStream struct {
+	handler   *Handler
+	projectID uuid.UUID
+	writer    http.ResponseWriter
+	flusher   http.Flusher
+	logOffset int
+}
+
+func (s *projectStream) emitSnapshot(ctx context.Context) bool {
+	project, err := s.handler.service.project(ctx, s.projectID)
+	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			_ = s.send("status", map[string]string{"status": "deleted"})
+			return false
+		}
+		return s.send("error", map[string]string{"message": err.Error()})
+	}
+
+	if !s.send("status", map[string]string{"status": project.Status}) {
+		return false
+	}
+	s.emitMetrics(ctx)
+	s.emitLogs(ctx)
+	s.emitDeployment(ctx)
+	return true
+}
+
+func (s *projectStream) emitMetrics(ctx context.Context) {
+	metrics, err := s.handler.service.ContainerMetrics(ctx, s.projectID)
+	if err != nil {
+		return
+	}
+	snapshot := MetricsSnapshotFromContainer(metrics)
+	for _, item := range snapshot.Items {
+		_ = s.send("metrics", item)
+		if item.Uptime != "" {
+			_ = s.send("status", map[string]string{"status": "running", "uptime": item.Uptime})
+		}
+	}
+}
+
+func (s *projectStream) emitLogs(ctx context.Context) {
+	lines, err := s.handler.service.ContainerLogs(ctx, s.projectID, streamLogTail)
+	if err != nil {
+		return
+	}
+	if len(lines) < s.logOffset {
+		s.logOffset = 0
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, line := range lines[s.logOffset:] {
+		_ = s.send("log", map[string]string{
+			"service":   streamDefaultSvc,
+			"line":      line,
+			"timestamp": now,
+		})
+	}
+	s.logOffset = len(lines)
+}
+
+func (s *projectStream) emitDeployment(ctx context.Context) {
+	deployment, ok, err := s.handler.service.activeDeployment(ctx, s.projectID)
+	if err == nil && ok {
+		_ = s.send("deployment", ResponseFromDB(deployment))
+		return
+	}
+	rows, err := s.handler.service.ListByProject(ctx, s.projectID, 1, 0)
+	if err == nil && len(rows) > 0 {
+		_ = s.send("deployment", ResponseFromDB(rows[0]))
+	}
+}
+
+func (s *projectStream) send(event string, data any) bool {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		payload = []byte(`{"message":"failed to encode stream event"}`)
+	}
+	if _, err := fmt.Fprintf(s.writer, "event: %s\ndata: %s\n\n", event, payload); err != nil {
+		return false
+	}
+	s.flusher.Flush()
+	return true
+}
+
+func (s *projectStream) heartbeat() bool {
+	if _, err := fmt.Fprint(s.writer, ": heartbeat\n\n"); err != nil {
+		return false
+	}
+	s.flusher.Flush()
+	return true
 }

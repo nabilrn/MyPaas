@@ -103,6 +103,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name          string  `json:"name"`
 		Branch        string  `json:"branch"`
+		AppPort       int32   `json:"appPort"`
 		MemoryLimitMb int32   `json:"memoryLimitMb"`
 		MemoryMb      int32   `json:"memoryMb"`
 		CPULimit      float64 `json:"cpuLimit"`
@@ -119,6 +120,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		ID:            id,
 		Name:          req.Name,
 		Branch:        req.Branch,
+		AppPort:       req.AppPort,
 		MemoryLimitMb: req.MemoryLimitMb,
 		CPULimit:      req.CPULimit,
 	})

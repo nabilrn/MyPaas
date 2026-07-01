@@ -20,12 +20,17 @@ type Config struct {
 
 	EncryptionKey string
 
-	DockerSocket string
-	CaddyAdmin   string
+	DockerSocket      string
+	DockerBindHost    string
+	CaddyAdmin        string
+	CaddyUpstreamHost string
 
 	FrontendURL  string
 	PublicDomain string
 	OwnerEmail   string
+
+	MetricsUsername string
+	MetricsPassword string
 
 	MaxConcurrentDeploys int
 	BuildTimeoutMinutes  int
@@ -83,12 +88,17 @@ func Load() (*Config, error) {
 
 		EncryptionKey: req("ENCRYPTION_KEY"),
 
-		DockerSocket: envStr("DOCKER_SOCKET", "/var/run/docker.sock"),
-		CaddyAdmin:   envStr("CADDY_ADMIN", "127.0.0.1:2019"),
+		DockerSocket:      envStr("DOCKER_SOCKET", "/var/run/docker.sock"),
+		DockerBindHost:    envStr("DOCKER_BIND_HOST", "127.0.0.1"),
+		CaddyAdmin:        envStr("CADDY_ADMIN", "127.0.0.1:2019"),
+		CaddyUpstreamHost: envStr("CADDY_UPSTREAM_HOST", "host.docker.internal"),
 
 		FrontendURL:  envStr("FRONTEND_URL", "http://localhost:5173"),
 		PublicDomain: envStr("PUBLIC_DOMAIN", "localhost"),
 		OwnerEmail:   envStr("OWNER_EMAIL", ""),
+
+		MetricsUsername: envStr("METRICS_USERNAME", ""),
+		MetricsPassword: envStr("METRICS_PASSWORD", ""),
 
 		MaxConcurrentDeploys: maxDeploys,
 		BuildTimeoutMinutes:  buildTimeout,

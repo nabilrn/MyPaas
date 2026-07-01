@@ -5,6 +5,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { Project } from '$types';
+	import { projectHost, projectURL } from '$lib/utils/urls';
 
 	let project: Project | null = null;
 	let loading = true;
@@ -22,6 +23,8 @@
 	$: base     = `/projects/${$page.params.id}`;
 	$: pathname = $page.url.pathname;
 	$: activeHref = tabs.slice().reverse().find((t) => pathname === base + t.href)?.href ?? '';
+	$: publicProjectHost = project ? projectHost(project.subdomain, $page.url.hostname) : '';
+	$: publicProjectURL = project ? projectURL(project.subdomain, $page.url.protocol, $page.url.hostname) : '';
 
 	onMount(loadProject);
 
@@ -95,12 +98,12 @@
 				<StatusBadge status={project.status} pulse />
 			</div>
 			<a
-				href="https://{project.subdomain}.nabilrizkinavisa.me"
+				href={publicProjectURL}
 				target="_blank"
 				rel="noopener"
 				class="mt-0.5 inline-flex items-center gap-1 text-sm text-brand-600 hover:underline dark:text-brand-400"
 			>
-				{project.subdomain}.nabilrizkinavisa.me
+				{publicProjectHost}
 				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
 				</svg>

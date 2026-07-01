@@ -5,20 +5,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 )
 
 type Client struct {
-	baseURL string
-	http    *http.Client
+	baseURL      string
+	upstreamHost string
+	http         *http.Client
 }
 
-func NewClient(adminAddress string) *Client {
+func NewClient(adminAddress, upstreamHost string) *Client {
 	adminAddress = strings.TrimPrefix(adminAddress, "http://")
+	if upstreamHost == "" {
+		upstreamHost = "127.0.0.1"
+	}
 	return &Client{
-		baseURL: "http://" + adminAddress,
+		baseURL:      "http://" + adminAddress,
+		upstreamHost: upstreamHost,
 		http: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -31,7 +37,7 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 		"handle": []map[string]any{{
 			"handler": "reverse_proxy",
 			"upstreams": []map[string]any{{
-				"dial": fmt.Sprintf("127.0.0.1:%d", port),
+				"dial": fmt.Sprintf("%s:%d", c.upstreamHost, port),
 			}},
 		}},
 		"terminal": true,
@@ -50,7 +56,7 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 			next = append(next, existing)
 		}
 	}
-	return c.putJSON(ctx, "/config/apps/http/servers/srv0/routes", next)
+	return c.patchJSON(ctx, "/config/apps/http/servers/srv0/routes", next)
 }
 
 func (c *Client) RemoveRoute(ctx context.Context, host string) error {
@@ -65,7 +71,7 @@ func (c *Client) RemoveRoute(ctx context.Context, host string) error {
 			filtered = append(filtered, route)
 		}
 	}
-	return c.putJSON(ctx, "/config/apps/http/servers/srv0/routes", filtered)
+	return c.patchJSON(ctx, "/config/apps/http/servers/srv0/routes", filtered)
 }
 
 func (c *Client) routes(ctx context.Context) ([]json.RawMessage, error) {
@@ -92,12 +98,12 @@ func (c *Client) routes(ctx context.Context) ([]json.RawMessage, error) {
 	return routes, nil
 }
 
-func (c *Client) putJSON(ctx context.Context, path string, payload any) error {
+func (c *Client) patchJSON(ctx context.Context, path string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -105,11 +111,16 @@ func (c *Client) putJSON(ctx context.Context, path string, payload any) error {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("caddy put config: %w", err)
+		return fmt.Errorf("caddy patch config: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("caddy put config returned %s", resp.Status)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(respBody))
+		if detail == "" {
+			return fmt.Errorf("caddy patch config returned %s", resp.Status)
+		}
+		return fmt.Errorf("caddy patch config returned %s: %s", resp.Status, detail)
 	}
 	return nil
 }

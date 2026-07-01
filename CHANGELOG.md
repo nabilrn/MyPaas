@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project structure and setup
 - Rollback endpoint and dashboard action for Dockerfile deployments
 - Webhook secret regeneration endpoint and settings UI action
+- Project app port can be edited from settings and through the update API
 - GitHub webhook endpoint with HMAC signature verification, branch filtering, rate limiting, delivery logging, and Dockerfile deployment trigger
 - Deployment startup recovery that marks interrupted queued/building deployments as failed and resets stuck project build states
 - Per-user quota endpoint and enforcement for project count, configured memory, and configured CPU limits
 - Dockerfile container metrics endpoint and dashboard chart for CPU, memory, and uptime
+- Strict CORS middleware for configured dashboard origins
+- Prometheus-compatible `/metrics` endpoint with optional Basic Auth credentials
+- Authenticated project SSE stream endpoint at `/projects/{id}/stream` for status, metrics, logs, and deployment events
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
@@ -28,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+- Ignore the Linux Docker socket `DOCKER_HOST` value for local Windows Docker CLI calls and use the non-deprecated `docker stop --timeout` flag
+- Treat missing Docker containers as empty log output instead of logging an internal server error while a project has not deployed successfully yet
+- Bind Caddy Admin API inside dev/prod containers on `0.0.0.0:2019` so the API can manage routes through the published local port or Docker network
+- Avoid Caddy wildcard route conflicts during dynamic project route updates and proxy deployed containers through configurable `CADDY_UPSTREAM_HOST`
+- Replace Caddy route arrays with `PATCH` instead of `PUT` to avoid Admin API `key already exists: routes` conflicts
+- Make Docker project port binding configurable with `DOCKER_BIND_HOST` so containerized Caddy can reach local project upstreams
+- Use HTTP local project URLs in development instead of hardcoded production HTTPS domains
+- Clear `allocated_port` when projects are soft-deleted so reused ports do not violate `projects_allocated_port_key`
 
 ### Security
 

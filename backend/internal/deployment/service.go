@@ -222,7 +222,11 @@ func (s *Service) ContainerLogs(ctx context.Context, projectID uuid.UUID, tail i
 	if err != nil {
 		return nil, err
 	}
-	return s.docker.Logs(ctx, containerName(project.Name), tail)
+	lines, err := s.docker.Logs(ctx, containerName(project.Name), tail)
+	if errors.Is(err, container.ErrNoContainer) {
+		return nil, errs.ErrNotFound
+	}
+	return lines, err
 }
 
 func (s *Service) ContainerMetrics(ctx context.Context, projectID uuid.UUID) (container.Metrics, error) {
@@ -377,7 +381,7 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		slog.Error("finish deployment", "deploymentId", deploymentID, "error", err)
 		return
 	}
-	log("Deployment running at https://" + s.host(project))
+	log("Deployment running at " + s.publicURL(project))
 }
 
 func (s *Service) rollbackLocked(ctx context.Context, project db.Project, target db.Deployment, userID uuid.UUID) (db.Deployment, error) {
@@ -438,7 +442,7 @@ func (s *Service) rollbackLocked(ctx context.Context, project db.Project, target
 	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deployment.ID, Status: "running"}); err != nil {
 		return fail(err)
 	}
-	log("Rollback running at https://" + s.host(project))
+	log("Rollback running at " + s.publicURL(project))
 
 	return s.Get(ctx, deployment.ID)
 }
@@ -608,6 +612,14 @@ func (s *Service) host(project db.Project) string {
 		domain = "localhost"
 	}
 	return project.Subdomain + "." + domain
+}
+
+func (s *Service) publicURL(project db.Project) string {
+	scheme := "https"
+	if s.cfg.IsDevelopment() {
+		scheme = "http"
+	}
+	return scheme + "://" + s.host(project)
 }
 
 func containerName(projectName string) string {

@@ -2,7 +2,7 @@
 # Local development with auto-reload and debug logging
 
 {
-	admin 127.0.0.1:2019
+	admin 0.0.0.0:2019
 	log default {
 		level debug
 		format json
@@ -15,24 +15,14 @@
 localhost:80 {
 	encode gzip
 
-	# Reverse proxy to SvelteKit frontend
-	reverse_proxy localhost:5173
+	# Reverse proxy to SvelteKit frontend running on the host
+	reverse_proxy host.docker.internal:5173
 
 	# API routes
-	reverse_proxy /api/* localhost:8080 {
+	reverse_proxy /api/* host.docker.internal:8080 {
 		header_up -User-Agent
 	}
 
-	log {
-		level debug
-	}
-}
-
-# Development wildcard (for testing project subdomains)
-*.localhost:80 {
-	reverse_proxy localhost:8080 {
-		header_up -User-Agent
-	}
 	log {
 		level debug
 	}
