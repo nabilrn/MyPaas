@@ -25,5 +25,5 @@ export function projectURL(subdomain: string, protocol: string, hostname: string
 }
 
 export function webhookURL(projectId: string, origin: string): string {
-	return `${origin}/webhook/${projectId}`;
+	return `${origin}/api/webhook/${projectId}`;
 }

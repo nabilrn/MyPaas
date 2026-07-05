@@ -45,18 +45,40 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 	if err != nil {
 		return err
 	}
+	return c.replaceHostRoute(ctx, host, route)
+}
 
+func (c *Client) AddFileServerRoute(ctx context.Context, host, root string) error {
+	route, err := json.Marshal(map[string]any{
+		"match": []map[string]any{{"host": []string{host}}},
+		"handle": []map[string]any{
+			{
+				"handler":     "file_server",
+				"root":        root,
+				"index_names": []string{"index.html"},
+			},
+		},
+		"terminal": true,
+	})
+	if err != nil {
+		return err
+	}
+	return c.replaceHostRoute(ctx, host, route)
+}
+
+func (c *Client) replaceHostRoute(ctx context.Context, host string, route json.RawMessage) error {
 	routes, err := c.routes(ctx)
 	if err != nil {
 		return err
 	}
-	next := []json.RawMessage{route}
-	for _, existing := range routes {
-		if !routeMatchesHost(existing, host) {
-			next = append(next, existing)
+
+	for idx, existing := range routes {
+		if routeMatchesHost(existing, host) {
+			return c.patchJSON(ctx, fmt.Sprintf("/config/apps/http/servers/srv0/routes/%d", idx), route)
 		}
 	}
-	return c.patchJSON(ctx, "/config/apps/http/servers/srv0/routes", next)
+
+	return c.postJSON(ctx, "/config/apps/http/servers/srv0/routes", route)
 }
 
 func (c *Client) RemoveRoute(ctx context.Context, host string) error {
@@ -65,13 +87,14 @@ func (c *Client) RemoveRoute(ctx context.Context, host string) error {
 		return err
 	}
 
-	filtered := make([]json.RawMessage, 0, len(routes))
-	for _, route := range routes {
-		if !routeMatchesHost(route, host) {
-			filtered = append(filtered, route)
+	for idx := len(routes) - 1; idx >= 0; idx-- {
+		if routeMatchesHost(routes[idx], host) {
+			if err := c.delete(ctx, fmt.Sprintf("/config/apps/http/servers/srv0/routes/%d", idx)); err != nil {
+				return err
+			}
 		}
 	}
-	return c.patchJSON(ctx, "/config/apps/http/servers/srv0/routes", filtered)
+	return nil
 }
 
 func (c *Client) routes(ctx context.Context) ([]json.RawMessage, error) {
@@ -99,11 +122,19 @@ func (c *Client) routes(ctx context.Context) ([]json.RawMessage, error) {
 }
 
 func (c *Client) patchJSON(ctx context.Context, path string, payload any) error {
+	return c.sendJSON(ctx, http.MethodPatch, path, payload)
+}
+
+func (c *Client) postJSON(ctx context.Context, path string, payload any) error {
+	return c.sendJSON(ctx, http.MethodPost, path, payload)
+}
+
+func (c *Client) sendJSON(ctx context.Context, method, path string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.baseURL+path, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -121,6 +152,27 @@ func (c *Client) patchJSON(ctx context.Context, path string, payload any) error 
 			return fmt.Errorf("caddy patch config returned %s", resp.Status)
 		}
 		return fmt.Errorf("caddy patch config returned %s: %s", resp.Status, detail)
+	}
+	return nil
+}
+
+func (c *Client) delete(ctx context.Context, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("caddy delete config: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(respBody))
+		if detail == "" {
+			return fmt.Errorf("caddy delete config returned %s", resp.Status)
+		}
+		return fmt.Errorf("caddy delete config returned %s: %s", resp.Status, detail)
 	}
 	return nil
 }

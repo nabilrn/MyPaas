@@ -1,10 +1,11 @@
 // ─── Domain enums ────────────────────────────────────────────────────────────
 
 export type ProjectStatus = 'pending' | 'running' | 'stopped' | 'crashed' | 'building';
-export type DeployMode    = 'dockerfile' | 'compose';
+export type DeployMode    = 'dockerfile' | 'compose' | 'static';
 export type DeployStatus  = 'queued' | 'cloning' | 'building' | 'starting' | 'running' | 'failed' | 'stopped' | 'rolled_back';
 export type UserRole      = 'owner' | 'collaborator';
 export type TriggeredBy   = 'manual' | 'webhook' | 'rollback';
+export type ResourceProfile = 'static' | 'go-small' | 'node-python' | 'compose-main' | 'custom';
 
 // ─── Domain models ───────────────────────────────────────────────────────────
 
@@ -27,8 +28,10 @@ export interface Project {
 	branch:              string;
 	subdomain:           string;
 	deployMode:          DeployMode;
+	resourceProfile:     ResourceProfile;
 	mainService:         string | null;
 	appPort:             number;
+	webhookSecret:       string;
 	allocatedPort:       number | null;
 	memoryLimitMb:       number;
 	cpuLimit:            number;
@@ -61,6 +64,13 @@ export interface EnvVar {
 	updatedAt: string;
 }
 
+export interface EnvVarDiscovery {
+	key: string;
+	source: string;
+	sensitive: boolean;
+	defaultValue?: string;
+}
+
 export interface ContainerMetrics {
 	service:        string;
 	cpu:            number;   // percent
@@ -74,19 +84,57 @@ export interface MetricsSnapshot {
 	collectedAt: string;
 }
 
+export interface ComposeResourceSummary {
+	projectName: string;
+	containers: number;
+	volumes: number;
+	networks: number;
+}
+
 export interface LogLine {
 	service:   string;
 	line:      string;
 	timestamp: string;
 }
 
+export interface LogsResponse {
+	lines: string[];
+	items: Array<{
+		service: string;
+		line: string;
+	}>;
+}
+
 export interface QuotaUsage {
 	memoryLimitMb: number;
 	memoryUsedMb: number;
+	memoryRuntimeMb: number;
 	cpuLimit: number;
 	cpuUsed: number;
+	cpuRuntime: number;
 	projectLimit: number;
 	projectCount: number;
+}
+
+export interface DeployModeDetection {
+	deployMode: DeployMode;
+	mainService: string | null;
+	services: string[];
+	composeFile: string | null;
+	hasDockerfile: boolean;
+	envVars: EnvVarDiscovery[];
+}
+
+export interface AuditLog {
+	id: string;
+	userId: string | null;
+	action: string;
+	resourceType: string | null;
+	resourceId: string | null;
+	metadata: Record<string, unknown>;
+	ipAddress: string | null;
+	userAgent: string | null;
+	createdAt: string;
 }
 
 // ─── API response wrappers ────────────────────────────────────────────────────

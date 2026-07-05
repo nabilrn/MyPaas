@@ -111,6 +111,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, h.cookie(AccessCookieName, tokens.AccessToken, time.Until(tokens.ExpiresAt), true))
+	http.SetCookie(w, h.cookie(RefreshCookieName, tokens.RefreshToken, time.Until(tokens.RefreshExpiresAt), true))
 	http.Redirect(w, r, mustJoinURL(h.cfg.FrontendURL, "/projects"), http.StatusFound)
 }
 
@@ -135,14 +136,23 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	userCtx, err := CurrentUser(r)
+	refreshCookie, err := r.Cookie(RefreshCookieName)
+	if err != nil || refreshCookie.Value == "" {
+		httpx.DomainError(w, errs.ErrUnauthorized)
+		return
+	}
+	claims, err := h.tokens.ParseRefresh(refreshCookie.Value)
 	if err != nil {
-		httpx.DomainError(w, err)
+		httpx.DomainError(w, errs.ErrUnauthorized)
 		return
 	}
 
-	user, err := h.queries.GetUserByID(r.Context(), userCtx.ID)
+	user, err := h.queries.GetUserByID(r.Context(), claims.UserID)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			httpx.DomainError(w, errs.ErrUnauthorized)
+			return
+		}
 		httpx.DomainError(w, err)
 		return
 	}
@@ -153,11 +163,16 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, h.cookie(AccessCookieName, tokens.AccessToken, time.Until(tokens.ExpiresAt), true))
-	httpx.JSON(w, http.StatusOK, map[string]any{"expiresAt": tokens.ExpiresAt})
+	http.SetCookie(w, h.cookie(RefreshCookieName, tokens.RefreshToken, time.Until(tokens.RefreshExpiresAt), true))
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"expiresAt":        tokens.ExpiresAt,
+		"refreshExpiresAt": tokens.RefreshExpiresAt,
+	})
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, _ *http.Request) {
 	clearCookie(w, AccessCookieName, h.cfg.IsDevelopment())
+	clearCookie(w, RefreshCookieName, h.cfg.IsDevelopment())
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -258,7 +273,7 @@ func clearCookie(w http.ResponseWriter, name string, development bool) {
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
-		HttpOnly: name == AccessCookieName,
+		HttpOnly: name == AccessCookieName || name == RefreshCookieName,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   !development,
 	})

@@ -19,13 +19,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strict CORS middleware for configured dashboard origins
 - Prometheus-compatible `/metrics` endpoint with optional Basic Auth credentials
 - Authenticated project SSE stream endpoint at `/projects/{id}/stream` for status, metrics, logs, and deployment events
+- Project Logs tab that loads recent history, streams new lines over SSE, filters by text/service, and exports visible logs
+- MVP Compose deployment support for project creation, deploy, lifecycle actions, logs, metrics, cleanup, and main-service port routing
+- Deploy mode detection endpoint and New Project form wiring that prefers Compose files over Dockerfile for `auto` projects
+- Active webhook secret display/copy flow in project settings
+- Refresh token cookie flow with 30-day refresh lifetime and frontend automatic refresh retry
+- Audit log sqlc queries, authenticated mutation middleware, owner-only audit log API, and dashboard viewer
+- Daily PostgreSQL backup scheduler with weekly snapshots, retention cleanup, and scoped unused MyPaas image pruning
+- Dependency-free `mypaas` CLI with config, admin user, project list/deploy/logs, and manual backup commands
+- MVP dogfooding sample projects for Node.js, Python FastAPI, and Go Dockerfile deployments
+- Static no-container deployment mode that publishes `dist`, `build`, `public`, or root `index.html` output through Caddy file serving
+- Opt-in shared PostgreSQL provisioning for new projects, creating a per-project database/user and injecting encrypted `DATABASE_URL`
+- Seed owner GitHub email into the user whitelist during migration
+- Env discovery for `.env.example`, `.env.sample`, `.env.template`, `.env.local.example`, and Compose `${VAR}` interpolation in the detect-mode API
+- New Project Environment step for discovered/manual env vars, sensitive key masking, managed shared `DATABASE_URL`, and encrypted env persistence during create
+- Compose resource audit/reset API and settings UI for clearing stale project containers, volumes, networks, routes, and allocated ports before deploy
+- Per-service Compose log and metrics collection, including multi-service log filters and metrics service selection in the dashboard
+- Realtime deployment build-log SSE events surfaced in the Logs tab before runtime container logs are available
+- Compose rollback path for the main service using per-commit immutable image tags for buildable services and target-commit Compose config for image-only services
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
+- Settings now shows the routable `/api/webhook/{projectId}` GitHub webhook URL and clearer webhook secret copy behavior
+- Caddy dev/prod config now proxies `/webhook/*` directly to the API for GitHub webhook delivery
+- Project rename now updates the active Caddy route when a deployed project has an allocated port
+- Project Overview now reads live metrics snapshots instead of hardcoded CPU, memory, and uptime values
 - Include `git` and Docker CLI in the backend production runtime image
 - Dockerfile deploy and rollback now start a replacement container on a fresh port before switching Caddy and removing the previous stable container
 - Manual and webhook deploy triggers now reuse an active deployment for the same project instead of creating duplicate concurrent work
 - Dashboard project list now shows quota usage bars for memory, CPU, and project count
+- PRD and timeline now include dashboard UX goals for async button spinners, double-submit prevention, and SPA-like project tab navigation
+- Dashboard async actions now use a shared spinner button with per-action pending state and double-submit prevention
+- Frontend dashboard received a PaaS-style polish pass with denser project inventory, project command surface, refined tabs, compact status badges, neutral action system, and redesigned project settings/env/metrics/admin views
+- PRD and timeline now require a pre-VM-deploy resource efficiency gate with resource profiles, separate configured-vs-real memory reporting, shared PostgreSQL provisioning, and static no-container hosting
+- PRD now groups goals into pre-deploy, after-deploy, and explicitly out-of-MVP work to keep Kubernetes/autoscaling out of the first VM deploy scope
+- PRD and timeline now include New Project env discovery from `.env.example`/Compose variables plus Compose stale volume warnings and explicit reset actions as pre-deploy goals
+- Dashboard quota now separates configured memory/CPU allocation from best-effort live Docker Stats runtime usage
+- After-deploy ADRs for idle sleep/wake-on-request, autosizing recommendations, and optional single-host replicas
 
 ### Deprecated
 
@@ -36,10 +66,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Treat missing Docker containers as empty log output instead of logging an internal server error while a project has not deployed successfully yet
 - Bind Caddy Admin API inside dev/prod containers on `0.0.0.0:2019` so the API can manage routes through the published local port or Docker network
 - Avoid Caddy wildcard route conflicts during dynamic project route updates and proxy deployed containers through configurable `CADDY_UPSTREAM_HOST`
+- Serve static projects correctly from Dockerized Caddy when the API runs on Windows by using container path separators and Caddy Admin route operations that match live API behavior
 - Replace Caddy route arrays with `PATCH` instead of `PUT` to avoid Admin API `key already exists: routes` conflicts
 - Make Docker project port binding configurable with `DOCKER_BIND_HOST` so containerized Caddy can reach local project upstreams
 - Use HTTP local project URLs in development instead of hardcoded production HTTPS domains
 - Clear `allocated_port` when projects are soft-deleted so reused ports do not violate `projects_allocated_port_key`
+- Return a conflict for duplicate admin whitelist users and render users without GitHub avatars cleanly
+- Route Caddy `/api/*` and `/webhook/*` with explicit `handle` blocks so dashboard fallback cannot intercept backend requests
+- Backend runtime image now includes `pg_dump`, and production compose mounts `/var/lib/mypaas/backups` into the API container
+- Backend build target now emits both `mypaas-api` and the `mypaas` CLI binary
+- Compose deployment override now replaces the main service `ports` list so app-local ports like `8080:8080` do not conflict with the MyPaas API
+- Compose commands now use the generated project `.env` and filter MyPaas internal env vars so values like the platform `DATABASE_URL` cannot leak into deployed apps
+- Project soft-delete now releases name/subdomain uniqueness via active-only unique indexes so deleted projects can be recreated with the same name
+- Added a no-op `/firebase-messaging-sw.js` static worker to quiet stale Firebase Messaging service worker probes on reused browser origins
+- Project create/update now persists `resource_profile`, returns it in API responses, and the dashboard resource forms apply profile defaults instead of a flat 512MB default
+- Static projects bypass Docker lifecycle/log collection while still supporting route start/stop/restart and zero-runtime metrics snapshots
+- Dockerfile containers and Compose main services can join `PROJECT_NETWORK` so shared platform services remain private on the Docker network
+- Compose deploys now warn in build logs when Docker resources exist before the first tracked active deployment
+- Production API Docker build now uses Go 1.23 to match the current module dependency floor
+- Backend and frontend Docker builds now ignore local artifacts such as `node_modules`, Svelte build output, and host binaries so containers can be recreated cleanly
 
 ### Security
 

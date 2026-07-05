@@ -32,6 +32,10 @@ frontend/.vercel/
 npm-debug.log
 yarn-error.log
 
+# Python
+__pycache__/
+*.py[cod]
+
 # IDE
 .vscode/
 .idea/
@@ -45,7 +49,6 @@ yarn-error.log
 
 # Docker
 docker-compose.override.yml
-.dockerignore
 
 # Database
 *.db
@@ -71,6 +74,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+!frontend/src/routes/**/logs/
+!frontend/src/routes/**/logs/**
 *.logg
 
 # Temp
@@ -82,6 +87,7 @@ temp/
 # Workspace
 /tmp/mypaas/
 /var/lib/mypaas/
+dummy-crud-db-app/
 
 # Caddy
 .caddy/
@@ -92,6 +98,7 @@ caddy_storage/
 coverage.out
 *.coverprofile
 .gocache/
+.gomodcache/
 
 # Local config
 settings.local.json

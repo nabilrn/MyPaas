@@ -49,14 +49,20 @@ func DomainError(w http.ResponseWriter, err error) {
 		Error(w, http.StatusNotFound, "NOT_FOUND", "Resource not found.", nil)
 	case errors.Is(err, errs.ErrProjectNameTaken):
 		Error(w, http.StatusConflict, "PROJECT_NAME_TAKEN", "Project name is already taken.", nil)
+	case errors.Is(err, errs.ErrUserAlreadyExists):
+		Error(w, http.StatusConflict, "USER_ALREADY_EXISTS", "User is already whitelisted.", nil)
 	case errors.Is(err, errs.ErrPortPoolExhausted):
 		Error(w, http.StatusConflict, "PORT_POOL_EXHAUSTED", "No available internal port remains.", nil)
 	case errors.Is(err, errs.ErrQuotaExceeded):
 		Error(w, http.StatusConflict, "QUOTA_EXCEEDED", err.Error(), nil)
+	case errors.Is(err, errs.ErrComposeFileNotFound):
+		Error(w, http.StatusBadRequest, "COMPOSE_FILE_NOT_FOUND", "Compose file was not found in the repository root.", nil)
 	case errors.Is(err, errs.ErrComposeUnsupported):
-		Error(w, http.StatusBadRequest, "COMPOSE_UNSUPPORTED", "Compose deployment is not part of the MVP yet.", nil)
+		Error(w, http.StatusBadRequest, "COMPOSE_UNSUPPORTED", "This action is not supported for Compose projects yet.", nil)
 	case errors.Is(err, errs.ErrDockerfileNotFound):
 		Error(w, http.StatusBadRequest, "DOCKERFILE_NOT_FOUND", "Dockerfile was not found in the repository root.", nil)
+	case errors.Is(err, errs.ErrNoDeployConfig):
+		Error(w, http.StatusBadRequest, "NO_DEPLOY_CONFIG", "No Dockerfile or Compose file was found in the repository root.", nil)
 	case errors.Is(err, errs.ErrValidation), errors.Is(err, errs.ErrBadRequest):
 		Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error(), nil)
 	default:

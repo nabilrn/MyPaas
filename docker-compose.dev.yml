@@ -31,6 +31,7 @@ services:
       - "127.0.0.1:2019:2019"
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./.run/static:/var/lib/mypaas/static:ro
       - caddy_data:/data
       - caddy_config:/config
 

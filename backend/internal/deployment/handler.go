@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"mypaas/internal/auth"
+	"mypaas/internal/container"
 	"mypaas/internal/errs"
 	"mypaas/internal/httpx"
 	"mypaas/internal/project"
@@ -21,7 +23,6 @@ const (
 	streamPollInterval = 5 * time.Second
 	streamHeartbeat    = 30 * time.Second
 	streamLogTail      = 200
-	streamDefaultSvc   = "app"
 )
 
 type Handler struct {
@@ -113,16 +114,16 @@ func (h *Handler) Logs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	lines, err := h.service.ContainerLogs(r.Context(), id, int(project.IntQuery(r, "tail", 500)))
+	lines, err := h.service.ContainerLogLines(r.Context(), id, int(project.IntQuery(r, "tail", 500)))
 	if err != nil {
 		if errors.Is(err, errs.ErrNotFound) {
-			httpx.JSON(w, http.StatusOK, map[string]any{"lines": []string{}})
+			httpx.JSON(w, http.StatusOK, EmptyLogsResponse())
 			return
 		}
 		httpx.DomainError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"lines": lines})
+	httpx.JSON(w, http.StatusOK, LogsResponseFromContainer(lines))
 }
 
 func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
@@ -130,12 +131,37 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	metrics, err := h.service.ContainerMetrics(r.Context(), id)
+	metrics, err := h.service.ContainerMetricsList(r.Context(), id)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, MetricsSnapshotFromContainer(metrics))
+	httpx.JSON(w, http.StatusOK, MetricsSnapshotFromContainers(metrics))
+}
+
+func (h *Handler) ComposeResources(w http.ResponseWriter, r *http.Request) {
+	id, ok := projectID(w, r)
+	if !ok {
+		return
+	}
+	resources, err := h.service.ComposeResources(r.Context(), id)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, resources)
+}
+
+func (h *Handler) ResetComposeResources(w http.ResponseWriter, r *http.Request) {
+	id, ok := projectID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.service.ResetComposeResources(r.Context(), id); err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
@@ -207,12 +233,46 @@ func projectID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return id, true
 }
 
+type LogsResponse struct {
+	Lines []string          `json:"lines"`
+	Items []LogLineResponse `json:"items"`
+}
+
+type LogLineResponse struct {
+	Service string `json:"service"`
+	Line    string `json:"line"`
+}
+
+func EmptyLogsResponse() LogsResponse {
+	return LogsResponse{
+		Lines: []string{},
+		Items: []LogLineResponse{},
+	}
+}
+
+func LogsResponseFromContainer(lines []container.ComposeLogLine) LogsResponse {
+	response := LogsResponse{
+		Lines: make([]string, 0, len(lines)),
+		Items: make([]LogLineResponse, 0, len(lines)),
+	}
+	for _, line := range lines {
+		response.Lines = append(response.Lines, line.Line)
+		response.Items = append(response.Items, LogLineResponse{
+			Service: line.Service,
+			Line:    line.Line,
+		})
+	}
+	return response
+}
+
 type projectStream struct {
-	handler   *Handler
-	projectID uuid.UUID
-	writer    http.ResponseWriter
-	flusher   http.Flusher
-	logOffset int
+	handler              *Handler
+	projectID            uuid.UUID
+	writer               http.ResponseWriter
+	flusher              http.Flusher
+	logOffset            map[string]int
+	buildLogDeploymentID string
+	buildLogOffset       int
 }
 
 func (s *projectStream) emitSnapshot(ctx context.Context) bool {
@@ -235,11 +295,11 @@ func (s *projectStream) emitSnapshot(ctx context.Context) bool {
 }
 
 func (s *projectStream) emitMetrics(ctx context.Context) {
-	metrics, err := s.handler.service.ContainerMetrics(ctx, s.projectID)
+	metrics, err := s.handler.service.ContainerMetricsList(ctx, s.projectID)
 	if err != nil {
 		return
 	}
-	snapshot := MetricsSnapshotFromContainer(metrics)
+	snapshot := MetricsSnapshotFromContainers(metrics)
 	for _, item := range snapshot.Items {
 		_ = s.send("metrics", item)
 		if item.Uptime != "" {
@@ -249,34 +309,82 @@ func (s *projectStream) emitMetrics(ctx context.Context) {
 }
 
 func (s *projectStream) emitLogs(ctx context.Context) {
-	lines, err := s.handler.service.ContainerLogs(ctx, s.projectID, streamLogTail)
+	lines, err := s.handler.service.ContainerLogLines(ctx, s.projectID, streamLogTail)
 	if err != nil {
 		return
 	}
-	if len(lines) < s.logOffset {
-		s.logOffset = 0
+	if s.logOffset == nil {
+		s.logOffset = make(map[string]int)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	for _, line := range lines[s.logOffset:] {
-		_ = s.send("log", map[string]string{
-			"service":   streamDefaultSvc,
-			"line":      line,
-			"timestamp": now,
-		})
+	byService := make(map[string][]container.ComposeLogLine)
+	for _, line := range lines {
+		byService[line.Service] = append(byService[line.Service], line)
 	}
-	s.logOffset = len(lines)
+	for service, serviceLines := range byService {
+		offset := s.logOffset[service]
+		if len(serviceLines) < offset {
+			offset = 0
+		}
+		for _, line := range serviceLines[offset:] {
+			_ = s.send("log", map[string]string{
+				"service":   line.Service,
+				"line":      line.Line,
+				"timestamp": now,
+			})
+		}
+		s.logOffset[service] = len(serviceLines)
+	}
 }
 
 func (s *projectStream) emitDeployment(ctx context.Context) {
 	deployment, ok, err := s.handler.service.activeDeployment(ctx, s.projectID)
 	if err == nil && ok {
 		_ = s.send("deployment", ResponseFromDB(deployment))
+		s.emitBuildLog(deployment.ID.String(), deployment.BuildLog)
 		return
 	}
 	rows, err := s.handler.service.ListByProject(ctx, s.projectID, 1, 0)
 	if err == nil && len(rows) > 0 {
 		_ = s.send("deployment", ResponseFromDB(rows[0]))
+		s.emitBuildLog(rows[0].ID.String(), rows[0].BuildLog)
 	}
+}
+
+func (s *projectStream) emitBuildLog(deploymentID string, buildLog *string) {
+	if buildLog == nil || strings.TrimSpace(*buildLog) == "" {
+		return
+	}
+	if s.buildLogDeploymentID != deploymentID {
+		s.buildLogDeploymentID = deploymentID
+		s.buildLogOffset = 0
+	}
+
+	lines := splitBuildLog(*buildLog)
+	if len(lines) < s.buildLogOffset {
+		s.buildLogOffset = 0
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, line := range lines[s.buildLogOffset:] {
+		_ = s.send("deployment-log", map[string]string{
+			"service":   "build",
+			"line":      line,
+			"timestamp": now,
+		})
+	}
+	s.buildLogOffset = len(lines)
+}
+
+func splitBuildLog(value string) []string {
+	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 func (s *projectStream) send(event string, data any) bool {

@@ -17,16 +17,27 @@
 http://{$PUBLIC_DOMAIN} {
 	encode gzip
 
-	# Reverse proxy to SvelteKit dashboard
-	reverse_proxy dashboard:3000 {
-		header_up -User-Agent
-		header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	# API routes
+	handle /api/* {
+		reverse_proxy api:8080 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
 	}
 
-	# API routes
-	reverse_proxy /api/* api:8080 {
-		header_up -User-Agent
-		header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	handle /webhook/* {
+		reverse_proxy api:8080 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+	}
+
+	# Reverse proxy to SvelteKit dashboard
+	handle {
+		reverse_proxy dashboard:3000 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
 	}
 
 	# Security headers

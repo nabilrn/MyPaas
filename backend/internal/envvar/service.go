@@ -64,6 +64,10 @@ func (s *Service) Delete(ctx context.Context, projectID uuid.UUID, key string) e
 	return s.queries.DeleteEnvVar(ctx, db.DeleteEnvVarParams{ProjectID: projectID, Key: key})
 }
 
+func (s *Service) DeleteAll(ctx context.Context, projectID uuid.UUID) error {
+	return s.queries.DeleteAllEnvVars(ctx, projectID)
+}
+
 func (s *Service) DecryptedMap(ctx context.Context, projectID uuid.UUID) (map[string]string, error) {
 	rows, err := s.queries.ListEnvVarsByProject(ctx, projectID)
 	if err != nil {

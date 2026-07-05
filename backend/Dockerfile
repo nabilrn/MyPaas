@@ -1,5 +1,5 @@
 ## Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /build
 
@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-api cmd/api/main.go
 ## Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates docker-cli git tzdata
+RUN apk add --no-cache ca-certificates docker-cli git postgresql-client tzdata
 
 WORKDIR /app
 

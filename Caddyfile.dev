@@ -15,12 +15,22 @@
 localhost:80 {
 	encode gzip
 
-	# Reverse proxy to SvelteKit frontend running on the host
-	reverse_proxy host.docker.internal:5173
-
 	# API routes
-	reverse_proxy /api/* host.docker.internal:8080 {
-		header_up -User-Agent
+	handle /api/* {
+		reverse_proxy host.docker.internal:8080 {
+			header_up -User-Agent
+		}
+	}
+
+	handle /webhook/* {
+		reverse_proxy host.docker.internal:8080 {
+			header_up -User-Agent
+		}
+	}
+
+	# Reverse proxy to SvelteKit frontend running on the host
+	handle {
+		reverse_proxy host.docker.internal:5173
 	}
 
 	log {

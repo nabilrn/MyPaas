@@ -2,14 +2,17 @@ package quota
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mypaas/internal/config"
+	"mypaas/internal/container"
 	"mypaas/internal/db"
 	"mypaas/internal/errs"
 )
@@ -17,19 +20,26 @@ import (
 type Service struct {
 	queries *db.Queries
 	cfg     *config.Config
+	docker  *container.DockerCLI
 }
 
 type Usage struct {
-	MemoryLimitMb int32   `json:"memoryLimitMb"`
-	MemoryUsedMb  int32   `json:"memoryUsedMb"`
-	CPULimit      float64 `json:"cpuLimit"`
-	CPUUsed       float64 `json:"cpuUsed"`
-	ProjectLimit  int32   `json:"projectLimit"`
-	ProjectCount  int32   `json:"projectCount"`
+	MemoryLimitMb   int32   `json:"memoryLimitMb"`
+	MemoryUsedMb    int32   `json:"memoryUsedMb"`
+	MemoryRuntimeMb int32   `json:"memoryRuntimeMb"`
+	CPULimit        float64 `json:"cpuLimit"`
+	CPUUsed         float64 `json:"cpuUsed"`
+	CPURuntime      float64 `json:"cpuRuntime"`
+	ProjectLimit    int32   `json:"projectLimit"`
+	ProjectCount    int32   `json:"projectCount"`
 }
 
-func NewService(queries *db.Queries, cfg *config.Config) *Service {
-	return &Service{queries: queries, cfg: cfg}
+func NewService(queries *db.Queries, cfg *config.Config, dockerClient ...*container.DockerCLI) *Service {
+	var docker *container.DockerCLI
+	if len(dockerClient) > 0 {
+		docker = dockerClient[0]
+	}
+	return &Service{queries: queries, cfg: cfg, docker: docker}
 }
 
 func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
@@ -41,13 +51,16 @@ func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
 	if err != nil {
 		return Usage{}, err
 	}
+	runtimeMemoryMb, runtimeCPU := s.runtimeUsage(ctx, userID)
 	return Usage{
-		MemoryLimitMb: s.cfg.UserRAMQuotaMB,
-		MemoryUsedMb:  resources.TotalMemoryMb,
-		CPULimit:      s.cfg.UserCPUQuota,
-		CPUUsed:       numericToFloat(resources.TotalCpu),
-		ProjectLimit:  s.cfg.MaxProjects,
-		ProjectCount:  int32(count),
+		MemoryLimitMb:   s.cfg.UserRAMQuotaMB,
+		MemoryUsedMb:    resources.TotalMemoryMb,
+		MemoryRuntimeMb: runtimeMemoryMb,
+		CPULimit:        s.cfg.UserCPUQuota,
+		CPUUsed:         numericToFloat(resources.TotalCpu),
+		CPURuntime:      runtimeCPU,
+		ProjectLimit:    s.cfg.MaxProjects,
+		ProjectCount:    int32(count),
 	}, nil
 }
 
@@ -101,4 +114,55 @@ func numericToFloat(value pgtype.Numeric) float64 {
 	}
 	f, _ := new(big.Rat).SetFrac(value.Int, big.NewInt(1)).Float64()
 	return f * math.Pow10(int(value.Exp))
+}
+
+func (s *Service) runtimeUsage(ctx context.Context, userID uuid.UUID) (int32, float64) {
+	if s.docker == nil {
+		return 0, 0
+	}
+	projects, err := s.queries.ListProjectsByUser(ctx, userID)
+	if err != nil {
+		return 0, 0
+	}
+	var memoryMb int32
+	var cpuPercent float64
+	for _, project := range projects {
+		if project.Status != "running" {
+			continue
+		}
+		metrics, err := s.projectMetrics(ctx, project)
+		if err != nil {
+			continue
+		}
+		memoryMb += int32(math.Round(metrics.MemoryMB))
+		cpuPercent += metrics.CPUPercent
+	}
+	return memoryMb, cpuPercent
+}
+
+func (s *Service) projectMetrics(ctx context.Context, project db.Project) (container.Metrics, error) {
+	name := "mypaas-" + project.Name
+	if project.DeployMode == "compose" {
+		metrics, err := s.docker.ComposeStats(ctx, name, mainService(project))
+		if errors.Is(err, container.ErrNoContainer) {
+			return container.Metrics{}, err
+		}
+		return metrics, err
+	}
+	metrics, err := s.docker.Stats(ctx, name)
+	if errors.Is(err, container.ErrNoContainer) {
+		return container.Metrics{}, err
+	}
+	return metrics, err
+}
+
+func mainService(project db.Project) string {
+	if project.MainService == nil {
+		return "app"
+	}
+	service := strings.TrimSpace(*project.MainService)
+	if service == "" {
+		return "app"
+	}
+	return service
 }

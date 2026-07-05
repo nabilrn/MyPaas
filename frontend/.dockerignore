@@ -1,0 +1,12 @@
+.env
+.env.*
+node_modules/
+build/
+.svelte-kit/
+dist/
+.vercel/
+coverage/
+*.log
+npm-debug.log
+yarn-error.log
+pnpm-debug.log

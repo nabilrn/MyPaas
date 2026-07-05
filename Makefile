@@ -66,7 +66,9 @@ build: build-backend build-frontend
 build-backend:
 	@echo "Building backend binary..."
 	@cd $(BACKEND_DIR) && go build -o bin/mypaas-api cmd/api/main.go
+	@cd $(BACKEND_DIR) && go build -o bin/mypaas cmd/cli/main.go
 	@echo "✓ Binary: $(BACKEND_DIR)/bin/mypaas-api"
+	@echo "✓ Binary: $(BACKEND_DIR)/bin/mypaas"
 
 build-frontend:
 	@echo "Building frontend..."

@@ -3,9 +3,11 @@ package user
 import (
 	"net/http"
 	"net/mail"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"mypaas/internal/auth"
 	"mypaas/internal/db"
@@ -43,7 +45,8 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
 		return
 	}
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if _, err := mail.ParseAddress(email); err != nil {
 		httpx.DomainError(w, errs.ErrValidation)
 		return
 	}
@@ -54,9 +57,16 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, errs.ErrValidation)
 		return
 	}
+	if _, err := h.queries.GetUserByEmail(r.Context(), email); err == nil {
+		httpx.DomainError(w, errs.ErrUserAlreadyExists)
+		return
+	} else if err != pgx.ErrNoRows {
+		httpx.DomainError(w, err)
+		return
+	}
 
 	created, err := h.queries.CreateUser(r.Context(), db.CreateUserParams{
-		Email: req.Email,
+		Email: email,
 		Role:  req.Role,
 	})
 	if err != nil {

@@ -12,10 +12,27 @@
 	html {
 		font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
 	}
+	body {
+		@apply bg-gray-50 text-gray-950 antialiased dark:bg-gray-950 dark:text-gray-100;
+	}
+	::selection {
+		@apply bg-gray-950 text-white dark:bg-white dark:text-gray-950;
+	}
+	input,
+	select,
+	textarea {
+		@apply bg-white text-gray-950 placeholder:text-gray-400 dark:bg-gray-950 dark:text-gray-100 dark:placeholder:text-gray-600;
+	}
 }
 
 @layer utilities {
 	.scrollbar-thin {
 		scrollbar-width: thin;
+	}
+	.surface {
+		@apply rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-950/[0.025] dark:border-gray-800 dark:bg-gray-900 dark:shadow-none;
+	}
+	.field {
+		@apply rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition-colors focus:border-gray-950 focus:ring-1 focus:ring-gray-950 dark:border-gray-700 dark:focus:border-white dark:focus:ring-white;
 	}
 }

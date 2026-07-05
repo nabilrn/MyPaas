@@ -649,6 +649,8 @@ Timeline implementasi MyPaas yang dipecah per-session untuk menjaga context Clau
 **Scope:**
 - Bug list dari dogfooding
 - Loading/error/empty state yang kurang
+- Reusable action button dengan inline spinner/loading state untuk semua async actions
+- Project detail tab navigation harus terasa client-side/SPA-like tanpa full layout reload
 - Keyboard shortcut: `g d`, `g n`, `/`
 - Toast notification system
 - Persistent banner untuk ongoing deployment
@@ -659,11 +661,58 @@ Timeline implementasi MyPaas yang dipecah per-session untuk menjaga context Clau
 - [ ] Semua P0 user story bekerja tanpa error
 - [ ] Tidak ada "undefined"/"null" bocor ke UI
 - [ ] Error network di-handle dengan retry
+- [ ] Semua action button async disable saat pending, menampilkan spinner, dan tidak double-submit
+- [ ] Project detail tab switching mempertahankan header/tab shell, loading hanya muncul di konten tab
 - [ ] Keyboard shortcut berfungsi
 - [ ] Accessibility basic compliant
 
 **Prompt Claude Code:**
-> "Review semua halaman untuk loading/error/empty state consistency. Implement toast system + persistent banner. Keyboard shortcut per NFR-USE-4. Accessibility basic pass (ARIA, keyboard nav). Fix inconsistency. List issues sebelum fix, prioritize dengan owner."
+> "Review semua halaman untuk loading/error/empty state consistency. Implement reusable Button/IconButton dengan inline spinner untuk semua async actions, prevent double-submit, dan pastikan project detail tab navigation terasa client-side/SPA-like tanpa full layout loading flash. Implement toast system + persistent banner. Keyboard shortcut per NFR-USE-4. Accessibility basic pass (ARIA, keyboard nav). Fix inconsistency. List issues sebelum fix, prioritize dengan owner."
+
+---
+
+### Session 6.5 — Resource efficiency gate before VM deploy (4-6 jam)
+
+**Scope:**
+Minimum pre-deploy gate:
+- Resource profiles untuk New Project: static/no-runtime, Go small, Node/Python, Compose main, Compose side service
+- Default memory/CPU limit mengikuti profile, bukan selalu 512MB
+- Dashboard quota membedakan configured limit vs real Docker Stats usage
+- Static no-container hosting path untuk project static/build output (serve langsung via Caddy filesystem)
+- Shared PostgreSQL provisioning design + minimal implementation:
+  - create database/user per project
+  - inject `DATABASE_URL`
+  - document sample CRUD app tanpa bundled Postgres container
+- Env discovery untuk New Project:
+  - scan `.env.example` / `.env.sample` / `.env.template` / `.env.local.example`
+  - scan Compose interpolation `${VAR}` dari compose file
+  - tampilkan key sebagai draft env yang user isi sebelum deploy
+- Compose stale volume guard:
+  - warning jika Docker volume/network/container lama dengan compose project name yang sama ditemukan
+  - reset project volumes sebagai action eksplisit
+  - hint troubleshooting untuk error DB auth/schema yang mengarah ke stale volume
+- Dogfood ulang 5 sample projects dengan target configured app memory <= 2GB di luar platform DB
+
+After-deploy design only:
+- Idle sleep / wake-on-request ADR
+- Autosizing recommendation ADR
+- Optional single-host replicas ADR
+- Kubernetes/multi-node autoscaling explicitly out of MVP
+
+**Definition of done:**
+- [ ] New Project form bisa memilih/menyarankan resource profile
+- [ ] Default static/go/node/compose profile lebih hemat dari 512MB flat default
+- [ ] Dashboard quota menampilkan configured limit dan real memory usage secara terpisah
+- [ ] Static sample bisa berjalan tanpa nginx/app container dedicated
+- [ ] CRUD DB sample bisa memakai shared PostgreSQL MyPaas
+- [ ] New Project form auto-discover env keys dari `.env.example`/Compose variables dan user bisa mengisi value sebelum deploy
+- [ ] Compose stale volume guard menampilkan warning/reset action saat resource lama ditemukan atau DB auth/schema gagal
+- [ ] 5 sample projects lolos smoke test dengan total configured app memory <= 2GB
+- [ ] ADR dibuat untuk idle sleep/wake-on-request, autosizing recommendation, dan optional single-host replicas
+- [ ] PRD pre-deploy vs after-deploy grouping tetap sinkron dengan implementasi
+
+**Prompt Claude Code:**
+> "Baca PRD FR-PROJ-8..9, FR-LIFE-8..9, FR-QUOTA-4..10, NFR-PERF-7..8, dan Delivery goal grouping. Implement hanya pre-deploy gate: resource profiles, configured-vs-real quota display, static no-container hosting, minimal shared Postgres provisioning, env discovery dari `.env.example`/Compose variables, Compose stale volume guard/reset action, dan dogfood 5 sample projects <= 2GB configured app memory. Buat ADR untuk after-deploy items: idle sleep/wake-on-request, autosizing recommendation, optional single-host replicas. Jangan implement Kubernetes/multi-node autoscaling."
 
 ---
 

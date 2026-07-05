@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mypaas/internal/db"
+	"mypaas/internal/envdiscover"
 )
 
 type Response struct {
@@ -19,8 +20,10 @@ type Response struct {
 	Branch             string  `json:"branch"`
 	Subdomain          string  `json:"subdomain"`
 	DeployMode         string  `json:"deployMode"`
+	ResourceProfile    string  `json:"resourceProfile"`
 	MainService        *string `json:"mainService"`
 	AppPort            int32   `json:"appPort"`
+	WebhookSecret      string  `json:"webhookSecret"`
 	AllocatedPort      *int32  `json:"allocatedPort"`
 	MemoryLimitMb      int32   `json:"memoryLimitMb"`
 	CPULimit           float64 `json:"cpuLimit"`
@@ -28,6 +31,15 @@ type Response struct {
 	ActiveDeploymentID *string `json:"activeDeploymentId"`
 	CreatedAt          string  `json:"createdAt"`
 	UpdatedAt          string  `json:"updatedAt"`
+}
+
+type DetectResponse struct {
+	DeployMode    string            `json:"deployMode"`
+	MainService   *string           `json:"mainService"`
+	Services      []string          `json:"services"`
+	ComposeFile   *string           `json:"composeFile"`
+	HasDockerfile bool              `json:"hasDockerfile"`
+	EnvVars       []envdiscover.Var `json:"envVars"`
 }
 
 func ResponseFromDB(project db.Project) Response {
@@ -39,8 +51,10 @@ func ResponseFromDB(project db.Project) Response {
 		Branch:             project.Branch,
 		Subdomain:          project.Subdomain,
 		DeployMode:         project.DeployMode,
+		ResourceProfile:    project.ResourceProfile,
 		MainService:        project.MainService,
 		AppPort:            project.AppPort,
+		WebhookSecret:      project.WebhookSecret,
 		AllocatedPort:      project.AllocatedPort,
 		MemoryLimitMb:      project.MemoryLimitMb,
 		CPULimit:           numericToResponseFloat(project.CpuLimit),
@@ -48,6 +62,17 @@ func ResponseFromDB(project db.Project) Response {
 		ActiveDeploymentID: uuidString(project.ActiveDeploymentID),
 		CreatedAt:          formatTimestamp(project.CreatedAt.Time, project.CreatedAt.Valid),
 		UpdatedAt:          formatTimestamp(project.UpdatedAt.Time, project.UpdatedAt.Valid),
+	}
+}
+
+func DetectResponseFromResult(result DetectResult) DetectResponse {
+	return DetectResponse{
+		DeployMode:    result.DeployMode,
+		MainService:   result.MainService,
+		Services:      result.Services,
+		ComposeFile:   result.ComposeFile,
+		HasDockerfile: result.HasDockerfile,
+		EnvVars:       result.EnvVars,
 	}
 }
 

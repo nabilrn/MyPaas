@@ -20,17 +20,27 @@ type ContainerMetricsResponse struct {
 }
 
 func MetricsSnapshotFromContainer(metrics container.Metrics) MetricsSnapshotResponse {
+	return MetricsSnapshotFromContainers([]container.Metrics{metrics})
+}
+
+func MetricsSnapshotFromContainers(metrics []container.Metrics) MetricsSnapshotResponse {
+	items := make([]ContainerMetricsResponse, 0, len(metrics))
+	var collectedAt time.Time
+	for _, item := range metrics {
+		if collectedAt.IsZero() || item.CollectedAt.After(collectedAt) {
+			collectedAt = item.CollectedAt
+		}
+		items = append(items, ContainerMetricsResponse{
+			Service:       item.Service,
+			CPU:           item.CPUPercent,
+			MemoryMB:      item.MemoryMB,
+			MemoryLimitMB: item.MemoryLimitMB,
+			Uptime:        item.Uptime,
+		})
+	}
 	return MetricsSnapshotResponse{
-		Items: []ContainerMetricsResponse{
-			{
-				Service:       metrics.Service,
-				CPU:           metrics.CPUPercent,
-				MemoryMB:      metrics.MemoryMB,
-				MemoryLimitMB: metrics.MemoryLimitMB,
-				Uptime:        metrics.Uptime,
-			},
-		},
-		CollectedAt: formatCollectedAt(metrics.CollectedAt),
+		Items:       items,
+		CollectedAt: formatCollectedAt(collectedAt),
 	}
 }
 

@@ -2,6 +2,7 @@ package container
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -88,6 +89,59 @@ func TestDockerCLIPortMappingUsesConfiguredBindHost(t *testing.T) {
 	got := cli.portMapping(RunOptions{HostPort: 3001, ContainerPort: 80})
 	if got != "0.0.0.0:3001:80" {
 		t.Fatalf("portMapping() = %q, want 0.0.0.0:3001:80", got)
+	}
+}
+
+func TestComposeBaseArgsIncludesEnvFileBeforeCommand(t *testing.T) {
+	got := composeBaseArgs("C:/tmp/project/.env")
+	want := []string{"compose", "--env-file", "C:/tmp/project/.env"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("composeBaseArgs() = %v, want %v", got, want)
+	}
+}
+
+func TestIsMypaasInternalEnvFiltersLeakyComposeVars(t *testing.T) {
+	for _, key := range []string{"DATABASE_URL", "POSTGRES_PASSWORD", "JWT_SECRET", "CADDY_ADMIN"} {
+		t.Run(key, func(t *testing.T) {
+			if !isMypaasInternalEnv(key) {
+				t.Fatalf("isMypaasInternalEnv(%q) = false, want true", key)
+			}
+		})
+	}
+	for _, key := range []string{"PATH", "SystemRoot", "DOCKER_HOST"} {
+		t.Run(key, func(t *testing.T) {
+			if isMypaasInternalEnv(key) {
+				t.Fatalf("isMypaasInternalEnv(%q) = true, want false", key)
+			}
+		})
+	}
+}
+
+func TestParseComposeServiceNamesDedupesAndSorts(t *testing.T) {
+	got := parseComposeServiceNames("web\n<no value>\ndb\nweb\r\n")
+	want := []string{"db", "web"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("parseComposeServiceNames() = %v, want %v", got, want)
+	}
+}
+
+func TestParseComposeBuildServicesJSON(t *testing.T) {
+	raw := []byte(`{
+		"services": {
+			"web": {"build": {"context": "."}},
+			"worker": {"build": "."},
+			"db": {"image": "postgres:16"},
+			"cache": {"build": null}
+		}
+	}`)
+
+	got, err := parseComposeBuildServicesJSON(raw)
+	if err != nil {
+		t.Fatalf("parseComposeBuildServicesJSON() error = %v", err)
+	}
+	want := []string{"web", "worker"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("parseComposeBuildServicesJSON() = %v, want %v", got, want)
 	}
 }
 

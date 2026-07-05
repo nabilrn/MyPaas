@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
 	"mypaas/internal/port"
+	"mypaas/internal/staticdeploy"
 )
 
 type Service struct {
@@ -66,10 +68,6 @@ func (s *Service) TriggerDockerfile(ctx context.Context, projectID, userID uuid.
 	if err != nil {
 		return db.Deployment{}, err
 	}
-	if project.DeployMode != "dockerfile" {
-		return db.Deployment{}, errs.ErrComposeUnsupported
-	}
-
 	lock := s.projectLock(project.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -101,10 +99,6 @@ func (s *Service) TriggerWebhook(ctx context.Context, projectID uuid.UUID) (db.D
 	if err != nil {
 		return db.Deployment{}, err
 	}
-	if project.DeployMode != "dockerfile" {
-		return db.Deployment{}, errs.ErrComposeUnsupported
-	}
-
 	lock := s.projectLock(project.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -165,16 +159,16 @@ func (s *Service) Rollback(ctx context.Context, deploymentID, userID uuid.UUID) 
 	if target.Status != "running" {
 		return db.Deployment{}, fmt.Errorf("%w: rollback target must be a successful deployment", errs.ErrValidation)
 	}
-	if target.ImageTag == nil || strings.TrimSpace(*target.ImageTag) == "" {
-		return db.Deployment{}, fmt.Errorf("%w: rollback target does not have an image tag", errs.ErrValidation)
-	}
 
 	project, err := s.project(ctx, target.ProjectID)
 	if err != nil {
 		return db.Deployment{}, err
 	}
-	if project.DeployMode != "dockerfile" {
-		return db.Deployment{}, errs.ErrComposeUnsupported
+	if project.DeployMode == "static" {
+		return db.Deployment{}, fmt.Errorf("%w: static deployments are rolled forward by redeploying the target commit", errs.ErrValidation)
+	}
+	if project.DeployMode == "dockerfile" && (target.ImageTag == nil || strings.TrimSpace(*target.ImageTag) == "") {
+		return db.Deployment{}, fmt.Errorf("%w: rollback target does not have an image tag", errs.ErrValidation)
 	}
 
 	lock := s.projectLock(project.ID)
@@ -189,6 +183,18 @@ func (s *Service) Start(ctx context.Context, projectID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if project.DeployMode == "static" {
+		if err := s.caddy.AddFileServerRoute(ctx, s.host(project), s.staticCaddyPath(project)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
+	}
+	if project.DeployMode == "compose" {
+		if err := s.docker.StartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
+	}
 	if err := s.docker.Start(ctx, containerName(project.Name)); err != nil {
 		return err
 	}
@@ -199,6 +205,18 @@ func (s *Service) Stop(ctx context.Context, projectID uuid.UUID) error {
 	project, err := s.project(ctx, projectID)
 	if err != nil {
 		return err
+	}
+	if project.DeployMode == "static" {
+		if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "stopped"})
+	}
+	if project.DeployMode == "compose" {
+		if err := s.docker.StopComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "stopped"})
 	}
 	if err := s.docker.Stop(ctx, containerName(project.Name)); err != nil {
 		return err
@@ -211,6 +229,18 @@ func (s *Service) Restart(ctx context.Context, projectID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if project.DeployMode == "static" {
+		if err := s.caddy.AddFileServerRoute(ctx, s.host(project), s.staticCaddyPath(project)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
+	}
+	if project.DeployMode == "compose" {
+		if err := s.docker.RestartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+			return err
+		}
+		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
+	}
 	if err := s.docker.Restart(ctx, containerName(project.Name)); err != nil {
 		return err
 	}
@@ -218,39 +248,140 @@ func (s *Service) Restart(ctx context.Context, projectID uuid.UUID) error {
 }
 
 func (s *Service) ContainerLogs(ctx context.Context, projectID uuid.UUID, tail int) ([]string, error) {
+	items, err := s.ContainerLogLines(ctx, projectID, tail)
+	if err != nil {
+		return nil, err
+	}
+	lines := make([]string, 0, len(items))
+	for _, item := range items {
+		lines = append(lines, item.Line)
+	}
+	return lines, nil
+}
+
+func (s *Service) ContainerLogLines(ctx context.Context, projectID uuid.UUID, tail int) ([]container.ComposeLogLine, error) {
 	project, err := s.project(ctx, projectID)
 	if err != nil {
 		return nil, err
+	}
+	if project.DeployMode == "static" {
+		return []container.ComposeLogLine{}, nil
+	}
+	if project.DeployMode == "compose" {
+		lines, err := s.docker.ComposeLogsAll(ctx, composeProjectName(project.Name), tail)
+		if errors.Is(err, container.ErrNoContainer) {
+			return nil, errs.ErrNotFound
+		}
+		return lines, err
 	}
 	lines, err := s.docker.Logs(ctx, containerName(project.Name), tail)
 	if errors.Is(err, container.ErrNoContainer) {
 		return nil, errs.ErrNotFound
 	}
-	return lines, err
+	if err != nil {
+		return nil, err
+	}
+	service := "app"
+	if project.MainService != nil && strings.TrimSpace(*project.MainService) != "" {
+		service = strings.TrimSpace(*project.MainService)
+	}
+	items := make([]container.ComposeLogLine, 0, len(lines))
+	for _, line := range lines {
+		items = append(items, container.ComposeLogLine{Service: service, Line: line})
+	}
+	return items, nil
 }
 
 func (s *Service) ContainerMetrics(ctx context.Context, projectID uuid.UUID) (container.Metrics, error) {
-	project, err := s.project(ctx, projectID)
+	items, err := s.ContainerMetricsList(ctx, projectID)
 	if err != nil {
 		return container.Metrics{}, err
 	}
-	if project.DeployMode != "dockerfile" {
-		return container.Metrics{}, errs.ErrComposeUnsupported
+	if len(items) == 0 {
+		return container.Metrics{}, errs.ErrNotFound
+	}
+	return items[0], nil
+}
+
+func (s *Service) ContainerMetricsList(ctx context.Context, projectID uuid.UUID) ([]container.Metrics, error) {
+	project, err := s.project(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if project.DeployMode == "static" {
+		return []container.Metrics{{
+			Service:       "static",
+			CPUPercent:    0,
+			MemoryMB:      0,
+			MemoryLimitMB: float64(project.MemoryLimitMb),
+			Uptime:        "n/a",
+			CollectedAt:   time.Now().UTC(),
+		}}, nil
+	}
+	if project.DeployMode == "compose" {
+		metrics, err := s.docker.ComposeStatsAll(ctx, composeProjectName(project.Name))
+		if errors.Is(err, container.ErrNoContainer) {
+			return nil, errs.ErrNotFound
+		}
+		return metrics, err
 	}
 
 	metrics, err := s.docker.Stats(ctx, containerName(project.Name))
 	if errors.Is(err, container.ErrNoContainer) {
-		return container.Metrics{}, errs.ErrNotFound
+		return nil, errs.ErrNotFound
 	}
 	if err != nil {
-		return container.Metrics{}, err
+		return nil, err
 	}
 	if project.MainService != nil && strings.TrimSpace(*project.MainService) != "" {
 		metrics.Service = strings.TrimSpace(*project.MainService)
 	} else {
 		metrics.Service = "app"
 	}
-	return metrics, nil
+	return []container.Metrics{metrics}, nil
+}
+
+func (s *Service) ComposeResources(ctx context.Context, projectID uuid.UUID) (container.ComposeResourceSummary, error) {
+	project, err := s.project(ctx, projectID)
+	if err != nil {
+		return container.ComposeResourceSummary{}, err
+	}
+	if project.DeployMode != "compose" {
+		return container.ComposeResourceSummary{}, errs.ErrComposeUnsupported
+	}
+	return s.docker.ComposeResources(ctx, composeProjectName(project.Name))
+}
+
+func (s *Service) ResetComposeResources(ctx context.Context, projectID uuid.UUID) error {
+	lock := s.projectLock(projectID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	project, err := s.project(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if project.DeployMode != "compose" {
+		return errs.ErrComposeUnsupported
+	}
+
+	if err := s.docker.RemoveComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+		return err
+	}
+	if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
+		slog.Warn("remove compose route during reset", "projectId", project.ID, "error", err)
+	}
+	if err := s.ports.Release(ctx, project.ID); err != nil {
+		return err
+	}
+	if err := s.queries.SetProjectAllocatedPort(ctx, db.SetProjectAllocatedPortParams{ID: project.ID}); err != nil {
+		return err
+	}
+	return s.queries.SetProjectActiveDeployment(ctx, db.SetProjectActiveDeploymentParams{
+		ID:                 project.ID,
+		ActiveDeploymentID: pgtype.UUID{},
+		Status:             "stopped",
+	})
 }
 
 func (s *Service) CleanupProject(ctx context.Context, projectID uuid.UUID) error {
@@ -258,13 +389,52 @@ func (s *Service) CleanupProject(ctx context.Context, projectID uuid.UUID) error
 	if err != nil {
 		return err
 	}
-	if err := s.docker.Remove(ctx, containerName(project.Name)); err != nil {
+	if project.DeployMode == "static" {
+		if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
+			slog.Warn("remove static caddy route", "projectId", project.ID, "error", err)
+		}
+		if err := os.RemoveAll(s.staticProjectPath(project)); err != nil {
+			return err
+		}
+	} else if project.DeployMode == "compose" {
+		if err := s.docker.RemoveComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+			return err
+		}
+	} else if err := s.docker.Remove(ctx, containerName(project.Name)); err != nil {
 		return err
 	}
 	if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
 		slog.Warn("remove caddy route", "projectId", project.ID, "error", err)
 	}
 	return s.ports.Release(ctx, project.ID)
+}
+
+func (s *Service) UpdateProjectRoute(ctx context.Context, before, after db.Project) error {
+	beforeHost := s.host(before)
+	afterHost := s.host(after)
+	if beforeHost == afterHost && samePort(before.AllocatedPort, after.AllocatedPort) {
+		return nil
+	}
+
+	if beforeHost != afterHost {
+		if err := s.caddy.RemoveRoute(ctx, beforeHost); err != nil {
+			slog.Warn("remove old caddy route after project update", "projectId", after.ID, "host", beforeHost, "error", err)
+		}
+	}
+
+	if after.AllocatedPort == nil {
+		if after.DeployMode == "static" && after.Status == "running" {
+			return s.caddy.AddFileServerRoute(ctx, afterHost, s.staticCaddyPath(after))
+		}
+		return nil
+	}
+	if after.DeployMode == "static" {
+		if after.Status != "running" {
+			return nil
+		}
+		return s.caddy.AddFileServerRoute(ctx, afterHost, s.staticCaddyPath(after))
+	}
+	return s.caddy.AddRoute(ctx, afterHost, *after.AllocatedPort)
 }
 
 func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
@@ -314,11 +484,6 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		return
 	}
 
-	if _, err := os.Stat(filepath.Join(workspace, "Dockerfile")); err != nil {
-		s.fail(ctx, deploymentID, projectID, originalStatus, errs.ErrDockerfileNotFound)
-		return
-	}
-
 	commitSHA := gitOutput(ctx, workspace, "rev-parse", "HEAD")
 	commitMessage := gitOutput(ctx, workspace, "log", "-1", "--pretty=%s")
 	if commitSHA == "" {
@@ -328,14 +493,34 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 	if len(shortSHA) > 12 {
 		shortSHA = shortSHA[:12]
 	}
-	imageTag := fmt.Sprintf("mypaas/%s:%s", project.Name, shortSHA)
+	var imageTag *string
+	if project.DeployMode == "dockerfile" {
+		tag := fmt.Sprintf("mypaas/%s:%s", project.Name, shortSHA)
+		imageTag = &tag
+	} else if project.DeployMode == "compose" {
+		tag := fmt.Sprintf("mypaas/%s-%s:%s", project.Name, mainService(project), shortSHA)
+		imageTag = &tag
+	} else if project.DeployMode == "static" {
+		imageTag = nil
+	} else {
+		s.fail(ctx, deploymentID, projectID, originalStatus, fmt.Errorf("%w: unknown deploy mode %q", errs.ErrValidation, project.DeployMode))
+		return
+	}
 	if err := s.queries.SetDeploymentBuildInfo(ctx, db.SetDeploymentBuildInfoParams{
 		ID:            deploymentID,
 		CommitSha:     &commitSHA,
 		CommitMessage: &commitMessage,
-		ImageTag:      &imageTag,
+		ImageTag:      imageTag,
 	}); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
+		return
+	}
+
+	if project.DeployMode == "static" {
+		if err := s.runStaticFromWorkspace(ctx, project, deploymentID, workspace, log); err != nil {
+			s.fail(ctx, deploymentID, projectID, originalStatus, err)
+			return
+		}
 		return
 	}
 
@@ -350,12 +535,25 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		return
 	}
 
+	if project.DeployMode == "compose" {
+		if err := s.runComposeFromWorkspace(ctx, project, deploymentID, workspace, envFile, stringValue(imageTag), log); err != nil {
+			s.fail(ctx, deploymentID, projectID, originalStatus, err)
+			return
+		}
+		return
+	}
+
+	if _, err := os.Stat(filepath.Join(workspace, "Dockerfile")); err != nil {
+		s.fail(ctx, deploymentID, projectID, originalStatus, errs.ErrDockerfileNotFound)
+		return
+	}
+
 	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
-	log("Building image " + imageTag)
-	if err := s.docker.Build(ctx, workspace, imageTag, log); err != nil {
+	log("Building image " + *imageTag)
+	if err := s.docker.Build(ctx, workspace, *imageTag, log); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
@@ -364,7 +562,7 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
-	if err := s.switchDockerfileContainer(ctx, project, deploymentID, imageTag, envFile, log); err != nil {
+	if err := s.switchDockerfileContainer(ctx, project, deploymentID, *imageTag, envFile, log); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
@@ -382,6 +580,185 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		return
 	}
 	log("Deployment running at " + s.publicURL(project))
+}
+
+func (s *Service) runStaticFromWorkspace(ctx context.Context, project db.Project, deploymentID uuid.UUID, workspace string, log func(string)) error {
+	source, rel, err := staticdeploy.FindSiteRoot(workspace)
+	if err != nil {
+		return err
+	}
+
+	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
+		return err
+	}
+	target := s.staticProjectPath(project)
+	next := target + "-" + deploymentID.String()
+	previous := target + ".previous"
+	if err := os.RemoveAll(next); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(previous); err != nil {
+		return err
+	}
+
+	log("Publishing static files from " + rel)
+	if err := staticdeploy.CopyDir(source, next); err != nil {
+		return err
+	}
+
+	hadPrevious := false
+	if _, err := os.Stat(target); err == nil {
+		if err := os.Rename(target, previous); err != nil {
+			return fmt.Errorf("prepare previous static release: %w", err)
+		}
+		hadPrevious = true
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	switched := false
+	defer func() {
+		if switched {
+			if err := os.RemoveAll(previous); err != nil {
+				slog.Warn("remove previous static release", "projectId", project.ID, "error", err)
+			}
+			return
+		}
+		if err := os.RemoveAll(target); err != nil {
+			slog.Warn("remove failed static release", "projectId", project.ID, "error", err)
+		}
+		if hadPrevious {
+			if err := os.Rename(previous, target); err != nil {
+				slog.Warn("restore previous static release", "projectId", project.ID, "error", err)
+			}
+		}
+	}()
+
+	if err := os.Rename(next, target); err != nil {
+		return fmt.Errorf("activate static release: %w", err)
+	}
+
+	if err := s.setStatus(ctx, deploymentID, "starting"); err != nil {
+		return err
+	}
+	log("Updating static route " + s.host(project))
+	if err := s.caddy.AddFileServerRoute(ctx, s.host(project), s.staticCaddyPath(project)); err != nil {
+		return err
+	}
+
+	if err := s.queries.SetProjectActiveDeployment(ctx, db.SetProjectActiveDeploymentParams{
+		ID:                 project.ID,
+		ActiveDeploymentID: pgUUID(deploymentID),
+		Status:             "running",
+	}); err != nil {
+		return err
+	}
+	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deploymentID, Status: "running"}); err != nil {
+		return err
+	}
+	log("Static deployment running at " + s.publicURL(project))
+	switched = true
+	return nil
+}
+
+func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Project, deploymentID uuid.UUID, workspace, envFile, imageTag string, log func(string)) error {
+	composeFile, err := findComposeFile(workspace)
+	if err != nil {
+		return err
+	}
+	main := mainService(project)
+	if main == "" {
+		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
+	}
+
+	services, err := s.docker.ComposeServices(ctx, workspace, envFile)
+	if err != nil {
+		return err
+	}
+	if !containsString(services, main) {
+		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
+	}
+	overrideImageTag := ""
+	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile)
+	if err != nil {
+		log("WARNING: could not detect Compose build services; rollback image tagging is disabled for this deployment")
+		slog.Warn("detect compose build services", "projectId", project.ID, "error", err)
+	} else if containsString(buildServices, main) {
+		overrideImageTag = imageTag
+	} else {
+		log("Compose main service has no build context; rollback will reuse the upstream image declared by Compose")
+	}
+	if resources, err := s.docker.ComposeResources(ctx, composeProjectName(project.Name)); err == nil {
+		total := resources.Containers + resources.Volumes + resources.Networks
+		if total > 0 && !project.ActiveDeploymentID.Valid {
+			log(fmt.Sprintf(
+				"WARNING: found existing Compose resources before first tracked deploy (containers=%d volumes=%d networks=%d). Use Reset Compose resources in settings if these are stale.",
+				resources.Containers,
+				resources.Volumes,
+				resources.Networks,
+			))
+		}
+	} else {
+		slog.Warn("check compose resources before deploy", "projectId", project.ID, "error", err)
+	}
+
+	port, allocatedNow, err := s.allocateProjectPort(ctx, project)
+	if err != nil {
+		return err
+	}
+	succeeded := false
+	defer func() {
+		if succeeded || !allocatedNow {
+			return
+		}
+		if err := s.ports.ReleasePort(context.Background(), port); err != nil {
+			slog.Warn("release compose port after failed deploy", "projectId", project.ID, "port", port, "error", err)
+		}
+		if err := s.queries.SetProjectAllocatedPort(context.Background(), db.SetProjectAllocatedPortParams{ID: project.ID}); err != nil {
+			slog.Warn("clear compose allocated port after failed deploy", "projectId", project.ID, "port", port, "error", err)
+		}
+	}()
+
+	overrideFile := filepath.Join(workspace, "docker-compose.mypaas.override.yml")
+	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
+		return err
+	}
+
+	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
+		return err
+	}
+	log("Starting compose project " + composeProjectName(project.Name))
+	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
+		ProjectName:  composeProjectName(project.Name),
+		WorkDir:      workspace,
+		ComposeFile:  composeFile,
+		OverrideFile: overrideFile,
+		EnvFile:      envFile,
+	}, log); err != nil {
+		return err
+	}
+
+	if err := s.setStatus(ctx, deploymentID, "starting"); err != nil {
+		return err
+	}
+	log("Updating route " + s.host(project))
+	if err := s.caddy.AddRoute(ctx, s.host(project), port); err != nil {
+		return err
+	}
+
+	if err := s.queries.SetProjectActiveDeployment(ctx, db.SetProjectActiveDeploymentParams{
+		ID:                 project.ID,
+		ActiveDeploymentID: pgUUID(deploymentID),
+		Status:             "running",
+	}); err != nil {
+		return err
+	}
+	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deploymentID, Status: "running"}); err != nil {
+		return err
+	}
+	log("Compose deployment running at " + s.publicURL(project))
+	succeeded = true
+	return nil
 }
 
 func (s *Service) rollbackLocked(ctx context.Context, project db.Project, target db.Deployment, userID uuid.UUID) (db.Deployment, error) {
@@ -419,17 +796,25 @@ func (s *Service) rollbackLocked(ctx context.Context, project db.Project, target
 		return fail(err)
 	}
 
-	envs, err := s.envs.DecryptedMap(ctx, project.ID)
-	if err != nil {
-		return fail(err)
-	}
-	envFile := filepath.Join(workspace, ".env")
-	if err := envvar.WriteEnvFile(envFile, envs); err != nil {
-		return fail(err)
-	}
-
-	if err := s.switchDockerfileContainer(ctx, project, deployment.ID, *target.ImageTag, envFile, log); err != nil {
-		return fail(err)
+	if project.DeployMode == "compose" {
+		if err := s.checkoutDeploymentCommit(ctx, project, target, workspace, log); err != nil {
+			return fail(err)
+		}
+		envFile, err := s.writeProjectEnvFile(ctx, project.ID, workspace)
+		if err != nil {
+			return fail(err)
+		}
+		if err := s.switchComposeRelease(ctx, project, target, workspace, envFile, log); err != nil {
+			return fail(err)
+		}
+	} else {
+		envFile, err := s.writeProjectEnvFile(ctx, project.ID, workspace)
+		if err != nil {
+			return fail(err)
+		}
+		if err := s.switchDockerfileContainer(ctx, project, deployment.ID, *target.ImageTag, envFile, log); err != nil {
+			return fail(err)
+		}
 	}
 
 	if err := s.queries.SetProjectActiveDeployment(ctx, db.SetProjectActiveDeploymentParams{
@@ -445,6 +830,113 @@ func (s *Service) rollbackLocked(ctx context.Context, project db.Project, target
 	log("Rollback running at " + s.publicURL(project))
 
 	return s.Get(ctx, deployment.ID)
+}
+
+func (s *Service) checkoutDeploymentCommit(ctx context.Context, project db.Project, target db.Deployment, workspace string, log func(string)) error {
+	if target.CommitSha == nil || strings.TrimSpace(*target.CommitSha) == "" {
+		return fmt.Errorf("%w: rollback target does not have a commit SHA", errs.ErrValidation)
+	}
+	log("Cloning repository " + project.RepoUrl)
+	if err := runGit(ctx, workspace, log, "clone", "--branch", project.Branch, project.RepoUrl, "."); err != nil {
+		return err
+	}
+	log("Checking out commit " + *target.CommitSha)
+	if err := runGit(ctx, workspace, log, "checkout", *target.CommitSha); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) writeProjectEnvFile(ctx context.Context, projectID uuid.UUID, workspace string) (string, error) {
+	envs, err := s.envs.DecryptedMap(ctx, projectID)
+	if err != nil {
+		return "", err
+	}
+	envFile := filepath.Join(workspace, ".env")
+	if err := envvar.WriteEnvFile(envFile, envs); err != nil {
+		return "", err
+	}
+	return envFile, nil
+}
+
+func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, target db.Deployment, workspace, envFile string, log func(string)) error {
+	imageTag := strings.TrimSpace(stringValue(target.ImageTag))
+	composeFile, err := findComposeFile(workspace)
+	if err != nil {
+		return err
+	}
+	main := mainService(project)
+	if main == "" {
+		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
+	}
+	services, err := s.docker.ComposeServices(ctx, workspace, envFile)
+	if err != nil {
+		return err
+	}
+	if !containsString(services, main) {
+		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
+	}
+	overrideImageTag := ""
+	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile)
+	if err != nil {
+		log("WARNING: could not detect Compose build services; rollback will not override the main service image")
+		slog.Warn("detect compose build services during rollback", "projectId", project.ID, "error", err)
+	} else if containsString(buildServices, main) {
+		if imageTag == "" {
+			return fmt.Errorf("%w: compose rollback target does not have an image tag", errs.ErrValidation)
+		}
+		exists, err := s.docker.ImageExists(ctx, imageTag)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return fmt.Errorf("%w: compose rollback image %q is no longer available on this host", errs.ErrValidation, imageTag)
+		}
+		overrideImageTag = imageTag
+	} else {
+		log("Compose rollback will use the upstream image declared by Compose")
+	}
+
+	port, allocatedNow, err := s.allocateProjectPort(ctx, project)
+	if err != nil {
+		return err
+	}
+	succeeded := false
+	defer func() {
+		if succeeded || !allocatedNow {
+			return
+		}
+		if err := s.ports.ReleasePort(context.Background(), port); err != nil {
+			slog.Warn("release compose rollback port after failed deploy", "projectId", project.ID, "port", port, "error", err)
+		}
+		if err := s.queries.SetProjectAllocatedPort(context.Background(), db.SetProjectAllocatedPortParams{ID: project.ID}); err != nil {
+			slog.Warn("clear compose rollback allocated port after failed deploy", "projectId", project.ID, "port", port, "error", err)
+		}
+	}()
+
+	overrideFile := filepath.Join(workspace, "docker-compose.mypaas.override.yml")
+	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
+		return err
+	}
+
+	log("Starting compose rollback " + composeProjectName(project.Name))
+	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
+		ProjectName:  composeProjectName(project.Name),
+		WorkDir:      workspace,
+		ComposeFile:  composeFile,
+		OverrideFile: overrideFile,
+		EnvFile:      envFile,
+		NoBuild:      true,
+	}, log); err != nil {
+		return err
+	}
+
+	log("Updating route " + s.host(project))
+	if err := s.caddy.AddRoute(ctx, s.host(project), port); err != nil {
+		return err
+	}
+	succeeded = true
+	return nil
 }
 
 func (s *Service) switchDockerfileContainer(ctx context.Context, project db.Project, deploymentID uuid.UUID, imageTag, envFile string, log func(string)) error {
@@ -549,6 +1041,78 @@ func (s *Service) ensurePort(ctx context.Context, project db.Project) (int32, er
 	return port, nil
 }
 
+func (s *Service) allocateProjectPort(ctx context.Context, project db.Project) (int32, bool, error) {
+	if project.AllocatedPort != nil {
+		return *project.AllocatedPort, false, nil
+	}
+	port, err := s.ports.Allocate(ctx, project.ID)
+	if err != nil {
+		return 0, false, err
+	}
+	if err := s.queries.SetProjectAllocatedPort(ctx, db.SetProjectAllocatedPortParams{
+		ID:            project.ID,
+		AllocatedPort: &port,
+	}); err != nil {
+		if releaseErr := s.ports.ReleasePort(context.Background(), port); releaseErr != nil {
+			slog.Warn("release port after failed project allocation", "projectId", project.ID, "port", port, "error", releaseErr)
+		}
+		return 0, false, err
+	}
+	return port, true, nil
+}
+
+func findComposeFile(workspace string) (string, error) {
+	for _, name := range []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} {
+		if _, err := os.Stat(filepath.Join(workspace, name)); err == nil {
+			return name, nil
+		}
+	}
+	return "", errs.ErrComposeFileNotFound
+}
+
+func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpuLimit float64, projectNetwork, imageTag string) error {
+	if memoryMB <= 0 {
+		memoryMB = 512
+	}
+	if cpuLimit <= 0 {
+		cpuLimit = 0.5
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(`services:
+  %q:
+    ports: !override
+      - %q
+    mem_limit: %dm
+    cpus: %.2f
+`, service, portMapping, memoryMB, cpuLimit))
+	imageTag = strings.TrimSpace(imageTag)
+	if imageTag != "" {
+		b.WriteString(fmt.Sprintf("    image: %q\n", imageTag))
+	}
+	projectNetwork = strings.TrimSpace(projectNetwork)
+	if projectNetwork != "" {
+		b.WriteString(`    networks:
+      - default
+      - mypaas_platform
+`)
+	} else {
+		b.WriteString(`    extra_hosts:
+      - "host.docker.internal:host-gateway"
+`)
+	}
+	b.WriteString(`    restart: unless-stopped
+`)
+	if projectNetwork != "" {
+		b.WriteString(fmt.Sprintf(`
+networks:
+  mypaas_platform:
+    external: true
+    name: %q
+`, projectNetwork))
+	}
+	return os.WriteFile(path, []byte(b.String()), 0600)
+}
+
 func (s *Service) fail(ctx context.Context, deploymentID, projectID uuid.UUID, originalStatus string, err error) {
 	msg := err.Error()
 	s.appendLog(ctx, deploymentID, "ERROR: "+msg)
@@ -622,8 +1186,65 @@ func (s *Service) publicURL(project db.Project) string {
 	return scheme + "://" + s.host(project)
 }
 
+func (s *Service) staticProjectPath(project db.Project) string {
+	root := strings.TrimSpace(s.cfg.StaticRoot)
+	if root == "" {
+		root = "/var/lib/mypaas/static"
+	}
+	return filepath.Join(root, project.ID.String())
+}
+
+func (s *Service) staticCaddyPath(project db.Project) string {
+	root := strings.TrimSpace(s.cfg.CaddyStaticRoot)
+	if root == "" {
+		root = strings.TrimSpace(s.cfg.StaticRoot)
+	}
+	if root == "" {
+		root = "/var/lib/mypaas/static"
+	}
+	return path.Join(strings.ReplaceAll(root, "\\", "/"), project.ID.String())
+}
+
 func containerName(projectName string) string {
 	return "mypaas-" + projectName
+}
+
+func composeProjectName(projectName string) string {
+	return "mypaas-" + projectName
+}
+
+func mainService(project db.Project) string {
+	if project.MainService == nil {
+		return "app"
+	}
+	service := strings.TrimSpace(*project.MainService)
+	if service == "" {
+		return "app"
+	}
+	return service
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func samePort(a, b *int32) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func temporaryContainerName(projectName string, deploymentID uuid.UUID) string {

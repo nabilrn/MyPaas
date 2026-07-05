@@ -1,0 +1,8 @@
+.env
+.env.*
+bin/
+tmp/
+*.exe
+*.out
+coverage.out
+*.coverprofile
