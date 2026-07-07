@@ -123,6 +123,7 @@ export interface DeployModeDetection {
 	composeFile: string | null;
 	hasDockerfile: boolean;
 	envVars: EnvVarDiscovery[];
+	appPort: number;
 }
 
 export interface AuditLog {

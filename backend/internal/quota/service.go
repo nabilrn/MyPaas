@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,6 +17,8 @@ import (
 	"mypaas/internal/db"
 	"mypaas/internal/errs"
 )
+
+const runtimeUsageTimeout = 1200 * time.Millisecond
 
 type Service struct {
 	queries *db.Queries
@@ -43,6 +46,14 @@ func NewService(queries *db.Queries, cfg *config.Config, dockerClient ...*contai
 }
 
 func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
+	return s.usage(ctx, userID, false)
+}
+
+func (s *Service) UsageWithRuntime(ctx context.Context, userID uuid.UUID) (Usage, error) {
+	return s.usage(ctx, userID, true)
+}
+
+func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bool) (Usage, error) {
 	resources, err := s.queries.GetTotalResourcesByUser(ctx, userID)
 	if err != nil {
 		return Usage{}, err
@@ -51,7 +62,13 @@ func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
 	if err != nil {
 		return Usage{}, err
 	}
-	runtimeMemoryMb, runtimeCPU := s.runtimeUsage(ctx, userID)
+	var runtimeMemoryMb int32
+	var runtimeCPU float64
+	if includeRuntime {
+		runtimeCtx, cancel := context.WithTimeout(ctx, runtimeUsageTimeout)
+		defer cancel()
+		runtimeMemoryMb, runtimeCPU = s.runtimeUsage(runtimeCtx, userID)
+	}
 	return Usage{
 		MemoryLimitMb:   s.cfg.UserRAMQuotaMB,
 		MemoryUsedMb:    resources.TotalMemoryMb,

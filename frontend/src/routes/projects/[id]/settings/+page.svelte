@@ -3,6 +3,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ActionButton from '$components/ActionButton.svelte';
+	import ErrorState from '$components/ErrorState.svelte';
+	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { ComposeResourceSummary, Project, ResourceProfile } from '$types';
@@ -10,6 +12,9 @@
 
 	let project: Project | null = null;
 	let composeResources: ComposeResourceSummary | null = null;
+	let loading = true;
+	let loadError = '';
+	let composeResourceError = '';
 
 	let name        = '';
 	let branch      = '';
@@ -24,6 +29,8 @@
 	let deletingProject = false;
 	let loadingComposeResources = false;
 	let resettingComposeResources = false;
+	let confirmRegenerateSecret = false;
+	let confirmResetComposeResources = false;
 
 	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
 		{ id: 'node-python',  title: 'Node/Python',       memoryMb: 256, cpuLimit: 0.35 },
@@ -43,28 +50,39 @@
 		? composeResources.containers + composeResources.volumes + composeResources.networks
 		: 0;
 
-	onMount(load);
+	onMount(() => {
+		void load();
+	});
 
 	async function load() {
-		project = await api.projects.get($page.params.id);
-		name = project.name;
-		branch = project.branch;
-		appPort = project.appPort;
-		resourceProfile = project.resourceProfile;
-		memoryMb = project.memoryLimitMb;
-		cpuLimit = project.cpuLimit;
-		if (project.deployMode === 'compose') {
-			await loadComposeResources(project.id);
+		loading = true;
+		loadError = '';
+		try {
+			project = await api.projects.get($page.params.id);
+			name = project.name;
+			branch = project.branch;
+			appPort = project.appPort;
+			resourceProfile = project.resourceProfile;
+			memoryMb = project.memoryLimitMb;
+			cpuLimit = project.cpuLimit;
+			if (project.deployMode === 'compose') {
+				await loadComposeResources(project.id);
+			}
+		} catch (err) {
+			loadError = err instanceof Error ? err.message : 'Failed to load project settings';
+		} finally {
+			loading = false;
 		}
 	}
 
 	async function loadComposeResources(projectId = project?.id) {
 		if (!projectId) return;
 		loadingComposeResources = true;
+		composeResourceError = '';
 		try {
 			composeResources = await api.projects.composeResources(projectId);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to load Compose resources');
+			composeResourceError = err instanceof Error ? err.message : 'Failed to load Compose resources';
 		} finally {
 			loadingComposeResources = false;
 		}
@@ -102,13 +120,18 @@
 		}
 	}
 
+	function requestRegenerateSecret() {
+		confirmRegenerateSecret = true;
+	}
+
 	async function handleRegenerateSecret() {
-		if (!project || regeneratingSecret || !window.confirm('Regenerate webhook secret? Existing GitHub webhook signatures will stop working until you update the secret.')) return;
+		if (!project || regeneratingSecret) return;
 		regeneratingSecret = true;
 		try {
 			const result = await api.projects.regenerateWebhookSecret(project.id);
 			project = { ...project, webhookSecret: result.webhookSecret };
 			showWebhookSecret = true;
+			confirmRegenerateSecret = false;
 			toast.success('Webhook secret regenerated');
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to regenerate webhook secret');
@@ -117,14 +140,18 @@
 		}
 	}
 
+	function requestResetComposeResources() {
+		confirmResetComposeResources = true;
+	}
+
 	async function handleResetComposeResources() {
 		if (!project || resettingComposeResources) return;
-		if (!window.confirm('Reset Compose resources for this project? Containers, Compose volumes, networks, route, and allocated port will be removed.')) return;
 		resettingComposeResources = true;
 		try {
 			await api.projects.resetComposeResources(project.id);
 			project = { ...project, status: 'stopped', allocatedPort: null, activeDeploymentId: null };
 			await loadComposeResources(project.id);
+			confirmResetComposeResources = false;
 			toast.success('Compose resources reset');
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to reset Compose resources');
@@ -161,17 +188,26 @@
 	<title>Settings · MyPaas</title>
 </svelte:head>
 
-{#if !project}
-	<div class="surface h-48 animate-pulse"></div>
-{:else}
+{#if loading}
+	<div class="space-y-4">
+		<div class="surface h-48 animate-pulse"></div>
+		<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+			<div class="surface h-64 animate-pulse"></div>
+			<div class="surface h-64 animate-pulse"></div>
+		</div>
+	</div>
+{:else if loadError || !project}
+	<div class="surface overflow-hidden">
+		<ErrorState title="Could not load settings" message={loadError || 'Project not found'} on:retry={() => void load()} />
+	</div>
+{:else if project}
 	<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
 		<div class="space-y-4">
-			<section class="surface overflow-hidden">
-				<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">General</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Routing and deployment branch settings.</p>
-				</div>
-				<div class="grid gap-4 p-5 sm:grid-cols-2">
+			<SectionPanel
+				title="General"
+				description="Routing and deployment branch settings."
+			>
+				<div class="grid gap-4 sm:grid-cols-2">
 					<div class="sm:col-span-2">
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="pname">Project name</label>
 						<input id="pname" type="text" bind:value={name} class="field w-full" />
@@ -192,13 +228,13 @@
 						</div>
 					{/if}
 				</div>
-			</section>
+			</SectionPanel>
 
-			<section class="surface overflow-hidden">
-				<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resource limits</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Default limits applied to the main service.</p>
-				</div>
+			<SectionPanel
+				title="Resource limits"
+				description="Default limits applied to the main service."
+				contentClass="p-0"
+			>
 				<div class="grid gap-4 p-5 sm:grid-cols-2">
 					<div>
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Profile</label>
@@ -233,22 +269,22 @@
 						</ActionButton>
 					</div>
 				{/if}
-			</section>
+			</SectionPanel>
 		</div>
 
 		<div class="space-y-4">
-			<section class="surface overflow-hidden">
-				<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Webhook</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Use this for GitHub push deploys.</p>
-				</div>
+			<SectionPanel
+				title="Webhook"
+				description="Use this for GitHub push deploys."
+				contentClass="p-0"
+			>
 				<div class="space-y-4 p-5">
 					<div>
 						<div class="mb-1 flex items-center justify-between">
 							<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Payload URL</p>
-							<button on:click={() => copyWebhookURL(project?.id ?? '')} class="text-xs font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">
+							<ActionButton variant="ghost" size="xs" on:click={() => copyWebhookURL(project?.id ?? '')} className="min-h-0 px-1 py-0">
 								Copy
-							</button>
+							</ActionButton>
 						</div>
 						<code class="block break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
 							{publicWebhookURL}
@@ -258,41 +294,55 @@
 						<div class="mb-1 flex items-center justify-between">
 							<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Secret</p>
 							<div class="flex gap-3">
-								<button type="button" on:click={() => (showWebhookSecret = !showWebhookSecret)} class="text-xs font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">
+								<ActionButton variant="ghost" size="xs" on:click={() => (showWebhookSecret = !showWebhookSecret)} className="min-h-0 px-1 py-0">
 									{showWebhookSecret ? 'Hide' : 'Show'}
-								</button>
-								<button type="button" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied')} class="text-xs font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">
+								</ActionButton>
+								<ActionButton variant="ghost" size="xs" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied')} className="min-h-0 px-1 py-0">
 									Copy
-								</button>
+								</ActionButton>
 							</div>
 						</div>
 						<code class="block break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
 							{showWebhookSecret ? project.webhookSecret : '••••••••••••••••••••••••••••••••'}
 						</code>
 					</div>
-					<ActionButton on:click={handleRegenerateSecret} loading={regeneratingSecret} loadingLabel="Regenerating...">
-						Regenerate secret
-					</ActionButton>
+					{#if confirmRegenerateSecret}
+						<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+							<p>Regenerating the secret invalidates existing GitHub webhook signatures.</p>
+							<div class="mt-3 flex flex-wrap gap-2">
+								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRegenerateSecret = false)}>
+									Cancel
+								</ActionButton>
+								<ActionButton variant="danger" size="xs" on:click={handleRegenerateSecret} loading={regeneratingSecret} loadingLabel="Regenerating...">
+									Regenerate now
+								</ActionButton>
+							</div>
+						</div>
+					{:else}
+						<ActionButton on:click={requestRegenerateSecret}>
+							Regenerate secret
+						</ActionButton>
+					{/if}
 				</div>
-			</section>
+			</SectionPanel>
 
 			{#if project.deployMode === 'compose'}
-				<section class="surface overflow-hidden">
-					<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Compose resources</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Tracked Docker resources for this Compose project.</p>
-					</div>
+				<SectionPanel
+					title="Compose resources"
+					description="Tracked Docker resources for this Compose project."
+					contentClass="p-0"
+				>
 					<div class="space-y-4 p-5">
-						<div class="grid grid-cols-3 gap-2 text-center">
-							<div class="rounded-md border border-gray-200 px-3 py-2 dark:border-gray-800">
+						<div class="grid grid-cols-3 overflow-hidden rounded-md border border-gray-200 text-center dark:border-gray-800">
+							<div class="border-r border-gray-200 px-3 py-2 dark:border-gray-800">
 								<p class="text-lg font-semibold text-gray-950 dark:text-white">{composeResources?.containers ?? 0}</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">Containers</p>
 							</div>
-							<div class="rounded-md border border-gray-200 px-3 py-2 dark:border-gray-800">
+							<div class="border-r border-gray-200 px-3 py-2 dark:border-gray-800">
 								<p class="text-lg font-semibold text-gray-950 dark:text-white">{composeResources?.volumes ?? 0}</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">Volumes</p>
 							</div>
-							<div class="rounded-md border border-gray-200 px-3 py-2 dark:border-gray-800">
+							<div class="px-3 py-2">
 								<p class="text-lg font-semibold text-gray-950 dark:text-white">{composeResources?.networks ?? 0}</p>
 								<p class="text-xs text-gray-500 dark:text-gray-400">Networks</p>
 							</div>
@@ -302,16 +352,37 @@
 								Compose resources exist but this project has no active deployment. Reset them before deploy if they are stale leftovers.
 							</p>
 						{/if}
+						{#if composeResourceError}
+							<div class="flex flex-col gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
+								<span>{composeResourceError}</span>
+								<ActionButton variant="ghost" size="xs" on:click={() => loadComposeResources()}>
+									Retry check
+								</ActionButton>
+							</div>
+						{/if}
 						<div class="flex gap-2">
 							<ActionButton variant="secondary" on:click={() => loadComposeResources()} loading={loadingComposeResources} loadingLabel="Checking...">
 								Check resources
 							</ActionButton>
-							<ActionButton variant="danger" on:click={handleResetComposeResources} disabled={composeResourceTotal === 0} loading={resettingComposeResources} loadingLabel="Resetting...">
+							<ActionButton variant="danger" on:click={requestResetComposeResources} disabled={composeResourceTotal === 0 || confirmResetComposeResources}>
 								Reset
 							</ActionButton>
 						</div>
+						{#if confirmResetComposeResources}
+							<div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
+								<p>This removes Compose containers, volumes, networks, route, and allocated port for this project.</p>
+								<div class="mt-3 flex flex-wrap gap-2">
+									<ActionButton variant="ghost" size="xs" on:click={() => (confirmResetComposeResources = false)}>
+										Cancel
+									</ActionButton>
+									<ActionButton variant="danger" size="xs" on:click={handleResetComposeResources} loading={resettingComposeResources} loadingLabel="Resetting...">
+										Reset now
+									</ActionButton>
+								</div>
+							</div>
+						{/if}
 					</div>
-				</section>
+				</SectionPanel>
 			{/if}
 
 			<section class="overflow-hidden rounded-lg border border-red-200 bg-white dark:border-red-900/60 dark:bg-gray-900">

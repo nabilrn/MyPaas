@@ -1,4 +1,4 @@
-.PHONY: dev test lint build migrate-up sqlc help clean
+.PHONY: dev test lint build migrate-up sqlc smoke-dogfood verify-prod install-vm help clean
 
 # Variables
 BACKEND_DIR := backend
@@ -15,6 +15,9 @@ help:
 	@echo "  migrate-up       Run database migrations up"
 	@echo "  migrate-down     Roll back database migrations"
 	@echo "  sqlc             Generate sqlc code from queries"
+	@echo "  smoke-dogfood    Verify the 5 local dogfood routes by response content"
+	@echo "  verify-prod      Verify production containers, health, Caddy, and CLI"
+	@echo "  install-vm       Install and start MyPaas on a Linux VM"
 	@echo "  clean            Remove build artifacts and temporary files"
 	@echo "  help             Show this help message"
 
@@ -93,6 +96,16 @@ sqlc:
 	@echo "Generating sqlc code..."
 	@cd $(BACKEND_DIR) && sqlc generate
 	@echo "✓ Generated: $(BACKEND_DIR)/internal/db"
+
+# Verification
+smoke-dogfood:
+	@powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dogfood-smoke.ps1
+
+verify-prod:
+	@bash scripts/verify-production.sh
+
+install-vm:
+	@bash scripts/install-vm.sh
 
 # Cleanup
 clean:

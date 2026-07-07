@@ -11,6 +11,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-api cmd/api/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas cmd/cli/main.go
 
 ## Runtime stage
 FROM alpine:3.19
@@ -20,6 +21,7 @@ RUN apk add --no-cache ca-certificates docker-cli git postgresql-client tzdata
 WORKDIR /app
 
 COPY --from=builder /build/bin/mypaas-api /app/mypaas-api
+COPY --from=builder /build/bin/mypaas /app/mypaas
 
 EXPOSE 8080
 

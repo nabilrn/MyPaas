@@ -9,18 +9,18 @@
 	export let ariaLabel: string | undefined = undefined;
 	export let className = '';
 
-	$: baseClass = 'inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-gray-950 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-white dark:focus:ring-offset-gray-950';
+	$: baseClass = 'inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-px disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-55 dark:focus-visible:ring-brand-500 dark:focus-visible:ring-offset-gray-950';
 	$: sizeClass = {
 		xs: 'min-h-8 rounded-md px-2.5 py-1.5 text-xs',
 		sm: 'min-h-9 rounded-md px-3 py-1.5 text-sm',
 		md: 'min-h-10 rounded-md px-4 py-2 text-sm'
 	}[size];
 	$: variantClass = {
-		primary: 'bg-gray-950 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200',
-		secondary: 'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900',
-		danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+		primary: 'bg-brand-700 text-white hover:bg-brand-900 dark:bg-brand-500 dark:text-gray-950 dark:hover:bg-brand-100',
+		secondary: 'border border-gray-300 bg-white text-gray-800 hover:border-gray-400 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950/80 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-900',
+		danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 dark:bg-red-500 dark:text-white dark:hover:bg-red-400',
 		ghost: 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100',
-		ghostDanger: 'text-gray-500 hover:bg-red-50 hover:text-red-600 focus:ring-red-500 dark:text-gray-400 dark:hover:bg-red-950/30 dark:hover:text-red-300'
+		ghostDanger: 'text-red-600 hover:bg-red-50 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-300 dark:hover:bg-red-950/30 dark:hover:text-red-200'
 	}[variant];
 	$: classes = `${baseClass} ${sizeClass} ${variantClass} ${full ? 'w-full' : ''} ${className}`.trim();
 </script>

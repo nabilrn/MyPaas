@@ -40,6 +40,7 @@ type DetectResponse struct {
 	ComposeFile   *string           `json:"composeFile"`
 	HasDockerfile bool              `json:"hasDockerfile"`
 	EnvVars       []envdiscover.Var `json:"envVars"`
+	AppPort       int32             `json:"appPort"`
 }
 
 func ResponseFromDB(project db.Project) Response {
@@ -73,6 +74,7 @@ func DetectResponseFromResult(result DetectResult) DetectResponse {
 		ComposeFile:   result.ComposeFile,
 		HasDockerfile: result.HasDockerfile,
 		EnvVars:       result.EnvVars,
+		AppPort:       result.AppPort,
 	}
 }
 

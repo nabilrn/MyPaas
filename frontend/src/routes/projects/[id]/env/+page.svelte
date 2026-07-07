@@ -2,12 +2,20 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import EmptyState from '$components/EmptyState.svelte';
+	import ErrorState from '$components/ErrorState.svelte';
+	import IconButton from '$components/IconButton.svelte';
+	import SectionPanel from '$components/SectionPanel.svelte';
+	import SecretField from '$components/SecretField.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { EnvVar } from '$types';
 
-	let vars: Array<EnvVar & { value: string; revealed: boolean; dirty: boolean }> = [];
+	type EnvRow = EnvVar & { value: string; revealed: boolean; dirty: boolean; revealing: boolean };
+
+	let vars: EnvRow[] = [];
 	let loading = true;
+	let error = '';
 
 	let newKey   = '';
 	let newValue = '';
@@ -18,13 +26,43 @@
 
 	$: dirtyCount = vars.filter((v) => v.dirty).length;
 	$: hasDirty = dirtyCount > 0;
+	$: canAdd = Boolean(newKey.trim() && !savingNewVar);
 
-	function toggleReveal(id: string) {
-		vars = vars.map((v) => (v.id === id ? { ...v, revealed: !v.revealed } : v));
+	async function toggleReveal(id: string) {
+		const row = vars.find((v) => v.id === id);
+		if (!row || row.revealing) return;
+		if (row.revealed) {
+			vars = vars.map((v) => (v.id === id ? { ...v, revealed: false } : v));
+			return;
+		}
+		if (row.dirty) {
+			toast.warning('Save or discard the draft before revealing the stored value');
+			return;
+		}
+
+		vars = vars.map((v) => (v.id === id ? { ...v, revealing: true } : v));
+		try {
+			const revealed = await api.env.reveal($page.params.id, row.key);
+			vars = vars.map((v) => (v.id === id ? { ...v, value: revealed.value, revealed: true, revealing: false } : v));
+		} catch (err) {
+			vars = vars.map((v) => (v.id === id ? { ...v, revealing: false } : v));
+			toast.error(err instanceof Error ? err.message : 'Failed to reveal variable');
+		}
 	}
 
 	function markDirty(id: string, value: string) {
 		vars = vars.map((v) => (v.id === id ? { ...v, value, dirty: true } : v));
+	}
+
+	function discardDraft(id: string) {
+		vars = vars.map((v) => (v.id === id ? { ...v, value: '', dirty: false, revealed: false } : v));
+	}
+
+	function copyValue(key: string, value: string) {
+		if (!value) return;
+		void navigator.clipboard.writeText(value)
+			.then(() => toast.success(`${key} copied`))
+			.catch(() => toast.error('Failed to copy variable'));
 	}
 
 	async function handleDelete(id: string, key: string) {
@@ -63,7 +101,7 @@
 		if (!newKey.trim() || savingNewVar) return;
 		savingNewVar = true;
 		try {
-			await api.env.bulkUpdate($page.params.id, { vars: [{ key: newKey.trim(), value: newValue }] });
+			await api.env.bulkUpdate($page.params.id, { vars: [{ key: normalizeEnvKey(newKey), value: newValue }] });
 			newKey   = '';
 			newValue = '';
 			adding   = false;
@@ -82,14 +120,31 @@
 		if (!background) {
 			loading = true;
 		}
+		error = '';
 		try {
 			const rows = await api.env.list($page.params.id);
-			vars = rows.map((v) => ({ ...v, value: '', revealed: false, dirty: false }));
+			vars = rows.map((v) => ({ ...v, value: '', revealed: false, dirty: false, revealing: false }));
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to load environment variables';
+			if (background) {
+				toast.error(error);
+			}
 		} finally {
 			if (!background) {
 				loading = false;
 			}
 		}
+	}
+
+	function normalizeEnvKey(value: string) {
+		return value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+	}
+
+	function envState(row: EnvRow) {
+		if (row.dirty && row.revealed) return 'Unsaved visible change';
+		if (row.dirty) return 'Unsaved overwrite draft';
+		if (row.revealed) return 'Stored value revealed';
+		return `Updated ${new Date(row.updatedAt).toLocaleDateString()}`;
 	}
 </script>
 
@@ -97,15 +152,13 @@
 	<title>Environment · MyPaas</title>
 </svelte:head>
 
-<section class="surface overflow-hidden">
-	<div class="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
-		<div>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Environment variables</h2>
-			<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-				Encrypted at rest. Values stay masked until edited.
-			</p>
-		</div>
-		<div class="flex items-center gap-2">
+<SectionPanel
+	title="Environment variables"
+	description="Encrypted at rest. Reveal only when you need to inspect a stored value."
+	contentClass="p-0"
+>
+	<svelte:fragment slot="actions">
+		<div class="flex flex-wrap items-center gap-2">
 			{#if hasDirty}
 				<span class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
 					{dirtyCount} unsaved
@@ -120,12 +173,14 @@
 				</ActionButton>
 			{/if}
 			{#if !adding}
-				<ActionButton variant="secondary" on:click={() => (adding = true)}>
-					Add variable
-				</ActionButton>
+				<IconButton label="Add variable" variant="primary" on:click={() => (adding = true)}>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+					</svg>
+				</IconButton>
 			{/if}
 		</div>
-	</div>
+	</svelte:fragment>
 
 	{#if loading}
 		<div class="space-y-3 p-5">
@@ -133,64 +188,44 @@
 				<div class="h-11 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
 			{/each}
 		</div>
+	{:else if error}
+		<ErrorState title="Could not load environment variables" message={error} on:retry={() => void load()} />
+	{:else if vars.length === 0}
+		<EmptyState
+			title="No environment variables yet."
+			description="Add variables when the app needs runtime configuration or secrets."
+			compact
+		/>
 	{:else}
 		<div class="divide-y divide-gray-100 dark:divide-gray-800">
 			{#each vars as v}
-				<div class="grid gap-3 px-5 py-3 lg:grid-cols-[14rem_minmax(0,1fr)_6rem] lg:items-center">
-					<div class="min-w-0">
-						<p class="truncate font-mono text-sm font-semibold text-gray-950 dark:text-white">
-							{v.key}
-							{#if v.dirty}
-								<span class="ml-1 text-amber-500">●</span>
-							{/if}
-						</p>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Updated {new Date(v.updatedAt).toLocaleDateString()}</p>
-					</div>
-					<input
-						type={v.revealed ? 'text' : 'password'}
-						value={v.revealed ? v.value || '••••••••' : ''}
-						placeholder="••••••••"
-						on:input={(e) => markDirty(v.id, (e.currentTarget as HTMLInputElement).value)}
-						class="field w-full font-mono"
-					/>
-					<div class="flex items-center gap-1 lg:justify-end">
-						<button
-							on:click={() => toggleReveal(v.id)}
-							class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-							aria-label="Toggle visibility"
-						>
-							{#if v.revealed}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.6 10.6A2 2 0 0013.4 13.4M9.9 4.2A10.8 10.8 0 0112 4c4.5 0 8.3 2.9 9.5 7a10.9 10.9 0 01-3 4.7M6.1 6.1A10.8 10.8 0 002.5 11c1.2 4.1 5 7 9.5 7 1.3 0 2.5-.2 3.6-.7" />
-								</svg>
-							{:else}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-									<path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-								</svg>
-							{/if}
-						</button>
-						<ActionButton
-							variant="ghostDanger"
-							size="xs"
-							on:click={() => handleDelete(v.id, v.key)}
-							className="px-2"
-							loading={deletingKeys.has(v.key)}
-							ariaLabel={`Delete ${v.key}`}
-						>
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-							</svg>
-						</ActionButton>
-					</div>
-				</div>
+				<SecretField
+					keyName={v.key}
+					value={v.value}
+					revealed={v.revealed}
+					dirty={v.dirty}
+					revealing={v.revealing}
+					deleting={deletingKeys.has(v.key)}
+					stateLabel={envState(v)}
+					on:change={(event) => markDirty(v.id, event.detail)}
+					on:copy={() => copyValue(v.key, v.value)}
+					on:discard={() => discardDraft(v.id)}
+					on:reveal={() => toggleReveal(v.id)}
+					on:remove={() => handleDelete(v.id, v.key)}
+				/>
 			{/each}
 		</div>
 	{/if}
 
 	{#if adding}
 		<div class="grid gap-3 border-t border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-800 dark:bg-gray-900/60 lg:grid-cols-[14rem_minmax(0,1fr)_auto]">
-			<input type="text" bind:value={newKey} placeholder="KEY" class="field w-full font-mono" />
+			<input
+				type="text"
+				value={newKey}
+				on:input={(event) => (newKey = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))}
+				placeholder="KEY"
+				class="field w-full font-mono uppercase"
+			/>
 			<input type="text" bind:value={newValue} placeholder="value" class="field w-full font-mono" />
 			<div class="flex gap-2">
 				<ActionButton
@@ -198,13 +233,14 @@
 					on:click={handleAdd}
 					loading={savingNewVar}
 					loadingLabel="Adding..."
+					disabled={!canAdd}
 				>
 					Add
 				</ActionButton>
-				<ActionButton variant="ghost" on:click={() => (adding = false)}>
+				<ActionButton variant="ghost" on:click={() => (adding = false)} disabled={savingNewVar}>
 					Cancel
 				</ActionButton>
 			</div>
 		</div>
 	{/if}
-</section>
+</SectionPanel>

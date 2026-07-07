@@ -2,6 +2,7 @@ package envvar
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"mypaas/internal/crypto"
 	"mypaas/internal/db"
@@ -35,9 +37,24 @@ func (s *Service) List(ctx context.Context, projectID uuid.UUID) ([]db.EnvVar, e
 	return s.queries.ListEnvVarsByProject(ctx, projectID)
 }
 
+func (s *Service) Reveal(ctx context.Context, projectID uuid.UUID, key string) (string, error) {
+	key = normalizeKey(key)
+	if key == "" {
+		return "", fmt.Errorf("%w: env var key is required", errs.ErrValidation)
+	}
+	row, err := s.queries.GetEnvVar(ctx, db.GetEnvVarParams{ProjectID: projectID, Key: key})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errs.ErrNotFound
+		}
+		return "", err
+	}
+	return s.cipher.Decrypt(row.ValueEncrypted, row.ValueNonce)
+}
+
 func (s *Service) BulkUpdate(ctx context.Context, projectID uuid.UUID, values []Value) error {
 	for _, item := range values {
-		key := strings.TrimSpace(item.Key)
+		key := normalizeKey(item.Key)
 		if !keyPattern.MatchString(key) {
 			return fmt.Errorf("%w: invalid env var key %q", errs.ErrValidation, item.Key)
 		}
@@ -58,6 +75,7 @@ func (s *Service) BulkUpdate(ctx context.Context, projectID uuid.UUID, values []
 }
 
 func (s *Service) Delete(ctx context.Context, projectID uuid.UUID, key string) error {
+	key = normalizeKey(key)
 	if key == "" {
 		return fmt.Errorf("%w: env var key is required", errs.ErrValidation)
 	}
@@ -113,4 +131,8 @@ func escapeEnvValue(value string) string {
 		return `"` + escaped + `"`
 	}
 	return value
+}
+
+func normalizeKey(key string) string {
+	return strings.ToUpper(strings.TrimSpace(key))
 }

@@ -258,6 +258,56 @@ func (q *Queries) ListProjectsByUser(ctx context.Context, userID uuid.UUID) ([]P
 	return items, nil
 }
 
+const listRoutableProjects = `-- name: ListRoutableProjects :many
+SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile
+FROM projects
+WHERE status = 'running'
+  AND deleted_at IS NULL
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListRoutableProjects(ctx context.Context) ([]Project, error) {
+	rows, err := q.db.Query(ctx, listRoutableProjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.RepoUrl,
+			&i.Branch,
+			&i.Subdomain,
+			&i.DeployMode,
+			&i.MainService,
+			&i.AppPort,
+			&i.WebhookSecret,
+			&i.AllocatedPort,
+			&i.MemoryLimitMb,
+			&i.CpuLimit,
+			&i.Status,
+			&i.ActiveDeploymentID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ResourceProfile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resetBuildingProjects = `-- name: ResetBuildingProjects :exec
 UPDATE projects
 SET status     = 'pending',

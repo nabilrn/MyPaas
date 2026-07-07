@@ -1,9 +1,11 @@
 package project
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -12,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +74,7 @@ type DetectResult struct {
 	ComposeFile   *string
 	HasDockerfile bool
 	EnvVars       []envdiscover.Var
+	AppPort       int32
 }
 
 func NewService(queries *db.Queries, domain string, quotaService *quota.Service) *Service {
@@ -124,6 +128,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 			return DetectResult{}, err
 		}
 		mainService := pickMainService(services)
+		appPort := inferComposeAppPort(ctx, workspace, composeFile, mainService, envVars)
 		return DetectResult{
 			DeployMode:    "compose",
 			MainService:   &mainService,
@@ -131,13 +136,14 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 			ComposeFile:   &composeFile,
 			HasDockerfile: hasDockerfile,
 			EnvVars:       envVars,
+			AppPort:       appPort,
 		}, nil
 	}
 	if hasDockerfile {
-		return DetectResult{DeployMode: "dockerfile", HasDockerfile: true, EnvVars: envVars}, nil
+		return DetectResult{DeployMode: "dockerfile", HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars)}, nil
 	}
 	if _, _, err := staticdeploy.FindSiteRoot(workspace); err == nil {
-		return DetectResult{DeployMode: "static", HasDockerfile: false, EnvVars: envVars}, nil
+		return DetectResult{DeployMode: "static", HasDockerfile: false, EnvVars: envVars, AppPort: 80}, nil
 	}
 	return DetectResult{}, errs.ErrNoDeployConfig
 }
@@ -373,6 +379,238 @@ func pickMainService(services []string) string {
 		}
 	}
 	return services[0]
+}
+
+func inferDockerfileAppPort(workspace string, envVars []envdiscover.Var) int32 {
+	env := envDefaultsFromDiscovery(envVars)
+	file, err := os.Open(filepath.Join(workspace, "Dockerfile"))
+	if err != nil {
+		return portFromEnv(env)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := stripDockerfileComment(scanner.Text())
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		switch strings.ToUpper(fields[0]) {
+		case "ENV":
+			mergeDockerfileEnv(env, strings.TrimSpace(line[len(fields[0]):]))
+		case "EXPOSE":
+			for _, token := range fields[1:] {
+				if port := parsePortToken(token, env); port > 0 {
+					return port
+				}
+			}
+		}
+	}
+	return portFromEnv(env)
+}
+
+func inferComposeAppPort(ctx context.Context, workspace, composeFile, serviceName string, envVars []envdiscover.Var) int32 {
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "config", "--format", "json")
+	cmd.Dir = workspace
+	out, err := cmd.Output()
+	if err != nil {
+		return portFromEnv(envDefaultsFromDiscovery(envVars))
+	}
+
+	var config struct {
+		Services map[string]json.RawMessage `json:"services"`
+	}
+	if err := json.Unmarshal(out, &config); err != nil {
+		return portFromEnv(envDefaultsFromDiscovery(envVars))
+	}
+	raw, ok := config.Services[serviceName]
+	if !ok {
+		return portFromEnv(envDefaultsFromDiscovery(envVars))
+	}
+
+	var service struct {
+		Ports       json.RawMessage `json:"ports"`
+		Expose      json.RawMessage `json:"expose"`
+		Environment json.RawMessage `json:"environment"`
+	}
+	if err := json.Unmarshal(raw, &service); err != nil {
+		return portFromEnv(envDefaultsFromDiscovery(envVars))
+	}
+
+	env := envDefaultsFromDiscovery(envVars)
+	mergeComposeEnvironment(env, service.Environment)
+	if port := parseComposePorts(service.Ports, env); port > 0 {
+		return port
+	}
+	if port := parseComposeExpose(service.Expose, env); port > 0 {
+		return port
+	}
+	return portFromEnv(env)
+}
+
+func envDefaultsFromDiscovery(vars []envdiscover.Var) map[string]string {
+	env := make(map[string]string)
+	for _, item := range vars {
+		if item.DefaultValue == nil {
+			continue
+		}
+		env[strings.ToUpper(strings.TrimSpace(item.Key))] = strings.TrimSpace(*item.DefaultValue)
+	}
+	return env
+}
+
+func portFromEnv(env map[string]string) int32 {
+	for _, key := range []string{"PORT", "APP_PORT", "SERVER_PORT", "LISTEN_PORT"} {
+		if port := parsePortToken(env[key], env); port > 0 {
+			return port
+		}
+	}
+	return 0
+}
+
+func stripDockerfileComment(line string) string {
+	if idx := strings.Index(line, "#"); idx >= 0 {
+		line = line[:idx]
+	}
+	return strings.TrimSpace(line)
+}
+
+func mergeDockerfileEnv(env map[string]string, raw string) {
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return
+	}
+	if len(fields) == 2 && !strings.Contains(fields[0], "=") {
+		env[strings.ToUpper(fields[0])] = trimPortValue(fields[1])
+		return
+	}
+	for _, field := range fields {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		env[strings.ToUpper(strings.TrimSpace(key))] = trimPortValue(value)
+	}
+}
+
+func mergeComposeEnvironment(env map[string]string, raw json.RawMessage) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return
+	}
+
+	var asMap map[string]any
+	if err := json.Unmarshal(raw, &asMap); err == nil {
+		for key, value := range asMap {
+			if value == nil {
+				continue
+			}
+			env[strings.ToUpper(key)] = trimPortValue(fmt.Sprint(value))
+		}
+		return
+	}
+
+	var asList []string
+	if err := json.Unmarshal(raw, &asList); err == nil {
+		for _, item := range asList {
+			key, value, ok := strings.Cut(item, "=")
+			if !ok {
+				continue
+			}
+			env[strings.ToUpper(strings.TrimSpace(key))] = trimPortValue(value)
+		}
+	}
+}
+
+func parseComposePorts(raw json.RawMessage, env map[string]string) int32 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var ports []json.RawMessage
+	if err := json.Unmarshal(raw, &ports); err != nil {
+		return 0
+	}
+	for _, item := range ports {
+		if port := parseComposePort(item, env); port > 0 {
+			return port
+		}
+	}
+	return 0
+}
+
+func parseComposePort(raw json.RawMessage, env map[string]string) int32 {
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		for _, key := range []string{"target", "container_port"} {
+			if value, ok := obj[key]; ok {
+				if port := parsePortToken(fmt.Sprint(value), env); port > 0 {
+					return port
+				}
+			}
+		}
+	}
+
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err != nil {
+		return 0
+	}
+	parts := strings.Split(asString, ":")
+	return parsePortToken(parts[len(parts)-1], env)
+}
+
+func parseComposeExpose(raw json.RawMessage, env map[string]string) int32 {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var values []json.RawMessage
+	if err := json.Unmarshal(raw, &values); err != nil {
+		var value string
+		if err := json.Unmarshal(raw, &value); err == nil {
+			return parsePortToken(value, env)
+		}
+		return 0
+	}
+	for _, item := range values {
+		if port := parseComposeExposeValue(item, env); port > 0 {
+			return port
+		}
+	}
+	return 0
+}
+
+func parseComposeExposeValue(raw json.RawMessage, env map[string]string) int32 {
+	var value string
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return parsePortToken(value, env)
+	}
+	var number int
+	if err := json.Unmarshal(raw, &number); err == nil {
+		return parsePortToken(strconv.Itoa(number), env)
+	}
+	return 0
+}
+
+func parsePortToken(token string, env map[string]string) int32 {
+	value := trimPortValue(token)
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		key := strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		value = env[strings.ToUpper(key)]
+	} else if strings.HasPrefix(value, "$") {
+		value = env[strings.ToUpper(strings.TrimPrefix(value, "$"))]
+	}
+	value = trimPortValue(value)
+	if strings.Contains(value, "/") {
+		value = strings.SplitN(value, "/", 2)[0]
+	}
+	port, err := strconv.Atoi(value)
+	if err != nil || port <= 0 || port > 65535 {
+		return 0
+	}
+	return int32(port)
+}
+
+func trimPortValue(value string) string {
+	return strings.Trim(strings.TrimSpace(value), `"'`)
 }
 
 func splitNonEmptyLines(value string) []string {

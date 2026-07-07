@@ -176,6 +176,27 @@ pnpm dev
 
 ## Deployment
 
+For a fresh Linux VM, run the installer from the repository root:
+```bash
+bash scripts/install-vm.sh
+```
+
+The installer checks Docker + Compose, generates a production `.env` with safe random secrets, creates MyPaas host directories, runs migrations, and starts the production Compose stack. For non-interactive installs, provide required values as environment variables:
+```bash
+PUBLIC_DOMAIN=mypaas.example.com \
+OWNER_EMAIL=you@example.com \
+GITHUB_CLIENT_ID=your_client_id \
+GITHUB_CLIENT_SECRET=your_client_secret \
+bash scripts/install-vm.sh
+```
+
+Useful installer flags:
+```bash
+SKIP_DEPLOY=true bash scripts/install-vm.sh          # prepare VM and .env only
+FORCE_ENV=true bash scripts/install-vm.sh            # regenerate .env
+SKIP_DOCKER_INSTALL=true bash scripts/install-vm.sh  # require Docker to already exist
+```
+
 **Production checklist:**
 - [ ] All tests passing
 - [ ] Environment variables set
@@ -185,7 +206,18 @@ pnpm dev
 
 Deploy via:
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+bash scripts/deploy-to-vm.sh
+```
+
+Verify after deploy or VM reboot:
+```bash
+bash scripts/verify-production.sh
+RUN_BACKUP=true bash scripts/verify-production.sh
+```
+
+Verify local dogfooding routes:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dogfood-smoke.ps1
 ```
 
 Monitor:

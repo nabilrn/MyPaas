@@ -52,3 +52,45 @@ func TestStaticCaddyPathUsesContainerPathSeparators(t *testing.T) {
 		t.Fatalf("staticCaddyPath() = %q, want %q", got, want)
 	}
 }
+
+func TestIdleMetricsUsesProjectShapeWithoutDocker(t *testing.T) {
+	mainService := "web"
+	project := db.Project{
+		DeployMode:    "compose",
+		MainService:   &mainService,
+		MemoryLimitMb: 256,
+		Status:        "stopped",
+	}
+
+	items := idleMetrics(project)
+	if len(items) != 1 {
+		t.Fatalf("idleMetrics() returned %d items, want 1", len(items))
+	}
+	got := items[0]
+	if got.Service != "web" {
+		t.Fatalf("Service = %q, want web", got.Service)
+	}
+	if got.MemoryLimitMB != 256 {
+		t.Fatalf("MemoryLimitMB = %v, want 256", got.MemoryLimitMB)
+	}
+	if got.CPUPercent != 0 || got.MemoryMB != 0 || got.Uptime != "n/a" {
+		t.Fatalf("idle metrics should be zeroed with n/a uptime, got %+v", got)
+	}
+}
+
+func TestHasLiveRuntime(t *testing.T) {
+	for _, status := range []string{"running", "building"} {
+		t.Run(status, func(t *testing.T) {
+			if !hasLiveRuntime(status) {
+				t.Fatalf("hasLiveRuntime(%q) = false, want true", status)
+			}
+		})
+	}
+	for _, status := range []string{"pending", "stopped", "crashed"} {
+		t.Run(status, func(t *testing.T) {
+			if hasLiveRuntime(status) {
+				t.Fatalf("hasLiveRuntime(%q) = true, want false", status)
+			}
+		})
+	}
+}

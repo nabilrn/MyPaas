@@ -80,15 +80,17 @@ export const api = {
 	},
 
 	deployments: {
-		list:     (projectId: string, page = 0): Promise<Deployment[]> => request(`/projects/${projectId}/deployments?offset=${page * 20}`),
+		list:     (projectId: string, page = 0, pageSize = 20, lookahead = false): Promise<Deployment[]> =>
+			request(`/projects/${projectId}/deployments?limit=${pageSize + (lookahead ? 1 : 0)}&offset=${page * pageSize}`),
 		get:      (id: string):                   Promise<Deployment>   => request(`/deployments/${id}`),
 		rollback: (id: string):                   Promise<Deployment>   => request(`/deployments/${id}/rollback`, { method: 'POST' })
 	},
 
 	env: {
 		list:       (projectId: string):              Promise<EnvVar[]> => request(`/projects/${projectId}/env`),
+		reveal:     (projectId: string, key: string): Promise<{ value: string }> => request(`/projects/${projectId}/env/${encodeURIComponent(key)}/reveal`),
 		bulkUpdate: (projectId: string, d: unknown):  Promise<void>    => request(`/projects/${projectId}/env`, { method: 'PUT', body: JSON.stringify(d) }),
-		delete:     (projectId: string, key: string): Promise<void>    => request(`/projects/${projectId}/env/${key}`, { method: 'DELETE' })
+		delete:     (projectId: string, key: string): Promise<void>    => request(`/projects/${projectId}/env/${encodeURIComponent(key)}`, { method: 'DELETE' })
 	},
 
 	logs: {
@@ -103,6 +105,7 @@ export const api = {
 		listUsers:   ():                       Promise<User[]> => request('/admin/users'),
 		addUser:     (d: unknown):             Promise<User>   => request('/admin/users',      { method: 'POST',   body: JSON.stringify(d) }),
 		removeUser:  (id: string):             Promise<void>   => request(`/admin/users/${id}`, { method: 'DELETE' }),
-		listAuditLogs: (page = 0):             Promise<AuditLog[]> => request(`/admin/audit-logs?offset=${page * 50}`)
+		listAuditLogs: (page = 0, pageSize = 50, lookahead = false): Promise<AuditLog[]> =>
+			request(`/admin/audit-logs?limit=${pageSize + (lookahead ? 1 : 0)}&offset=${page * pageSize}`)
 	}
 };

@@ -2,6 +2,8 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import IconButton from '$components/IconButton.svelte';
+	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { LogLine } from '$types';
@@ -11,6 +13,7 @@
 	};
 
 	const maxLines = 5000;
+	const renderLimit = 1000;
 	const historyService = 'app';
 
 	let logs: LogEntry[] = [];
@@ -21,6 +24,7 @@
 	let filter = '';
 	let selectedService = 'all';
 	let error = '';
+	let streamError = '';
 	let nextID = 1;
 	let logViewport: HTMLDivElement | null = null;
 	let source: EventSource | null = null;
@@ -32,6 +36,13 @@
 		const matchesFilter = query === '' || log.line.toLowerCase().includes(query) || log.service.toLowerCase().includes(query);
 		return matchesService && matchesFilter;
 	});
+	$: renderedLogs = filteredLogs.length > renderLimit ? filteredLogs.slice(-renderLimit) : filteredLogs;
+	$: clippedRenderCount = filteredLogs.length - renderedLogs.length;
+	$: streamDescription = streaming
+		? 'Streaming container output with local filter and copy/export controls.'
+		: streamError
+			? 'Live stream is reconnecting. Historical logs remain available.'
+			: 'Connecting to the project log stream.';
 
 	onMount(() => {
 		void loadHistory();
@@ -76,11 +87,13 @@
 
 	function connectStream() {
 		source?.close();
+		streaming = false;
+		streamError = '';
 		source = new EventSource(`/api/projects/${$page.params.id}/stream`, { withCredentials: true });
 
 		source.addEventListener('open', () => {
 			streaming = true;
-			error = '';
+			streamError = '';
 		});
 
 		source.addEventListener('log', appendStreamLog);
@@ -88,6 +101,7 @@
 
 		source.addEventListener('error', () => {
 			streaming = false;
+			streamError = 'Live stream disconnected. Browser retry is active.';
 		});
 	}
 
@@ -138,6 +152,11 @@
 
 	function clearLogs() {
 		logs = [];
+		selectedService = 'all';
+	}
+
+	function reconnectStream() {
+		connectStream();
 	}
 
 	function copyVisibleLogs() {
@@ -168,20 +187,19 @@
 	<title>Logs · MyPaas</title>
 </svelte:head>
 
-<div class="flex h-[calc(100vh-16rem)] min-h-[32rem] flex-col gap-3">
-	<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-		<div>
-			<h1 class="text-lg font-semibold tracking-tight text-gray-950 dark:text-white">Logs</h1>
-			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-				{streaming ? 'Streaming container output' : 'Connecting to log stream'}
-				<span class="ml-2 inline-flex items-center gap-1.5">
+<div class="flex h-[calc(100vh-16rem)] min-h-[32rem] flex-col">
+	<SectionPanel
+		title="Log stream"
+		description={streamDescription}
+		className="flex min-h-0 flex-1 flex-col"
+		contentClass="flex min-h-0 flex-1 flex-col gap-3 p-4"
+	>
+		<svelte:fragment slot="actions">
+			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+				<span class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 text-xs font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
 					<span class="h-1.5 w-1.5 rounded-full {streaming ? 'bg-green-500' : 'bg-amber-500'}"></span>
 					{filteredLogs.length} visible
 				</span>
-			</p>
-		</div>
-
-		<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 			<input
 				type="search"
 				bind:value={filter}
@@ -196,45 +214,77 @@
 					<option value={service}>{service === 'all' ? 'All services' : service}</option>
 				{/each}
 			</select>
-			<button
-				type="button"
+			<ActionButton
+				variant="secondary"
 				on:click={copyVisibleLogs}
 				disabled={filteredLogs.length === 0}
-				class="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900"
 			>
 				Copy
-			</button>
-			<button
-				type="button"
+			</ActionButton>
+			<ActionButton
+				variant="secondary"
 				on:click={downloadLogs}
 				disabled={filteredLogs.length === 0}
-				class="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900"
 			>
 				Download
-			</button>
-		</div>
-	</div>
+			</ActionButton>
+			</div>
+		</svelte:fragment>
 
 	{#if error}
-		<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-			{error}
+		<div class="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+			<span>{error}</span>
+			<ActionButton
+				variant="ghost"
+				size="xs"
+				type="button"
+				on:click={() => loadHistory(true)}
+				loading={reloadingHistory}
+				loadingLabel="Retrying..."
+				className="text-amber-800 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40"
+			>
+				Retry history
+			</ActionButton>
+		</div>
+	{/if}
+
+	{#if streamError}
+		<div class="flex flex-col gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
+			<span>{streamError}</span>
+			<ActionButton variant="secondary" size="xs" type="button" on:click={reconnectStream}>
+				Reconnect
+			</ActionButton>
 		</div>
 	{/if}
 
 	<div
 		bind:this={logViewport}
 		on:scroll={handleScroll}
-		class="scrollbar-thin relative flex-1 overflow-auto rounded-lg border border-gray-800 bg-gray-950 p-4 font-mono text-xs leading-5 text-gray-100 shadow-sm"
+		class="scrollbar-thin relative flex-1 overflow-auto rounded-md border border-gray-800 bg-gray-950 p-4 font-mono text-xs leading-5 text-gray-100 shadow-sm"
+		aria-live="polite"
 	>
 		{#if loading}
-			<p class="text-gray-500">Loading logs...</p>
+			<div class="space-y-2">
+				{#each [1, 2, 3, 4, 5, 6] as _}
+					<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
+						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+					</div>
+				{/each}
+			</div>
 		{:else if filteredLogs.length === 0}
 			<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
 		{:else}
-			{#each filteredLogs as log (log.id)}
-				<div class="grid grid-cols-[5.5rem_7rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words">
+			{#if clippedRenderCount > 0}
+				<p class="mb-2 text-gray-500">
+					Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.
+				</p>
+			{/if}
+			{#each renderedLogs as log (log.id)}
+				<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
 					<span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span>
-					<span class="truncate text-sky-300">{log.service}</span>
+					<span class="truncate text-sky-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span>
 					<span>{log.line}</span>
 				</div>
 			{/each}
@@ -254,17 +304,18 @@
 			<button type="button" on:click={clearLogs} class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
 				Clear local view
 			</button>
-			<ActionButton
-				variant="ghost"
-				size="xs"
+			<IconButton
+				label="Reload log history"
+				variant="brand"
 				type="button"
 				on:click={() => loadHistory(true)}
 				loading={reloadingHistory}
-				loadingLabel="Reloading..."
-				className="min-h-0 px-0 py-0"
 			>
-				Reload history
-			</ActionButton>
+				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
+				</svg>
+			</IconButton>
 		</div>
 	</div>
+	</SectionPanel>
 </div>

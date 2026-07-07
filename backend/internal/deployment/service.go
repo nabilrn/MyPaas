@@ -308,15 +308,8 @@ func (s *Service) ContainerMetricsList(ctx context.Context, projectID uuid.UUID)
 	if err != nil {
 		return nil, err
 	}
-	if project.DeployMode == "static" {
-		return []container.Metrics{{
-			Service:       "static",
-			CPUPercent:    0,
-			MemoryMB:      0,
-			MemoryLimitMB: float64(project.MemoryLimitMb),
-			Uptime:        "n/a",
-			CollectedAt:   time.Now().UTC(),
-		}}, nil
+	if project.DeployMode == "static" || !hasLiveRuntime(project.Status) {
+		return idleMetrics(project), nil
 	}
 	if project.DeployMode == "compose" {
 		metrics, err := s.docker.ComposeStatsAll(ctx, composeProjectName(project.Name))
@@ -339,6 +332,25 @@ func (s *Service) ContainerMetricsList(ctx context.Context, projectID uuid.UUID)
 		metrics.Service = "app"
 	}
 	return []container.Metrics{metrics}, nil
+}
+
+func hasLiveRuntime(status string) bool {
+	return status == "running" || status == "building"
+}
+
+func idleMetrics(project db.Project) []container.Metrics {
+	service := mainService(project)
+	if project.DeployMode == "static" {
+		service = "static"
+	}
+	return []container.Metrics{{
+		Service:       service,
+		CPUPercent:    0,
+		MemoryMB:      0,
+		MemoryLimitMB: float64(project.MemoryLimitMb),
+		Uptime:        "n/a",
+		CollectedAt:   time.Now().UTC(),
+	}}
 }
 
 func (s *Service) ComposeResources(ctx context.Context, projectID uuid.UUID) (container.ComposeResourceSummary, error) {
@@ -407,6 +419,55 @@ func (s *Service) CleanupProject(ctx context.Context, projectID uuid.UUID) error
 		slog.Warn("remove caddy route", "projectId", project.ID, "error", err)
 	}
 	return s.ports.Release(ctx, project.ID)
+}
+
+func (s *Service) ReconcileRoutes(ctx context.Context) error {
+	projects, err := s.queries.ListRoutableProjects(ctx)
+	if err != nil {
+		return fmt.Errorf("list routable projects: %w", err)
+	}
+
+	reconciled := 0
+	var firstErr error
+	for _, project := range projects {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := s.reconcileRoute(ctx, project); err != nil {
+			slog.Warn("reconcile caddy route failed",
+				"projectId", project.ID,
+				"name", project.Name,
+				"mode", project.DeployMode,
+				"error", err,
+			)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		reconciled++
+	}
+
+	slog.Info("caddy routes reconciled",
+		"projects", len(projects),
+		"reconciled", reconciled,
+	)
+	return firstErr
+}
+
+func (s *Service) reconcileRoute(ctx context.Context, project db.Project) error {
+	host := s.host(project)
+	switch project.DeployMode {
+	case "static":
+		return s.caddy.AddFileServerRoute(ctx, host, s.staticCaddyPath(project))
+	case "dockerfile", "compose":
+		if project.AllocatedPort == nil {
+			return fmt.Errorf("running %s project has no allocated port", project.DeployMode)
+		}
+		return s.caddy.AddRoute(ctx, host, *project.AllocatedPort)
+	default:
+		return fmt.Errorf("unsupported deploy mode %q", project.DeployMode)
+	}
 }
 
 func (s *Service) UpdateProjectRoute(ctx context.Context, before, after db.Project) error {

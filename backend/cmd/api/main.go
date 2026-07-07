@@ -89,9 +89,18 @@ func run() error {
 		return fmt.Errorf("recover interrupted deployments: %w", err)
 	}
 
+	routeReconciler := deployment.NewService(
+		cfg,
+		queries,
+		envvar.NewService(queries, cipher),
+		port.NewService(pool),
+		caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost),
+		container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+	)
+
 	appCtx, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
-	backgroundDone := startBackgroundJobs(appCtx, cfg)
+	backgroundDone := startBackgroundJobs(appCtx, cfg, routeReconciler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -185,9 +194,44 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	return r
 }
 
-func startBackgroundJobs(ctx context.Context, cfg *config.Config) <-chan struct{} {
-	dockerClient := container.NewDockerCLI(cfg.DockerBindHost)
-	return backup.NewService(cfg, dockerClient).Start(ctx)
+func startBackgroundJobs(ctx context.Context, cfg *config.Config, routeReconciler *deployment.Service) <-chan struct{} {
+	done := make(chan struct{})
+	backupDone := backup.NewService(cfg, container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)).Start(ctx)
+	routeDone := startRouteReconciler(ctx, routeReconciler, 30*time.Second)
+
+	go func() {
+		defer close(done)
+		<-backupDone
+		<-routeDone
+	}()
+	return done
+}
+
+func startRouteReconciler(ctx context.Context, service *deployment.Service, interval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		run := func() {
+			reconcileCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			if err := service.ReconcileRoutes(reconcileCtx); err != nil {
+				slog.Warn("caddy route reconciliation incomplete", "error", err)
+			}
+		}
+
+		run()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				run()
+			}
+		}
+	}()
+	return done
 }
 
 func registerRoutes(
@@ -237,6 +281,7 @@ func registerRoutes(
 			r.Post("/{id}/webhook-secret/regenerate", projectHandler.RegenerateWebhookSecret)
 			r.Get("/{id}/deployments", deploymentHandler.List)
 			r.Get("/{id}/env", envHandler.List)
+			r.Get("/{id}/env/{key}/reveal", envHandler.Reveal)
 			r.Put("/{id}/env", envHandler.BulkUpdate)
 			r.Delete("/{id}/env/{key}", envHandler.Delete)
 			r.Get("/{id}/stream", deploymentHandler.Stream)

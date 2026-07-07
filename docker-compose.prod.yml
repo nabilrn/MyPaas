@@ -95,6 +95,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
       CADDY_ADMIN: "127.0.0.1:2019"
     depends_on:
       - api

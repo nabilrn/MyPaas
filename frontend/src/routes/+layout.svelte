@@ -6,7 +6,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api';
+	import { sidebarCollapsed } from '$stores/sidebar';
+	import { theme } from '$stores/theme';
 	import type { User } from '$types';
+	import faviconGreen from '../assets/mypaas-icon-transparent-green.png';
+	import faviconWhite from '../assets/mypaas-icon-transparent-white.png';
 
 	let user: User | null = null;
 	let checked = false;
@@ -29,14 +33,23 @@
 	});
 </script>
 
-{#if !isLogin && user}
-	<Navbar {user} />
-{/if}
+<svelte:head>
+	<link rel="icon" type="image/png" href={$theme === 'dark' ? faviconWhite : faviconGreen} />
+</svelte:head>
 
-<main class="min-h-screen bg-gray-50 dark:bg-gray-950">
-	{#if checked || isLogin}
-		<slot />
+{#if checked || isLogin}
+	{#if !isLogin && user}
+		<div class="min-h-screen transition-[padding] duration-200 {$sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}">
+			<Navbar {user} />
+			<main class="min-h-screen">
+				<slot />
+			</main>
+		</div>
+	{:else}
+		<main class="min-h-screen">
+			<slot />
+		</main>
 	{/if}
-</main>
+{/if}
 
 <Toast />

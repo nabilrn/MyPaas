@@ -20,6 +20,15 @@ FROM projects
 WHERE user_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
+-- name: ListRoutableProjects :many
+SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
+       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
+       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile
+FROM projects
+WHERE status = 'running'
+  AND deleted_at IS NULL
+ORDER BY created_at ASC;
+
 -- name: CountProjectsByUser :one
 SELECT COUNT(*)
 FROM projects

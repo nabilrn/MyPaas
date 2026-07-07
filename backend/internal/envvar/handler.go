@@ -31,6 +31,19 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, ResponsesFromDB(rows))
 }
 
+func (h *Handler) Reveal(w http.ResponseWriter, r *http.Request) {
+	id, ok := projectID(w, r)
+	if !ok {
+		return
+	}
+	value, err := h.service.Reveal(r.Context(), id, chi.URLParam(r, "key"))
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"value": value})
+}
+
 func (h *Handler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 	id, ok := projectID(w, r)
 	if !ok {

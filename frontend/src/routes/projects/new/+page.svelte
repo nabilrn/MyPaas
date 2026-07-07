@@ -2,17 +2,25 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import Breadcrumbs from '$components/Breadcrumbs.svelte';
+	import PageHeader from '$components/PageHeader.svelte';
+	import SectionPanel from '$components/SectionPanel.svelte';
+	import SegmentedChoice from '$components/SegmentedChoice.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost } from '$lib/utils/urls';
 	import type { DeployModeDetection, EnvVarDiscovery, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
-	type EnvDraft = EnvVarDiscovery & {
-		value: string;
-	};
+	type EnvDraft = EnvVarDiscovery & { value: string };
+	type PortSource = 'fallback' | 'detected' | 'manual' | 'static';
 
-	let step = 1;
+	const DEFAULT_APP_PORT = '3000';
+	const breadcrumbs = [
+		{ label: 'Projects', href: '/projects' },
+		{ label: 'New project' }
+	];
+
 	let submitting = false;
 	let detecting = false;
 	let error = '';
@@ -20,38 +28,77 @@
 	let detectedServices: string[] = [];
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
+	let appPortSource: PortSource = 'fallback';
 	let form = {
-		name:        '',
-		repoUrl:     '',
-		branch:      'main',
-		deployMode:  'auto' as DeployModeChoice,
+		name: '',
+		repoUrl: '',
+		branch: 'main',
+		deployMode: 'auto' as DeployModeChoice,
 		mainService: '',
-		appPort:     '3000',
+		appPort: '',
 		resourceProfile: 'node-python' as ResourceProfile,
-		memoryMb:    '256',
-		cpuLimit:    '0.35',
+		memoryMb: '256',
+		cpuLimit: '0.35',
 		sharedPostgres: false
 	};
 
-	const steps = ['Repository', 'Runtime', 'Environment', 'Resources'];
 	const deployModes: Array<{ id: DeployModeChoice; title: string; body: string }> = [
-		{ id: 'auto',       title: 'Auto',       body: 'Detect runtime files' },
-		{ id: 'dockerfile', title: 'Dockerfile', body: 'Single container app' },
-		{ id: 'compose',    title: 'Compose',    body: 'Multi-service project' },
-		{ id: 'static',     title: 'Static',     body: 'No runtime container' }
+		{ id: 'auto', title: 'Auto', body: 'Detect' },
+		{ id: 'dockerfile', title: 'Dockerfile', body: 'Single app' },
+		{ id: 'compose', title: 'Compose', body: 'Multi-service' },
+		{ id: 'static', title: 'Static', body: 'File server' }
 	];
 	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: string; cpuLimit: string }> = [
-		{ id: 'node-python',  title: 'Node/Python',       memoryMb: '256', cpuLimit: '0.35' },
-		{ id: 'go-small',     title: 'Go small',          memoryMb: '128', cpuLimit: '0.2' },
-		{ id: 'compose-main', title: 'Compose main',      memoryMb: '256', cpuLimit: '0.35' },
-		{ id: 'static',       title: 'Static/no-runtime', memoryMb: '64',  cpuLimit: '0.1' },
-		{ id: 'custom',       title: 'Custom',            memoryMb: '512', cpuLimit: '0.5' }
+		{ id: 'node-python', title: 'Node/Python', memoryMb: '256', cpuLimit: '0.35' },
+		{ id: 'go-small', title: 'Go small', memoryMb: '128', cpuLimit: '0.2' },
+		{ id: 'compose-main', title: 'Compose main', memoryMb: '256', cpuLimit: '0.35' },
+		{ id: 'static', title: 'Static/no-runtime', memoryMb: '64', cpuLimit: '0.1' },
+		{ id: 'custom', title: 'Custom', memoryMb: '512', cpuLimit: '0.5' }
 	];
 
-	function next() { step = Math.min(step + 1, steps.length); }
-	function back() { step = Math.max(step - 1, 1); }
 	$: previewHost = projectHost(form.name || 'your-app', $page.url.hostname);
 	$: selectedProfile = resourceProfiles.find((profile) => profile.id === form.resourceProfile);
+	$: managedDatabaseUrl = form.sharedPostgres && form.deployMode !== 'static';
+	$: effectiveAppPort = form.deployMode === 'static' ? '80' : form.appPort || DEFAULT_APP_PORT;
+	$: deployModeOptions = deployModes.map((mode) => ({
+		value: mode.id,
+		label: mode.title,
+		description: mode.body
+	}));
+	$: portStateLabel = form.deployMode === 'static'
+		? 'Static file server'
+		: appPortSource === 'detected'
+			? 'Detected from repository'
+			: appPortSource === 'manual'
+				? 'Manual override'
+				: 'Fallback if detection finds no port';
+	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && !submitting && !detecting);
+	$: createDisabledReason = !form.name.trim()
+		? 'Project name is required'
+		: !form.repoUrl.trim()
+			? 'Repository URL is required'
+			: detecting
+				? 'Repository detection is running'
+				: submitting
+					? 'Project creation is running'
+					: '';
+	$: reviewStateLabel = canSubmit ? 'Ready to create' : createDisabledReason || 'Complete required fields';
+	$: detectionStateLabel = detecting
+		? 'Inspecting repository'
+		: detectMessage
+			? detectMessage
+			: form.repoUrl.trim()
+				? 'Ready for detection'
+				: 'Waiting for repository URL';
+	$: detectionStateBody = detecting
+		? 'MyPaas is checking the branch for Dockerfile, Compose, static assets, ports, services, and env hints.'
+		: detectMessage
+			? detectedServices.length > 0
+				? `Services: ${detectedServices.join(', ')}`
+				: 'Runtime and defaults have been applied from the repository.'
+			: form.repoUrl.trim()
+				? 'Run detection to fill runtime, port, service, and discovered environment defaults.'
+				: 'Paste a repository URL before running detection.';
 
 	function defaultProfileForMode(mode: DeployModeChoice): ResourceProfile {
 		if (mode === 'static') return 'static';
@@ -70,14 +117,46 @@
 		form.deployMode = mode;
 		if (mode === 'static') {
 			form.appPort = '80';
+			appPortSource = 'static';
 			form.mainService = '';
 			form.sharedPostgres = false;
 		} else if (form.appPort === '80') {
-			form.appPort = '3000';
+			form.appPort = '';
+			appPortSource = 'fallback';
+		} else if (!form.appPort) {
+			appPortSource = 'fallback';
 		}
 		if (form.resourceProfile !== 'custom') {
 			applyResourceProfile(defaultProfileForMode(mode));
 		}
+	}
+
+	function applyDetectedMode(detected: DeployModeDetection) {
+		const manualPort = appPortSource === 'manual' ? form.appPort : '';
+		chooseDeployMode(detected.deployMode);
+		if (detected.mainService) {
+			form.mainService = detected.mainService;
+		}
+		if (detected.deployMode === 'static') {
+			form.appPort = '80';
+			appPortSource = 'static';
+		} else if (detected.appPort > 0) {
+			form.appPort = String(detected.appPort);
+			appPortSource = 'detected';
+		} else if (manualPort) {
+			form.appPort = manualPort;
+			appPortSource = 'manual';
+		} else {
+			form.appPort = '';
+			appPortSource = 'fallback';
+		}
+		detectedServices = detected.services;
+		mergeDiscoveredEnvVars(detected.envVars ?? []);
+		detectMessage = detected.deployMode === 'compose'
+			? `Compose${detected.composeFile ? `: ${detected.composeFile}` : ''}`
+			: detected.deployMode === 'static'
+				? 'Static site'
+				: 'Dockerfile';
 	}
 
 	function markCustomProfile() {
@@ -96,7 +175,7 @@
 	}
 
 	function addEnvVar() {
-		const key = newEnvKey.trim();
+		const key = normalizeEnvKey(newEnvKey);
 		if (!key || envDrafts.some((item) => item.key === key)) {
 			newEnvKey = '';
 			return;
@@ -114,11 +193,26 @@
 		return /SECRET|TOKEN|PASSWORD|PASS|KEY|DATABASE_URL|DSN|PRIVATE/i.test(key);
 	}
 
-	$: managedDatabaseUrl = form.sharedPostgres && form.deployMode !== 'static';
+	function normalizeEnvKey(value: string) {
+		return value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+	}
+
+	function handleNewEnvKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		addEnvVar();
+	}
+
+	function handleAppPortInput(event: Event) {
+		form.appPort = (event.currentTarget as HTMLInputElement).value;
+		appPortSource = form.appPort ? 'manual' : 'fallback';
+	}
 
 	async function handleDetectMode(showToast = true): Promise<DeployModeDetection> {
 		if (!form.repoUrl.trim()) {
-			throw new Error('Repository URL is required before detection');
+			const message = 'Repository URL is required before detection';
+			error = message;
+			throw new Error(message);
 		}
 
 		detecting = true;
@@ -129,22 +223,9 @@
 				repoUrl: form.repoUrl,
 				branch: form.branch
 			});
-			form.deployMode = detected.deployMode;
-			if (form.resourceProfile !== 'custom') {
-				applyResourceProfile(defaultProfileForMode(detected.deployMode));
-			}
-			if (detected.mainService) {
-				form.mainService = detected.mainService;
-			}
-			detectedServices = detected.services;
-			mergeDiscoveredEnvVars(detected.envVars ?? []);
-			detectMessage = detected.deployMode === 'compose'
-				? `Detected Compose${detected.composeFile ? ` (${detected.composeFile})` : ''}`
-				: detected.deployMode === 'static'
-					? 'Detected static site'
-					: 'Detected Dockerfile';
+			applyDetectedMode(detected);
 			if (showToast) {
-				toast.success(detectMessage);
+				toast.success(`Detected ${detectMessage || detected.deployMode}`);
 			}
 			return detected;
 		} catch (err) {
@@ -160,7 +241,7 @@
 	}
 
 	async function handleSubmit() {
-		if (submitting) return;
+		if (submitting || detecting) return;
 		submitting = true;
 		error = '';
 		try {
@@ -176,12 +257,11 @@
 				form.appPort = '80';
 				form.sharedPostgres = false;
 			}
+			const appPort = deployMode === 'static' ? 80 : Number(form.appPort || DEFAULT_APP_PORT);
+
 			const envVars = envDrafts
 				.filter((item) => item.key.trim() && item.value.length > 0)
-				.map((item) => ({
-					key: item.key.trim(),
-					value: item.value
-				}));
+				.map((item) => ({ key: item.key.trim(), value: item.value }));
 
 			const project = await api.projects.create({
 				name: form.name,
@@ -190,7 +270,7 @@
 				deployMode,
 				resourceProfile: form.resourceProfile,
 				mainService,
-				appPort: Number(form.appPort),
+				appPort,
 				memoryLimitMb: Number(form.memoryMb),
 				cpuLimit: Number(form.cpuLimit),
 				sharedPostgres: form.sharedPostgres,
@@ -211,302 +291,314 @@
 	<title>New project · MyPaas</title>
 </svelte:head>
 
-<div class="mx-auto max-w-6xl px-4 py-7 sm:px-6">
-	<a href="/projects" class="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">
-		<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-			<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-		</svg>
-		Projects
-	</a>
+<div class="page-shell py-6">
+	<Breadcrumbs items={breadcrumbs} />
 
-	<header class="mb-6">
-		<p class="text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">Create deployment target</p>
-		<h1 class="mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">New project</h1>
-		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Connect a Git repository and choose the container runtime MyPaas should run.</p>
-	</header>
+	<PageHeader
+		title="New project"
+		description="Create a routable deployment target from a Git repository."
+	/>
 
-	<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-		<section class="surface overflow-hidden">
-			<div class="grid grid-cols-4 border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-900/70">
-				{#each steps as label, index}
-					<button
-						type="button"
-						on:click={() => (step = index + 1)}
-						class="border-r border-gray-100 px-4 py-3 text-left last:border-r-0 dark:border-gray-800
-							{step === index + 1 ? 'bg-white dark:bg-gray-900' : 'text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white'}"
-					>
-						<span class="block text-[11px] font-medium uppercase tracking-wide">Step {index + 1}</span>
-						<span class="mt-1 block text-sm font-semibold">{label}</span>
-					</button>
-				{/each}
-			</div>
+	{#if error}
+		<div class="mb-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
+			<p class="font-medium">Action blocked</p>
+			<p class="mt-1">{error}</p>
+		</div>
+	{/if}
 
-			<div class="p-5">
-				{#if error}
-					<div class="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-						{error}
+	<div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem]">
+		<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
+			<SectionPanel
+				title="Repository source"
+				description="Name the route, choose the branch, and detect how MyPaas should run it."
+			>
+				<div class="grid gap-4 sm:grid-cols-2">
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="name">Project name</label>
+						<input id="name" type="text" bind:value={form.name} placeholder="my-app" class="field w-full" />
 					</div>
-				{/if}
-
-				{#if step === 1}
-					<div class="space-y-5">
-						<div>
-							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Repository</h2>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The repository root must contain a Dockerfile, Compose file, or static index.html output.</p>
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="name">Project name</label>
-								<input id="name" type="text" bind:value={form.name} placeholder="my-app" class="field w-full" />
-							</div>
-							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="branch">Branch</label>
-								<input id="branch" type="text" bind:value={form.branch} class="field w-full font-mono" />
-							</div>
-							<div class="sm:col-span-2">
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
-								<input id="repo" type="text" bind:value={form.repoUrl} placeholder="https://github.com/username/repo" class="field w-full font-mono" />
-							</div>
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="branch">Branch</label>
+						<input id="branch" type="text" bind:value={form.branch} class="field w-full font-mono" />
+					</div>
+					<div class="sm:col-span-2">
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
+						<div class="flex flex-col gap-2 sm:flex-row">
+							<input id="repo" type="text" bind:value={form.repoUrl} placeholder="https://github.com/username/repo" class="field min-w-0 flex-1 font-mono" />
+							<ActionButton
+								variant="secondary"
+								type="button"
+								on:click={() => void handleDetectMode().catch(() => undefined)}
+								disabled={detecting || !form.repoUrl.trim()}
+								loading={detecting}
+								loadingLabel="Detecting..."
+							>
+								Detect
+							</ActionButton>
 						</div>
 					</div>
-				{:else if step === 2}
-					<div class="space-y-5">
-						<div>
-							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime</h2>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-detect prefers Compose when both runtime files exist.</p>
+				</div>
+				<div
+					class="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 text-sm dark:border-gray-800 dark:bg-gray-950/60"
+					aria-live="polite"
+				>
+					<div class="flex gap-3">
+						<span
+							class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full
+								{detecting
+									? 'bg-yellow-500'
+									: detectMessage
+										? 'bg-brand-500'
+										: 'bg-gray-400 dark:bg-gray-600'}"
+						></span>
+						<div class="min-w-0">
+							<p class="font-medium text-gray-950 dark:text-white">{detectionStateLabel}</p>
+							<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{detectionStateBody}</p>
 						</div>
-						<div class="grid gap-2 sm:grid-cols-4">
-							{#each deployModes as mode}
-								<button
-									type="button"
-									on:click={() => chooseDeployMode(mode.id)}
-									class="rounded-md border p-3 text-left transition-colors
-										{form.deployMode === mode.id
-											? 'border-gray-950 bg-gray-950 text-white dark:border-white dark:bg-white dark:text-gray-950'
-											: 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 dark:hover:bg-gray-900'}"
-								>
-									<span class="block text-sm font-semibold">{mode.title}</span>
-									<span class="mt-1 block text-xs opacity-70">{mode.body}</span>
-								</button>
-							{/each}
-						</div>
-						<div class="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-950">
-							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-								<p class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
-									{#if detectMessage}
-										<span class="font-medium text-gray-950 dark:text-white">{detectMessage}</span>
-										{#if detectedServices.length > 0}
-											<span class="ml-1">Services: {detectedServices.join(', ')}</span>
-										{/if}
-									{:else}
-										Run detection after entering the repository URL.
-									{/if}
-								</p>
-								<ActionButton
-									variant="secondary"
-									size="xs"
-									type="button"
-									on:click={() => void handleDetectMode()}
-									disabled={detecting || !form.repoUrl.trim()}
-									loading={detecting}
-									loadingLabel="Detecting..."
-								>
-									Detect
-								</ActionButton>
-							</div>
-						</div>
+					</div>
+				</div>
+			</SectionPanel>
+
+			<SectionPanel
+				title="Runtime and entrypoint"
+				description="Use detection for repository defaults, then override only the values that need to be explicit."
+			>
+				<div class="space-y-4">
+					<SegmentedChoice
+						label="Deployment mode"
+						value={form.deployMode}
+						options={deployModeOptions}
+						on:change={(event) => chooseDeployMode(event.detail as DeployModeChoice)}
+					/>
+
+					<div class="grid gap-4 sm:grid-cols-2">
 						{#if form.deployMode === 'compose'}
 							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainService">Main service name</label>
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainService">Main service</label>
 								<input id="mainService" type="text" bind:value={form.mainService} placeholder="app" class="field w-full font-mono" />
 							</div>
 						{/if}
 						{#if form.deployMode !== 'static'}
 							<div>
 								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="appPort">App port</label>
-								<input id="appPort" type="number" bind:value={form.appPort} class="field w-full font-mono sm:w-44" />
+								<input
+									id="appPort"
+									type="number"
+									min="1"
+									max="65535"
+									value={form.appPort}
+									placeholder={DEFAULT_APP_PORT}
+									on:input={handleAppPortInput}
+									class="field w-full font-mono"
+								/>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{portStateLabel}</p>
+							</div>
+						{:else}
+							<div class="soft-panel p-3 text-sm sm:col-span-2">
+								<p class="font-medium text-gray-950 dark:text-white">Static deployment</p>
+								<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Static projects are served by the file server on port 80, so app port and database options are disabled.</p>
 							</div>
 						{/if}
 					</div>
-				{:else if step === 3}
-					<div class="space-y-5">
-						<div>
-							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Environment</h2>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Detected keys become encrypted project env vars after create.</p>
+				</div>
+			</SectionPanel>
+
+			<SectionPanel
+				title="Resources"
+				description="Keep defaults small for the self-hosted VM quota, or switch to custom values when needed."
+			>
+				<div class="grid gap-4 sm:grid-cols-3">
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Profile</label>
+						<select id="profile" bind:value={form.resourceProfile} on:change={() => applyResourceProfile(form.resourceProfile)} class="field w-full">
+							{#each resourceProfiles as profile}
+								<option value={profile.id}>{profile.title}</option>
+							{/each}
+						</select>
+					</div>
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="memory">Memory</label>
+						<select id="memory" bind:value={form.memoryMb} on:change={markCustomProfile} class="field w-full">
+							<option value="64">64 MB</option>
+							<option value="128">128 MB</option>
+							<option value="256">256 MB</option>
+							<option value="512">512 MB</option>
+							<option value="1024">1024 MB</option>
+							<option value="2048">2048 MB</option>
+						</select>
+					</div>
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="cpu">CPU</label>
+						<select id="cpu" bind:value={form.cpuLimit} on:change={markCustomProfile} class="field w-full">
+							<option value="0.1">0.10</option>
+							<option value="0.2">0.20</option>
+							<option value="0.25">0.25</option>
+							<option value="0.35">0.35</option>
+							<option value="0.5">0.50</option>
+							<option value="1">1.00</option>
+							<option value="2">2.00</option>
+						</select>
+					</div>
+				</div>
+				<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Changing memory or CPU directly switches the profile to Custom.</p>
+			</SectionPanel>
+
+			<SectionPanel
+				title="Environment"
+				description="Add only the variables this project needs. Keys are normalized before create."
+			>
+				<svelte:fragment slot="actions">
+					{#if form.deployMode !== 'static'}
+						<label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+							<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
+							Shared PostgreSQL
+						</label>
+					{/if}
+				</svelte:fragment>
+				<div>
+					<div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
+						<div class="hidden gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400 lg:grid lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem]">
+							<span>Key</span>
+							<span>Value</span>
+							<span>Source</span>
+							<span></span>
 						</div>
-						{#if form.deployMode !== 'static'}
-							<label class="flex items-start gap-3 rounded-md border border-gray-200 bg-white p-3 text-sm dark:border-gray-800 dark:bg-gray-950">
-								<input type="checkbox" bind:checked={form.sharedPostgres} class="mt-1 h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
-								<span>
-									<span class="block font-medium text-gray-950 dark:text-white">Provision shared PostgreSQL</span>
-									<span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">MyPaas will create DATABASE_URL as a managed encrypted env var.</span>
-								</span>
-							</label>
-						{/if}
-						<div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
-							<div class="grid grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
-								<span>Key</span>
-								<span>Value</span>
-								<span>Source</span>
+						{#if managedDatabaseUrl}
+							<div class="grid gap-2 border-b border-gray-100 px-3 py-3 dark:border-gray-800 lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] lg:items-center">
+								<p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white">DATABASE_URL</p>
+								<input value="Generated on create" disabled class="field w-full opacity-70" />
+								<span class="truncate text-xs text-gray-500 dark:text-gray-400"><span class="lg:hidden">Source: </span>managed</span>
 								<span></span>
 							</div>
-							{#if managedDatabaseUrl}
-								<div class="grid grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] items-center gap-2 border-b border-gray-100 px-3 py-2 dark:border-gray-800">
-									<div class="min-w-0">
-										<p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white">DATABASE_URL</p>
-										<p class="text-[11px] text-gray-500 dark:text-gray-400">managed</p>
-									</div>
-									<input value="Generated on create" disabled class="field w-full opacity-70" />
-									<span class="truncate text-xs text-gray-500 dark:text-gray-400">shared db</span>
-									<span></span>
-								</div>
-							{/if}
-							{#each envDrafts as draft, index}
-								<div class="grid grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] items-center gap-2 border-b border-gray-100 px-3 py-2 last:border-b-0 dark:border-gray-800">
-									<div class="min-w-0">
-										<input bind:value={draft.key} class="field w-full font-mono" />
-										{#if draft.sensitive}
-											<p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">masked</p>
-										{/if}
-									</div>
-									<input
-										type={draft.sensitive ? 'password' : 'text'}
-										bind:value={draft.value}
-										placeholder={draft.defaultValue ? `sample: ${draft.defaultValue}` : ''}
-										class="field w-full font-mono"
-									/>
-									<span class="truncate text-xs text-gray-500 dark:text-gray-400" title={draft.source}>{draft.source}</span>
-									<button type="button" on:click={() => removeEnvVar(index)} class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-950 dark:hover:bg-gray-800 dark:hover:text-white">
-										×
-									</button>
-								</div>
-							{/each}
-						</div>
-						<div class="flex gap-2">
-							<input bind:value={newEnvKey} placeholder="ENV_KEY" class="field min-w-0 flex-1 font-mono" on:keydown={(event) => event.key === 'Enter' && addEnvVar()} />
-							<ActionButton type="button" variant="secondary" on:click={addEnvVar}>
-								Add
-							</ActionButton>
-						</div>
-					</div>
-				{:else}
-					<div class="space-y-5">
-						<div>
-							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resources</h2>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Keep defaults small for personal VM capacity.</p>
-						</div>
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div class="sm:col-span-2">
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Resource profile</label>
-								<select
-									id="profile"
-									bind:value={form.resourceProfile}
-									on:change={() => applyResourceProfile(form.resourceProfile)}
-									class="field w-full"
+						{/if}
+						{#each envDrafts as draft, index}
+							<div class="grid gap-2 border-b border-gray-100 px-3 py-3 last:border-b-0 dark:border-gray-800 lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] lg:items-center">
+								<input
+									value={draft.key}
+									on:input={(event) => (draft.key = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))}
+									class="field w-full font-mono uppercase"
+								/>
+								<input
+									type={draft.sensitive ? 'password' : 'text'}
+									bind:value={draft.value}
+									placeholder={draft.defaultValue ? `sample: ${draft.defaultValue}` : ''}
+									class="field w-full font-mono"
+								/>
+								<span class="truncate text-xs text-gray-500 dark:text-gray-400" title={draft.source}><span class="lg:hidden">Source: </span>{draft.source}</span>
+								<button
+									type="button"
+									on:click={() => removeEnvVar(index)}
+									class="app-focus inline-flex min-h-8 items-center justify-center rounded-md px-2 text-gray-400 hover:bg-gray-100 hover:text-gray-950 dark:hover:bg-gray-800 dark:hover:text-white"
+									aria-label={`Remove ${draft.key || 'environment variable'}`}
 								>
-									{#each resourceProfiles as profile}
-										<option value={profile.id}>{profile.title} ({profile.memoryMb} MB / {profile.cpuLimit} CPU)</option>
-									{/each}
-								</select>
+									×
+								</button>
 							</div>
-							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="memory">Memory limit</label>
-								<select id="memory" bind:value={form.memoryMb} on:change={markCustomProfile} class="field w-full">
-									<option value="64">64 MB</option>
-									<option value="128">128 MB</option>
-									<option value="256">256 MB</option>
-									<option value="512">512 MB</option>
-									<option value="1024">1024 MB</option>
-									<option value="2048">2048 MB</option>
-								</select>
-							</div>
-							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="cpu">CPU limit</label>
-								<select id="cpu" bind:value={form.cpuLimit} on:change={markCustomProfile} class="field w-full">
-									<option value="0.1">0.10 cores</option>
-									<option value="0.2">0.20 cores</option>
-									<option value="0.25">0.25 cores</option>
-									<option value="0.35">0.35 cores</option>
-									<option value="0.5">0.5 cores</option>
-									<option value="1">1 core</option>
-									<option value="2">2 cores</option>
-								</select>
-							</div>
+						{/each}
+						{#if envDrafts.length === 0 && !managedDatabaseUrl}
+							<p class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">No project environment variables configured.</p>
+						{/if}
+					</div>
+					<div class="mt-3 flex gap-2">
+						<input
+							value={newEnvKey}
+							placeholder="ENV_KEY"
+							class="field min-w-0 flex-1 font-mono uppercase"
+							on:input={(event) => (newEnvKey = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))}
+							on:keydown={handleNewEnvKeydown}
+						/>
+						<ActionButton type="button" variant="secondary" on:click={addEnvVar}>Add</ActionButton>
+					</div>
+				</div>
+			</SectionPanel>
+		</form>
+
+		<aside class="lg:sticky lg:top-6 lg:self-start">
+			<SectionPanel
+				title="Review"
+				description="Confirm route, runtime, and quota before create."
+				contentClass="p-0"
+			>
+				<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800" aria-live="polite">
+					<span
+						class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium
+							{canSubmit
+								? 'border-brand-500/30 bg-brand-50 text-brand-900 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100'
+								: 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}"
+					>
+						{reviewStateLabel}
+					</span>
+					{#if createDisabledReason}
+						<p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">{createDisabledReason}</p>
+					{/if}
+				</div>
+				<dl class="divide-y divide-gray-100 text-sm dark:divide-gray-800">
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Subdomain</dt>
+						<dd class="mt-1 truncate font-mono font-medium text-gray-950 dark:text-white">{previewHost}</dd>
+					</div>
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Repository</dt>
+						<dd class="mt-1 truncate font-mono text-gray-950 dark:text-white">{form.repoUrl || '-'}</dd>
+					</div>
+					<div class="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-800">
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">Branch</dt>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch}</dd>
+						</div>
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.deployMode}</dd>
 						</div>
 					</div>
-				{/if}
-			</div>
-
-			<div class="flex items-center justify-between border-t border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-800 dark:bg-gray-900/70">
-				<ActionButton type="button" on:click={back} disabled={step === 1}>
-					Back
-				</ActionButton>
-				{#if step < steps.length}
-					<ActionButton variant="primary" type="button" on:click={next}>
-						Continue
-					</ActionButton>
-				{:else}
+					<div class="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800">
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">Port</dt>
+							<dd class="mt-1">
+								<span class="font-mono text-gray-950 dark:text-white">{form.deployMode === 'static' ? '-' : effectiveAppPort}</span>
+								{#if form.deployMode !== 'static'}
+									<span class="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{portStateLabel}</span>
+								{/if}
+							</dd>
+						</div>
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">Memory</dt>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.memoryMb} MB</dd>
+						</div>
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">CPU</dt>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.cpuLimit}</dd>
+						</div>
+					</div>
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Profile</dt>
+						<dd class="mt-1 text-gray-950 dark:text-white">{selectedProfile?.title ?? form.resourceProfile}</dd>
+					</div>
+					{#if form.deployMode !== 'static'}
+						<div class="px-5 py-3">
+							<dt class="text-xs text-gray-500 dark:text-gray-400">Database</dt>
+							<dd class="mt-1 text-gray-950 dark:text-white">{form.sharedPostgres ? 'Shared PostgreSQL' : '-'}</dd>
+						</div>
+					{/if}
+				</dl>
+				<div class="border-t border-gray-100 p-5 dark:border-gray-800">
 					<ActionButton
 						variant="primary"
+						size="md"
 						type="button"
+						full
 						on:click={handleSubmit}
 						loading={submitting}
-						loadingLabel="Creating..."
+						loadingLabel={form.deployMode === 'auto' ? 'Detecting...' : 'Creating...'}
+						disabled={!canSubmit}
 					>
 						Create project
 					</ActionButton>
-				{/if}
-			</div>
-		</section>
-
-		<aside class="surface h-fit overflow-hidden">
-			<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-				<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Deployment plan</h2>
-			</div>
-			<dl class="divide-y divide-gray-100 text-sm dark:divide-gray-800">
-				<div class="px-5 py-3">
-					<dt class="text-xs text-gray-500 dark:text-gray-400">Subdomain</dt>
-					<dd class="mt-1 truncate font-mono font-medium text-gray-950 dark:text-white">{previewHost}</dd>
+					{#if form.deployMode === 'auto'}
+						<p class="mt-2 text-xs leading-5 text-gray-500 dark:text-gray-400">Auto mode runs detection before the project is created.</p>
+					{/if}
 				</div>
-				<div class="px-5 py-3">
-					<dt class="text-xs text-gray-500 dark:text-gray-400">Repository</dt>
-					<dd class="mt-1 truncate font-mono text-gray-950 dark:text-white">{form.repoUrl || '-'}</dd>
-				</div>
-				<div class="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-800">
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">Branch</dt>
-						<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch}</dd>
-					</div>
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>
-						<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.deployMode}</dd>
-					</div>
-				</div>
-				<div class="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800">
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">Port</dt>
-						<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.appPort}</dd>
-					</div>
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">Memory</dt>
-						<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.memoryMb}</dd>
-					</div>
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">CPU</dt>
-						<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.cpuLimit}</dd>
-					</div>
-				</div>
-				<div class="px-5 py-3">
-					<dt class="text-xs text-gray-500 dark:text-gray-400">Profile</dt>
-					<dd class="mt-1 text-gray-950 dark:text-white">{selectedProfile?.title ?? form.resourceProfile}</dd>
-				</div>
-				{#if form.deployMode !== 'static'}
-					<div class="px-5 py-3">
-						<dt class="text-xs text-gray-500 dark:text-gray-400">Database</dt>
-						<dd class="mt-1 text-gray-950 dark:text-white">{form.sharedPostgres ? 'Shared PostgreSQL' : '-'}</dd>
-					</div>
-				{/if}
-			</dl>
+			</SectionPanel>
 		</aside>
 	</div>
 </div>

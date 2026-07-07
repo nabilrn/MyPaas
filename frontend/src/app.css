@@ -5,18 +5,71 @@
 @layer base {
 	:root {
 		color-scheme: light;
+		--app-bg: oklch(0.982 0.005 245);
+		--app-surface: oklch(1 0 0);
+		--app-surface-muted: oklch(0.965 0.006 245);
+		--app-surface-raised: oklch(0.995 0.002 245);
+		--app-border: oklch(0.9 0.009 250);
+		--app-border-strong: oklch(0.82 0.014 250);
+		--app-ink: oklch(0.18 0.014 255);
+		--app-muted: oklch(0.44 0.019 255);
+		--app-subtle: oklch(0.6 0.016 255);
+		--app-accent: oklch(0.58 0.15 165);
+		--app-accent-strong: oklch(0.45 0.13 165);
+		--app-accent-soft: oklch(0.94 0.04 165);
+		--app-accent-ink: oklch(0.25 0.09 165);
+		--app-danger: oklch(0.56 0.2 25);
+		--app-warning: oklch(0.68 0.16 70);
+		--app-info: oklch(0.58 0.13 245);
+		--app-success: oklch(0.58 0.15 165);
+		--chart-cpu: oklch(0.52 0.13 248);
+		--chart-cpu-soft: oklch(0.52 0.13 248 / 0.12);
+		--chart-memory: oklch(0.58 0.15 165);
+		--chart-memory-soft: oklch(0.58 0.15 165 / 0.12);
+		--chart-grid: oklch(0.9 0.009 250);
+		--chart-tick: oklch(0.55 0.016 255);
 	}
 	.dark {
 		color-scheme: dark;
+		--app-bg: oklch(0.145 0.012 255);
+		--app-surface: oklch(0.205 0.014 255);
+		--app-surface-muted: oklch(0.25 0.015 255);
+		--app-surface-raised: oklch(0.235 0.014 255);
+		--app-border: oklch(0.32 0.016 255);
+		--app-border-strong: oklch(0.42 0.018 255);
+		--app-ink: oklch(0.96 0.004 255);
+		--app-muted: oklch(0.72 0.014 255);
+		--app-subtle: oklch(0.64 0.014 255);
+		--app-accent: oklch(0.72 0.15 165);
+		--app-accent-strong: oklch(0.78 0.14 165);
+		--app-accent-soft: oklch(0.29 0.055 165);
+		--app-accent-ink: oklch(0.86 0.12 165);
+		--app-danger: oklch(0.68 0.19 25);
+		--app-warning: oklch(0.78 0.16 70);
+		--app-info: oklch(0.72 0.14 245);
+		--app-success: oklch(0.72 0.15 165);
+		--chart-cpu: oklch(0.72 0.14 248);
+		--chart-cpu-soft: oklch(0.72 0.14 248 / 0.16);
+		--chart-memory: oklch(0.72 0.15 165);
+		--chart-memory-soft: oklch(0.72 0.15 165 / 0.16);
+		--chart-grid: oklch(0.34 0.016 255);
+		--chart-tick: oklch(0.7 0.014 255);
 	}
 	html {
-		font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+		font-size: 15px;
+		font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		text-rendering: optimizeLegibility;
+		background: var(--app-bg);
 	}
 	body {
-		@apply bg-gray-50 text-gray-950 antialiased dark:bg-gray-950 dark:text-gray-100;
+		min-height: 100vh;
+		background: var(--app-bg);
+		color: var(--app-ink);
+		@apply antialiased;
 	}
 	::selection {
-		@apply bg-gray-950 text-white dark:bg-white dark:text-gray-950;
+		background: var(--app-accent-strong);
+		color: white;
 	}
 	input,
 	select,
@@ -26,13 +79,71 @@
 }
 
 @layer utilities {
+	.page-shell {
+		width: min(100%, 144rem);
+		margin-inline: auto;
+		padding-inline: clamp(0.875rem, 1.1vw, 1.5rem);
+	}
 	.scrollbar-thin {
 		scrollbar-width: thin;
 	}
 	.surface {
-		@apply rounded-lg border border-gray-200 bg-white shadow-sm shadow-gray-950/[0.025] dark:border-gray-800 dark:bg-gray-900 dark:shadow-none;
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: var(--app-surface);
+		box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+	}
+	.surface-raised {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: var(--app-surface-raised);
+	}
+	.control-panel {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: var(--app-surface);
+		box-shadow: 0 8px 8px rgb(15 23 42 / 0.035);
 	}
 	.field {
-		@apply rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition-colors focus:border-gray-950 focus:ring-1 focus:ring-gray-950 dark:border-gray-700 dark:focus:border-white dark:focus:ring-white;
+		border: 1px solid var(--app-border);
+		border-radius: 0.375rem;
+		background: var(--app-surface);
+		color: var(--app-ink);
+		@apply px-3 py-2 text-sm outline-none transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500;
+	}
+	.field:focus {
+		border-color: var(--app-accent);
+		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 76%, transparent);
+	}
+	.app-focus {
+		outline: none;
+	}
+	.app-focus:focus-visible {
+		border-color: var(--app-accent);
+		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 76%, transparent);
+	}
+	.panel-header {
+		border-bottom: 1px solid var(--app-border);
+		background: color-mix(in oklch, var(--app-surface-muted) 52%, transparent);
+		@apply px-5 py-4;
+	}
+	.soft-panel {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: color-mix(in oklch, var(--app-surface-muted) 72%, var(--app-surface));
+	}
+	.metric-label {
+		color: var(--app-subtle);
+		@apply text-xs font-medium;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			scroll-behavior: auto !important;
+			transition-duration: 0.01ms !important;
+		}
 	}
 }
