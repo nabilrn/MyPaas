@@ -328,6 +328,15 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
                   <div class="example-row"><span>Project</span><code id="example-project">https://todo.mypaas.example.com</code></div>
                 </div>
               </div>
+              <div class="guide-card">
+                <strong>The domain must be active in Cloudflare DNS.</strong>
+                <ol>
+                  <li>If you bought the domain at Cloudflare Registrar, it already uses Cloudflare DNS.</li>
+                  <li>If you bought it elsewhere, add the domain in Cloudflare, copy the two Cloudflare nameservers, then change the nameservers at your registrar.</li>
+                  <li>You do not have to transfer registrar ownership to Cloudflare. Nameserver change is enough for MyPaas.</li>
+                  <li>Wait until Cloudflare shows the domain as active before testing MyPaas routes.</li>
+                </ol>
+              </div>
               <div class="notice">Example: if you enter <code>mypaas.my.id</code>, a project named <code>crud</code> will route to <code>crud.mypaas.my.id</code>.</div>
             </div>
             <div class="grid">
@@ -377,15 +386,35 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
           <section class="wizard-step" data-step="2" hidden>
             <div class="guide">
               <div class="guide-card">
-                <strong>Create or reuse a Cloudflare Tunnel.</strong>
+                <strong>Create or reuse a Cloudflare Tunnel token.</strong>
                 <ol>
-                  <li>Your domain should use Cloudflare nameservers.</li>
                   <li>Open Cloudflare Zero Trust, then go to <strong>Networks</strong> -> <strong>Tunnels</strong>.</li>
-                  <li>Create a tunnel or open an existing tunnel, choose the Docker connector, and copy the token from the generated command.</li>
-                  <li>Add public hostnames for <code id="cf-root-example">your-domain</code> and <code id="cf-wildcard-example">*.your-domain</code> routed to <code>http://caddy:80</code>.</li>
+                  <li>Create a tunnel or open an existing tunnel.</li>
+                  <li>Choose the <strong>Docker</strong> connector.</li>
+                  <li>Copy the token from the generated <code>cloudflared tunnel run --token ...</code> command.</li>
                 </ol>
               </div>
               <div class="warning">Use the Tunnel token from the Docker connector command. This is not the same thing as a Cloudflare API token.</div>
+              <div class="guide-card">
+                <strong>Add Public Hostname routes in the tunnel.</strong>
+                <ol>
+                  <li>In the tunnel, open <strong>Public Hostnames</strong> or <strong>Published application routes</strong>.</li>
+                  <li>Add hostname <code id="cf-root-example">your-domain</code>, service type <code>HTTP</code>, service URL <code>caddy:80</code>.</li>
+                  <li>Add hostname <code id="cf-wildcard-example">*.your-domain</code>, service type <code>HTTP</code>, service URL <code>caddy:80</code>.</li>
+                  <li>The wildcard route is what lets every deployed project use <code>project.your-domain</code>.</li>
+                  <li>Do not point these routes to the VM public IP. The tunnel container reaches Caddy inside Docker by the <code>caddy:80</code> service name.</li>
+                </ol>
+              </div>
+              <div class="guide-card">
+                <strong>Check DNS records after adding routes.</strong>
+                <ol>
+                  <li>Open <strong>Cloudflare DNS</strong> -> <strong>Records</strong>.</li>
+                  <li>If your Cloudflare zone is exactly this MyPaas domain, create CNAME records for <code>@</code> and <code>*</code>.</li>
+                  <li>If your zone is a parent domain, create records for this subdomain and wildcard subdomain, for example <code>mypaas</code> and <code>*.mypaas</code>.</li>
+                  <li>Point both records to your tunnel target: <code>&lt;tunnel-id&gt;.cfargotunnel.com</code>, with proxy enabled.</li>
+                  <li>If Cloudflare says a wildcard route will not create a DNS record, create the wildcard CNAME manually.</li>
+                </ol>
+              </div>
             </div>
             <div class="grid">
               <div class="field full">

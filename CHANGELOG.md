@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project-local Impeccable design workflow context and live-mode config for future UI polish passes
 - Environment variable `.env` paste/upload importer with preview, duplicate/invalid detection, and overwrite confirmation
 - GitHub webhook setup help dialog in project settings with payload URL, secret, and event configuration guidance
-- VM install browser wizard for first-time production credentials, including GitHub OAuth and Cloudflare Tunnel setup guidance
+- VM install browser wizard for first-time production credentials, including GitHub OAuth, Cloudflare DNS, and Tunnel route setup guidance
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
