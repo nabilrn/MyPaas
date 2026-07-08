@@ -7,6 +7,9 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 SKIP_DOCKER_INSTALL="${SKIP_DOCKER_INSTALL:-false}"
 SKIP_DEPLOY="${SKIP_DEPLOY:-false}"
 FORCE_ENV="${FORCE_ENV:-false}"
+INSTALL_WIZARD="${INSTALL_WIZARD:-false}"
+WIZARD_HOST="${WIZARD_HOST:-127.0.0.1}"
+WIZARD_PORT="${WIZARD_PORT:-8787}"
 
 cd "$ROOT_DIR"
 
@@ -119,6 +122,15 @@ ensure_openssl() {
   sudo_cmd apt-get install -y openssl
 }
 
+ensure_python3() {
+  if command_exists python3; then
+    return
+  fi
+  command_exists apt-get || die "python3 is required for INSTALL_WIZARD=true"
+  sudo_cmd apt-get update
+  sudo_cmd apt-get install -y python3
+}
+
 install_docker_debian() {
   if ! command_exists curl || ! command_exists gpg; then
     sudo_cmd apt-get update
@@ -182,9 +194,66 @@ docker_prefix() {
   die "current user cannot access Docker. Add the user to the docker group or run with sudo"
 }
 
+run_install_wizard() {
+  ensure_python3
+
+  local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
+  local postgres_user postgres_db postgres_password jwt_secret encryption_key project_network docker_bind_host metrics_password
+  local wizard_token
+
+  public_domain="${PUBLIC_DOMAIN:-}"
+  owner_email="${OWNER_EMAIL:-}"
+  github_client_id="${GITHUB_CLIENT_ID:-}"
+  github_client_secret="${GITHUB_CLIENT_SECRET:-}"
+  callback_url="${GITHUB_CALLBACK_URL:-}"
+  cloudflare_tunnel_token="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+  postgres_user="${POSTGRES_USER:-mypaas}"
+  postgres_db="${POSTGRES_DB:-mypaas}"
+  postgres_password="${POSTGRES_PASSWORD:-$(random_hex 24)}"
+  validate_url_safe_password "$postgres_password"
+  jwt_secret="${JWT_SECRET:-$(random_base64 32)}"
+  encryption_key="${ENCRYPTION_KEY:-$(random_base64 32)}"
+  metrics_password="${METRICS_PASSWORD:-$(random_hex 18)}"
+  project_network="${PROJECT_NETWORK:-mypaas-prod}"
+  ensure_docker_network "$project_network"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
+  wizard_token="${WIZARD_TOKEN:-$(random_hex 16)}"
+
+  log "Starting install wizard"
+  printf 'Wizard URL: http://127.0.0.1:%s/?token=%s\n' "$WIZARD_PORT" "$wizard_token"
+  printf 'If this VM is remote, open a new terminal on your laptop and run:\n'
+  printf '  ssh -L %s:%s:%s <user>@<vm-ip>\n' "$WIZARD_PORT" "$WIZARD_HOST" "$WIZARD_PORT"
+  printf 'Then open the Wizard URL above in your local browser.\n'
+
+  WIZARD_ENV_FILE="$ENV_FILE" \
+  WIZARD_TOKEN="$wizard_token" \
+  WIZARD_HOST="$WIZARD_HOST" \
+  WIZARD_PORT="$WIZARD_PORT" \
+  WIZARD_DEFAULT_PUBLIC_DOMAIN="$public_domain" \
+  WIZARD_DEFAULT_OWNER_EMAIL="$owner_email" \
+  WIZARD_DEFAULT_GITHUB_CLIENT_ID="$github_client_id" \
+  WIZARD_DEFAULT_GITHUB_CLIENT_SECRET="$github_client_secret" \
+  WIZARD_DEFAULT_GITHUB_CALLBACK_URL="$callback_url" \
+  WIZARD_DEFAULT_CLOUDFLARE_TUNNEL_TOKEN="$cloudflare_tunnel_token" \
+  WIZARD_DEFAULT_POSTGRES_USER="$postgres_user" \
+  WIZARD_DEFAULT_POSTGRES_DB="$postgres_db" \
+  WIZARD_DEFAULT_POSTGRES_PASSWORD="$postgres_password" \
+  WIZARD_DEFAULT_JWT_SECRET="$jwt_secret" \
+  WIZARD_DEFAULT_ENCRYPTION_KEY="$encryption_key" \
+  WIZARD_DEFAULT_METRICS_PASSWORD="$metrics_password" \
+  WIZARD_DEFAULT_PROJECT_NETWORK="$project_network" \
+  WIZARD_DEFAULT_DOCKER_BIND_HOST="$docker_bind_host" \
+  python3 "$ROOT_DIR/scripts/install-wizard.py"
+}
+
 write_env_file() {
   if [[ -f "$ENV_FILE" && "$FORCE_ENV" != "true" ]]; then
     log "Using existing $ENV_FILE"
+    return
+  fi
+
+  if [[ "$INSTALL_WIZARD" == "true" ]]; then
+    run_install_wizard
     return
   fi
 
