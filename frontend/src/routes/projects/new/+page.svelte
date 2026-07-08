@@ -30,6 +30,7 @@
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
 	let appPortSource: PortSource = 'fallback';
+	let envFileInput: HTMLInputElement | null = null;
 	let form = {
 		name: '',
 		repoUrl: '',
@@ -193,6 +194,90 @@
 
 	function removeEnvVar(index: number) {
 		envDrafts = envDrafts.filter((_, itemIndex) => itemIndex !== index);
+	}
+
+	function triggerEnvFileImport() {
+		envFileInput?.click();
+	}
+
+	async function handleEnvFileImport(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		try {
+			const parsed = parseEnvFile(await file.text());
+			if (parsed.vars.length === 0) {
+				toast.error('No valid env variables found');
+				return;
+			}
+			mergeEnvFileVars(parsed.vars);
+			const skippedSuffix = parsed.skipped > 0 ? `, skipped ${parsed.skipped}` : '';
+			toast.success(`Imported ${parsed.vars.length} env variable${parsed.vars.length === 1 ? '' : 's'}${skippedSuffix}`);
+		} catch {
+			toast.error('Failed to import env file');
+		} finally {
+			input.value = '';
+		}
+	}
+
+	function parseEnvFile(content: string): { vars: EnvDraft[]; skipped: number } {
+		const vars: EnvDraft[] = [];
+		let skipped = 0;
+		for (const rawLine of content.replace(/\r\n/g, '\n').split('\n')) {
+			let line = rawLine.trim();
+			if (!line || line.startsWith('#')) continue;
+			if (line.startsWith('export ')) {
+				line = line.slice('export '.length).trim();
+			}
+			const separatorIndex = line.indexOf('=');
+			if (separatorIndex <= 0) {
+				skipped++;
+				continue;
+			}
+			const key = normalizeEnvKey(line.slice(0, separatorIndex));
+			if (!key) {
+				skipped++;
+				continue;
+			}
+			vars.push({
+				key,
+				value: unwrapEnvValue(line.slice(separatorIndex + 1).trim()),
+				source: 'env-file',
+				sensitive: isSensitiveEnvKey(key)
+			});
+		}
+		return { vars, skipped };
+	}
+
+	function unwrapEnvValue(value: string) {
+		if (value.length < 2) return value;
+		const quote = value[0];
+		if ((quote !== '"' && quote !== "'") || value[value.length - 1] !== quote) {
+			return value;
+		}
+		const inner = value.slice(1, -1);
+		if (quote === "'") return inner;
+		return inner.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+	}
+
+	function mergeEnvFileVars(vars: EnvDraft[]) {
+		const incoming = new Map<string, EnvDraft>();
+		for (const item of vars) {
+			incoming.set(item.key, item);
+		}
+		const nextDrafts = envDrafts.map((item) => {
+			const imported = incoming.get(item.key);
+			if (!imported) return item;
+			incoming.delete(item.key);
+			return {
+				...item,
+				value: imported.value,
+				source: imported.source,
+				sensitive: item.sensitive || imported.sensitive
+			};
+		});
+		envDrafts = [...nextDrafts, ...incoming.values()].sort((a, b) => a.key.localeCompare(b.key));
 	}
 
 	function isSensitiveEnvKey(key: string) {
@@ -454,12 +539,30 @@
 				description="Add only the variables this project needs. Keys are normalized before create."
 			>
 				<svelte:fragment slot="actions">
-					{#if form.deployMode !== 'static'}
-						<label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-							<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
-							Shared PostgreSQL
-						</label>
-					{/if}
+					<div class="flex flex-wrap items-center gap-2">
+						<input
+							bind:this={envFileInput}
+							type="file"
+							accept=".env,text/plain"
+							class="hidden"
+							on:change={handleEnvFileImport}
+						/>
+						<ActionButton type="button" variant="secondary" size="xs" on:click={triggerEnvFileImport}>
+							<span class="inline-flex items-center gap-1.5">
+								<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0-12l-4 4m4-4l4 4" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
+								</svg>
+								Import .env
+							</span>
+						</ActionButton>
+						{#if form.deployMode !== 'static'}
+							<label class="inline-flex min-h-8 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+								<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
+								Shared PostgreSQL
+							</label>
+						{/if}
+					</div>
 				</svelte:fragment>
 				<div>
 					<div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
