@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -174,7 +175,7 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		if err != nil {
 			return DetectResult{}, err
 		}
-		mainService := pickMainService(services)
+		mainService := pickMainService(ctx, workspace, composeFile, services)
 		appPort := inferComposeAppPort(ctx, workspace, composeFile, mainService, envVars)
 		return DetectResult{
 			DeployMode:    "compose",
@@ -477,12 +478,58 @@ func firstNonEmptyLine(value string) string {
 }
 
 func detectComposeFile(workspace string) string {
-	for _, name := range []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} {
+	for _, name := range composeFileCandidates(workspace) {
 		if fileExists(filepath.Join(workspace, name)) {
 			return name
 		}
 	}
 	return ""
+}
+
+func composeFileCandidates(workspace string) []string {
+	candidates := []string{
+		"docker-compose.yml",
+		"docker-compose.yaml",
+		"compose.yml",
+		"compose.yaml",
+		"docker-compose.prod.yml",
+		"docker-compose.prod.yaml",
+		"compose.prod.yml",
+		"compose.prod.yaml",
+		"docker-compose.production.yml",
+		"docker-compose.production.yaml",
+		"compose.production.yml",
+		"compose.production.yaml",
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	for _, name := range candidates {
+		seen[name] = struct{}{}
+	}
+
+	for _, pattern := range []string{"docker-compose.*.yml", "docker-compose.*.yaml", "compose.*.yml", "compose.*.yaml"} {
+		matches, err := filepath.Glob(filepath.Join(workspace, pattern))
+		if err != nil {
+			continue
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			name := filepath.Base(match)
+			if ignoredComposeCandidate(name) {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			candidates = append(candidates, name)
+		}
+	}
+	return candidates
+}
+
+func ignoredComposeCandidate(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	return strings.Contains(normalized, "override") || strings.Contains(normalized, "test")
 }
 
 func detectComposeServices(ctx context.Context, workspace, composeFile string) ([]string, error) {
@@ -499,13 +546,62 @@ func detectComposeServices(ctx context.Context, workspace, composeFile string) (
 	return services, nil
 }
 
-func pickMainService(services []string) string {
+func pickMainService(ctx context.Context, workspace, composeFile string, services []string) string {
+	if service := pickServiceWithPublishedPort(ctx, workspace, composeFile, services); service != "" {
+		return service
+	}
+	for _, preferred := range []string{"app", "web", "frontend", "api", "backend", "server"} {
+		for _, service := range services {
+			if service == preferred {
+				return service
+			}
+		}
+	}
+	if len(services) == 0 {
+		return ""
+	}
+	return services[0]
+}
+
+func pickServiceWithPublishedPort(ctx context.Context, workspace, composeFile string, services []string) string {
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "config", "--format", "json")
+	cmd.Dir = workspace
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return pickMainServiceFromComposeConfig(out, services)
+}
+
+func pickMainServiceFromComposeConfig(rawConfig []byte, services []string) string {
+	var config struct {
+		Services map[string]struct {
+			Ports  json.RawMessage `json:"ports"`
+			Expose json.RawMessage `json:"expose"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal(rawConfig, &config); err != nil {
+		return ""
+	}
 	for _, service := range services {
-		if service == "app" {
+		raw, ok := config.Services[service]
+		if !ok {
+			continue
+		}
+		if parseComposePorts(raw.Ports, nil) > 0 {
 			return service
 		}
 	}
-	return services[0]
+	for _, service := range services {
+		raw, ok := config.Services[service]
+		if !ok {
+			continue
+		}
+		if parseComposeExpose(raw.Expose, nil) > 0 {
+			return service
+		}
+	}
+	return ""
 }
 
 func inferDockerfileAppPort(workspace string, envVars []envdiscover.Var) int32 {

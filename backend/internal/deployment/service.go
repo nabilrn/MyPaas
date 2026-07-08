@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -732,7 +733,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
 	}
 
-	services, err := s.docker.ComposeServices(ctx, workspace, envFile)
+	services, err := s.docker.ComposeServices(ctx, workspace, envFile, composeFile)
 	if err != nil {
 		return err
 	}
@@ -740,7 +741,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
 	}
 	overrideImageTag := ""
-	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile)
+	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile, composeFile)
 	if err != nil {
 		log("WARNING: could not detect Compose build services; rollback image tagging is disabled for this deployment")
 		slog.Warn("detect compose build services", "projectId", project.ID, "error", err)
@@ -934,7 +935,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 	if main == "" {
 		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
 	}
-	services, err := s.docker.ComposeServices(ctx, workspace, envFile)
+	services, err := s.docker.ComposeServices(ctx, workspace, envFile, composeFile)
 	if err != nil {
 		return err
 	}
@@ -942,7 +943,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
 	}
 	overrideImageTag := ""
-	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile)
+	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile, composeFile)
 	if err != nil {
 		log("WARNING: could not detect Compose build services; rollback will not override the main service image")
 		slog.Warn("detect compose build services during rollback", "projectId", project.ID, "error", err)
@@ -1131,12 +1132,58 @@ func (s *Service) allocateProjectPort(ctx context.Context, project db.Project) (
 }
 
 func findComposeFile(workspace string) (string, error) {
-	for _, name := range []string{"docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"} {
+	for _, name := range composeFileCandidates(workspace) {
 		if _, err := os.Stat(filepath.Join(workspace, name)); err == nil {
 			return name, nil
 		}
 	}
 	return "", errs.ErrComposeFileNotFound
+}
+
+func composeFileCandidates(workspace string) []string {
+	candidates := []string{
+		"docker-compose.yml",
+		"docker-compose.yaml",
+		"compose.yml",
+		"compose.yaml",
+		"docker-compose.prod.yml",
+		"docker-compose.prod.yaml",
+		"compose.prod.yml",
+		"compose.prod.yaml",
+		"docker-compose.production.yml",
+		"docker-compose.production.yaml",
+		"compose.production.yml",
+		"compose.production.yaml",
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	for _, name := range candidates {
+		seen[name] = struct{}{}
+	}
+
+	for _, pattern := range []string{"docker-compose.*.yml", "docker-compose.*.yaml", "compose.*.yml", "compose.*.yaml"} {
+		matches, err := filepath.Glob(filepath.Join(workspace, pattern))
+		if err != nil {
+			continue
+		}
+		sort.Strings(matches)
+		for _, match := range matches {
+			name := filepath.Base(match)
+			if ignoredComposeCandidate(name) {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			candidates = append(candidates, name)
+		}
+	}
+	return candidates
+}
+
+func ignoredComposeCandidate(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	return strings.Contains(normalized, "override") || strings.Contains(normalized, "test")
 }
 
 func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpuLimit float64, projectNetwork, imageTag string) error {

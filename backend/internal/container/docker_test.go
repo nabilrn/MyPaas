@@ -101,6 +101,14 @@ func TestComposeBaseArgsIncludesEnvFileBeforeCommand(t *testing.T) {
 	}
 }
 
+func TestComposeConfigArgsIncludesComposeFileAfterEnvFile(t *testing.T) {
+	got := composeConfigArgs("C:/tmp/project/.env", "docker-compose.prod.yml")
+	want := []string{"compose", "--env-file", "C:/tmp/project/.env", "-f", "docker-compose.prod.yml"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("composeConfigArgs() = %v, want %v", got, want)
+	}
+}
+
 func TestIsMypaasInternalEnvFiltersLeakyComposeVars(t *testing.T) {
 	for _, key := range []string{"DATABASE_URL", "POSTGRES_PASSWORD", "JWT_SECRET", "CADDY_ADMIN"} {
 		t.Run(key, func(t *testing.T) {

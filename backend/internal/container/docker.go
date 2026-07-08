@@ -136,8 +136,8 @@ func (d *DockerCLI) CleanupUnusedManagedImages(ctx context.Context, until string
 	return runSimple(ctx, "docker", "image", "prune", "-a", "-f", "--filter", "label="+ManagedImageLabel, "--filter", "until="+until)
 }
 
-func (d *DockerCLI) ComposeServices(ctx context.Context, dir, envFile string) ([]string, error) {
-	args := composeBaseArgs(envFile)
+func (d *DockerCLI) ComposeServices(ctx context.Context, dir, envFile string, composeFile ...string) ([]string, error) {
+	args := composeConfigArgs(envFile, firstString(composeFile))
 	args = append(args, "config", "--services")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
@@ -154,8 +154,8 @@ func (d *DockerCLI) ComposeServices(ctx context.Context, dir, envFile string) ([
 	return services, nil
 }
 
-func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile string) ([]string, error) {
-	args := composeBaseArgs(envFile)
+func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile string, composeFile ...string) ([]string, error) {
+	args := composeConfigArgs(envFile, firstString(composeFile))
 	args = append(args, "config", "--format", "json")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
@@ -166,8 +166,8 @@ func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile strin
 }
 
 func (d *DockerCLI) WriteSanitizedComposeConfig(ctx context.Context, dir, envFile, composeFile, outputPath string) error {
-	args := composeBaseArgs(envFile)
-	args = append(args, "-f", composeFile, "config", "--format", "json")
+	args := composeConfigArgs(envFile, composeFile)
+	args = append(args, "config", "--format", "json")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker compose config --format json: %w: %s", err, strings.TrimSpace(string(out)))
@@ -789,6 +789,22 @@ func composeBaseArgs(envFile string) []string {
 		args = append(args, "--env-file", envFile)
 	}
 	return args
+}
+
+func composeConfigArgs(envFile, composeFile string) []string {
+	args := composeBaseArgs(envFile)
+	composeFile = strings.TrimSpace(composeFile)
+	if composeFile != "" {
+		args = append(args, "-f", composeFile)
+	}
+	return args
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 func composeEnv() []string {

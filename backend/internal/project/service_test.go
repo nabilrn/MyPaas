@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -124,6 +125,39 @@ func TestParseRemoteBranchRefs(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("parseRemoteBranchRefs()[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestDetectComposeFilePrefersProdVariant(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "docker-compose.test.yml"), "services: {}\n")
+	writeFile(t, filepath.Join(dir, "docker-compose.prod.yml"), "services: {}\n")
+
+	got := detectComposeFile(dir)
+	if got != "docker-compose.prod.yml" {
+		t.Fatalf("detectComposeFile() = %q, want docker-compose.prod.yml", got)
+	}
+}
+
+func TestPickMainServicePrefersFrontendOverDatabase(t *testing.T) {
+	got := pickMainService(context.Background(), t.TempDir(), "docker-compose.prod.yml", []string{"db", "backend", "frontend"})
+	if got != "frontend" {
+		t.Fatalf("pickMainService() = %q, want frontend", got)
+	}
+}
+
+func TestPickMainServiceFromComposeConfigPrefersPortsOverExpose(t *testing.T) {
+	raw := []byte(`{
+		"services": {
+			"db": {},
+			"backend": {"expose": ["3000"]},
+			"frontend": {"ports": [{"target": 80, "published": "80"}]}
+		}
+	}`)
+
+	got := pickMainServiceFromComposeConfig(raw, []string{"db", "backend", "frontend"})
+	if got != "frontend" {
+		t.Fatalf("pickMainServiceFromComposeConfig() = %q, want frontend", got)
 	}
 }
 
