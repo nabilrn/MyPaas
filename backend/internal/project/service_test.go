@@ -108,6 +108,25 @@ func TestParseDefaultBranchRef(t *testing.T) {
 	}
 }
 
+func TestParseRemoteBranchRefs(t *testing.T) {
+	input := "8f8c2 refs/heads/main\n" +
+		"9a9c1 refs/heads/fina\n" +
+		"aaaa1 refs/heads/release/v1\n" +
+		"9a9c1 refs/heads/fina\n" +
+		"bbbb2 refs/tags/v1.0.0\n"
+
+	got := parseRemoteBranchRefs(input)
+	want := []string{"main", "fina", "release/v1"}
+	if len(got) != len(want) {
+		t.Fatalf("parseRemoteBranchRefs() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("parseRemoteBranchRefs()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {

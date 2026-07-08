@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"mypaas/internal/errs"
 )
@@ -62,7 +63,11 @@ func DomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errs.ErrDockerfileNotFound):
 		Error(w, http.StatusBadRequest, "DOCKERFILE_NOT_FOUND", "Dockerfile was not found in the repository root.", nil)
 	case errors.Is(err, errs.ErrNoDeployConfig):
-		Error(w, http.StatusBadRequest, "NO_DEPLOY_CONFIG", "No Dockerfile or Compose file was found in the repository root.", nil)
+		message := strings.TrimPrefix(err.Error(), errs.ErrNoDeployConfig.Error()+": ")
+		if message == err.Error() {
+			message = "No Dockerfile, Compose file, or static site was found in the selected branch repository root."
+		}
+		Error(w, http.StatusBadRequest, "NO_DEPLOY_CONFIG", message, nil)
 	case errors.Is(err, errs.ErrValidation), errors.Is(err, errs.ErrBadRequest):
 		Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error(), nil)
 	default:

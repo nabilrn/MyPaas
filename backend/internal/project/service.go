@@ -33,6 +33,8 @@ import (
 
 var projectNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$`)
 
+const maxAutoDetectBranches = 50
+
 type Service struct {
 	queries *db.Queries
 	domain  string
@@ -99,17 +101,57 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	if repoURL == "" {
 		return DetectResult{}, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
 	}
-	branch := strings.TrimSpace(input.Branch)
-	if branch == "" {
-		resolvedBranch, err := resolveDefaultBranch(ctx, repoURL)
-		if err != nil {
-			return DetectResult{}, err
-		}
-		branch = resolvedBranch
-	}
 
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+
+	branch := strings.TrimSpace(input.Branch)
+	if branch != "" {
+		return detectModeOnBranch(ctx, repoURL, branch)
+	}
+
+	defaultBranch, err := resolveDefaultBranch(ctx, repoURL)
+	if err != nil {
+		return DetectResult{}, err
+	}
+
+	result, err := detectModeOnBranch(ctx, repoURL, defaultBranch)
+	if err == nil {
+		return result, nil
+	}
+	if !errors.Is(err, errs.ErrNoDeployConfig) {
+		return DetectResult{}, err
+	}
+
+	branches, listErr := listRemoteBranches(ctx, repoURL)
+	if listErr != nil {
+		return DetectResult{}, err
+	}
+	checkedBranches := 0
+	for _, candidate := range branches {
+		if candidate == defaultBranch {
+			continue
+		}
+		if checkedBranches >= maxAutoDetectBranches {
+			break
+		}
+		checkedBranches++
+		result, err := detectModeOnBranch(ctx, repoURL, candidate)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, errs.ErrNoDeployConfig) {
+			continue
+		}
+	}
+
+	return DetectResult{}, fmt.Errorf("%w: no Dockerfile, Compose file, or static site found on default branch %q or %d scanned remote branches", errs.ErrNoDeployConfig, defaultBranch, checkedBranches)
+}
+
+func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResult, error) {
+	if branch == "" {
+		return DetectResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
+	}
 
 	workspace, err := os.MkdirTemp("", "mypaas-detect-*")
 	if err != nil {
@@ -151,7 +193,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	if _, _, err := staticdeploy.FindSiteRoot(workspace); err == nil {
 		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80}, nil
 	}
-	return DetectResult{}, errs.ErrNoDeployConfig
+	return DetectResult{}, fmt.Errorf("%w: no deploy config found on branch %q", errs.ErrNoDeployConfig, branch)
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, error) {
@@ -379,6 +421,18 @@ func resolveDefaultBranch(ctx context.Context, repoURL string) (string, error) {
 	return branch, nil
 }
 
+func listRemoteBranches(ctx context.Context, repoURL string) ([]string, error) {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return nil, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
+	}
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--heads", repoURL).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to list remote branches: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
+	}
+	return parseRemoteBranchRefs(string(out)), nil
+}
+
 func parseDefaultBranchRef(output string) string {
 	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
 		line = strings.TrimSpace(line)
@@ -389,6 +443,27 @@ func parseDefaultBranchRef(output string) string {
 		return strings.TrimPrefix(fields[1], "refs/heads/")
 	}
 	return ""
+}
+
+func parseRemoteBranchRefs(output string) []string {
+	seen := make(map[string]struct{})
+	branches := make([]string, 0)
+	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) < 2 || !strings.HasPrefix(fields[1], "refs/heads/") {
+			continue
+		}
+		branch := strings.TrimPrefix(fields[1], "refs/heads/")
+		if branch == "" {
+			continue
+		}
+		if _, ok := seen[branch]; ok {
+			continue
+		}
+		seen[branch] = struct{}{}
+		branches = append(branches, branch)
+	}
+	return branches
 }
 
 func firstNonEmptyLine(value string) string {
