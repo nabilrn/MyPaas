@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas cmd/cli/main.go
 ## Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates docker-cli git postgresql-client tzdata
+RUN apk add --no-cache ca-certificates docker-cli docker-cli-compose git postgresql-client tzdata
 
 WORKDIR /app
 
