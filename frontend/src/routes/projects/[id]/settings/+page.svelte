@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
@@ -31,6 +32,7 @@
 	let resettingComposeResources = false;
 	let confirmRegenerateSecret = false;
 	let confirmResetComposeResources = false;
+	let showWebhookHelp = false;
 
 	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
 		{ id: 'node-python',  title: 'Node/Python',       memoryMb: 256, cpuLimit: 0.35 },
@@ -124,6 +126,12 @@
 		confirmRegenerateSecret = true;
 	}
 
+	function handleWindowKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && showWebhookHelp) {
+			showWebhookHelp = false;
+		}
+	}
+
 	async function handleRegenerateSecret() {
 		if (!project || regeneratingSecret) return;
 		regeneratingSecret = true;
@@ -183,6 +191,8 @@
 		}
 	}
 </script>
+
+<svelte:window on:keydown={handleWindowKeydown} />
 
 <svelte:head>
 	<title>Settings · MyPaas</title>
@@ -278,6 +288,14 @@
 				description="Use this for GitHub push deploys."
 				contentClass="p-0"
 			>
+				<svelte:fragment slot="actions">
+					<IconButton label="Webhook setup instructions" variant="brand" on:click={() => (showWebhookHelp = true)}>
+						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h1.5v6h-1.5zM12 7.5h.01" />
+							<path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					</IconButton>
+				</svelte:fragment>
 				<div class="space-y-4 p-5">
 					<div>
 						<div class="mb-1 flex items-center justify-between">
@@ -411,6 +429,86 @@
 					</ActionButton>
 				</div>
 			</section>
+		</div>
+	</div>
+{/if}
+
+{#if showWebhookHelp && project}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4"
+	>
+		<button
+			type="button"
+			class="absolute inset-0 cursor-default bg-gray-950/45 backdrop-blur-sm"
+			aria-label="Close webhook setup"
+			on:click={() => (showWebhookHelp = false)}
+		></button>
+		<div
+			class="surface relative max-h-[90vh] w-full max-w-2xl overflow-hidden shadow-xl shadow-gray-950/20"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="webhook-help-title"
+			tabindex="-1"
+		>
+			<div class="panel-header flex items-start justify-between gap-3">
+				<div class="min-w-0">
+					<h2 id="webhook-help-title" class="text-sm font-semibold text-gray-950 dark:text-white">GitHub webhook setup</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Configure push deploys for the selected repository.</p>
+				</div>
+				<IconButton label="Close webhook setup" variant="ghost" on:click={() => (showWebhookHelp = false)}>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+					</svg>
+				</IconButton>
+			</div>
+
+			<div class="max-h-[calc(90vh-5rem)] space-y-5 overflow-y-auto p-5">
+				<div class="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
+					<span class="metric-label">Payload URL</span>
+					<div class="flex min-w-0 items-start gap-2">
+						<code class="min-w-0 flex-1 break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+							{publicWebhookURL}
+						</code>
+						<ActionButton variant="secondary" size="xs" on:click={() => copyWebhookURL(project?.id ?? '')}>
+							Copy
+						</ActionButton>
+					</div>
+
+					<span class="metric-label">Secret</span>
+					<div class="flex min-w-0 items-start gap-2">
+						<code class="min-w-0 flex-1 break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
+							{showWebhookSecret ? project.webhookSecret : '••••••••••••••••••••••••••••••••'}
+						</code>
+						<ActionButton variant="secondary" size="xs" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied')}>
+							Copy
+						</ActionButton>
+					</div>
+				</div>
+
+				<ol class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+					<li class="flex gap-3">
+						<span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-semibold text-white dark:bg-gray-100 dark:text-gray-950">1</span>
+						<span>Open the GitHub repository, then go to <span class="font-medium text-gray-950 dark:text-white">Settings</span> and <span class="font-medium text-gray-950 dark:text-white">Webhooks</span>.</span>
+					</li>
+					<li class="flex gap-3">
+						<span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-semibold text-white dark:bg-gray-100 dark:text-gray-950">2</span>
+						<span>Choose <span class="font-medium text-gray-950 dark:text-white">Add webhook</span>, paste the payload URL, and set content type to <span class="font-mono">application/json</span>.</span>
+					</li>
+					<li class="flex gap-3">
+						<span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-semibold text-white dark:bg-gray-100 dark:text-gray-950">3</span>
+						<span>Paste the webhook secret, keep <span class="font-medium text-gray-950 dark:text-white">Just the push event</span> selected, and leave the webhook active.</span>
+					</li>
+					<li class="flex gap-3">
+						<span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-900 text-xs font-semibold text-white dark:bg-gray-100 dark:text-gray-950">4</span>
+						<span>Save it. MyPaas deploys only when the push targets the configured branch: <span class="font-mono">{project.branch}</span>.</span>
+					</li>
+				</ol>
+
+				<div class="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200">
+					<p class="font-medium">Automatic deploy without webhook?</p>
+					<p class="mt-1">GitHub does not push commit events to MyPaas unless MyPaas is registered through a webhook or GitHub App. Polling the GitHub API can work, but it is slower, noisier, and needs extra token scope.</p>
+				</div>
+			</div>
 		</div>
 	</div>
 {/if}

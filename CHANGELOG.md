@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shared dashboard `SecretField` component for consistent environment variable hidden, revealed, dirty, copy, discard, reveal, and delete states
 - Shared dashboard `DeployControlPanel` component for project status, deploy/restart/stop actions, logs access, and route/runtime metadata
 - Project-local Impeccable design workflow context and live-mode config for future UI polish passes
+- Environment variable `.env` paste/upload importer with preview, duplicate/invalid detection, and overwrite confirmation
+- GitHub webhook setup help dialog in project settings with payload URL, secret, and event configuration guidance
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
@@ -113,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Encrypted environment variables can be revealed through an authenticated decrypt endpoint, with 404 handling for missing keys
 - Sidebar navigation now keeps the active menu item highlighted across nested project and admin routes
 - Dashboard P0 UX states now handle deployment load failures, env var load failures/empty state, admin user load failures/empty state, env overwrite drafts, and New Project env-key Enter behavior
+- Project detail header status now follows the project SSE stream so deployment completion appears without polling or manual reload
 
 ### Security
 

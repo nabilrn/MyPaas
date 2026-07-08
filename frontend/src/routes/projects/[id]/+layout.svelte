@@ -7,14 +7,19 @@
 	import ErrorState from '$components/ErrorState.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import type { Project } from '$types';
+	import type { Project, ProjectStatus } from '$types';
 	import { projectHost, projectURL } from '$lib/utils/urls';
+
+	const terminalProjectStatuses = new Set<ProjectStatus>(['running', 'stopped', 'crashed', 'pending']);
 
 	let project: Project | null = null;
 	let loading = true;
 	let error = '';
 	let pendingAction: 'stop' | 'restart' | 'deploy' | null = null;
 	let optimisticHref: string | null = null;
+	let projectRefreshInFlight = false;
+	let stream: EventSource | null = null;
+	let lastStreamStatus: ProjectStatus | null = null;
 
 	const tabs = [
 		{ label: 'Overview',     href: '' },
@@ -75,21 +80,75 @@
 		optimisticHref = href;
 	}
 
-	onMount(loadProject);
+	onMount(() => {
+		void loadProject();
+		connectProjectStream();
+
+		return () => {
+			stream?.close();
+			stream = null;
+		};
+	});
+
+	function connectProjectStream() {
+		stream?.close();
+		stream = new EventSource(`/api/projects/${$page.params.id}/stream`, { withCredentials: true });
+		stream.addEventListener('status', handleStatusEvent);
+	}
+
+	function handleStatusEvent(event: MessageEvent) {
+		try {
+			const parsed = JSON.parse(event.data) as { status?: string };
+			if (parsed.status === 'deleted') {
+				stream?.close();
+				project = null;
+				error = 'Project not found';
+				return;
+			}
+			if (!isProjectStatus(parsed.status)) return;
+
+			const previousStatus = project?.status ?? lastStreamStatus;
+			lastStreamStatus = parsed.status;
+			if (project) {
+				project = { ...project, status: parsed.status };
+			}
+			if (previousStatus !== parsed.status && terminalProjectStatuses.has(parsed.status)) {
+				void loadProject(true);
+			}
+		} catch {
+			// Ignore malformed stream events; EventSource will keep the connection alive.
+		}
+	}
+
+	function isProjectStatus(status: string | undefined): status is ProjectStatus {
+		return status === 'pending'
+			|| status === 'running'
+			|| status === 'stopped'
+			|| status === 'crashed'
+			|| status === 'building';
+	}
 
 	async function loadProject(background = false) {
+		if (projectRefreshInFlight) return;
+		projectRefreshInFlight = true;
 		if (!background || !project) {
 			loading = true;
 		}
-		error = '';
+		if (!background || !project) {
+			error = '';
+		}
 		try {
 			project = await api.projects.get($page.params.id);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load project';
+			const message = err instanceof Error ? err.message : 'Failed to load project';
+			if (!background || !project) {
+				error = message;
+			}
 		} finally {
 			if (!background || !project) {
 				loading = false;
 			}
+			projectRefreshInFlight = false;
 		}
 	}
 
