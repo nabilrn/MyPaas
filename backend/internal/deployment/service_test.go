@@ -24,7 +24,7 @@ func TestWriteComposeOverrideReplacesExistingPorts(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(raw)
-	if !strings.Contains(content, "ports: !override") {
+	if !strings.Contains(content, "ports:") {
 		t.Fatalf("override should replace compose ports, got:\n%s", content)
 	}
 	if !strings.Contains(content, `"127.0.0.1:3001:8080"`) {

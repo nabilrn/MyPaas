@@ -165,6 +165,21 @@ func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile strin
 	return parseComposeBuildServicesJSON(out)
 }
 
+func (d *DockerCLI) WriteSanitizedComposeConfig(ctx context.Context, dir, envFile, composeFile, outputPath string) error {
+	args := composeBaseArgs(envFile)
+	args = append(args, "-f", composeFile, "config", "--format", "json")
+	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker compose config --format json: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	sanitized, err := removeComposeHostPorts(out)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(outputPath, sanitized, 0600)
+}
+
 func (d *DockerCLI) ComposeUp(ctx context.Context, opts ComposeUpOptions, log func(string)) error {
 	args := composeBaseArgs(opts.EnvFile)
 	args = append(args,
@@ -685,6 +700,31 @@ func parseComposeBuildServicesJSON(raw []byte) ([]string, error) {
 	}
 	sort.Strings(services)
 	return services, nil
+}
+
+func removeComposeHostPorts(raw []byte) ([]byte, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("parse compose config json: %w", err)
+	}
+
+	services, ok := doc["services"].(map[string]any)
+	if !ok || len(services) == 0 {
+		return nil, fmt.Errorf("compose config does not define services")
+	}
+	for _, rawService := range services {
+		service, ok := rawService.(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(service, "ports")
+	}
+
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("write sanitized compose config: %w", err)
+	}
+	return append(out, '\n'), nil
 }
 
 func labeledResourceIDs(ctx context.Context, resource, projectName string) ([]string, error) {

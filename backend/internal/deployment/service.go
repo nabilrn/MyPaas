@@ -784,6 +784,10 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
 		return err
 	}
+	sanitizedComposeFile := filepath.Join(workspace, "docker-compose.mypaas.sanitized.json")
+	if err := s.docker.WriteSanitizedComposeConfig(ctx, workspace, envFile, composeFile, sanitizedComposeFile); err != nil {
+		return err
+	}
 
 	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
 		return err
@@ -792,7 +796,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
 		ProjectName:  composeProjectName(project.Name),
 		WorkDir:      workspace,
-		ComposeFile:  composeFile,
+		ComposeFile:  sanitizedComposeFile,
 		OverrideFile: overrideFile,
 		EnvFile:      envFile,
 	}, log); err != nil {
@@ -979,12 +983,16 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
 		return err
 	}
+	sanitizedComposeFile := filepath.Join(workspace, "docker-compose.mypaas.sanitized.json")
+	if err := s.docker.WriteSanitizedComposeConfig(ctx, workspace, envFile, composeFile, sanitizedComposeFile); err != nil {
+		return err
+	}
 
 	log("Starting compose rollback " + composeProjectName(project.Name))
 	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
 		ProjectName:  composeProjectName(project.Name),
 		WorkDir:      workspace,
-		ComposeFile:  composeFile,
+		ComposeFile:  sanitizedComposeFile,
 		OverrideFile: overrideFile,
 		EnvFile:      envFile,
 		NoBuild:      true,
@@ -1141,7 +1149,7 @@ func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpu
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`services:
   %q:
-    ports: !override
+    ports:
       - %q
     mem_limit: %dm
     cpus: %.2f
