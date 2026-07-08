@@ -88,6 +88,13 @@ random_hex() {
   openssl rand -hex "$bytes" | tr -d '\n'
 }
 
+docker_bridge_gateway() {
+  local docker_cmd gateway
+  docker_cmd="$(docker_prefix)"
+  gateway="$($docker_cmd network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+  printf '%s' "${gateway:-0.0.0.0}"
+}
+
 validate_url_safe_password() {
   local value="$1"
   if [[ "$value" =~ [^A-Za-z0-9._~-] ]]; then
@@ -177,6 +184,7 @@ write_env_file() {
 
   local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
   local postgres_user postgres_db postgres_password jwt_secret encryption_key
+  local docker_bind_host
 
   public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
   owner_email="$(prompt_required OWNER_EMAIL "Owner GitHub primary email")"
@@ -191,6 +199,7 @@ write_env_file() {
   validate_url_safe_password "$postgres_password"
   jwt_secret="${JWT_SECRET:-$(random_base64 32)}"
   encryption_key="${ENCRYPTION_KEY:-$(random_base64 32)}"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_bridge_gateway)}"
 
   umask 077
   cat > "$ENV_FILE" <<EOF
@@ -217,7 +226,7 @@ ENCRYPTION_KEY=$encryption_key
 
 DOCKER_SOCKET=/var/run/docker.sock
 DOCKER_HOST=
-DOCKER_BIND_HOST=127.0.0.1
+DOCKER_BIND_HOST=$docker_bind_host
 PROJECT_NETWORK=mypaas-prod
 
 USER_RAM_QUOTA_GB=${USER_RAM_QUOTA_GB:-6}
