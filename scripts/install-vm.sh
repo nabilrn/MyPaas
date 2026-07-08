@@ -181,9 +181,9 @@ write_env_file() {
   public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
   owner_email="$(prompt_required OWNER_EMAIL "Owner GitHub primary email")"
   github_client_id="$(prompt_required GITHUB_CLIENT_ID "GitHub OAuth Client ID")"
-  github_client_secret="$(prompt_required GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" true)"
+  github_client_secret="$(prompt_required GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret")"
   callback_url="$(prompt_optional GITHUB_CALLBACK_URL "GitHub OAuth callback URL" "https://$public_domain/api/auth/github/callback")"
-  cloudflare_tunnel_token="$(prompt_required CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token" true)"
+  cloudflare_tunnel_token="$(prompt_required CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token")"
 
   postgres_user="$(prompt_optional POSTGRES_USER "Postgres user" "mypaas")"
   postgres_db="$(prompt_optional POSTGRES_DB "Postgres database" "mypaas")"
