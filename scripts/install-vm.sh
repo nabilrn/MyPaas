@@ -88,10 +88,18 @@ random_hex() {
   openssl rand -hex "$bytes" | tr -d '\n'
 }
 
-docker_bridge_gateway() {
+ensure_docker_network() {
+  local network_name="$1"
+  local docker_cmd
+  docker_cmd="$(docker_prefix)"
+  $docker_cmd network inspect "$network_name" >/dev/null 2>&1 || $docker_cmd network create "$network_name" >/dev/null
+}
+
+docker_network_gateway() {
+  local network_name="$1"
   local docker_cmd gateway
   docker_cmd="$(docker_prefix)"
-  gateway="$($docker_cmd network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+  gateway="$($docker_cmd network inspect "$network_name" --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
   printf '%s' "${gateway:-0.0.0.0}"
 }
 
@@ -183,7 +191,7 @@ write_env_file() {
   log "Generating production .env"
 
   local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
-  local postgres_user postgres_db postgres_password jwt_secret encryption_key
+  local postgres_user postgres_db postgres_password jwt_secret encryption_key project_network
   local docker_bind_host
 
   public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
@@ -199,7 +207,9 @@ write_env_file() {
   validate_url_safe_password "$postgres_password"
   jwt_secret="${JWT_SECRET:-$(random_base64 32)}"
   encryption_key="${ENCRYPTION_KEY:-$(random_base64 32)}"
-  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_bridge_gateway)}"
+  project_network="${PROJECT_NETWORK:-mypaas-prod}"
+  ensure_docker_network "$project_network"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
 
   umask 077
   cat > "$ENV_FILE" <<EOF
@@ -227,7 +237,7 @@ ENCRYPTION_KEY=$encryption_key
 DOCKER_SOCKET=/var/run/docker.sock
 DOCKER_HOST=
 DOCKER_BIND_HOST=$docker_bind_host
-PROJECT_NETWORK=mypaas-prod
+PROJECT_NETWORK=$project_network
 
 USER_RAM_QUOTA_GB=${USER_RAM_QUOTA_GB:-6}
 USER_CPU_QUOTA=${USER_CPU_QUOTA:-3}
@@ -282,9 +292,11 @@ prepare_host() {
     sudo_cmd mkdir -p "$dir"
   done
 
-  local docker_cmd
-  docker_cmd="$(docker_prefix)"
-  $docker_cmd network inspect mypaas-prod >/dev/null 2>&1 || $docker_cmd network create mypaas-prod >/dev/null
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+  ensure_docker_network "${PROJECT_NETWORK:-mypaas-prod}"
 }
 
 main() {
