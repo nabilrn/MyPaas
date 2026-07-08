@@ -191,7 +191,7 @@ The wizard binds to `127.0.0.1` on the VM and prints a one-time URL. For a remot
 ssh -L 8787:127.0.0.1:8787 <user>@<vm-ip>
 ```
 
-Then open the printed `http://127.0.0.1:8787/?token=...` URL locally. The wizard explains how to create the GitHub OAuth app and Cloudflare Tunnel token, writes the production `.env`, shuts down, and lets the installer continue.
+Then open the printed `http://127.0.0.1:8787/?token=...` URL locally. The step-by-step wizard explains the public domain/subdomain model, how to create the GitHub OAuth app, how to get a Cloudflare Tunnel token, writes the production `.env`, shuts down, and lets the installer continue.
 
 The installer checks Docker + Compose, generates a production `.env` with safe random secrets, creates MyPaas host directories, runs migrations, and starts the production Compose stack. For non-interactive installs, provide required values as environment variables:
 ```bash

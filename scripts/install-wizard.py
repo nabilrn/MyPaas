@@ -193,6 +193,7 @@ def write_env(content: str) -> None:
 def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     values = values or DEFAULTS
     domain = values.get("PUBLIC_DOMAIN", "")
+    callback_is_generated = not values.get("GITHUB_CALLBACK_URL", "")
     callback = values.get("GITHUB_CALLBACK_URL", "") or (f"https://{domain}/api/auth/github/callback" if domain else "")
     body = f"""<!doctype html>
 <html lang="en">
@@ -208,14 +209,14 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       color: #111827;
     }}
     body {{ margin: 0; }}
-    main {{ max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 32px 20px 48px; }}
     header {{ margin-bottom: 22px; }}
     h1 {{ margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: 0; }}
     h2 {{ margin: 0 0 12px; font-size: 16px; }}
     h3 {{ margin: 18px 0 8px; font-size: 14px; }}
     p {{ margin: 0; color: #4b5563; line-height: 1.55; }}
     a {{ color: #047857; }}
-    .layout {{ display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }}
+    .layout {{ display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }}
     .panel {{ border: 1px solid #d9dee6; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
     .panel-header {{ border-bottom: 1px solid #e5e7eb; padding: 18px; }}
     .panel-body {{ padding: 18px; }}
@@ -228,15 +229,37 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     .hint {{ font-size: 12px; color: #6b7280; }}
     .alert {{ margin-bottom: 14px; border: 1px solid #fecaca; border-radius: 6px; background: #fef2f2; color: #991b1b; padding: 10px 12px; font-size: 14px; }}
     .notice {{ border: 1px solid #bfdbfe; border-radius: 6px; background: #eff6ff; color: #1e3a8a; padding: 10px 12px; font-size: 13px; }}
+    .warning {{ border: 1px solid #fde68a; border-radius: 6px; background: #fffbeb; color: #92400e; padding: 10px 12px; font-size: 13px; }}
     details {{ border-top: 1px solid #e5e7eb; }}
     summary {{ cursor: pointer; padding: 16px 18px; font-weight: 650; color: #374151; }}
     button {{ min-height: 42px; border: 1px solid #065f46; border-radius: 6px; background: #047857; color: #fff; padding: 0 16px; font-weight: 700; cursor: pointer; }}
     button:hover {{ background: #065f46; }}
-    .actions {{ display: flex; justify-content: flex-end; border-top: 1px solid #e5e7eb; padding: 16px 18px; }}
+    button.secondary {{ border-color: #d1d5db; background: #fff; color: #374151; }}
+    button.secondary:hover {{ background: #f9fafb; }}
+    .actions {{ display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #e5e7eb; padding: 16px 18px; }}
+    .actions-right {{ display: flex; gap: 10px; }}
     ol {{ margin: 10px 0 0 20px; padding: 0; color: #374151; line-height: 1.55; }}
     li + li {{ margin-top: 10px; }}
     code {{ background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 1px 4px; font-size: 12px; }}
     .stack {{ display: grid; gap: 14px; }}
+    .stepper {{ position: sticky; top: 20px; display: grid; gap: 8px; padding: 10px; }}
+    .step-tab {{ display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid transparent; border-radius: 8px; padding: 10px; color: #6b7280; }}
+    .step-number {{ display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 7px; background: #f3f4f6; color: #4b5563; font-size: 12px; font-weight: 800; }}
+    .step-title {{ display: block; color: #111827; font-size: 13px; font-weight: 750; }}
+    .step-body {{ display: block; margin-top: 2px; font-size: 12px; }}
+    .step-tab.active {{ border-color: #a7f3d0; background: #ecfdf5; color: #047857; }}
+    .step-tab.active .step-number {{ background: #047857; color: #fff; }}
+    .step-tab.done .step-number {{ background: #d1fae5; color: #047857; }}
+    .wizard-step[hidden] {{ display: none; }}
+    .guide {{ display: grid; gap: 12px; margin-bottom: 16px; }}
+    .guide-card {{ border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; padding: 14px; }}
+    .guide-card strong {{ color: #111827; }}
+    .example-grid {{ display: grid; gap: 8px; margin-top: 12px; }}
+    .example-row {{ display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }}
+    .review {{ display: grid; gap: 10px; }}
+    .review-row {{ display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 12px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px; }}
+    .review-row span:first-child {{ color: #6b7280; }}
+    .review-row span:last-child {{ min-width: 0; overflow-wrap: anywhere; font-weight: 650; }}
     @media (max-width: 900px) {{ .layout {{ grid-template-columns: 1fr; }} .grid {{ grid-template-columns: 1fr; }} }}
     @media (prefers-color-scheme: dark) {{
       :root {{ background: #030712; color: #f9fafb; }}
@@ -246,6 +269,17 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       input {{ background: #030712; color: #f9fafb; border-color: #374151; }}
       code {{ background: #030712; border-color: #374151; }}
       .notice {{ background: rgba(30, 58, 138, .25); border-color: #1d4ed8; color: #bfdbfe; }}
+      .warning {{ background: rgba(146, 64, 14, .22); border-color: #92400e; color: #fde68a; }}
+      button.secondary {{ border-color: #374151; background: #111827; color: #e5e7eb; }}
+      button.secondary:hover {{ background: #1f2937; }}
+      .step-title {{ color: #f9fafb; }}
+      .step-number {{ background: #1f2937; color: #cbd5e1; }}
+      .step-tab.active {{ border-color: #047857; background: rgba(4, 120, 87, .16); color: #a7f3d0; }}
+      .step-tab.done .step-number {{ background: rgba(4, 120, 87, .25); color: #a7f3d0; }}
+      .guide-card {{ background: #0b1220; border-color: #273244; }}
+      .guide-card strong {{ color: #f9fafb; }}
+      .review-row {{ border-color: #273244; }}
+      .review-row span:first-child {{ color: #94a3b8; }}
     }}
   </style>
 </head>
@@ -256,107 +290,237 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       <p>Fill the production credentials once. The wizard writes <code>{esc(ENV_FILE)}</code>, shuts down, and the installer continues.</p>
     </header>
     <div class="layout">
+      <aside class="panel stepper" aria-label="Install steps">
+        <div class="step-tab active" data-progress="0">
+          <span class="step-number">1</span>
+          <span><span class="step-title">Domain</span><span class="step-body">Base URL and owner</span></span>
+        </div>
+        <div class="step-tab" data-progress="1">
+          <span class="step-number">2</span>
+          <span><span class="step-title">GitHub</span><span class="step-body">OAuth login</span></span>
+        </div>
+        <div class="step-tab" data-progress="2">
+          <span class="step-number">3</span>
+          <span><span class="step-title">Cloudflare</span><span class="step-body">Tunnel routing</span></span>
+        </div>
+        <div class="step-tab" data-progress="3">
+          <span class="step-number">4</span>
+          <span><span class="step-title">Review</span><span class="step-body">Save and deploy</span></span>
+        </div>
+      </aside>
+
       <form class="panel" method="post" action="/save">
         <input type="hidden" name="token" value="{esc(TOKEN)}">
         <div class="panel-header">
-          <h2>Required credentials</h2>
-          <p>Credential fields are intentionally visible so pasted tokens can be checked before saving.</p>
+          <h2 id="step-heading">Domain and owner</h2>
+          <p id="step-description">Start with the public domain MyPaas will control.</p>
         </div>
         <div class="panel-body">
           {f'<div class="alert">{esc(error)}</div>' if error else ''}
-          <div class="grid">
-            <div class="field">
-              <label for="PUBLIC_DOMAIN">Public domain</label>
-              <input id="PUBLIC_DOMAIN" name="PUBLIC_DOMAIN" required placeholder="mypaas.example.com" value="{esc(domain)}">
-              <span class="hint">Use the dashboard hostname, without https://.</span>
+
+          <section class="wizard-step" data-step="0">
+            <div class="guide">
+              <div class="guide-card">
+                <strong>You need a domain you control.</strong>
+                <p>MyPaas uses this domain as its base address. The dashboard runs at <code>https://your-domain</code>, and deployed projects get subdomains under it.</p>
+                <div class="example-grid">
+                  <div class="example-row"><span>Dashboard</span><code id="example-dashboard">https://mypaas.example.com</code></div>
+                  <div class="example-row"><span>Project</span><code id="example-project">https://todo.mypaas.example.com</code></div>
+                </div>
+              </div>
+              <div class="notice">Example: if you enter <code>mypaas.my.id</code>, a project named <code>crud</code> will route to <code>crud.mypaas.my.id</code>.</div>
             </div>
-            <div class="field">
-              <label for="OWNER_EMAIL">Owner GitHub primary email</label>
-              <input id="OWNER_EMAIL" name="OWNER_EMAIL" required placeholder="you@example.com" value="{esc(values.get("OWNER_EMAIL", ""))}">
-              <span class="hint">This email is whitelisted as the first MyPaas owner.</span>
+            <div class="grid">
+              <div class="field">
+                <label for="PUBLIC_DOMAIN">Public MyPaas domain</label>
+                <input id="PUBLIC_DOMAIN" name="PUBLIC_DOMAIN" required placeholder="mypaas.example.com" value="{esc(domain)}">
+                <span class="hint">Use the hostname only, without <code>https://</code>. A dedicated subdomain like <code>mypaas.example.com</code> is recommended.</span>
+              </div>
+              <div class="field">
+                <label for="OWNER_EMAIL">Owner GitHub primary email</label>
+                <input id="OWNER_EMAIL" name="OWNER_EMAIL" required placeholder="you@example.com" value="{esc(values.get("OWNER_EMAIL", ""))}">
+                <span class="hint">Only this whitelisted email can log in as the first owner.</span>
+              </div>
             </div>
+          </section>
+
+          <section class="wizard-step" data-step="1" hidden>
+            <div class="guide">
+              <div class="guide-card">
+                <strong>Create a GitHub OAuth app.</strong>
+                <ol>
+                  <li>Open <a href="https://github.com/settings/developers" target="_blank" rel="noopener">GitHub Developer settings</a>.</li>
+                  <li>Choose <strong>OAuth Apps</strong>, then <strong>New OAuth App</strong>.</li>
+                  <li>Set Homepage URL to <code id="github-homepage-example">https://your-domain</code>.</li>
+                  <li>Set Authorization callback URL to <code id="github-callback-example">https://your-domain/api/auth/github/callback</code>.</li>
+                  <li>Create the app, copy the Client ID, then generate and copy a Client Secret.</li>
+                </ol>
+              </div>
+            </div>
+            <div class="grid">
             <div class="field">
-              <label for="GITHUB_CLIENT_ID">GitHub OAuth Client ID</label>
+              <label for="GITHUB_CLIENT_ID">OAuth Client ID</label>
               <input id="GITHUB_CLIENT_ID" name="GITHUB_CLIENT_ID" required value="{esc(values.get("GITHUB_CLIENT_ID", ""))}">
             </div>
             <div class="field">
-              <label for="GITHUB_CLIENT_SECRET">GitHub OAuth Client Secret</label>
+              <label for="GITHUB_CLIENT_SECRET">OAuth Client Secret</label>
               <input id="GITHUB_CLIENT_SECRET" name="GITHUB_CLIENT_SECRET" required value="{esc(values.get("GITHUB_CLIENT_SECRET", ""))}">
             </div>
             <div class="field full">
               <label for="GITHUB_CALLBACK_URL">GitHub OAuth callback URL</label>
-              <input id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required value="{esc(callback)}">
+              <input id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required data-generated="{str(callback_is_generated).lower()}" value="{esc(callback)}">
               <span class="hint">Must match the callback URL in the GitHub OAuth app exactly.</span>
             </div>
-            <div class="field full">
+            </div>
+          </section>
+
+          <section class="wizard-step" data-step="2" hidden>
+            <div class="guide">
+              <div class="guide-card">
+                <strong>Create or reuse a Cloudflare Tunnel.</strong>
+                <ol>
+                  <li>Your domain should use Cloudflare nameservers.</li>
+                  <li>Open Cloudflare Zero Trust, then go to <strong>Networks</strong> -> <strong>Tunnels</strong>.</li>
+                  <li>Create a tunnel or open an existing tunnel, choose the Docker connector, and copy the token from the generated command.</li>
+                  <li>Add public hostnames for <code id="cf-root-example">your-domain</code> and <code id="cf-wildcard-example">*.your-domain</code> routed to <code>http://caddy:80</code>.</li>
+                </ol>
+              </div>
+              <div class="warning">Use the Tunnel token from the Docker connector command. This is not the same thing as a Cloudflare API token.</div>
+            </div>
+            <div class="grid">
+              <div class="field full">
               <label for="CLOUDFLARE_TUNNEL_TOKEN">Cloudflare Tunnel token</label>
               <input id="CLOUDFLARE_TUNNEL_TOKEN" name="CLOUDFLARE_TUNNEL_TOKEN" required value="{esc(values.get("CLOUDFLARE_TUNNEL_TOKEN", ""))}">
               <span class="hint">Use a Cloudflare Zero Trust tunnel token, not an API token.</span>
             </div>
           </div>
+          </section>
+
+          <section class="wizard-step" data-step="3" hidden>
+            <div class="guide">
+              <div class="guide-card">
+                <strong>Review before saving.</strong>
+                <p>The installer will write <code>{esc(ENV_FILE)}</code>, prepare host directories, run migrations, then start MyPaas.</p>
+                <div class="review">
+                  <div class="review-row"><span>Dashboard</span><span id="review-dashboard">-</span></div>
+                  <div class="review-row"><span>Project URL pattern</span><span id="review-project">-</span></div>
+                  <div class="review-row"><span>GitHub callback</span><span id="review-callback">-</span></div>
+                  <div class="review-row"><span>Owner email</span><span id="review-owner">-</span></div>
+                </div>
+              </div>
+            </div>
+            <details>
+              <summary>Advanced generated values</summary>
+              <div class="panel-body grid">
+                {advanced_field("POSTGRES_USER", "Postgres user", values)}
+                {advanced_field("POSTGRES_DB", "Postgres database", values)}
+                {advanced_field("POSTGRES_PASSWORD", "Postgres password", values)}
+                {advanced_field("PROJECT_NETWORK", "Docker project network", values)}
+                {advanced_field("DOCKER_BIND_HOST", "Docker bind host", values)}
+                {advanced_field("METRICS_PASSWORD", "Metrics password", values)}
+                <div class="field full">
+                  <label for="JWT_SECRET">JWT secret</label>
+                  <input id="JWT_SECRET" name="JWT_SECRET" required value="{esc(values.get("JWT_SECRET", ""))}">
+                </div>
+                <div class="field full">
+                  <label for="ENCRYPTION_KEY">Env encryption key</label>
+                  <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required value="{esc(values.get("ENCRYPTION_KEY", ""))}">
+                </div>
+              </div>
+            </details>
+          </section>
         </div>
-        <details>
-          <summary>Advanced generated values</summary>
-          <div class="panel-body grid">
-            {advanced_field("POSTGRES_USER", "Postgres user", values)}
-            {advanced_field("POSTGRES_DB", "Postgres database", values)}
-            {advanced_field("POSTGRES_PASSWORD", "Postgres password", values)}
-            {advanced_field("PROJECT_NETWORK", "Docker project network", values)}
-            {advanced_field("DOCKER_BIND_HOST", "Docker bind host", values)}
-            {advanced_field("METRICS_PASSWORD", "Metrics password", values)}
-            <div class="field full">
-              <label for="JWT_SECRET">JWT secret</label>
-              <input id="JWT_SECRET" name="JWT_SECRET" required value="{esc(values.get("JWT_SECRET", ""))}">
-            </div>
-            <div class="field full">
-              <label for="ENCRYPTION_KEY">Env encryption key</label>
-              <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required value="{esc(values.get("ENCRYPTION_KEY", ""))}">
-            </div>
-          </div>
-        </details>
         <div class="actions">
-          <button type="submit">Save .env and continue install</button>
+          <button class="secondary" type="button" id="back-button">Back</button>
+          <div class="actions-right">
+            <button type="button" id="next-button">Continue</button>
+            <button type="submit" id="submit-button">Save .env and continue install</button>
+          </div>
         </div>
       </form>
-
-      <aside class="stack">
-        <section class="panel">
-          <div class="panel-header"><h2>How to get GitHub OAuth credentials</h2></div>
-          <div class="panel-body">
-            <ol>
-              <li>Open <a href="https://github.com/settings/developers" target="_blank" rel="noopener">GitHub Developer settings</a>.</li>
-              <li>Choose <strong>OAuth Apps</strong>, then <strong>New OAuth App</strong>.</li>
-              <li>Set Homepage URL to <code>https://your-domain</code>.</li>
-              <li>Set Authorization callback URL to <code>https://your-domain/api/auth/github/callback</code>.</li>
-              <li>After create, copy the Client ID and generate a Client Secret.</li>
-            </ol>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="panel-header"><h2>How to get the Cloudflare Tunnel token</h2></div>
-          <div class="panel-body">
-            <ol>
-              <li>Open Cloudflare Zero Trust.</li>
-              <li>Go to <strong>Networks</strong> -> <strong>Tunnels</strong>.</li>
-              <li>Create or open a tunnel, choose the Docker connector, and copy the token from the run command.</li>
-              <li>Add public hostnames for <code>your-domain</code> and <code>*.your-domain</code> to route to <code>http://caddy:80</code>.</li>
-            </ol>
-          </div>
-        </section>
-        <div class="notice">For remote VMs, keep this wizard on <code>127.0.0.1</code> and access it through SSH port forwarding.</div>
-      </aside>
     </div>
   </main>
   <script>
+    const steps = Array.from(document.querySelectorAll('.wizard-step'));
+    const progress = Array.from(document.querySelectorAll('[data-progress]'));
+    const heading = document.getElementById('step-heading');
+    const description = document.getElementById('step-description');
+    const backButton = document.getElementById('back-button');
+    const nextButton = document.getElementById('next-button');
+    const submitButton = document.getElementById('submit-button');
     const domain = document.getElementById('PUBLIC_DOMAIN');
+    const owner = document.getElementById('OWNER_EMAIL');
     const callback = document.getElementById('GITHUB_CALLBACK_URL');
-    let callbackTouched = Boolean(callback.value);
+    const titles = [
+      ['Domain and owner', 'Start with the public domain MyPaas will control.'],
+      ['GitHub login', 'Create the OAuth app MyPaas uses for dashboard login.'],
+      ['Cloudflare tunnel', 'Connect the public domain and wildcard project subdomains to this VM.'],
+      ['Review and save', 'Check the generated production config before the installer continues.']
+    ];
+    let currentStep = 0;
+    let callbackTouched = callback.dataset.generated !== 'true' && Boolean(callback.value);
+
+    function cleanDomain() {{
+      return domain.value.trim().replace(/^https?:\\/\\//i, '').replace(/\\/.*$/, '').replace(/\\.$/, '').toLowerCase();
+    }}
+
+    function setText(id, value) {{
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    }}
+
+    function updateDerivedText() {{
+      const clean = cleanDomain() || 'mypaas.example.com';
+      setText('example-dashboard', `https://${{clean}}`);
+      setText('example-project', `https://todo.${{clean}}`);
+      setText('github-homepage-example', `https://${{clean}}`);
+      setText('github-callback-example', `https://${{clean}}/api/auth/github/callback`);
+      setText('cf-root-example', clean);
+      setText('cf-wildcard-example', `*.${{clean}}`);
+      setText('review-dashboard', cleanDomain() ? `https://${{cleanDomain()}}` : '-');
+      setText('review-project', cleanDomain() ? `https://<project>.${{cleanDomain()}}` : '-');
+      setText('review-callback', callback.value || '-');
+      setText('review-owner', owner.value || '-');
+    }}
+
+    function showStep(index) {{
+      currentStep = Math.max(0, Math.min(index, steps.length - 1));
+      steps.forEach((step, stepIndex) => step.hidden = stepIndex !== currentStep);
+      progress.forEach((item, itemIndex) => {{
+        item.classList.toggle('active', itemIndex === currentStep);
+        item.classList.toggle('done', itemIndex < currentStep);
+      }});
+      heading.textContent = titles[currentStep][0];
+      description.textContent = titles[currentStep][1];
+      backButton.hidden = currentStep === 0;
+      nextButton.hidden = currentStep === steps.length - 1;
+      submitButton.hidden = currentStep !== steps.length - 1;
+      updateDerivedText();
+    }}
+
+    function validateCurrentStep() {{
+      const invalid = Array.from(steps[currentStep].querySelectorAll('input[required]'))
+        .find((input) => !input.checkValidity());
+      if (!invalid) return true;
+      invalid.reportValidity();
+      return false;
+    }}
+
+    backButton.addEventListener('click', () => showStep(currentStep - 1));
+    nextButton.addEventListener('click', () => {{
+      if (validateCurrentStep()) showStep(currentStep + 1);
+    }});
     callback.addEventListener('input', () => callbackTouched = true);
     domain.addEventListener('input', () => {{
-      if (callbackTouched) return;
-      const clean = domain.value.trim().replace(/^https?:\\/\\//i, '').replace(/\\/.*$/, '').replace(/\\.$/, '');
-      callback.value = clean ? `https://${{clean}}/api/auth/github/callback` : '';
+      const clean = cleanDomain();
+      if (!callbackTouched) {{
+        callback.value = clean ? `https://${{clean}}/api/auth/github/callback` : '';
+      }}
+      updateDerivedText();
     }});
+    owner.addEventListener('input', updateDerivedText);
+    callback.addEventListener('input', updateDerivedText);
+    showStep(0);
   </script>
 </body>
 </html>"""

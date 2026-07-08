@@ -2,6 +2,7 @@
 
 .gitattributes text eol=lf
 *.sh text eol=lf
+*.py text eol=lf
 *.go text eol=lf
 *.ts text eol=lf
 *.svelte text eol=lf
