@@ -35,6 +35,7 @@ type Response struct {
 
 type DetectResponse struct {
 	DeployMode    string            `json:"deployMode"`
+	Branch        string            `json:"branch"`
 	MainService   *string           `json:"mainService"`
 	Services      []string          `json:"services"`
 	ComposeFile   *string           `json:"composeFile"`
@@ -69,6 +70,7 @@ func ResponseFromDB(project db.Project) Response {
 func DetectResponseFromResult(result DetectResult) DetectResponse {
 	return DetectResponse{
 		DeployMode:    result.DeployMode,
+		Branch:        result.Branch,
 		MainService:   result.MainService,
 		Services:      result.Services,
 		ComposeFile:   result.ComposeFile,

@@ -32,7 +32,7 @@
 	let form = {
 		name: '',
 		repoUrl: '',
-		branch: 'main',
+		branch: '',
 		deployMode: 'auto' as DeployModeChoice,
 		mainService: '',
 		appPort: '',
@@ -91,7 +91,7 @@
 				? 'Ready for detection'
 				: 'Waiting for repository URL';
 	$: detectionStateBody = detecting
-		? 'MyPaas is checking the branch for Dockerfile, Compose, static assets, ports, services, and env hints.'
+		? 'MyPaas is checking the repository branch for Dockerfile, Compose, static assets, ports, services, and env hints.'
 		: detectMessage
 			? detectedServices.length > 0
 				? `Services: ${detectedServices.join(', ')}`
@@ -133,6 +133,9 @@
 
 	function applyDetectedMode(detected: DeployModeDetection) {
 		const manualPort = appPortSource === 'manual' ? form.appPort : '';
+		if (detected.branch) {
+			form.branch = detected.branch;
+		}
 		chooseDeployMode(detected.deployMode);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
@@ -152,11 +155,13 @@
 		}
 		detectedServices = detected.services;
 		mergeDiscoveredEnvVars(detected.envVars ?? []);
+		const branchSuffix = detected.branch ? ` on ${detected.branch}` : '';
 		detectMessage = detected.deployMode === 'compose'
 			? `Compose${detected.composeFile ? `: ${detected.composeFile}` : ''}`
 			: detected.deployMode === 'static'
 				? 'Static site'
 				: 'Dockerfile';
+		detectMessage += branchSuffix;
 	}
 
 	function markCustomProfile() {
@@ -319,7 +324,7 @@
 					</div>
 					<div>
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="branch">Branch</label>
-						<input id="branch" type="text" bind:value={form.branch} class="field w-full font-mono" />
+						<input id="branch" type="text" bind:value={form.branch} placeholder="auto-detect default branch" class="field w-full font-mono" />
 					</div>
 					<div class="sm:col-span-2">
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
@@ -544,7 +549,7 @@
 					<div class="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-800">
 						<div class="px-5 py-3">
 							<dt class="text-xs text-gray-500 dark:text-gray-400">Branch</dt>
-							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch}</dd>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch || 'Auto-detect'}</dd>
 						</div>
 						<div class="px-5 py-3">
 							<dt class="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>

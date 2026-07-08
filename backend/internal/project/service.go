@@ -69,6 +69,7 @@ type DetectInput struct {
 
 type DetectResult struct {
 	DeployMode    string
+	Branch        string
 	MainService   *string
 	Services      []string
 	ComposeFile   *string
@@ -100,7 +101,11 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	}
 	branch := strings.TrimSpace(input.Branch)
 	if branch == "" {
-		branch = "main"
+		resolvedBranch, err := resolveDefaultBranch(ctx, repoURL)
+		if err != nil {
+			return DetectResult{}, err
+		}
+		branch = resolvedBranch
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -131,6 +136,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 		appPort := inferComposeAppPort(ctx, workspace, composeFile, mainService, envVars)
 		return DetectResult{
 			DeployMode:    "compose",
+			Branch:        branch,
 			MainService:   &mainService,
 			Services:      services,
 			ComposeFile:   &composeFile,
@@ -140,10 +146,10 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 		}, nil
 	}
 	if hasDockerfile {
-		return DetectResult{DeployMode: "dockerfile", HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars)}, nil
+		return DetectResult{DeployMode: "dockerfile", Branch: branch, HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars)}, nil
 	}
 	if _, _, err := staticdeploy.FindSiteRoot(workspace); err == nil {
-		return DetectResult{DeployMode: "static", HasDockerfile: false, EnvVars: envVars, AppPort: 80}, nil
+		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80}, nil
 	}
 	return DetectResult{}, errs.ErrNoDeployConfig
 }
@@ -156,8 +162,13 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, er
 	if strings.TrimSpace(input.RepoURL) == "" {
 		return db.Project{}, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
 	}
+	input.Branch = strings.TrimSpace(input.Branch)
 	if input.Branch == "" {
-		input.Branch = "main"
+		branch, err := resolveDefaultBranch(ctx, input.RepoURL)
+		if err != nil {
+			return db.Project{}, err
+		}
+		input.Branch = branch
 	}
 	if input.DeployMode == "" || input.DeployMode == "auto" {
 		input.DeployMode = "dockerfile"
@@ -347,6 +358,47 @@ func cloneForDetect(ctx context.Context, workspace, repoURL, branch string) erro
 		return fmt.Errorf("%w: failed to clone repository branch %q", errs.ErrValidation, branch)
 	}
 	return nil
+}
+
+func resolveDefaultBranch(ctx context.Context, repoURL string) (string, error) {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return "", fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--symref", repoURL, "HEAD").CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to detect default branch: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
+	}
+	branch := parseDefaultBranchRef(string(out))
+	if branch == "" {
+		return "", fmt.Errorf("%w: failed to detect default branch", errs.ErrValidation)
+	}
+	return branch, nil
+}
+
+func parseDefaultBranchRef(output string) string {
+	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		fields := strings.Fields(line)
+		if len(fields) < 3 || fields[0] != "ref:" || fields[2] != "HEAD" || !strings.HasPrefix(fields[1], "refs/heads/") {
+			continue
+		}
+		return strings.TrimPrefix(fields[1], "refs/heads/")
+	}
+	return ""
+}
+
+func firstNonEmptyLine(value string) string {
+	for _, line := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return "unknown error"
 }
 
 func detectComposeFile(workspace string) string {

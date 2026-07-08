@@ -68,6 +68,46 @@ func TestParseComposeExposeUsesFirstPort(t *testing.T) {
 	}
 }
 
+func TestParseDefaultBranchRef(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name: "main",
+			input: "ref: refs/heads/main\tHEAD\n" +
+				"8f8c2 HEAD\n",
+			want: "main",
+		},
+		{
+			name: "master",
+			input: "ref: refs/heads/master HEAD\n" +
+				"8f8c2 HEAD\n",
+			want: "master",
+		},
+		{
+			name: "branch with slash",
+			input: "ref: refs/heads/release/v1 HEAD\n" +
+				"8f8c2 HEAD\n",
+			want: "release/v1",
+		},
+		{
+			name:  "missing symref",
+			input: "8f8c2 HEAD\n",
+			want:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseDefaultBranchRef(tt.input); got != tt.want {
+				t.Fatalf("parseDefaultBranchRef() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {

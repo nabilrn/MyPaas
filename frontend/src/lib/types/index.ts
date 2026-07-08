@@ -118,6 +118,7 @@ export interface QuotaUsage {
 
 export interface DeployModeDetection {
 	deployMode: DeployMode;
+	branch: string;
 	mainService: string | null;
 	services: string[];
 	composeFile: string | null;
