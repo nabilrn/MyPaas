@@ -22,6 +22,15 @@ set +a
 : "${POSTGRES_USER:?POSTGRES_USER is required}"
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 : "${POSTGRES_DB:?POSTGRES_DB is required}"
+: "${PUBLIC_DOMAIN:?PUBLIC_DOMAIN is required}"
+: "${OWNER_EMAIL:?OWNER_EMAIL is required}"
+: "${GITHUB_CLIENT_ID:?GITHUB_CLIENT_ID is required}"
+: "${GITHUB_CLIENT_SECRET:?GITHUB_CLIENT_SECRET is required}"
+: "${GITHUB_CALLBACK_URL:?GITHUB_CALLBACK_URL is required}"
+: "${JWT_SECRET:?JWT_SECRET is required}"
+: "${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}"
+: "${DOCKER_SOCKET:?DOCKER_SOCKET is required}"
+: "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 
 SUDO=""
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then

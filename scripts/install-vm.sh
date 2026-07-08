@@ -175,7 +175,7 @@ write_env_file() {
 
   log "Generating production .env"
 
-  local public_domain owner_email github_client_id github_client_secret callback_url
+  local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
   local postgres_user postgres_db postgres_password jwt_secret encryption_key
 
   public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
@@ -183,6 +183,7 @@ write_env_file() {
   github_client_id="$(prompt_required GITHUB_CLIENT_ID "GitHub OAuth Client ID")"
   github_client_secret="$(prompt_required GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret" true)"
   callback_url="$(prompt_optional GITHUB_CALLBACK_URL "GitHub OAuth callback URL" "https://$public_domain/api/auth/github/callback")"
+  cloudflare_tunnel_token="$(prompt_required CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token" true)"
 
   postgres_user="$(prompt_optional POSTGRES_USER "Postgres user" "mypaas")"
   postgres_db="$(prompt_optional POSTGRES_DB "Postgres database" "mypaas")"
@@ -208,6 +209,8 @@ OWNER_EMAIL=$owner_email
 GITHUB_CLIENT_ID=$github_client_id
 GITHUB_CLIENT_SECRET=$github_client_secret
 GITHUB_CALLBACK_URL=$callback_url
+
+CLOUDFLARE_TUNNEL_TOKEN=$cloudflare_tunnel_token
 
 JWT_SECRET=$jwt_secret
 ENCRYPTION_KEY=$encryption_key

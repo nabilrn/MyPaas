@@ -17,8 +17,8 @@
 http://{$PUBLIC_DOMAIN} {
 	encode gzip
 
-	# API routes
-	handle /api/* {
+	# API routes. Frontend calls /api/*, backend routes are mounted at /.
+	handle_path /api/* {
 		reverse_proxy api:8080 {
 			header_up -User-Agent
 			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"

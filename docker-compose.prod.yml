@@ -101,6 +101,14 @@ services:
       - api
       - dashboard
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+
 volumes:
   postgres_data:
   caddy_data:

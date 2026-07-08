@@ -15,8 +15,18 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
+: "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
+
 echo "Checking production containers..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+
+echo "Checking Cloudflare Tunnel container..."
+$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps cloudflared
 
 echo "Checking API health..."
 curl -fsS http://127.0.0.1:8080/health >/dev/null
