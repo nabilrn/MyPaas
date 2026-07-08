@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -33,6 +33,8 @@
 	let confirmRegenerateSecret = false;
 	let confirmResetComposeResources = false;
 	let showWebhookHelp = false;
+	let copiedTarget: 'webhook-url' | 'webhook-secret' | '' = '';
+	let copiedResetTimer: ReturnType<typeof setTimeout> | undefined;
 
 	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
 		{ id: 'node-python',  title: 'Node/Python',       memoryMb: 256, cpuLimit: 0.35 },
@@ -54,6 +56,12 @@
 
 	onMount(() => {
 		void load();
+	});
+
+	onDestroy(() => {
+		if (copiedResetTimer) {
+			clearTimeout(copiedResetTimer);
+		}
 	});
 
 	async function load() {
@@ -169,12 +177,22 @@
 	}
 
 	function copyWebhookURL(projectId: string) {
-		copyText(webhookURL(projectId, $page.url.origin), 'Webhook URL copied');
+		copyText(webhookURL(projectId, $page.url.origin), 'Webhook URL copied', 'webhook-url');
 	}
 
-	function copyText(value: string, successMessage: string) {
+	function copyText(value: string, successMessage: string, target: 'webhook-url' | 'webhook-secret') {
 		navigator.clipboard?.writeText(value)
-			.then(() => toast.success(successMessage))
+			.then(() => {
+				copiedTarget = target;
+				if (copiedResetTimer) {
+					clearTimeout(copiedResetTimer);
+				}
+				copiedResetTimer = setTimeout(() => {
+					copiedTarget = '';
+					copiedResetTimer = undefined;
+				}, 1800);
+				toast.success(successMessage);
+			})
 			.catch(() => toast.error('Failed to copy'));
 	}
 
@@ -300,9 +318,22 @@
 					<div>
 						<div class="mb-1 flex items-center justify-between">
 							<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Payload URL</p>
-							<ActionButton variant="ghost" size="xs" on:click={() => copyWebhookURL(project?.id ?? '')} className="min-h-0 px-1 py-0">
-								Copy
-							</ActionButton>
+							<IconButton
+								label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'}
+								variant={copiedTarget === 'webhook-url' ? 'brand' : 'ghost'}
+								on:click={() => copyWebhookURL(project?.id ?? '')}
+							>
+								{#if copiedTarget === 'webhook-url'}
+									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+									</svg>
+								{:else}
+									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
+									</svg>
+								{/if}
+							</IconButton>
 						</div>
 						<code class="block break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
 							{publicWebhookURL}
@@ -312,12 +343,36 @@
 						<div class="mb-1 flex items-center justify-between">
 							<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Secret</p>
 							<div class="flex gap-3">
-								<ActionButton variant="ghost" size="xs" on:click={() => (showWebhookSecret = !showWebhookSecret)} className="min-h-0 px-1 py-0">
-									{showWebhookSecret ? 'Hide' : 'Show'}
-								</ActionButton>
-								<ActionButton variant="ghost" size="xs" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied')} className="min-h-0 px-1 py-0">
-									Copy
-								</ActionButton>
+								<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Show webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>
+									{#if showWebhookSecret}
+										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M10.6 10.6a2 2 0 002.8 2.8" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M9.9 4.2A10.7 10.7 0 0112 4c5 0 8.5 4 10 8a15.1 15.1 0 01-3.1 4.7M6.6 6.6A14.6 14.6 0 002 12c1.5 4 5 8 10 8a10.8 10.8 0 005.4-1.5" />
+										</svg>
+									{:else}
+										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8-10-8-10-8z" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+										</svg>
+									{/if}
+								</IconButton>
+								<IconButton
+									label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'}
+									variant={copiedTarget === 'webhook-secret' ? 'brand' : 'ghost'}
+									on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}
+								>
+									{#if copiedTarget === 'webhook-secret'}
+										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+										</svg>
+									{:else}
+										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
+										</svg>
+									{/if}
+								</IconButton>
 							</div>
 						</div>
 						<code class="block break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
@@ -469,9 +524,22 @@
 						<code class="min-w-0 flex-1 break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
 							{publicWebhookURL}
 						</code>
-						<ActionButton variant="secondary" size="xs" on:click={() => copyWebhookURL(project?.id ?? '')}>
-							Copy
-						</ActionButton>
+						<IconButton
+							label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'}
+							variant={copiedTarget === 'webhook-url' ? 'brand' : 'default'}
+							on:click={() => copyWebhookURL(project?.id ?? '')}
+						>
+							{#if copiedTarget === 'webhook-url'}
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+								</svg>
+							{:else}
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
+								</svg>
+							{/if}
+						</IconButton>
 					</div>
 
 					<span class="metric-label">Secret</span>
@@ -479,9 +547,22 @@
 						<code class="min-w-0 flex-1 break-all rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
 							{showWebhookSecret ? project.webhookSecret : '••••••••••••••••••••••••••••••••'}
 						</code>
-						<ActionButton variant="secondary" size="xs" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied')}>
-							Copy
-						</ActionButton>
+						<IconButton
+							label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'}
+							variant={copiedTarget === 'webhook-secret' ? 'brand' : 'default'}
+							on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}
+						>
+							{#if copiedTarget === 'webhook-secret'}
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+								</svg>
+							{:else}
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
+									<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
+								</svg>
+							{/if}
+						</IconButton>
 					</div>
 				</div>
 

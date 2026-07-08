@@ -28,6 +28,8 @@
 	let nextID = 1;
 	let logViewport: HTMLDivElement | null = null;
 	let source: EventSource | null = null;
+	let logsCopied = false;
+	let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
 	$: services = ['all', ...Array.from(new Set(logs.map((log) => log.service))).sort()];
 	$: filteredLogs = logs.filter((log) => {
@@ -51,6 +53,9 @@
 		return () => {
 			source?.close();
 			source = null;
+			if (copyResetTimer) {
+				clearTimeout(copyResetTimer);
+			}
 		};
 	});
 
@@ -162,7 +167,17 @@
 	function copyVisibleLogs() {
 		const text = filteredLogs.map((log) => formatLine(log)).join('\n');
 		void navigator.clipboard.writeText(text)
-			.then(() => toast.success('Logs copied'))
+			.then(() => {
+				logsCopied = true;
+				if (copyResetTimer) {
+					clearTimeout(copyResetTimer);
+				}
+				copyResetTimer = setTimeout(() => {
+					logsCopied = false;
+					copyResetTimer = undefined;
+				}, 1800);
+				toast.success('Logs copied');
+			})
 			.catch(() => toast.error('Failed to copy logs'));
 	}
 
@@ -214,20 +229,34 @@
 					<option value={service}>{service === 'all' ? 'All services' : service}</option>
 				{/each}
 			</select>
-			<ActionButton
-				variant="secondary"
+			<IconButton
+				label={logsCopied ? 'Logs copied' : 'Copy visible logs'}
+				variant={logsCopied ? 'brand' : 'default'}
 				on:click={copyVisibleLogs}
 				disabled={filteredLogs.length === 0}
 			>
-				Copy
-			</ActionButton>
-			<ActionButton
-				variant="secondary"
+				{#if logsCopied}
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+					</svg>
+				{:else}
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
+					</svg>
+				{/if}
+			</IconButton>
+			<IconButton
+				label="Download visible logs"
+				variant="default"
 				on:click={downloadLogs}
 				disabled={filteredLogs.length === 0}
 			>
-				Download
-			</ActionButton>
+				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v11m0 0l-4-4m4 4l4-4" />
+					<path stroke-linecap="round" stroke-linejoin="round" d="M5 19h14" />
+				</svg>
+			</IconButton>
 			</div>
 		</svelte:fragment>
 
@@ -297,13 +326,18 @@
 		</div>
 		<div class="flex items-center gap-3">
 			{#if paused}
-				<button type="button" on:click={scrollToBottom} class="font-medium text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white">
-					Resume auto-scroll
-				</button>
+				<IconButton label="Resume auto-scroll" variant="brand" type="button" on:click={scrollToBottom}>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
+					</svg>
+				</IconButton>
 			{/if}
-			<button type="button" on:click={clearLogs} class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
-				Clear local view
-			</button>
+			<IconButton label="Clear local log view" variant="ghost" type="button" on:click={clearLogs} disabled={logs.length === 0}>
+				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16" />
+					<path stroke-linecap="round" stroke-linejoin="round" d="M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+				</svg>
+			</IconButton>
 			<IconButton
 				label="Reload log history"
 				variant="brand"

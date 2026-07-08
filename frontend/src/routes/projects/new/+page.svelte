@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import Breadcrumbs from '$components/Breadcrumbs.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import SegmentedChoice from '$components/SegmentedChoice.svelte';
@@ -490,14 +491,16 @@
 									class="field w-full font-mono"
 								/>
 								<span class="truncate text-xs text-gray-500 dark:text-gray-400" title={draft.source}><span class="lg:hidden">Source: </span>{draft.source}</span>
-								<button
+								<IconButton
+									label={`Remove ${draft.key || 'environment variable'}`}
+									variant="ghost"
 									type="button"
 									on:click={() => removeEnvVar(index)}
-									class="app-focus inline-flex min-h-8 items-center justify-center rounded-md px-2 text-gray-400 hover:bg-gray-100 hover:text-gray-950 dark:hover:bg-gray-800 dark:hover:text-white"
-									aria-label={`Remove ${draft.key || 'environment variable'}`}
 								>
-									×
-								</button>
+									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+									</svg>
+								</IconButton>
 							</div>
 						{/each}
 						{#if envDrafts.length === 0 && !managedDatabaseUrl}
