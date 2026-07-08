@@ -47,6 +47,8 @@ do
   $SUDO mkdir -p "$dir"
 done
 
+$DOCKER_BIN network inspect "${PROJECT_NETWORK:-mypaas-prod}" >/dev/null 2>&1 || $DOCKER_BIN network create "${PROJECT_NETWORK:-mypaas-prod}" >/dev/null
+
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
 

@@ -116,4 +116,5 @@ volumes:
 
 networks:
   default:
-    name: mypaas-prod
+    name: ${PROJECT_NETWORK:-mypaas-prod}
+    external: true
