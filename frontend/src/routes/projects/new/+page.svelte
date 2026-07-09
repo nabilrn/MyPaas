@@ -86,9 +86,17 @@
 				? 'Manual override'
 				: 'Fallback if detection finds no port';
 	$: composeBlockingIssues = composePlan?.issues.filter((issue) => issue.severity === 'error') ?? [];
-	$: missingRequiredEnvKeys = (composePlan?.requiredEnvVars ?? [])
+	$: envDraftValueByKey = new Map(
+		envDrafts
+			.map((item) => [normalizeEnvKey(item.key), item.value] as const)
+			.filter(([key]) => Boolean(key))
+	);
+	$: normalizedComposeRequiredEnvKeys = Array.from(
+		new Set((composePlan?.requiredEnvVars ?? []).map(normalizeEnvKey).filter(Boolean))
+	);
+	$: missingRequiredEnvKeys = normalizedComposeRequiredEnvKeys
 		.filter((key) => !(managedDatabaseUrl && key === 'DATABASE_URL'))
-		.filter((key) => !envDrafts.some((item) => item.key === key && item.value.trim().length > 0));
+		.filter((key) => !(envDraftValueByKey.get(key)?.trim().length > 0));
 	$: composeDisabledReason = composeBlockingIssues[0]?.message
 		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
 	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !composeDisabledReason && !submitting && !detecting && !inspectingRepo);
@@ -331,12 +339,13 @@
 	}
 
 	function mergeDiscoveredEnvVars(vars: EnvVarDiscovery[]) {
-		const existing = new Set(envDrafts.map((item) => item.key));
+		const existing = new Set(envDrafts.map((item) => normalizeEnvKey(item.key)));
 		const nextDrafts = [...envDrafts];
 		for (const item of vars) {
-			if (!item.key || existing.has(item.key)) continue;
-			nextDrafts.push({ ...item, value: '' });
-			existing.add(item.key);
+			const key = normalizeEnvKey(item.key);
+			if (!key || existing.has(key)) continue;
+			nextDrafts.push({ ...item, key, value: '' });
+			existing.add(key);
 		}
 		envDrafts = nextDrafts.sort((a, b) => a.key.localeCompare(b.key));
 	}
@@ -354,6 +363,18 @@
 
 	function removeEnvVar(index: number) {
 		envDrafts = envDrafts.filter((_, itemIndex) => itemIndex !== index);
+	}
+
+	function updateEnvDraftKey(index: number, value: string) {
+		const key = normalizeEnvKey(value);
+		envDrafts = envDrafts.map((item, itemIndex) => itemIndex === index
+			? { ...item, key, sensitive: item.sensitive || isSensitiveEnvKey(key) }
+			: item
+		);
+	}
+
+	function updateEnvDraftValue(index: number, value: string) {
+		envDrafts = envDrafts.map((item, itemIndex) => itemIndex === index ? { ...item, value } : item);
 	}
 
 	function triggerEnvFileImport() {
@@ -384,7 +405,7 @@
 	function parseEnvFile(content: string): { vars: EnvDraft[]; skipped: number } {
 		const vars: EnvDraft[] = [];
 		let skipped = 0;
-		for (const rawLine of content.replace(/\r\n/g, '\n').split('\n')) {
+		for (const rawLine of content.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').split('\n')) {
 			let line = rawLine.trim();
 			if (!line || line.startsWith('#')) continue;
 			if (line.startsWith('export ')) {
@@ -402,12 +423,40 @@
 			}
 			vars.push({
 				key,
-				value: unwrapEnvValue(line.slice(separatorIndex + 1).trim()),
+				value: unwrapEnvValue(stripEnvInlineComment(line.slice(separatorIndex + 1).trim()).trim()),
 				source: 'env-file',
 				sensitive: isSensitiveEnvKey(key)
 			});
 		}
 		return { vars, skipped };
+	}
+
+	function stripEnvInlineComment(value: string) {
+		let quote = '';
+		let escaped = false;
+		for (let index = 0; index < value.length; index += 1) {
+			const char = value[index];
+			if (escaped) {
+				escaped = false;
+				continue;
+			}
+			if (quote === '"' && char === '\\') {
+				escaped = true;
+				continue;
+			}
+			if (!quote && (char === '"' || char === "'")) {
+				quote = char;
+				continue;
+			}
+			if (quote === char) {
+				quote = '';
+				continue;
+			}
+			if (!quote && char === '#' && (index === 0 || /\s/.test(value[index - 1]))) {
+				return value.slice(0, index).trimEnd();
+			}
+		}
+		return value;
 	}
 
 	function unwrapEnvValue(value: string) {
@@ -424,14 +473,19 @@
 	function mergeEnvFileVars(vars: EnvDraft[]) {
 		const incoming = new Map<string, EnvDraft>();
 		for (const item of vars) {
-			incoming.set(item.key, item);
+			const key = normalizeEnvKey(item.key);
+			if (key) {
+				incoming.set(key, { ...item, key });
+			}
 		}
 		const nextDrafts = envDrafts.map((item) => {
-			const imported = incoming.get(item.key);
+			const key = normalizeEnvKey(item.key);
+			const imported = incoming.get(key);
 			if (!imported) return item;
-			incoming.delete(item.key);
+			incoming.delete(key);
 			return {
 				...item,
+				key,
 				value: imported.value,
 				source: imported.source,
 				sensitive: item.sensitive || imported.sensitive
@@ -532,8 +586,8 @@
 			const appPort = deployMode === 'static' ? 80 : Number(form.appPort || DEFAULT_APP_PORT);
 
 			const envVars = envDrafts
-				.filter((item) => item.key.trim() && item.value.length > 0)
-				.map((item) => ({ key: item.key.trim(), value: item.value }));
+				.filter((item) => normalizeEnvKey(item.key) && item.value.length > 0)
+				.map((item) => ({ key: normalizeEnvKey(item.key), value: item.value }));
 
 			const project = await api.projects.create({
 				name: form.name,
@@ -913,12 +967,13 @@
 							<div class="grid gap-2 border-b border-gray-100 px-3 py-3 last:border-b-0 dark:border-gray-800 lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] lg:items-center">
 								<input
 									value={draft.key}
-									on:input={(event) => (draft.key = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))}
+									on:input={(event) => updateEnvDraftKey(index, (event.currentTarget as HTMLInputElement).value)}
 									class="field w-full font-mono uppercase"
 								/>
 								<input
 									type={draft.sensitive ? 'password' : 'text'}
-									bind:value={draft.value}
+									value={draft.value}
+									on:input={(event) => updateEnvDraftValue(index, (event.currentTarget as HTMLInputElement).value)}
 									placeholder={draft.defaultValue ? `sample: ${draft.defaultValue}` : ''}
 									class="field w-full font-mono"
 								/>
