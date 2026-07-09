@@ -44,6 +44,7 @@ type DetectResponse struct {
 	HasDockerfile bool              `json:"hasDockerfile"`
 	EnvVars       []envdiscover.Var `json:"envVars"`
 	AppPort       int32             `json:"appPort"`
+	ComposePlan   *ComposePlan      `json:"composePlan"`
 	Tree          []RepoTreeEntry   `json:"tree"`
 	TreeTruncated bool              `json:"treeTruncated"`
 }
@@ -83,6 +84,7 @@ func DetectResponseFromResult(result DetectResult) DetectResponse {
 		HasDockerfile: result.HasDockerfile,
 		EnvVars:       result.EnvVars,
 		AppPort:       result.AppPort,
+		ComposePlan:   result.ComposePlan,
 		Tree:          result.Tree,
 		TreeTruncated: result.TreeTruncated,
 	}

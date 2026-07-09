@@ -86,6 +86,7 @@ type DetectResult struct {
 	HasDockerfile bool
 	EnvVars       []envdiscover.Var
 	AppPort       int32
+	ComposePlan   *ComposePlan
 	Tree          []RepoTreeEntry
 	TreeTruncated bool
 }
@@ -190,6 +191,10 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		}
 		mainService := pickMainService(ctx, workspace, composeFile, services)
 		appPort := inferComposeAppPort(ctx, workspace, composeFile, mainService, envVars)
+		composePlan, err := inspectComposePlan(ctx, workspace, composeFile, services, mainService, appPort, envVars)
+		if err != nil {
+			return DetectResult{}, err
+		}
 		return DetectResult{
 			DeployMode:    "compose",
 			Branch:        branch,
@@ -199,6 +204,7 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 			HasDockerfile: hasDockerfile,
 			EnvVars:       envVars,
 			AppPort:       appPort,
+			ComposePlan:   composePlan,
 			Tree:          tree,
 			TreeTruncated: treeTruncated,
 		}, nil

@@ -86,6 +86,39 @@ export interface RepoInspection {
 	treeTruncated: boolean;
 }
 
+export interface ComposeIssue {
+	severity: 'error' | 'warning' | 'info';
+	code: string;
+	service?: string;
+	message: string;
+}
+
+export interface ComposePortPlan {
+	target: number;
+	published: string | null;
+	protocol: string;
+}
+
+export interface ComposeServicePlan {
+	name: string;
+	role: 'public' | 'internal';
+	buildContext: string | null;
+	dockerfile: string | null;
+	image: string | null;
+	ports: ComposePortPlan[];
+	expose: number[];
+	dependsOn: string[];
+}
+
+export interface ComposePlan {
+	recommendedMainService: string;
+	recommendedAppPort: number;
+	routeTarget: string;
+	requiredEnvVars: string[];
+	services: ComposeServicePlan[];
+	issues: ComposeIssue[];
+}
+
 export interface ContainerMetrics {
 	service:        string;
 	cpu:            number;   // percent
@@ -139,6 +172,7 @@ export interface DeployModeDetection extends RepoInspection {
 	hasDockerfile: boolean;
 	envVars: EnvVarDiscovery[];
 	appPort: number;
+	composePlan: ComposePlan | null;
 }
 
 export interface AuditLog {

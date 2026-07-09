@@ -10,7 +10,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost } from '$lib/utils/urls';
-	import type { DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
+	import type { ComposeIssue, ComposePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
 	type EnvDraft = EnvVarDiscovery & { value: string };
@@ -36,6 +36,7 @@
 	let defaultBranch = '';
 	let repoTree: RepoTreeEntry[] = [];
 	let repoTreeTruncated = false;
+	let composePlan: ComposePlan | null = null;
 	let detectedServices: string[] = [];
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
@@ -84,20 +85,28 @@
 			: appPortSource === 'manual'
 				? 'Manual override'
 				: 'Fallback if detection finds no port';
-	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !submitting && !detecting && !inspectingRepo);
+	$: composeBlockingIssues = composePlan?.issues.filter((issue) => issue.severity === 'error') ?? [];
+	$: missingRequiredEnvKeys = (composePlan?.requiredEnvVars ?? [])
+		.filter((key) => !(managedDatabaseUrl && key === 'DATABASE_URL'))
+		.filter((key) => !envDrafts.some((item) => item.key === key && item.value.trim().length > 0));
+	$: composeDisabledReason = composeBlockingIssues[0]?.message
+		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
+	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !composeDisabledReason && !submitting && !detecting && !inspectingRepo);
 	$: createDisabledReason = !form.name.trim()
 		? 'Project name is required'
 		: !form.repoUrl.trim()
 			? 'Repository URL is required'
 			: !form.branch.trim()
 				? 'Branch is required'
-				: inspectingRepo
-					? 'Repository branches are loading'
-					: detecting
-						? 'Repository detection is running'
-						: submitting
-							? 'Project creation is running'
-							: '';
+				: composeDisabledReason
+					? composeDisabledReason
+					: inspectingRepo
+						? 'Repository branches are loading'
+						: detecting
+							? 'Repository detection is running'
+							: submitting
+								? 'Project creation is running'
+								: '';
 	$: reviewStateLabel = canSubmit ? 'Ready to create' : createDisabledReason || 'Complete required fields';
 	$: detectionStateLabel = detecting
 		? 'Inspecting runtime'
@@ -143,6 +152,9 @@
 
 	function chooseDeployMode(mode: DeployModeChoice) {
 		form.deployMode = mode;
+		if (mode !== 'compose') {
+			composePlan = null;
+		}
 		if (mode === 'static') {
 			form.appPort = '80';
 			appPortSource = 'static';
@@ -168,6 +180,7 @@
 		branchOptions = normalizeBranches(detected.branches, detected.branch || defaultBranch);
 		repoTree = detected.tree ?? repoTree;
 		repoTreeTruncated = detected.treeTruncated ?? repoTreeTruncated;
+		composePlan = detected.composePlan ?? null;
 		chooseDeployMode(detected.deployMode);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
@@ -230,6 +243,7 @@
 		defaultBranch = '';
 		repoTree = [];
 		repoTreeTruncated = false;
+		composePlan = null;
 		lastRepoInspectKey = '';
 	}
 
@@ -246,6 +260,7 @@
 	function handleBranchChange(event: Event) {
 		form.branch = (event.currentTarget as HTMLSelectElement).value;
 		detectMessage = '';
+		composePlan = null;
 		detectedServices = [];
 		void inspectRepository(false, true).catch(() => undefined);
 	}
@@ -444,6 +459,16 @@
 		appPortSource = form.appPort ? 'manual' : 'fallback';
 	}
 
+	function issueTone(issue: ComposeIssue) {
+		if (issue.severity === 'error') return 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200';
+		if (issue.severity === 'warning') return 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900/60 dark:bg-yellow-950/20 dark:text-yellow-100';
+		return 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-800 dark:bg-gray-950/60 dark:text-gray-300';
+	}
+
+	function issueLabel(issue: ComposeIssue) {
+		return issue.service ? `${issue.severity}: ${issue.service}` : issue.severity;
+	}
+
 	async function handleDetectMode(showToast = true): Promise<DeployModeDetection> {
 		if (!form.repoUrl.trim()) {
 			const message = 'Repository URL is required before detection';
@@ -495,6 +520,9 @@
 				const detected = await handleDetectMode(false);
 				deployMode = detected.deployMode;
 				mainService = detected.mainService || mainService;
+			}
+			if (composeDisabledReason) {
+				throw new Error(composeDisabledReason);
 			}
 			if (deployMode === 'static') {
 				mainService = null;
@@ -709,6 +737,89 @@
 							</div>
 						{/if}
 					</div>
+
+					{#if composePlan}
+						<div class="rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+							<div class="border-b border-gray-100 px-3 py-3 dark:border-gray-800">
+								<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+									<div>
+										<p class="text-sm font-medium text-gray-950 dark:text-white">Compose Doctor</p>
+										<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Route target: <span class="font-mono">{composePlan.routeTarget}</span></p>
+									</div>
+									<span
+										class="inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-medium
+											{composeBlockingIssues.length > 0 || missingRequiredEnvKeys.length > 0
+												? 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900/60 dark:bg-yellow-950/20 dark:text-yellow-100'
+												: 'border-brand-500/30 bg-brand-50 text-brand-900 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100'}"
+									>
+										{composeBlockingIssues.length > 0 || missingRequiredEnvKeys.length > 0 ? 'Needs attention' : 'Ready'}
+									</span>
+								</div>
+							</div>
+
+							<div class="divide-y divide-gray-100 dark:divide-gray-800">
+								<div class="grid gap-2 px-3 py-3 text-xs sm:grid-cols-2">
+									<div>
+										<p class="font-medium text-gray-600 dark:text-gray-300">Recommended public service</p>
+										<p class="mt-1 font-mono text-gray-950 dark:text-white">{composePlan.recommendedMainService}:{composePlan.recommendedAppPort}</p>
+									</div>
+									<div>
+										<p class="font-medium text-gray-600 dark:text-gray-300">Required env</p>
+										<p class="mt-1 font-mono text-gray-950 dark:text-white">
+											{composePlan.requiredEnvVars.length > 0 ? composePlan.requiredEnvVars.join(', ') : '-'}
+										</p>
+									</div>
+								</div>
+
+								<div class="px-3 py-3">
+									<p class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300">Services</p>
+									<div class="grid gap-2 md:grid-cols-2">
+										{#each composePlan.services as service}
+											<div class="rounded-md border border-gray-200 px-3 py-2 text-xs dark:border-gray-800">
+												<div class="flex items-center justify-between gap-2">
+													<span class="truncate font-mono font-medium text-gray-950 dark:text-white">{service.name}</span>
+													<span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-gray-900 dark:text-gray-300">{service.role}</span>
+												</div>
+												<p class="mt-1 truncate text-gray-500 dark:text-gray-400">
+													{service.buildContext ? `build: ${service.buildContext}` : service.image ? `image: ${service.image}` : 'no build/image'}
+												</p>
+												<p class="mt-1 font-mono text-gray-500 dark:text-gray-400">
+													ports: {service.ports.length > 0 ? service.ports.map((port) => `${port.published ? `${port.published}:` : ''}${port.target}`).join(', ') : service.expose.length > 0 ? service.expose.join(', ') : '-'}
+												</p>
+											</div>
+										{/each}
+									</div>
+								</div>
+
+								{#if missingRequiredEnvKeys.length > 0}
+									<div class="px-3 py-3">
+										<p class="mb-2 text-xs font-medium text-red-700 dark:text-red-200">Missing required env values</p>
+										<div class="flex flex-wrap gap-1.5">
+											{#each missingRequiredEnvKeys as key}
+												<span class="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">{key}</span>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								<div class="px-3 py-3">
+									<p class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300">Issues</p>
+									{#if composePlan.issues.length > 0}
+										<div class="space-y-2">
+											{#each composePlan.issues as issue}
+												<div class={`rounded-md border px-3 py-2 text-xs ${issueTone(issue)}`}>
+													<p class="font-medium uppercase tracking-normal">{issueLabel(issue)}</p>
+													<p class="mt-1 leading-5">{issue.message}</p>
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<p class="text-xs text-gray-500 dark:text-gray-400">No Compose compatibility issues detected.</p>
+									{/if}
+								</div>
+							</div>
+						</div>
+					{/if}
 				</div>
 			</SectionPanel>
 
