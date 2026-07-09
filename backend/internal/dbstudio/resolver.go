@@ -3,6 +3,7 @@ package dbstudio
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -107,7 +108,12 @@ func inferDriver(envs map[string]string) DriverID {
 
 func prepareComposeConnection(ctx context.Context, project db.Project, conn Connection) (Connection, error) {
 	if project.DeployMode == "compose" && shouldConnectComposeNetwork(conn.Host) {
-		if err := connectComposeNetwork(ctx, project.Name); err != nil {
+		if retargeted, ok, err := retargetComposeService(ctx, project.Name, conn); err != nil {
+			return Connection{}, err
+		} else if ok {
+			return retargeted, nil
+		}
+		if err := connectComposeNetworks(ctx, project.Name); err != nil {
 			return Connection{}, err
 		}
 	}
@@ -115,6 +121,8 @@ func prepareComposeConnection(ctx context.Context, project db.Project, conn Conn
 }
 
 func connectionWithDSN(conn Connection, password string, query url.Values) Connection {
+	conn.password = password
+	conn.query = cloneQuery(query)
 	switch conn.Driver {
 	case DriverPostgres:
 		conn.DSN = postgresDSN(conn, password, query)
@@ -122,6 +130,25 @@ func connectionWithDSN(conn Connection, password string, query url.Values) Conne
 		conn.DSN = mysqlDSN(conn, password)
 	}
 	return conn
+}
+
+func cloneQuery(query url.Values) map[string][]string {
+	if len(query) == 0 {
+		return nil
+	}
+	cloned := make(map[string][]string, len(query))
+	for key, values := range query {
+		cloned[key] = append([]string(nil), values...)
+	}
+	return cloned
+}
+
+func retargetConnection(conn Connection, host string) Connection {
+	conn.Host = host
+	if conn.Source != "" && !strings.Contains(conn.Source, "+compose-ip") {
+		conn.Source += "+compose-ip"
+	}
+	return connectionWithDSN(conn, conn.password, url.Values(conn.query))
 }
 
 func postgresDSN(conn Connection, password string, query url.Values) string {
@@ -178,17 +205,202 @@ func sqlDriver(driver DriverID) (string, Adapter) {
 	}
 }
 
-func connectComposeNetwork(ctx context.Context, projectName string) error {
+func retargetComposeService(ctx context.Context, projectName string, conn Connection) (Connection, bool, error) {
+	hostname, err := os.Hostname()
+	if err != nil || strings.TrimSpace(hostname) == "" {
+		return conn, false, nil
+	}
+
+	target, ok, err := composeServiceTarget(ctx, projectName, conn.Host)
+	if err != nil {
+		return Connection{}, false, err
+	}
+	if !ok {
+		return conn, false, nil
+	}
+	connected, err := connectDockerNetwork(ctx, target.Network, hostname)
+	if err != nil {
+		return Connection{}, false, err
+	}
+	if !connected {
+		return conn, false, nil
+	}
+	return retargetConnection(conn, target.IPAddress), true, nil
+}
+
+type composeServiceEndpoint struct {
+	Network   string
+	IPAddress string
+}
+
+func composeServiceTarget(ctx context.Context, projectName, service string) (composeServiceEndpoint, bool, error) {
+	service = strings.TrimSpace(service)
+	if service == "" {
+		return composeServiceEndpoint{}, false, nil
+	}
+	for _, project := range composeProjectCandidates(projectName) {
+		ids, err := composeServiceContainerIDs(ctx, project, service)
+		if err != nil {
+			return composeServiceEndpoint{}, false, err
+		}
+		for _, id := range ids {
+			endpoints, err := inspectContainerNetworks(ctx, id)
+			if err != nil {
+				return composeServiceEndpoint{}, false, err
+			}
+			if endpoint, ok := preferredEndpoint(endpoints); ok {
+				return endpoint, true, nil
+			}
+		}
+	}
+	return composeServiceEndpoint{}, false, nil
+}
+
+func composeServiceContainerIDs(ctx context.Context, projectName, service string) ([]string, error) {
+	out, err := exec.CommandContext(ctx, "docker", "ps", "-aq",
+		"--filter", "label=com.docker.compose.project="+projectName,
+		"--filter", "label=com.docker.compose.service="+service,
+	).CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if isDockerUnavailable(msg) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: find compose service container: %s", errs.ErrValidation, firstLine(msg))
+	}
+	return fieldsByLine(string(out)), nil
+}
+
+func inspectContainerNetworks(ctx context.Context, containerID string) ([]composeServiceEndpoint, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{json .NetworkSettings.Networks}}", containerID).CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if isDockerUnavailable(msg) || isNoSuchContainer(msg) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: inspect compose service networks: %s", errs.ErrValidation, firstLine(msg))
+	}
+	return parseComposeNetworkInspect(string(out))
+}
+
+func parseComposeNetworkInspect(value string) ([]composeServiceEndpoint, error) {
+	var raw map[string]struct {
+		IPAddress string `json:"IPAddress"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &raw); err != nil {
+		return nil, fmt.Errorf("%w: parse compose service networks: %v", errs.ErrValidation, err)
+	}
+	endpoints := make([]composeServiceEndpoint, 0, len(raw))
+	for network, item := range raw {
+		network = strings.TrimSpace(network)
+		ip := strings.TrimSpace(item.IPAddress)
+		if network == "" || ip == "" {
+			continue
+		}
+		endpoints = append(endpoints, composeServiceEndpoint{Network: network, IPAddress: ip})
+	}
+	return endpoints, nil
+}
+
+func preferredEndpoint(endpoints []composeServiceEndpoint) (composeServiceEndpoint, bool) {
+	for _, endpoint := range endpoints {
+		if !strings.Contains(strings.ToLower(endpoint.Network), "mypaas_platform") {
+			return endpoint, true
+		}
+	}
+	if len(endpoints) == 0 {
+		return composeServiceEndpoint{}, false
+	}
+	return endpoints[0], true
+}
+
+func connectComposeNetworks(ctx context.Context, projectName string) error {
 	hostname, err := os.Hostname()
 	if err != nil || strings.TrimSpace(hostname) == "" {
 		return nil
 	}
-	network := "mypaas-" + projectName + "_default"
-	out, err := exec.CommandContext(ctx, "docker", "network", "connect", network, hostname).CombinedOutput()
-	if err == nil || isAlreadyConnected(string(out)) || isDockerUnavailable(string(out)) {
+	networks, err := composeProjectNetworks(ctx, projectName)
+	if err != nil {
+		return err
+	}
+	if len(networks) == 0 {
+		networks = fallbackComposeNetworks(projectName)
+	}
+	for _, network := range networks {
+		if _, err := connectDockerNetwork(ctx, network, hostname); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func composeProjectNetworks(ctx context.Context, projectName string) ([]string, error) {
+	seen := make(map[string]struct{})
+	networks := make([]string, 0)
+	for _, project := range composeProjectCandidates(projectName) {
+		out, err := exec.CommandContext(ctx, "docker", "network", "ls", "-q", "--filter", "label=com.docker.compose.project="+project).CombinedOutput()
+		if err != nil {
+			msg := strings.TrimSpace(string(out))
+			if isDockerUnavailable(msg) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("%w: list compose networks: %s", errs.ErrValidation, firstLine(msg))
+		}
+		for _, network := range fieldsByLine(string(out)) {
+			if _, ok := seen[network]; ok {
+				continue
+			}
+			seen[network] = struct{}{}
+			networks = append(networks, network)
+		}
+	}
+	return networks, nil
+}
+
+func connectDockerNetwork(ctx context.Context, network, container string) (bool, error) {
+	network = strings.TrimSpace(network)
+	container = strings.TrimSpace(container)
+	if network == "" || container == "" {
+		return false, nil
+	}
+	out, err := exec.CommandContext(ctx, "docker", "network", "connect", network, container).CombinedOutput()
+	msg := string(out)
+	if err == nil || isAlreadyConnected(msg) {
+		return true, nil
+	}
+	if isDockerUnavailable(msg) || isNoSuchContainer(msg) {
+		return false, nil
+	}
+	return false, fmt.Errorf("%w: connect API to compose network %q: %s", errs.ErrValidation, network, firstLine(msg))
+}
+
+func composeProjectCandidates(projectName string) []string {
+	projectName = strings.TrimSpace(projectName)
+	if projectName == "" {
 		return nil
 	}
-	return fmt.Errorf("%w: connect API to compose network: %s", errs.ErrValidation, firstLine(string(out)))
+	candidates := []string{projectName}
+	if !strings.HasPrefix(projectName, "mypaas-") {
+		candidates = append([]string{"mypaas-" + projectName}, candidates...)
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func fallbackComposeNetworks(projectName string) []string {
+	out := make([]string, 0, len(composeProjectCandidates(projectName)))
+	for _, project := range composeProjectCandidates(projectName) {
+		out = append(out, project+"_default")
+	}
+	return out
 }
 
 func isAlreadyConnected(output string) bool {
@@ -199,6 +411,11 @@ func isAlreadyConnected(output string) bool {
 func isDockerUnavailable(output string) bool {
 	output = strings.ToLower(output)
 	return strings.Contains(output, "no such container") || strings.Contains(output, "cannot connect to the docker daemon")
+}
+
+func isNoSuchContainer(output string) bool {
+	output = strings.ToLower(output)
+	return strings.Contains(output, "no such container")
 }
 
 func shouldConnectComposeNetwork(host string) bool {
@@ -250,4 +467,16 @@ func firstLine(value string) string {
 		}
 	}
 	return "unknown error"
+}
+
+func fieldsByLine(value string) []string {
+	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }

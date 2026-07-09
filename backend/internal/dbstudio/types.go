@@ -22,6 +22,9 @@ type Connection struct {
 	User     string   `json:"user"`
 	Source   string   `json:"source"`
 	DSN      string   `json:"-"`
+
+	password string
+	query    map[string][]string
 }
 
 type Status struct {

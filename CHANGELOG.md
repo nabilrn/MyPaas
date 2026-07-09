@@ -114,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pass `PUBLIC_DOMAIN` into the production Caddy container so `Caddyfile.prod` can adapt successfully
 - Added a no-op `/firebase-messaging-sw.js` static worker to quiet stale Firebase Messaging service worker probes on reused browser origins
 - Project create/update now persists `resource_profile`, returns it in API responses, and the dashboard resource forms apply profile defaults instead of a flat 512MB default
+- DB Studio now connects the API container to the actual Compose service network and targets the database container IP, fixing custom network database hosts like `db`
 - Static projects bypass Docker lifecycle/log collection while still supporting route start/stop/restart and zero-runtime metrics snapshots
 - Dockerfile containers and Compose main services can join `PROJECT_NETWORK` so shared platform services remain private on the Docker network
 - Compose deploys now warn in build logs when Docker resources exist before the first tracked active deployment
