@@ -29,6 +29,7 @@ import (
 	"mypaas/internal/container"
 	"mypaas/internal/crypto"
 	"mypaas/internal/db"
+	"mypaas/internal/dbstudio"
 	"mypaas/internal/deployment"
 	"mypaas/internal/envvar"
 	"mypaas/internal/logger"
@@ -159,6 +160,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	quotaService := quota.NewService(queries, cfg, dockerClient)
 	sharedPostgresService := sharedpostgres.NewService(pool, cfg, envService)
 	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost), dockerClient)
+	dbStudioHandler := dbstudio.NewHandler(dbstudio.NewService(queries, envService, auditService))
 	projectHandler := project.NewHandler(
 		project.NewService(queries, cfg.PublicDomain, quotaService),
 		func(r *http.Request, id uuid.UUID) error {
@@ -186,9 +188,9 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, quotaHandler, userHandler, webhookHandler, auditHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, quotaHandler, userHandler, webhookHandler, auditHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler)
 	})
 
 	return r
@@ -243,6 +245,7 @@ func registerRoutes(
 	projectHandler *project.Handler,
 	deploymentHandler *deployment.Handler,
 	envHandler *envvar.Handler,
+	dbStudioHandler *dbstudio.Handler,
 	quotaHandler *quota.Handler,
 	userHandler *user.Handler,
 	webhookHandler *webhook.Handler,
@@ -284,6 +287,19 @@ func registerRoutes(
 			r.Get("/{id}/env/{key}/reveal", envHandler.Reveal)
 			r.Put("/{id}/env", envHandler.BulkUpdate)
 			r.Delete("/{id}/env/{key}", envHandler.Delete)
+			r.Route("/{id}/db", func(r chi.Router) {
+				r.Use(auth.RequireOwner)
+				r.Get("/status", dbStudioHandler.Status)
+				r.Post("/write-session", dbStudioHandler.StartWriteSession)
+				r.Delete("/write-session/{sessionId}", dbStudioHandler.RevokeWriteSession)
+				r.Get("/schemas", dbStudioHandler.Schemas)
+				r.Get("/tables", dbStudioHandler.Tables)
+				r.Get("/columns", dbStudioHandler.Columns)
+				r.Get("/rows", dbStudioHandler.Rows)
+				r.Post("/rows", dbStudioHandler.Insert)
+				r.Patch("/rows", dbStudioHandler.Update)
+				r.Delete("/rows", dbStudioHandler.Delete)
+			})
 			r.Get("/{id}/stream", deploymentHandler.Stream)
 			r.Get("/{id}/logs", deploymentHandler.Logs)
 			r.Get("/{id}/metrics", deploymentHandler.Metrics)

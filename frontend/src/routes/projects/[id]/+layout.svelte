@@ -27,6 +27,7 @@
 		{ label: 'Logs',         href: '/logs' },
 		{ label: 'Metrics',      href: '/metrics' },
 		{ label: 'Environment',  href: '/env' },
+		{ label: 'Database',     href: '/database' },
 		{ label: 'Settings',     href: '/settings' }
 	];
 

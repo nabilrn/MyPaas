@@ -143,6 +143,10 @@ func classify(r *http.Request) (string, *string, uuid.UUID) {
 		return "project.env_updated", stringPtr("project"), id
 	case r.Method == http.MethodDelete && strings.Contains(path, "/env/"):
 		return "project.env_deleted", stringPtr("project"), id
+	case strings.Contains(path, "/projects/") && strings.Contains(path, "/db/write-session"):
+		return "project.dbstudio_write_session", stringPtr("project"), id
+	case strings.Contains(path, "/projects/") && strings.Contains(path, "/db/rows"):
+		return "project.dbstudio_rows_mutated", stringPtr("project"), id
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/admin/users"):
 		return "admin.user_added", stringPtr("user"), uuid.Nil
 	case r.Method == http.MethodDelete && strings.Contains(path, "/admin/users/"):

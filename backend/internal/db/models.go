@@ -23,6 +23,16 @@ type AuditLog struct {
 	CreatedAt    pgtype.Timestamp `json:"created_at"`
 }
 
+type DbStudioSession struct {
+	ID        uuid.UUID        `json:"id"`
+	ProjectID uuid.UUID        `json:"project_id"`
+	UserID    uuid.UUID        `json:"user_id"`
+	Mode      string           `json:"mode"`
+	ExpiresAt pgtype.Timestamp `json:"expires_at"`
+	RevokedAt pgtype.Timestamp `json:"revoked_at"`
+	CreatedAt pgtype.Timestamp `json:"created_at"`
+}
+
 type Deployment struct {
 	ID                uuid.UUID        `json:"id"`
 	ProjectID         uuid.UUID        `json:"project_id"`

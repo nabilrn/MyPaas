@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New Project repository inspection with branch dropdown selection and repository structure preview before runtime detection
 - Compose Doctor preflight in detect-mode with public service/port recommendation, required env detection, build context checks, host-port warnings, and unsafe Compose config flags
 - Detect-mode env discovery now scans nested env example files for monorepo-style repositories without turning Dockerfile build/image defaults into project env vars
+- DB Studio Lite for project databases, with PostgreSQL/MySQL/MariaDB connection discovery, schema/table browsing, paginated rows, temporary write mode, and guarded insert/update/delete by primary key
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`

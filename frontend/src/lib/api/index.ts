@@ -9,6 +9,12 @@ import type {
 	User,
 	AuditLog,
 	ComposeResourceSummary,
+	DBStudioColumn,
+	DBStudioRowPage,
+	DBStudioSchema,
+	DBStudioStatus,
+	DBStudioTable,
+	DBStudioWriteSession,
 	LogsResponse
 } from '$types';
 
@@ -94,6 +100,27 @@ export const api = {
 		reveal:     (projectId: string, key: string): Promise<{ value: string }> => request(`/projects/${projectId}/env/${encodeURIComponent(key)}/reveal`),
 		bulkUpdate: (projectId: string, d: unknown):  Promise<void>    => request(`/projects/${projectId}/env`, { method: 'PUT', body: JSON.stringify(d) }),
 		delete:     (projectId: string, key: string): Promise<void>    => request(`/projects/${projectId}/env/${encodeURIComponent(key)}`, { method: 'DELETE' })
+	},
+
+	dbStudio: {
+		status: (projectId: string): Promise<DBStudioStatus> => request(`/projects/${projectId}/db/status`),
+		startWriteSession: (projectId: string, ttlMinutes = 15): Promise<DBStudioWriteSession> =>
+			request(`/projects/${projectId}/db/write-session`, { method: 'POST', body: JSON.stringify({ ttlMinutes }) }),
+		revokeWriteSession: (projectId: string, sessionId: string): Promise<void> =>
+			request(`/projects/${projectId}/db/write-session/${sessionId}`, { method: 'DELETE' }),
+		schemas: (projectId: string): Promise<DBStudioSchema[]> => request(`/projects/${projectId}/db/schemas`),
+		tables: (projectId: string, schema: string): Promise<DBStudioTable[]> =>
+			request(`/projects/${projectId}/db/tables?schema=${encodeURIComponent(schema)}`),
+		columns: (projectId: string, schema: string, table: string): Promise<DBStudioColumn[]> =>
+			request(`/projects/${projectId}/db/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`),
+		rows: (projectId: string, schema: string, table: string, limit = 100, offset = 0): Promise<DBStudioRowPage> =>
+			request(`/projects/${projectId}/db/rows?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&limit=${limit}&offset=${offset}`),
+		insert: (projectId: string, data: unknown): Promise<void> =>
+			request(`/projects/${projectId}/db/rows`, { method: 'POST', body: JSON.stringify(data) }),
+		update: (projectId: string, data: unknown): Promise<void> =>
+			request(`/projects/${projectId}/db/rows`, { method: 'PATCH', body: JSON.stringify(data) }),
+		delete: (projectId: string, data: unknown): Promise<void> =>
+			request(`/projects/${projectId}/db/rows`, { method: 'DELETE', body: JSON.stringify(data) })
 	},
 
 	logs: {
