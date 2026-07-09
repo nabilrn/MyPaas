@@ -9,7 +9,7 @@
 	import SegmentedChoice from '$components/SegmentedChoice.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import { projectHost } from '$lib/utils/urls';
+	import { projectHost, projectURL } from '$lib/utils/urls';
 	import type { ComposeIssue, ComposePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
@@ -17,6 +17,18 @@
 	type PortSource = 'fallback' | 'detected' | 'manual' | 'static';
 
 	const DEFAULT_APP_PORT = '3000';
+	const publicOriginEnvKeys = new Set([
+		'ALLOWED_ORIGINS',
+		'APP_ORIGIN',
+		'APP_URL',
+		'CLIENT_URL',
+		'CORS_ORIGIN',
+		'CORS_ORIGINS',
+		'FRONTEND_URL',
+		'PUBLIC_APP_ORIGIN',
+		'PUBLIC_ORIGIN',
+		'PUBLIC_URL'
+	]);
 	const breadcrumbs = [
 		{ label: 'Projects', href: '/projects' },
 		{ label: 'New project' }
@@ -70,6 +82,7 @@
 	];
 
 	$: previewHost = projectHost(form.name || 'your-app', $page.url.hostname);
+	$: previewOrigin = projectURL(form.name || 'your-app', $page.url.protocol, $page.url.hostname);
 	$: selectedProfile = resourceProfiles.find((profile) => profile.id === form.resourceProfile);
 	$: managedDatabaseUrl = form.sharedPostgres && form.deployMode !== 'static';
 	$: effectiveAppPort = form.deployMode === 'static' ? '80' : form.appPort || DEFAULT_APP_PORT;
@@ -343,7 +356,7 @@
 		const nextDrafts = envDrafts.map((item) => {
 			const discovered = vars.find((candidate) => normalizeEnvKey(candidate.key) === normalizeEnvKey(item.key));
 			if (!discovered) return item;
-			const defaultValue = discovered.sensitive ? '' : discovered.defaultValue ?? '';
+			const defaultValue = discoveredEnvDefaultValue(discovered);
 			return {
 				...item,
 				source: mergeEnvSources(item.source, discovered.source),
@@ -355,10 +368,19 @@
 		for (const item of vars) {
 			const key = normalizeEnvKey(item.key);
 			if (!key || existing.has(key)) continue;
-			nextDrafts.push({ ...item, key, value: item.sensitive ? '' : item.defaultValue ?? '' });
+			nextDrafts.push({ ...item, key, value: discoveredEnvDefaultValue({ ...item, key }) });
 			existing.add(key);
 		}
 		envDrafts = nextDrafts.sort((a, b) => a.key.localeCompare(b.key));
+	}
+
+	function discoveredEnvDefaultValue(item: EnvVarDiscovery) {
+		if (item.sensitive) return '';
+		return item.defaultValue ?? inferredProjectEnvValue(item.key);
+	}
+
+	function inferredProjectEnvValue(key: string) {
+		return publicOriginEnvKeys.has(normalizeEnvKey(key)) ? previewOrigin : '';
 	}
 
 	function mergeEnvSources(current: string, discovered: string) {
@@ -653,7 +675,7 @@
 		<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
 			<SectionPanel
 				title="Repository source"
-				description="Name the route, load repository branches, then detect how MyPaas should run the selected branch."
+				description="Name the route, load repository branches, and preview the selected branch structure."
 			>
 				<div class="grid gap-4">
 					<div>
@@ -697,45 +719,12 @@
 							>
 								Refresh
 							</ActionButton>
-							<ActionButton
-								variant="secondary"
-								type="button"
-								on:click={() => void handleDetectMode().catch(() => undefined)}
-								disabled={detecting || inspectingRepo || !form.repoUrl.trim() || !form.branch.trim()}
-								loading={detecting}
-								loadingLabel="Detecting..."
-							>
-								Detect
-							</ActionButton>
 						</div>
 					</div>
 				</div>
 				{#if repoInspectError}
 					<p class="mt-3 text-xs leading-5 text-red-600 dark:text-red-300">{repoInspectError}</p>
 				{/if}
-				<div
-					class="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 text-sm dark:border-gray-800 dark:bg-gray-950/60"
-					aria-live="polite"
-				>
-					<div class="flex gap-3">
-						<span
-							class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full
-								{detecting
-									? 'bg-yellow-500'
-									: inspectingRepo
-										? 'bg-yellow-500'
-									: detectMessage
-										? 'bg-brand-500'
-										: repoInspectError
-											? 'bg-red-500'
-										: 'bg-gray-400 dark:bg-gray-600'}"
-						></span>
-						<div class="min-w-0">
-							<p class="font-medium text-gray-950 dark:text-white">{detectionStateLabel}</p>
-							<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{detectionStateBody}</p>
-						</div>
-					</div>
-				</div>
 				<div class="mt-4">
 					<div class="mb-2 flex items-center justify-between gap-3">
 						<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Repository structure</p>
@@ -771,7 +760,43 @@
 				title="Runtime and entrypoint"
 				description="Use detection for repository defaults, then override only the values that need to be explicit."
 			>
+				<svelte:fragment slot="actions">
+					<ActionButton
+						variant="secondary"
+						type="button"
+						on:click={() => void handleDetectMode().catch(() => undefined)}
+						disabled={detecting || inspectingRepo || !form.repoUrl.trim() || !form.branch.trim()}
+						loading={detecting}
+						loadingLabel="Detecting..."
+					>
+						Detect runtime
+					</ActionButton>
+				</svelte:fragment>
 				<div class="space-y-4">
+					<div
+						class="rounded-md border border-gray-200 bg-gray-50 px-3 py-3 text-sm dark:border-gray-800 dark:bg-gray-950/60"
+						aria-live="polite"
+					>
+						<div class="flex gap-3">
+							<span
+								class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full
+									{detecting
+										? 'bg-yellow-500'
+										: inspectingRepo
+											? 'bg-yellow-500'
+										: detectMessage
+											? 'bg-brand-500'
+											: repoInspectError
+												? 'bg-red-500'
+											: 'bg-gray-400 dark:bg-gray-600'}"
+							></span>
+							<div class="min-w-0">
+								<p class="font-medium text-gray-950 dark:text-white">{detectionStateLabel}</p>
+								<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{detectionStateBody}</p>
+							</div>
+						</div>
+					</div>
+
 					<SegmentedChoice
 						label="Deployment mode"
 						value={form.deployMode}

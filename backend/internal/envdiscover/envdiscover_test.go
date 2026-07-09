@@ -22,6 +22,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       PORT: ${PORT:-3000}
       CACHE_DSN: ${CACHE_DSN:?required}
+      HEALTHCHECK_PASSWORD: $${MARIADB_ROOT_PASSWORD}
 `), 0640); err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +50,9 @@ services:
 	}
 	if !byKey["CACHE_DSN"].Sensitive {
 		t.Fatalf("CACHE_DSN should be sensitive")
+	}
+	if _, ok := byKey["MARIADB_ROOT_PASSWORD"]; ok {
+		t.Fatalf("escaped Compose variable should not be discovered: %#v", byKey["MARIADB_ROOT_PASSWORD"])
 	}
 }
 

@@ -20,6 +20,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: ${PORT:-3000}
+      INTERNAL_PASSWORD: $${INTERNAL_PASSWORD}
 `), 0640); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +93,7 @@ services:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_PORT: ${DB_PORT:-3306}
+      HEALTHCHECK_PASSWORD: $${MARIADB_ROOT_PASSWORD}
 `), 0640); err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +114,9 @@ services:
 		if !strings.Contains(content, want) {
 			t.Fatalf(".env preview missing %q in:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, "MARIADB_ROOT_PASSWORD=") {
+		t.Fatalf(".env preview should not include escaped Compose variable:\n%s", content)
 	}
 }
 

@@ -20,6 +20,12 @@ import (
 
 var composeEnvExpr = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?])([^}]*))?\}`)
 
+type composeEnvMatch struct {
+	key          string
+	operator     string
+	defaultValue string
+}
+
 type ComposePlan struct {
 	RecommendedMainService string               `json:"recommendedMainService"`
 	RecommendedAppPort     int32                `json:"recommendedAppPort"`
@@ -181,11 +187,11 @@ func composeVariableKeys(workspace, composeFile string) []string {
 		return nil
 	}
 	seen := make(map[string]struct{})
-	for _, match := range composeEnvExpr.FindAllStringSubmatch(string(content), -1) {
-		if len(match) < 2 || strings.TrimSpace(match[1]) == "" {
+	for _, match := range composeEnvMatches(string(content)) {
+		if strings.TrimSpace(match.key) == "" {
 			continue
 		}
-		seen[match[1]] = struct{}{}
+		seen[match.key] = struct{}{}
 	}
 	out := make([]string, 0, len(seen))
 	for key := range seen {
@@ -193,6 +199,29 @@ func composeVariableKeys(workspace, composeFile string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func composeEnvMatches(content string) []composeEnvMatch {
+	indexes := composeEnvExpr.FindAllStringSubmatchIndex(content, -1)
+	matches := make([]composeEnvMatch, 0, len(indexes))
+	for _, index := range indexes {
+		if len(index) < 8 {
+			continue
+		}
+		start := index[0]
+		if start > 0 && content[start-1] == '$' {
+			continue
+		}
+		item := composeEnvMatch{key: content[index[2]:index[3]]}
+		if index[4] >= 0 && index[5] >= 0 {
+			item.operator = content[index[4]:index[5]]
+		}
+		if index[6] >= 0 && index[7] >= 0 {
+			item.defaultValue = content[index[6]:index[7]]
+		}
+		matches = append(matches, item)
+	}
+	return matches
 }
 
 func composeServicePlanFromConfig(workspace, serviceName string, spec composeServiceConfig) ComposeServicePlan {
@@ -431,12 +460,9 @@ func requiredComposeEnvVars(workspace, composeFile string, envVars []envdiscover
 		}
 	}
 	seen := make(map[string]struct{})
-	for _, match := range composeEnvExpr.FindAllStringSubmatch(string(content), -1) {
-		if len(match) < 3 {
-			continue
-		}
-		key := match[1]
-		operator := match[2]
+	for _, match := range composeEnvMatches(string(content)) {
+		key := match.key
+		operator := match.operator
 		if operator == "-" || operator == ":-" {
 			continue
 		}

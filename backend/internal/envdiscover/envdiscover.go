@@ -46,6 +46,12 @@ type Var struct {
 	DefaultValue *string `json:"defaultValue,omitempty"`
 }
 
+type composeVariableMatch struct {
+	key          string
+	operator     string
+	defaultValue string
+}
+
 func Discover(workspace, composeFile string) ([]Var, error) {
 	found := make(map[string]Var)
 	if err := discoverEnvFiles(found, workspace); err != nil {
@@ -131,17 +137,40 @@ func discoverEnvFile(found map[string]Var, source, content string) {
 }
 
 func discoverCompose(found map[string]Var, source, content string) {
-	for _, match := range composeVariableExpr.FindAllStringSubmatch(content, -1) {
-		key := match[1]
+	for _, match := range composeVariableMatches(content) {
+		key := match.key
 		if !keyPattern.MatchString(key) {
 			continue
 		}
 		defaultValue := ""
-		if len(match) >= 4 && (match[2] == "-" || match[2] == ":-") {
-			defaultValue = strings.TrimSpace(match[3])
+		if match.operator == "-" || match.operator == ":-" {
+			defaultValue = strings.TrimSpace(match.defaultValue)
 		}
 		add(found, key, source, defaultValue)
 	}
+}
+
+func composeVariableMatches(content string) []composeVariableMatch {
+	indexes := composeVariableExpr.FindAllStringSubmatchIndex(content, -1)
+	matches := make([]composeVariableMatch, 0, len(indexes))
+	for _, index := range indexes {
+		if len(index) < 8 {
+			continue
+		}
+		start := index[0]
+		if start > 0 && content[start-1] == '$' {
+			continue
+		}
+		item := composeVariableMatch{key: content[index[2]:index[3]]}
+		if index[4] >= 0 && index[5] >= 0 {
+			item.operator = content[index[4]:index[5]]
+		}
+		if index[6] >= 0 && index[7] >= 0 {
+			item.defaultValue = content[index[6]:index[7]]
+		}
+		matches = append(matches, item)
+	}
+	return matches
 }
 
 func add(found map[string]Var, key, source, defaultValue string) {
