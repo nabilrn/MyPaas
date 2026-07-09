@@ -56,6 +56,27 @@ func TestComposePortPlansParsesPublishedHostPort(t *testing.T) {
 	}
 }
 
+func TestComposeServicePlanEmptyCollectionsMarshalAsArrays(t *testing.T) {
+	item := ComposeServicePlan{
+		Name:      "db",
+		Role:      "internal",
+		Ports:     composePortPlans(nil),
+		Expose:    composeExposePorts(nil),
+		DependsOn: composeDependsOn(nil),
+	}
+
+	raw, err := json.Marshal(item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	for _, want := range []string{`"ports":[]`, `"expose":[]`, `"dependsOn":[]`} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("ComposeServicePlan JSON missing %s in %s", want, content)
+		}
+	}
+}
+
 func TestComposeServiceIssuesDetectReservedPortAndMissingDockerfile(t *testing.T) {
 	workspace := t.TempDir()
 	context := "client"

@@ -10,11 +10,21 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost, projectURL } from '$lib/utils/urls';
-	import type { ComposeIssue, ComposePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
+	import type { ComposeIssue, ComposePlan, ComposePortPlan, ComposeServicePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
 	type EnvDraft = EnvVarDiscovery & { value: string };
 	type PortSource = 'fallback' | 'detected' | 'manual' | 'static';
+	type ComposeServicePlanPayload = Omit<ComposeServicePlan, 'ports' | 'expose' | 'dependsOn'> & {
+		ports?: ComposePortPlan[] | null;
+		expose?: number[] | null;
+		dependsOn?: string[] | null;
+	};
+	type ComposePlanPayload = Omit<ComposePlan, 'requiredEnvVars' | 'services' | 'issues'> & {
+		requiredEnvVars?: string[] | null;
+		services?: ComposeServicePlanPayload[] | null;
+		issues?: ComposeIssue[] | null;
+	};
 
 	const DEFAULT_APP_PORT = '3000';
 	const publicOriginEnvKeys = new Set([
@@ -109,7 +119,7 @@
 	);
 	$: missingRequiredEnvKeys = normalizedComposeRequiredEnvKeys
 		.filter((key) => !(managedDatabaseUrl && key === 'DATABASE_URL'))
-		.filter((key) => !(envDraftValueByKey.get(key)?.trim().length > 0));
+		.filter((key) => !((envDraftValueByKey.get(key)?.trim().length ?? 0) > 0));
 	$: composeDisabledReason = composeBlockingIssues[0]?.message
 		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
 	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !composeDisabledReason && !submitting && !detecting && !inspectingRepo);
@@ -201,7 +211,7 @@
 		branchOptions = normalizeBranches(detected.branches, detected.branch || defaultBranch);
 		repoTree = detected.tree ?? repoTree;
 		repoTreeTruncated = detected.treeTruncated ?? repoTreeTruncated;
-		composePlan = detected.composePlan ?? null;
+		composePlan = normalizeComposePlan(detected.composePlan);
 		chooseDeployMode(detected.deployMode);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
@@ -228,6 +238,33 @@
 				? 'Static site'
 				: 'Dockerfile';
 		detectMessage += branchSuffix;
+	}
+
+	function normalizeComposePlan(plan: ComposePlan | null | undefined): ComposePlan | null {
+		if (!plan) return null;
+		const payload = plan as ComposePlanPayload;
+		return {
+			...plan,
+			requiredEnvVars: Array.isArray(payload.requiredEnvVars) ? payload.requiredEnvVars : [],
+			services: Array.isArray(payload.services)
+				? payload.services.map((service) => ({
+					...service,
+					ports: Array.isArray(service.ports) ? service.ports : [],
+					expose: Array.isArray(service.expose) ? service.expose : [],
+					dependsOn: Array.isArray(service.dependsOn) ? service.dependsOn : []
+				}))
+				: [],
+			issues: Array.isArray(payload.issues) ? payload.issues : []
+		};
+	}
+
+	function formatComposeServicePorts(service: ComposeServicePlan) {
+		const ports = Array.isArray(service.ports) ? service.ports : [];
+		const expose = Array.isArray(service.expose) ? service.expose : [];
+		if (ports.length > 0) {
+			return ports.map((port) => `${port.published ? `${port.published}:` : ''}${port.target}`).join(', ');
+		}
+		return expose.length > 0 ? expose.join(', ') : '-';
 	}
 
 	function normalizeBranches(branches: string[] | undefined, selected = '') {
@@ -880,7 +917,7 @@
 													{service.buildContext ? `build: ${service.buildContext}` : service.image ? `image: ${service.image}` : 'no build/image'}
 												</p>
 												<p class="mt-1 font-mono text-gray-500 dark:text-gray-400">
-													ports: {service.ports.length > 0 ? service.ports.map((port) => `${port.published ? `${port.published}:` : ''}${port.target}`).join(', ') : service.expose.length > 0 ? service.expose.join(', ') : '-'}
+													ports: {formatComposeServicePorts(service)}
 												</p>
 											</div>
 										{/each}

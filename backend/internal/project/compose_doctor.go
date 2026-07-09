@@ -105,6 +105,7 @@ func inspectComposePlan(ctx context.Context, workspace, composeFile string, serv
 		RouteTarget:            fmt.Sprintf("%s:%d", mainService, appPort),
 		RequiredEnvVars:        requiredComposeEnvVars(workspace, composeFile, envVars),
 		Services:               make([]ComposeServicePlan, 0, len(services)),
+		Issues:                 make([]ComposeIssue, 0),
 	}
 
 	for _, serviceName := range services {
@@ -341,11 +342,11 @@ func composeBuildInfo(raw json.RawMessage) (*string, *string) {
 
 func composePortPlans(raw json.RawMessage) []ComposePortPlan {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil
+		return []ComposePortPlan{}
 	}
 	var values []json.RawMessage
 	if err := json.Unmarshal(raw, &values); err != nil {
-		return nil
+		return []ComposePortPlan{}
 	}
 	ports := make([]ComposePortPlan, 0, len(values))
 	for _, value := range values {
@@ -393,11 +394,11 @@ func composePortPlan(raw json.RawMessage) ComposePortPlan {
 
 func composeExposePorts(raw json.RawMessage) []int32 {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil
+		return []int32{}
 	}
 	var values []json.RawMessage
 	if err := json.Unmarshal(raw, &values); err != nil {
-		return nil
+		return []int32{}
 	}
 	ports := make([]int32, 0, len(values))
 	for _, value := range values {
@@ -422,7 +423,7 @@ func composeExposePort(raw json.RawMessage) int32 {
 
 func composeDependsOn(raw json.RawMessage) []string {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil
+		return []string{}
 	}
 	var asMap map[string]any
 	if err := json.Unmarshal(raw, &asMap); err == nil {
@@ -438,7 +439,7 @@ func composeDependsOn(raw json.RawMessage) []string {
 		sort.Strings(asList)
 		return asList
 	}
-	return nil
+	return []string{}
 }
 
 func hasDockerSocketMount(raw json.RawMessage) bool {
