@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VM install browser wizard for first-time production credentials, including GitHub OAuth, Cloudflare DNS, and Tunnel route setup guidance
 - New Project repository inspection with branch dropdown selection and repository structure preview before runtime detection
 - Compose Doctor preflight in detect-mode with public service/port recommendation, required env detection, build context checks, host-port warnings, and unsafe Compose config flags
+- Detect-mode env discovery now scans nested env example files for monorepo-style repositories without turning Dockerfile build/image defaults into project env vars
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
@@ -78,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risky dashboard actions now use inline confirmation states for rollback, webhook secret regeneration, Compose reset, and whitelist user removal
 - Settings now has explicit load failure retry and inline Compose resource check errors instead of a permanent skeleton or toast-only recovery
 - Dashboard visual system now uses semantic app surface tokens, a native system font stack, softer sidebar active states, consistent brand focus rings, and quieter top-level headers for a more refined PaaS control-plane feel
+- New Project now fills non-sensitive discovered env defaults while keeping sensitive values blank for `.env` import or manual entry
 - PRD and timeline now require a pre-VM-deploy resource efficiency gate with resource profiles, separate configured-vs-real memory reporting, shared PostgreSQL provisioning, and static no-container hosting
 - PRD now groups goals into pre-deploy, after-deploy, and explicitly out-of-MVP work to keep Kubernetes/autoscaling out of the first VM deploy scope
 - New Project auto detection now validates the selected branch only, auto-applies Compose Doctor recommendations, and blocks create when required Compose env values or blocking Compose issues remain unresolved

@@ -13,7 +13,31 @@ var (
 	composeVariableExpr = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?:(:?[-?])([^}]*))?\}`)
 	sensitiveTokens     = []string{"SECRET", "TOKEN", "PASSWORD", "PASS", "KEY", "DATABASE_URL", "DSN", "PRIVATE"}
 	envFiles            = []string{".env.example", ".env.sample", ".env.template", ".env.local.example"}
+	envFileNames        = map[string]struct{}{}
+	skippedDirs         = map[string]struct{}{
+		".cache":       {},
+		".git":         {},
+		".next":        {},
+		".svelte-kit":  {},
+		"build":        {},
+		"coverage":     {},
+		"dist":         {},
+		"node_modules": {},
+		"target":       {},
+		"vendor":       {},
+	}
 )
+
+const (
+	maxDiscoverDepth = 4
+	maxEnvFiles      = 24
+)
+
+func init() {
+	for _, name := range envFiles {
+		envFileNames[name] = struct{}{}
+	}
+}
 
 type Var struct {
 	Key          string  `json:"key"`
@@ -24,16 +48,8 @@ type Var struct {
 
 func Discover(workspace, composeFile string) ([]Var, error) {
 	found := make(map[string]Var)
-	for _, name := range envFiles {
-		path := filepath.Join(workspace, name)
-		content, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		discoverEnvFile(found, name, string(content))
+	if err := discoverEnvFiles(found, workspace); err != nil {
+		return nil, err
 	}
 
 	if strings.TrimSpace(composeFile) != "" {
@@ -58,8 +74,44 @@ func Discover(workspace, composeFile string) ([]Var, error) {
 	return vars, nil
 }
 
+func discoverEnvFiles(found map[string]Var, workspace string) error {
+	count := 0
+	return filepath.WalkDir(workspace, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == workspace {
+			return nil
+		}
+		rel, err := filepath.Rel(workspace, path)
+		if err != nil {
+			return err
+		}
+		depth := pathDepth(rel)
+		if entry.IsDir() {
+			if shouldSkipDir(entry.Name()) || depth >= maxDiscoverDepth {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if count >= maxEnvFiles {
+			return nil
+		}
+		if _, ok := envFileNames[entry.Name()]; !ok {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		discoverEnvFile(found, filepath.ToSlash(rel), string(content))
+		count++
+		return nil
+	})
+}
+
 func discoverEnvFile(found map[string]Var, source, content string) {
-	for _, line := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
+	for _, line := range strings.Split(strings.ReplaceAll(strings.TrimPrefix(content, "\ufeff"), "\r\n", "\n"), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -120,6 +172,21 @@ func isSensitive(key string) bool {
 	return false
 }
 
+func pathDepth(rel string) int {
+	depth := 0
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		if part != "" {
+			depth++
+		}
+	}
+	return depth
+}
+
+func shouldSkipDir(name string) bool {
+	_, ok := skippedDirs[strings.ToLower(strings.TrimSpace(name))]
+	return ok
+}
+
 func stripInlineComment(value string) string {
 	inSingle := false
 	inDouble := false
@@ -141,7 +208,7 @@ func stripInlineComment(value string) string {
 			inDouble = !inDouble
 			continue
 		}
-		if ch == '#' && !inSingle && !inDouble {
+		if ch == '#' && !inSingle && !inDouble && (i == 0 || value[i-1] == ' ' || value[i-1] == '\t') {
 			return strings.TrimSpace(value[:i])
 		}
 	}

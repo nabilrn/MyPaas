@@ -340,14 +340,31 @@
 
 	function mergeDiscoveredEnvVars(vars: EnvVarDiscovery[]) {
 		const existing = new Set(envDrafts.map((item) => normalizeEnvKey(item.key)));
-		const nextDrafts = [...envDrafts];
+		const nextDrafts = envDrafts.map((item) => {
+			const discovered = vars.find((candidate) => normalizeEnvKey(candidate.key) === normalizeEnvKey(item.key));
+			if (!discovered) return item;
+			const defaultValue = discovered.sensitive ? '' : discovered.defaultValue ?? '';
+			return {
+				...item,
+				source: mergeEnvSources(item.source, discovered.source),
+				sensitive: item.sensitive || discovered.sensitive,
+				defaultValue: item.defaultValue ?? discovered.defaultValue,
+				value: item.value || defaultValue
+			};
+		});
 		for (const item of vars) {
 			const key = normalizeEnvKey(item.key);
 			if (!key || existing.has(key)) continue;
-			nextDrafts.push({ ...item, key, value: '' });
+			nextDrafts.push({ ...item, key, value: item.sensitive ? '' : item.defaultValue ?? '' });
 			existing.add(key);
 		}
 		envDrafts = nextDrafts.sort((a, b) => a.key.localeCompare(b.key));
+	}
+
+	function mergeEnvSources(current: string, discovered: string) {
+		if (!current) return discovered;
+		if (!discovered || current.split(', ').includes(discovered)) return current;
+		return `${current}, ${discovered}`;
 	}
 
 	function addEnvVar() {
