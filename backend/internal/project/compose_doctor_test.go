@@ -77,6 +77,35 @@ func TestComposeServicePlanEmptyCollectionsMarshalAsArrays(t *testing.T) {
 	}
 }
 
+func TestComposeServicePlanHandlesAbsoluteBuildContextFromComposeConfig(t *testing.T) {
+	workspace := t.TempDir()
+	serverDir := filepath.Join(workspace, "server")
+	if err := os.MkdirAll(serverDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverDir, "Dockerfile"), []byte("FROM alpine\n"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	rawBuild, err := json.Marshal(map[string]any{
+		"context":    serverDir,
+		"dockerfile": "Dockerfile",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item := composeServicePlanFromConfig(workspace, "backend", composeServiceConfig{Build: rawBuild})
+	if item.BuildContext == nil || *item.BuildContext != "server" {
+		t.Fatalf("BuildContext = %#v, want server", item.BuildContext)
+	}
+
+	plan := &ComposePlan{Issues: make([]ComposeIssue, 0)}
+	addComposeServiceIssues(plan, workspace, "backend", item, composeServiceConfig{})
+	if hasComposeIssue(plan.Issues, "BUILD_CONTEXT_MISSING") || hasComposeIssue(plan.Issues, "DOCKERFILE_MISSING") {
+		t.Fatalf("absolute build context should resolve inside workspace, got issues: %#v", plan.Issues)
+	}
+}
+
 func TestComposeServiceIssuesDetectReservedPortAndMissingDockerfile(t *testing.T) {
 	workspace := t.TempDir()
 	context := "client"

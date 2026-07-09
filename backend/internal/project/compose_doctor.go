@@ -241,11 +241,8 @@ func composeServicePlanFromConfig(workspace, serviceName string, spec composeSer
 		DependsOn:    dependsOn,
 	}
 	if buildContext != nil {
-		contextPath := filepath.Clean(filepath.Join(workspace, *buildContext))
-		if rel, err := filepath.Rel(workspace, contextPath); err == nil {
-			normalized := filepath.ToSlash(rel)
-			item.BuildContext = &normalized
-		}
+		_, displayPath := composeBuildContextPath(workspace, *buildContext)
+		item.BuildContext = &displayPath
 	}
 	return item
 }
@@ -267,9 +264,9 @@ func addComposePlanIssues(plan *ComposePlan, doc composeConfigDoc, mainService s
 
 func addComposeServiceIssues(plan *ComposePlan, workspace, serviceName string, item ComposeServicePlan, spec composeServiceConfig) {
 	if item.BuildContext != nil {
-		contextPath := filepath.Join(workspace, *item.BuildContext)
+		contextPath, displayPath := composeBuildContextPath(workspace, *item.BuildContext)
 		if !pathExists(contextPath) {
-			message := fmt.Sprintf("Build context %q does not exist.", *item.BuildContext)
+			message := fmt.Sprintf("Build context %q does not exist.", displayPath)
 			plan.Issues = append(plan.Issues, composeIssue("error", "BUILD_CONTEXT_MISSING", &serviceName, message))
 		}
 		dockerfile := "Dockerfile"
@@ -278,7 +275,7 @@ func addComposeServiceIssues(plan *ComposePlan, workspace, serviceName string, i
 		}
 		dockerfilePath := filepath.Join(contextPath, dockerfile)
 		if !pathExists(dockerfilePath) {
-			message := fmt.Sprintf("Dockerfile %q does not exist in build context %q.", dockerfile, *item.BuildContext)
+			message := fmt.Sprintf("Dockerfile %q does not exist in build context %q.", dockerfile, displayPath)
 			plan.Issues = append(plan.Issues, composeIssue("error", "DOCKERFILE_MISSING", &serviceName, message))
 		}
 	}
@@ -310,6 +307,25 @@ func addComposeServiceIssues(plan *ComposePlan, workspace, serviceName string, i
 
 func composeIssue(severity, code string, service *string, message string) ComposeIssue {
 	return ComposeIssue{Severity: severity, Code: code, Service: service, Message: message}
+}
+
+func composeBuildContextPath(workspace, buildContext string) (string, string) {
+	raw := strings.TrimSpace(buildContext)
+	if raw == "" {
+		raw = "."
+	}
+	cleaned := filepath.Clean(filepath.FromSlash(raw))
+	contextPath := cleaned
+	if !filepath.IsAbs(contextPath) {
+		contextPath = filepath.Join(workspace, contextPath)
+	}
+	contextPath = filepath.Clean(contextPath)
+
+	displayPath := filepath.ToSlash(cleaned)
+	if rel, err := filepath.Rel(workspace, contextPath); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		displayPath = filepath.ToSlash(rel)
+	}
+	return contextPath, displayPath
 }
 
 func composeBuildInfo(raw json.RawMessage) (*string, *string) {
