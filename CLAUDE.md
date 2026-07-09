@@ -475,5 +475,5 @@ Detail di `docs/adr/`.
 
 ---
 
-*Last updated: 2026-04-20*
-*Maintainer: Nabil Pratama*
+*Last updated: 2026-07-10*
+*Maintainer: Nabil Rizki Navisa*

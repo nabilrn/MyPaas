@@ -48,7 +48,8 @@ func (a mysqlAdapter) Columns(ctx context.Context, conn *sql.DB, schema, table s
 	rows, err := conn.QueryContext(ctx, `
 SELECT column_name, column_type, is_nullable = 'YES',
        column_key = 'PRI',
-       extra LIKE '%auto_increment%' OR generation_expression <> ''
+       COALESCE(extra, '') LIKE '%auto_increment%'
+       OR COALESCE(generation_expression, '') <> ''
 FROM information_schema.columns
 WHERE table_schema = ?
   AND table_name = ?

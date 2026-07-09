@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PRD and timeline now include New Project env discovery from `.env.example`/Compose variables plus Compose stale volume warnings and explicit reset actions as pre-deploy goals
 - Dashboard quota now separates configured memory/CPU allocation from best-effort live Docker Stats runtime usage
 - After-deploy ADRs for idle sleep/wake-on-request, autosizing recommendations, and optional single-host replicas
+- README now documents the paste-ready Linux VM installer flow from Quick Start
 
 ### Deprecated
 
@@ -115,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a no-op `/firebase-messaging-sw.js` static worker to quiet stale Firebase Messaging service worker probes on reused browser origins
 - Project create/update now persists `resource_profile`, returns it in API responses, and the dashboard resource forms apply profile defaults instead of a flat 512MB default
 - DB Studio now connects the API container to the actual Compose service network and targets the database container IP, fixing custom network database hosts like `db`
+- DB Studio now tolerates nullable MariaDB/MySQL generated-column metadata so column browsing does not crash on `information_schema.columns`
 - Static projects bypass Docker lifecycle/log collection while still supporting route start/stop/restart and zero-runtime metrics snapshots
 - Dockerfile containers and Compose main services can join `PROJECT_NETWORK` so shared platform services remain private on the Docker network
 - Compose deploys now warn in build logs when Docker resources exist before the first tracked active deployment

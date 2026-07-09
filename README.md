@@ -11,19 +11,40 @@ MyPaas is a lightweight, self-hosted platform for deploying multi-service applic
 - 📊 **Realtime dashboard** — logs, metrics, deployment history
 - ⏮️ **Instant rollback** — go back to any previous deployment
 - 🔐 **GitHub OAuth** — whitelisted collaborators only
+- 🧰 **VM install script** — prepare a fresh Linux VM and start MyPaas with one command
 
 ---
 
 ## Quick Start
 
-### Prerequisites
+### Production VM install
+For a fresh Ubuntu/Debian VM, clone the repository and run the installer:
+```bash
+git clone <your-mypaas-repo-url> mypaas
+cd mypaas
+INSTALL_WIZARD=true bash scripts/install-vm.sh
+```
+
+Use the browser wizard when you want a guided setup for GitHub OAuth, Cloudflare DNS, Cloudflare Tunnel, owner email, and production secrets. On a remote VM, open the wizard through SSH port forwarding from your laptop:
+```bash
+ssh -L 8787:127.0.0.1:8787 <user>@<vm-ip>
+```
+
+For terminal-only setup:
+```bash
+bash scripts/install-vm.sh
+```
+
+The installer checks Docker + Compose, installs Docker on Ubuntu/Debian when needed, generates `.env`, prepares `/var/lib/mypaas`, runs migrations, and starts `docker-compose.prod.yml`. See [Deployment](#deployment) for non-interactive env flags and verification commands.
+
+### Local development prerequisites
 - **Go 1.22+** (backend)
 - **Node.js 18+ & pnpm** (frontend)
 - **PostgreSQL 16**
 - **Docker + Docker Compose** (plugin version)
 - **Caddy 2** (reverse proxy)
 
-### 1. Clone & setup environment
+### 1. Clone and setup environment
 ```bash
 git clone <your-repo-url> mypaas
 cd mypaas
@@ -260,4 +281,4 @@ MIT — See [LICENSE](LICENSE)
 
 ---
 
-**Last updated:** 2026-04-23
+**Last updated:** 2026-07-10

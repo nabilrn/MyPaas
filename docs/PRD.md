@@ -1,6 +1,6 @@
 # MyPaas — Product Requirements Document
 
-**Author:** Nabil Pratama
+**Author:** Nabil Rizki Navisa
 **Status:** v2.0
 **Last updated:** 20 April 2026
 **Timeline:** 10-15 hari
