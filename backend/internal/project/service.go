@@ -185,6 +185,9 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		return DetectResult{}, fmt.Errorf("discover env vars: %w", err)
 	}
 	if composeFile != "" {
+		if err := prepareComposePreviewEnv(workspace, composeFile, envVars); err != nil {
+			return DetectResult{}, err
+		}
 		services, err := detectComposeServices(ctx, workspace, composeFile)
 		if err != nil {
 			return DetectResult{}, err

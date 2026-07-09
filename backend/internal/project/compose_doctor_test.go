@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"mypaas/internal/envdiscover"
 )
 
 func TestRequiredComposeEnvVarsSkipsDefaults(t *testing.T) {
@@ -76,6 +79,39 @@ func TestComposeServiceIssuesDetectReservedPortAndMissingDockerfile(t *testing.T
 	}
 	if !hasComposeIssue(plan.Issues, "HOST_PORT_RESERVED") {
 		t.Fatalf("missing HOST_PORT_RESERVED issue: %#v", plan.Issues)
+	}
+}
+
+func TestPrepareComposePreviewEnvWritesPlaceholders(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "compose.yml"), []byte(`
+services:
+  db:
+    image: mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_PORT: ${DB_PORT:-3306}
+`), 0640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := prepareComposePreviewEnv(workspace, "compose.yml", []envdiscover.Var{
+		{Key: "DB_ROOT_PASSWORD", Sensitive: true},
+		{Key: "DB_NAME"},
+	}); err != nil {
+		t.Fatalf("prepareComposePreviewEnv() error = %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(workspace, ".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	for _, want := range []string{"DB_ROOT_PASSWORD=mypaas_preview", "DB_NAME=mypaas_preview", "DB_PORT=3000"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf(".env preview missing %q in:\n%s", want, content)
+		}
 	}
 }
 

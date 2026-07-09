@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"mypaas/internal/envdiscover"
+	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
 )
 
@@ -121,11 +123,76 @@ func inspectComposePlan(ctx context.Context, workspace, composeFile string, serv
 func composeConfigJSON(ctx context.Context, workspace, composeFile string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "config", "--format", "json")
 	cmd.Dir = workspace
-	out, err := cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("%w: compose config could not be validated: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			message = firstNonEmptyLine(string(out))
+		}
+		return nil, fmt.Errorf("%w: compose config could not be validated: %s", errs.ErrValidation, firstNonEmptyLine(message))
 	}
 	return out, nil
+}
+
+func prepareComposePreviewEnv(workspace, composeFile string, envVars []envdiscover.Var) error {
+	envPath := filepath.Join(workspace, ".env")
+	if pathExists(envPath) {
+		return nil
+	}
+	values := make(map[string]string)
+	for _, item := range envVars {
+		if strings.TrimSpace(item.Key) == "" {
+			continue
+		}
+		if item.DefaultValue != nil {
+			values[item.Key] = *item.DefaultValue
+			continue
+		}
+		values[item.Key] = composePreviewEnvValue(item.Key)
+	}
+	for _, key := range composeVariableKeys(workspace, composeFile) {
+		if _, ok := values[key]; ok {
+			continue
+		}
+		values[key] = composePreviewEnvValue(key)
+	}
+	return envvar.WriteEnvFile(envPath, values)
+}
+
+func composePreviewEnvValue(key string) string {
+	upper := strings.ToUpper(strings.TrimSpace(key))
+	switch {
+	case strings.Contains(upper, "PORT"):
+		return "3000"
+	case strings.Contains(upper, "URL") && strings.Contains(upper, "DATABASE"):
+		return "mysql://mypaas_preview:mypaas_preview@db:3306/mypaas_preview"
+	case strings.Contains(upper, "NAME") || strings.Contains(upper, "USER"):
+		return "mypaas_preview"
+	default:
+		return "mypaas_preview"
+	}
+}
+
+func composeVariableKeys(workspace, composeFile string) []string {
+	content, err := os.ReadFile(filepath.Join(workspace, composeFile))
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for _, match := range composeEnvExpr.FindAllStringSubmatch(string(content), -1) {
+		if len(match) < 2 || strings.TrimSpace(match[1]) == "" {
+			continue
+		}
+		seen[match[1]] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for key := range seen {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func composeServicePlanFromConfig(workspace, serviceName string, spec composeServiceConfig) ComposeServicePlan {
