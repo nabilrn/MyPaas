@@ -30,6 +30,32 @@ func TestFindSiteRootPrefersBuildOutput(t *testing.T) {
 	}
 }
 
+func TestFindSiteRootSupportsCommonStaticOutputDirs(t *testing.T) {
+	for _, rel := range []string{"out", ".output/public", "_site", "site", "www"} {
+		t.Run(rel, func(t *testing.T) {
+			workspace := t.TempDir()
+			root := filepath.Join(workspace, rel)
+			if err := os.MkdirAll(root, 0750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("ok"), 0640); err != nil {
+				t.Fatal(err)
+			}
+
+			gotRoot, gotRel, err := FindSiteRoot(workspace)
+			if err != nil {
+				t.Fatalf("FindSiteRoot returned error: %v", err)
+			}
+			if gotRel != rel {
+				t.Fatalf("rel = %q, want %q", gotRel, rel)
+			}
+			if gotRoot != root {
+				t.Fatalf("root = %q, want %q", gotRoot, root)
+			}
+		})
+	}
+}
+
 func TestCopyDirSkipsGitAndNodeModules(t *testing.T) {
 	src := t.TempDir()
 	dst := filepath.Join(t.TempDir(), "out")

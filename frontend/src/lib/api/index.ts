@@ -5,6 +5,7 @@ import type {
 	EnvVar,
 	MetricsSnapshot,
 	QuotaUsage,
+	RepoInspection,
 	User,
 	AuditLog,
 	ComposeResourceSummary,
@@ -67,6 +68,8 @@ export const api = {
 		get:    (id: string):          Promise<Project>    => request(`/projects/${id}`),
 		create: (data: unknown):       Promise<Project>    => request('/projects',      { method: 'POST',   body: JSON.stringify(data) }),
 		detectMode: (data: unknown):   Promise<DeployModeDetection> => request('/projects/detect-mode', { method: 'POST', body: JSON.stringify(data) }),
+		inspectRepository: (data: unknown): Promise<RepoInspection> =>
+			request('/projects/detect-mode', { method: 'POST', body: JSON.stringify({ ...(data as object), inspectOnly: true }) }),
 		update: (id: string, d: unknown): Promise<Project> => request(`/projects/${id}`, { method: 'PATCH',  body: JSON.stringify(d) }),
 		delete: (id: string):          Promise<void>       => request(`/projects/${id}`, { method: 'DELETE' }),
 		deploy: (id: string):          Promise<Deployment> => request(`/projects/${id}/deploy`,   { method: 'POST' }),

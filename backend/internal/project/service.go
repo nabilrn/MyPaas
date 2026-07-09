@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"math/big"
 	"os"
 	"os/exec"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -34,7 +36,9 @@ import (
 
 var projectNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$`)
 
-const maxAutoDetectBranches = 50
+const maxRepoTreeEntries = 250
+
+var errRepoTreeLimitReached = errors.New("repository tree limit reached")
 
 type Service struct {
 	queries *db.Queries
@@ -66,19 +70,31 @@ type UpdateInput struct {
 }
 
 type DetectInput struct {
-	RepoURL string
-	Branch  string
+	RepoURL     string
+	Branch      string
+	InspectOnly bool
 }
 
 type DetectResult struct {
 	DeployMode    string
 	Branch        string
+	DefaultBranch string
+	Branches      []string
 	MainService   *string
 	Services      []string
 	ComposeFile   *string
 	HasDockerfile bool
 	EnvVars       []envdiscover.Var
 	AppPort       int32
+	Tree          []RepoTreeEntry
+	TreeTruncated bool
+}
+
+type RepoTreeEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+	Depth int    `json:"depth"`
 }
 
 func NewService(queries *db.Queries, domain string, quotaService *quota.Service) *Service {
@@ -103,50 +119,43 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 		return DetectResult{}, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
 	defer cancel()
 
-	branch := strings.TrimSpace(input.Branch)
-	if branch != "" {
-		return detectModeOnBranch(ctx, repoURL, branch)
-	}
-
-	defaultBranch, err := resolveDefaultBranch(ctx, repoURL)
+	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL)
 	if err != nil {
 		return DetectResult{}, err
 	}
 
-	result, err := detectModeOnBranch(ctx, repoURL, defaultBranch)
-	if err == nil {
-		return result, nil
+	branch := strings.TrimSpace(input.Branch)
+	if branch == "" {
+		branch = defaultBranch
 	}
-	if !errors.Is(err, errs.ErrNoDeployConfig) {
-		return DetectResult{}, err
-	}
-
-	branches, listErr := listRemoteBranches(ctx, repoURL)
-	if listErr != nil {
-		return DetectResult{}, err
-	}
-	checkedBranches := 0
-	for _, candidate := range branches {
-		if candidate == defaultBranch {
-			continue
-		}
-		if checkedBranches >= maxAutoDetectBranches {
-			break
-		}
-		checkedBranches++
-		result, err := detectModeOnBranch(ctx, repoURL, candidate)
-		if err == nil {
-			return result, nil
-		}
-		if !errors.Is(err, errs.ErrNoDeployConfig) {
-			continue
-		}
+	if branch == "" {
+		return DetectResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
 	}
 
-	return DetectResult{}, fmt.Errorf("%w: no Dockerfile, Compose file, or static site found on default branch %q or %d scanned remote branches", errs.ErrNoDeployConfig, defaultBranch, checkedBranches)
+	if input.InspectOnly {
+		tree, truncated, err := inspectRepositoryTree(ctx, repoURL, branch)
+		if err != nil {
+			return DetectResult{}, err
+		}
+		return DetectResult{
+			Branch:        branch,
+			DefaultBranch: defaultBranch,
+			Branches:      branches,
+			Tree:          tree,
+			TreeTruncated: truncated,
+		}, nil
+	}
+
+	result, err := detectModeOnBranch(ctx, repoURL, branch)
+	if err != nil {
+		return DetectResult{}, err
+	}
+	result.DefaultBranch = defaultBranch
+	result.Branches = branches
+	return result, nil
 }
 
 func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResult, error) {
@@ -162,6 +171,10 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 
 	if err := cloneForDetect(ctx, workspace, repoURL, branch); err != nil {
 		return DetectResult{}, err
+	}
+	tree, treeTruncated, err := listRepositoryTree(workspace, maxRepoTreeEntries)
+	if err != nil {
+		return DetectResult{}, fmt.Errorf("list repository tree: %w", err)
 	}
 
 	composeFile := detectComposeFile(workspace)
@@ -186,13 +199,15 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 			HasDockerfile: hasDockerfile,
 			EnvVars:       envVars,
 			AppPort:       appPort,
+			Tree:          tree,
+			TreeTruncated: treeTruncated,
 		}, nil
 	}
 	if hasDockerfile {
-		return DetectResult{DeployMode: "dockerfile", Branch: branch, HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars)}, nil
+		return DetectResult{DeployMode: "dockerfile", Branch: branch, HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars), Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 	if _, _, err := staticdeploy.FindSiteRoot(workspace); err == nil {
-		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80}, nil
+		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 	return DetectResult{}, fmt.Errorf("%w: no deploy config found on branch %q", errs.ErrNoDeployConfig, branch)
 }
@@ -395,7 +410,7 @@ func valueOrEmpty(value *string) string {
 }
 
 func cloneForDetect(ctx context.Context, workspace, repoURL, branch string) error {
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, repoURL, ".")
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--single-branch", "--branch", branch, repoURL, ".")
 	cmd.Dir = workspace
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: failed to clone repository branch %q", errs.ErrValidation, branch)
@@ -404,34 +419,36 @@ func cloneForDetect(ctx context.Context, workspace, repoURL, branch string) erro
 }
 
 func resolveDefaultBranch(ctx context.Context, repoURL string) (string, error) {
+	defaultBranch, _, err := inspectRemoteBranches(ctx, repoURL)
+	return defaultBranch, err
+}
+
+func listRemoteBranches(ctx context.Context, repoURL string) ([]string, error) {
+	_, branches, err := inspectRemoteBranches(ctx, repoURL)
+	return branches, err
+}
+
+func inspectRemoteBranches(ctx context.Context, repoURL string) (string, []string, error) {
 	repoURL = strings.TrimSpace(repoURL)
 	if repoURL == "" {
-		return "", fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
+		return "", nil, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--symref", repoURL, "HEAD").CombinedOutput()
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--symref", repoURL, "HEAD", "refs/heads/*").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%w: failed to detect default branch: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
+		return "", nil, fmt.Errorf("%w: failed to inspect remote branches: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
 	}
-	branch := parseDefaultBranchRef(string(out))
-	if branch == "" {
-		return "", fmt.Errorf("%w: failed to detect default branch", errs.ErrValidation)
+	defaultBranch := parseDefaultBranchRef(string(out))
+	branches := prioritizeDefaultBranch(defaultBranch, parseRemoteBranchRefs(string(out)))
+	if defaultBranch == "" && len(branches) > 0 {
+		defaultBranch = branches[0]
 	}
-	return branch, nil
-}
-
-func listRemoteBranches(ctx context.Context, repoURL string) ([]string, error) {
-	repoURL = strings.TrimSpace(repoURL)
-	if repoURL == "" {
-		return nil, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
+	if defaultBranch == "" {
+		return "", nil, fmt.Errorf("%w: failed to detect default branch", errs.ErrValidation)
 	}
-	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--heads", repoURL).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to list remote branches: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
-	}
-	return parseRemoteBranchRefs(string(out)), nil
+	return defaultBranch, branches, nil
 }
 
 func parseDefaultBranchRef(output string) string {
@@ -465,6 +482,158 @@ func parseRemoteBranchRefs(output string) []string {
 		branches = append(branches, branch)
 	}
 	return branches
+}
+
+func prioritizeDefaultBranch(defaultBranch string, branches []string) []string {
+	if len(branches) == 0 {
+		return branches
+	}
+	rest := make([]string, 0, len(branches))
+	hasDefault := false
+	for _, branch := range branches {
+		if branch == defaultBranch {
+			hasDefault = true
+			continue
+		}
+		rest = append(rest, branch)
+	}
+	sort.Strings(rest)
+	if !hasDefault || defaultBranch == "" {
+		return rest
+	}
+	return append([]string{defaultBranch}, rest...)
+}
+
+func inspectRepositoryTree(ctx context.Context, repoURL, branch string) ([]RepoTreeEntry, bool, error) {
+	workspace, err := os.MkdirTemp("", "mypaas-repo-preview-*")
+	if err != nil {
+		return nil, false, fmt.Errorf("create repository preview workspace: %w", err)
+	}
+	defer os.RemoveAll(workspace)
+
+	if err := cloneForTreePreview(ctx, workspace, repoURL, branch); err != nil {
+		return nil, false, err
+	}
+	tree, truncated, err := listGitRepositoryTree(ctx, workspace, maxRepoTreeEntries)
+	if err != nil {
+		return nil, false, err
+	}
+	return tree, truncated, nil
+}
+
+func cloneForTreePreview(ctx context.Context, workspace, repoURL, branch string) error {
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--filter", "blob:none", "--no-checkout", "--single-branch", "--branch", branch, repoURL, ".")
+	cmd.Dir = workspace
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%w: failed to clone repository branch %q for preview", errs.ErrValidation, branch)
+	}
+	return nil
+}
+
+func listGitRepositoryTree(ctx context.Context, workspace string, limit int) ([]RepoTreeEntry, bool, error) {
+	cmd := exec.CommandContext(ctx, "git", "ls-tree", "-r", "-t", "--full-tree", "HEAD")
+	cmd.Dir = workspace
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: failed to read repository tree: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
+	}
+	tree, truncated := parseGitTreeEntries(string(out), limit)
+	return tree, truncated, nil
+}
+
+func parseGitTreeEntries(output string, limit int) ([]RepoTreeEntry, bool) {
+	entries := make([]RepoTreeEntry, 0)
+	truncated := false
+	for _, line := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
+		if len(entries) >= limit {
+			truncated = true
+			break
+		}
+		meta, rel, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(meta)
+		if len(fields) < 2 {
+			continue
+		}
+		entryType := "file"
+		switch fields[1] {
+		case "tree":
+			entryType = "directory"
+		case "blob":
+			entryType = "file"
+		default:
+			continue
+		}
+		rel = strings.TrimSpace(rel)
+		if rel == "" {
+			continue
+		}
+		entries = append(entries, RepoTreeEntry{
+			Name:  pathpkg.Base(rel),
+			Path:  rel,
+			Type:  entryType,
+			Depth: strings.Count(rel, "/"),
+		})
+	}
+	return entries, truncated
+}
+
+func listRepositoryTree(root string, limit int) ([]RepoTreeEntry, bool, error) {
+	root = filepath.Clean(root)
+	entries := make([]RepoTreeEntry, 0)
+	truncated := false
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if shouldSkipRepoPreview(entry) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if len(entries) >= limit {
+			truncated = true
+			return errRepoTreeLimitReached
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		entryType := "file"
+		if entry.IsDir() {
+			entryType = "directory"
+		}
+		entries = append(entries, RepoTreeEntry{
+			Name:  entry.Name(),
+			Path:  rel,
+			Type:  entryType,
+			Depth: strings.Count(rel, "/"),
+		})
+		return nil
+	})
+	if errors.Is(err, errRepoTreeLimitReached) {
+		err = nil
+	}
+	return entries, truncated, err
+}
+
+func shouldSkipRepoPreview(entry fs.DirEntry) bool {
+	if !entry.IsDir() {
+		return false
+	}
+	switch strings.ToLower(entry.Name()) {
+	case ".git", "node_modules", "vendor", ".cache", ".turbo":
+		return true
+	default:
+		return false
+	}
 }
 
 func firstNonEmptyLine(value string) string {

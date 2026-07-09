@@ -71,6 +71,21 @@ export interface EnvVarDiscovery {
 	defaultValue?: string;
 }
 
+export interface RepoTreeEntry {
+	name: string;
+	path: string;
+	type: 'file' | 'directory';
+	depth: number;
+}
+
+export interface RepoInspection {
+	branch: string;
+	defaultBranch: string;
+	branches: string[];
+	tree: RepoTreeEntry[];
+	treeTruncated: boolean;
+}
+
 export interface ContainerMetrics {
 	service:        string;
 	cpu:            number;   // percent
@@ -116,9 +131,8 @@ export interface QuotaUsage {
 	projectCount: number;
 }
 
-export interface DeployModeDetection {
+export interface DeployModeDetection extends RepoInspection {
 	deployMode: DeployMode;
-	branch: string;
 	mainService: string | null;
 	services: string[];
 	composeFile: string | null;

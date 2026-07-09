@@ -10,7 +10,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost } from '$lib/utils/urls';
-	import type { DeployModeDetection, EnvVarDiscovery, ResourceProfile } from '$types';
+	import type { DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
 	type EnvDraft = EnvVarDiscovery & { value: string };
@@ -24,8 +24,18 @@
 
 	let submitting = false;
 	let detecting = false;
+	let inspectingRepo = false;
 	let error = '';
 	let detectMessage = '';
+	let repoInspectError = '';
+	let repoInspectMessage = '';
+	let repoInspectTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+	let repoInspectRequest = 0;
+	let lastRepoInspectKey = '';
+	let branchOptions: string[] = [];
+	let defaultBranch = '';
+	let repoTree: RepoTreeEntry[] = [];
+	let repoTreeTruncated = false;
 	let detectedServices: string[] = [];
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
@@ -74,32 +84,48 @@
 			: appPortSource === 'manual'
 				? 'Manual override'
 				: 'Fallback if detection finds no port';
-	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && !submitting && !detecting);
+	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !submitting && !detecting && !inspectingRepo);
 	$: createDisabledReason = !form.name.trim()
 		? 'Project name is required'
 		: !form.repoUrl.trim()
 			? 'Repository URL is required'
-			: detecting
-				? 'Repository detection is running'
-				: submitting
-					? 'Project creation is running'
-					: '';
+			: !form.branch.trim()
+				? 'Branch is required'
+				: inspectingRepo
+					? 'Repository branches are loading'
+					: detecting
+						? 'Repository detection is running'
+						: submitting
+							? 'Project creation is running'
+							: '';
 	$: reviewStateLabel = canSubmit ? 'Ready to create' : createDisabledReason || 'Complete required fields';
 	$: detectionStateLabel = detecting
-		? 'Inspecting repository'
+		? 'Inspecting runtime'
+		: inspectingRepo
+			? 'Loading repository'
 		: detectMessage
 			? detectMessage
+			: repoInspectMessage
+				? repoInspectMessage
 			: form.repoUrl.trim()
-				? 'Ready for detection'
+				? form.branch.trim()
+					? 'Ready for detection'
+					: 'Select a branch'
 				: 'Waiting for repository URL';
 	$: detectionStateBody = detecting
-		? 'MyPaas is checking the repository branch for Dockerfile, Compose, static assets, ports, services, and env hints.'
+		? 'MyPaas is checking the selected branch for Dockerfile, Compose, static assets, ports, services, and env hints.'
+		: inspectingRepo
+			? 'Fetching branches and the top-level repository structure.'
 		: detectMessage
 			? detectedServices.length > 0
 				? `Services: ${detectedServices.join(', ')}`
 				: 'Runtime and defaults have been applied from the repository.'
+			: repoInspectError
+				? repoInspectError
 			: form.repoUrl.trim()
-				? 'Run detection to fill runtime, port, service, and discovered environment defaults.'
+				? form.branch.trim()
+					? 'Run detection to fill runtime, port, service, and discovered environment defaults.'
+					: 'Branches load automatically after the repository URL is entered.'
 				: 'Paste a repository URL before running detection.';
 
 	function defaultProfileForMode(mode: DeployModeChoice): ResourceProfile {
@@ -138,6 +164,10 @@
 		if (detected.branch) {
 			form.branch = detected.branch;
 		}
+		defaultBranch = detected.defaultBranch || defaultBranch;
+		branchOptions = normalizeBranches(detected.branches, detected.branch || defaultBranch);
+		repoTree = detected.tree ?? repoTree;
+		repoTreeTruncated = detected.treeTruncated ?? repoTreeTruncated;
 		chooseDeployMode(detected.deployMode);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
@@ -164,6 +194,121 @@
 				? 'Static site'
 				: 'Dockerfile';
 		detectMessage += branchSuffix;
+	}
+
+	function normalizeBranches(branches: string[] | undefined, selected = '') {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		const add = (branch: string) => {
+			branch = branch.trim();
+			if (!branch || seen.has(branch)) return;
+			seen.add(branch);
+			out.push(branch);
+		};
+		for (const branch of branches ?? []) {
+			add(branch);
+		}
+		add(selected);
+		return out;
+	}
+
+	function handleRepoUrlInput(event: Event) {
+		const value = (event.currentTarget as HTMLInputElement).value;
+		if (value === form.repoUrl) return;
+		form.repoUrl = value;
+		form.branch = '';
+		detectMessage = '';
+		detectedServices = [];
+		resetRepositoryInspection();
+		scheduleRepositoryInspection();
+	}
+
+	function resetRepositoryInspection() {
+		repoInspectError = '';
+		repoInspectMessage = '';
+		branchOptions = [];
+		defaultBranch = '';
+		repoTree = [];
+		repoTreeTruncated = false;
+		lastRepoInspectKey = '';
+	}
+
+	function scheduleRepositoryInspection() {
+		if (repoInspectTimer) {
+			clearTimeout(repoInspectTimer);
+		}
+		if (!form.repoUrl.trim()) return;
+		repoInspectTimer = setTimeout(() => {
+			void inspectRepository().catch(() => undefined);
+		}, 700);
+	}
+
+	function handleBranchChange(event: Event) {
+		form.branch = (event.currentTarget as HTMLSelectElement).value;
+		detectMessage = '';
+		detectedServices = [];
+		void inspectRepository(false, true).catch(() => undefined);
+	}
+
+	async function inspectRepository(showToast = false, force = false): Promise<RepoInspection | undefined> {
+		const repoUrl = form.repoUrl.trim();
+		if (!repoUrl) return undefined;
+		if (repoInspectTimer) {
+			clearTimeout(repoInspectTimer);
+			repoInspectTimer = undefined;
+		}
+
+		const requestedBranch = form.branch.trim();
+		const requestKey = `${repoUrl}\n${requestedBranch}`;
+		if (!force && requestKey === lastRepoInspectKey) {
+			return undefined;
+		}
+
+		const requestId = ++repoInspectRequest;
+		inspectingRepo = true;
+		repoInspectError = '';
+		try {
+			const inspection = await api.projects.inspectRepository({
+				repoUrl,
+				branch: requestedBranch
+			});
+			if (requestId !== repoInspectRequest) {
+				return undefined;
+			}
+			defaultBranch = inspection.defaultBranch || inspection.branch;
+			if (!form.branch.trim() && inspection.branch) {
+				form.branch = inspection.branch;
+			}
+			branchOptions = normalizeBranches(inspection.branches, form.branch || inspection.branch || defaultBranch);
+			repoTree = inspection.tree ?? [];
+			repoTreeTruncated = inspection.treeTruncated ?? false;
+			repoInspectMessage = branchOptions.length === 1
+				? '1 branch available'
+				: `${branchOptions.length} branches available`;
+			lastRepoInspectKey = `${repoUrl}\n${form.branch.trim()}`;
+			if (showToast) {
+				toast.success('Repository branches loaded');
+			}
+			return inspection;
+		} catch (err) {
+			if (requestId !== repoInspectRequest) {
+				return undefined;
+			}
+			const message = err instanceof Error ? err.message : 'Failed to inspect repository';
+			repoInspectError = message;
+			repoInspectMessage = '';
+			branchOptions = [];
+			repoTree = [];
+			repoTreeTruncated = false;
+			if (showToast) {
+				toast.error(message);
+			}
+			throw err;
+		} finally {
+			if (requestId === repoInspectRequest) {
+				inspectingRepo = false;
+			}
+		}
 	}
 
 	function markCustomProfile() {
@@ -305,6 +450,14 @@
 			error = message;
 			throw new Error(message);
 		}
+		if (!form.branch.trim()) {
+			const inspection = await inspectRepository(false, true);
+			if (!inspection?.branch && !form.branch.trim()) {
+				const message = 'Select a branch before detection';
+				error = message;
+				throw new Error(message);
+			}
+		}
 
 		detecting = true;
 		error = '';
@@ -332,7 +485,7 @@
 	}
 
 	async function handleSubmit() {
-		if (submitting || detecting) return;
+		if (submitting || detecting || inspectingRepo) return;
 		submitting = true;
 		error = '';
 		try {
@@ -401,26 +554,55 @@
 		<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
 			<SectionPanel
 				title="Repository source"
-				description="Name the route, choose the branch, and detect how MyPaas should run it."
+				description="Name the route, load repository branches, then detect how MyPaas should run the selected branch."
 			>
-				<div class="grid gap-4 sm:grid-cols-2">
+				<div class="grid gap-4">
 					<div>
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="name">Project name</label>
 						<input id="name" type="text" bind:value={form.name} placeholder="my-app" class="field w-full" />
 					</div>
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="branch">Branch</label>
-						<input id="branch" type="text" bind:value={form.branch} placeholder="auto-detect default branch" class="field w-full font-mono" />
-					</div>
-					<div class="sm:col-span-2">
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
+						<input
+							id="repo"
+							type="text"
+							value={form.repoUrl}
+							placeholder="https://github.com/username/repo"
+							class="field w-full font-mono"
+							on:input={handleRepoUrlInput}
+							on:blur={() => void inspectRepository(false).catch(() => undefined)}
+						/>
+					</div>
+					<div>
+						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="branch">Branch</label>
 						<div class="flex flex-col gap-2 sm:flex-row">
-							<input id="repo" type="text" bind:value={form.repoUrl} placeholder="https://github.com/username/repo" class="field min-w-0 flex-1 font-mono" />
+							<select
+								id="branch"
+								value={form.branch}
+								class="field min-w-0 flex-1 font-mono"
+								disabled={inspectingRepo || (!branchOptions.length && !form.branch)}
+								on:change={handleBranchChange}
+							>
+								<option value="" disabled>{inspectingRepo ? 'Loading branches...' : 'Select branch'}</option>
+								{#each branchOptions as branch}
+									<option value={branch}>{branch}{branch === defaultBranch ? ' (default)' : ''}</option>
+								{/each}
+							</select>
+							<ActionButton
+								variant="secondary"
+								type="button"
+								on:click={() => void inspectRepository(true, true).catch(() => undefined)}
+								disabled={inspectingRepo || detecting || !form.repoUrl.trim()}
+								loading={inspectingRepo}
+								loadingLabel="Loading..."
+							>
+								Refresh
+							</ActionButton>
 							<ActionButton
 								variant="secondary"
 								type="button"
 								on:click={() => void handleDetectMode().catch(() => undefined)}
-								disabled={detecting || !form.repoUrl.trim()}
+								disabled={detecting || inspectingRepo || !form.repoUrl.trim() || !form.branch.trim()}
 								loading={detecting}
 								loadingLabel="Detecting..."
 							>
@@ -429,6 +611,9 @@
 						</div>
 					</div>
 				</div>
+				{#if repoInspectError}
+					<p class="mt-3 text-xs leading-5 text-red-600 dark:text-red-300">{repoInspectError}</p>
+				{/if}
 				<div
 					class="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 text-sm dark:border-gray-800 dark:bg-gray-950/60"
 					aria-live="polite"
@@ -438,14 +623,47 @@
 							class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full
 								{detecting
 									? 'bg-yellow-500'
+									: inspectingRepo
+										? 'bg-yellow-500'
 									: detectMessage
 										? 'bg-brand-500'
+										: repoInspectError
+											? 'bg-red-500'
 										: 'bg-gray-400 dark:bg-gray-600'}"
 						></span>
 						<div class="min-w-0">
 							<p class="font-medium text-gray-950 dark:text-white">{detectionStateLabel}</p>
 							<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{detectionStateBody}</p>
 						</div>
+					</div>
+				</div>
+				<div class="mt-4">
+					<div class="mb-2 flex items-center justify-between gap-3">
+						<p class="text-xs font-medium text-gray-600 dark:text-gray-300">Repository structure</p>
+						{#if repoTreeTruncated}
+							<span class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400">First {repoTree.length} entries</span>
+						{/if}
+					</div>
+					<div class="max-h-72 overflow-auto rounded-md border border-gray-200 bg-white text-xs dark:border-gray-800 dark:bg-gray-950">
+						{#if repoTree.length > 0}
+							{#each repoTree as item}
+								<div
+									class="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-2 border-b border-gray-100 px-3 py-1.5 last:border-b-0 dark:border-gray-900"
+									style={`padding-left: ${0.75 + item.depth * 0.9}rem;`}
+								>
+									<span class="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+										{item.type === 'directory' ? 'dir' : 'file'}
+									</span>
+									<span class="truncate font-mono {item.type === 'directory' ? 'font-medium text-gray-950 dark:text-white' : 'text-gray-600 dark:text-gray-300'}">
+										{item.path}
+									</span>
+								</div>
+							{/each}
+						{:else}
+							<p class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
+								{inspectingRepo ? 'Loading repository structure...' : 'Repository structure appears after branches load.'}
+							</p>
+						{/if}
 					</div>
 				</div>
 			</SectionPanel>
@@ -655,7 +873,7 @@
 					<div class="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-800">
 						<div class="px-5 py-3">
 							<dt class="text-xs text-gray-500 dark:text-gray-400">Branch</dt>
-							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch || 'Auto-detect'}</dd>
+							<dd class="mt-1 font-mono text-gray-950 dark:text-white">{form.branch || '-'}</dd>
 						</div>
 						<div class="px-5 py-3">
 							<dt class="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>

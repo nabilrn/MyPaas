@@ -11,7 +11,7 @@ import (
 	"mypaas/internal/errs"
 )
 
-var candidateDirs = []string{"dist", "build", "public", "."}
+var candidateDirs = []string{"dist", "build", "out", "public", ".output/public", "_site", "site", "www", "."}
 
 func FindSiteRoot(workspace string) (string, string, error) {
 	workspace = filepath.Clean(workspace)

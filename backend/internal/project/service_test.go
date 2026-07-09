@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"mypaas/internal/envdiscover"
@@ -124,6 +125,70 @@ func TestParseRemoteBranchRefs(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("parseRemoteBranchRefs()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestPrioritizeDefaultBranch(t *testing.T) {
+	got := prioritizeDefaultBranch("main", []string{"feature/api", "main", "dev"})
+	want := []string{"main", "dev", "feature/api"}
+	if len(got) != len(want) {
+		t.Fatalf("prioritizeDefaultBranch() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("prioritizeDefaultBranch()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestListRepositoryTreeSkipsHeavyDirsAndTruncates(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", "pkg"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "README.md"), "ok")
+	writeFile(t, filepath.Join(dir, "src", "main.go"), "package main\n")
+	writeFile(t, filepath.Join(dir, "node_modules", "pkg", "index.js"), "module")
+
+	tree, truncated, err := listRepositoryTree(dir, 2)
+	if err != nil {
+		t.Fatalf("listRepositoryTree() returned error: %v", err)
+	}
+	if !truncated {
+		t.Fatalf("listRepositoryTree() truncated = false, want true")
+	}
+	for _, item := range tree {
+		if item.Path == "node_modules" || strings.HasPrefix(item.Path, "node_modules/") {
+			t.Fatalf("listRepositoryTree() included skipped path %q", item.Path)
+		}
+	}
+}
+
+func TestParseGitTreeEntries(t *testing.T) {
+	input := "040000 tree abc123\tcmd\n" +
+		"100644 blob def456\tcmd/api/main.go\n" +
+		"100644 blob 111111\tREADME.md\n" +
+		"120000 blob 222222\tlink\n"
+
+	got, truncated := parseGitTreeEntries(input, 3)
+	if !truncated {
+		t.Fatalf("parseGitTreeEntries() truncated = false, want true")
+	}
+	want := []RepoTreeEntry{
+		{Name: "cmd", Path: "cmd", Type: "directory", Depth: 0},
+		{Name: "main.go", Path: "cmd/api/main.go", Type: "file", Depth: 2},
+		{Name: "README.md", Path: "README.md", Type: "file", Depth: 0},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("parseGitTreeEntries() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("parseGitTreeEntries()[%d] = %#v, want %#v", i, got[i], want[i])
 		}
 	}
 }

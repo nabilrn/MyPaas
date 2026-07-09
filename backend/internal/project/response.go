@@ -36,12 +36,16 @@ type Response struct {
 type DetectResponse struct {
 	DeployMode    string            `json:"deployMode"`
 	Branch        string            `json:"branch"`
+	DefaultBranch string            `json:"defaultBranch"`
+	Branches      []string          `json:"branches"`
 	MainService   *string           `json:"mainService"`
 	Services      []string          `json:"services"`
 	ComposeFile   *string           `json:"composeFile"`
 	HasDockerfile bool              `json:"hasDockerfile"`
 	EnvVars       []envdiscover.Var `json:"envVars"`
 	AppPort       int32             `json:"appPort"`
+	Tree          []RepoTreeEntry   `json:"tree"`
+	TreeTruncated bool              `json:"treeTruncated"`
 }
 
 func ResponseFromDB(project db.Project) Response {
@@ -71,12 +75,16 @@ func DetectResponseFromResult(result DetectResult) DetectResponse {
 	return DetectResponse{
 		DeployMode:    result.DeployMode,
 		Branch:        result.Branch,
+		DefaultBranch: result.DefaultBranch,
+		Branches:      result.Branches,
 		MainService:   result.MainService,
 		Services:      result.Services,
 		ComposeFile:   result.ComposeFile,
 		HasDockerfile: result.HasDockerfile,
 		EnvVars:       result.EnvVars,
 		AppPort:       result.AppPort,
+		Tree:          result.Tree,
+		TreeTruncated: result.TreeTruncated,
 	}
 }
 
