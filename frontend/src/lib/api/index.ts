@@ -14,6 +14,7 @@ import type {
 	DBStudioSchema,
 	DBStudioStatus,
 	DBStudioTable,
+	DBStudioRowFilters,
 	DBStudioWriteSession,
 	LogsResponse
 } from '$types';
@@ -113,8 +114,21 @@ export const api = {
 			request(`/projects/${projectId}/db/tables?schema=${encodeURIComponent(schema)}`),
 		columns: (projectId: string, schema: string, table: string): Promise<DBStudioColumn[]> =>
 			request(`/projects/${projectId}/db/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`),
-		rows: (projectId: string, schema: string, table: string, limit = 100, offset = 0): Promise<DBStudioRowPage> =>
-			request(`/projects/${projectId}/db/rows?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&limit=${limit}&offset=${offset}`),
+		rows: (projectId: string, schema: string, table: string, limit = 100, offset = 0, filters: DBStudioRowFilters = {}): Promise<DBStudioRowPage> => {
+			const params = new URLSearchParams({
+				schema,
+				table,
+				limit: String(limit),
+				offset: String(offset)
+			});
+			if (filters.search?.trim()) {
+				params.set('search', filters.search.trim());
+			}
+			for (const [column, value] of Object.entries(filters.enumFilters ?? {})) {
+				if (value) params.set(`filter[${column}]`, value);
+			}
+			return request(`/projects/${projectId}/db/rows?${params.toString()}`);
+		},
 		insert: (projectId: string, data: unknown): Promise<void> =>
 			request(`/projects/${projectId}/db/rows`, { method: 'POST', body: JSON.stringify(data) }),
 		update: (projectId: string, data: unknown): Promise<void> =>

@@ -49,7 +49,8 @@ func (a mysqlAdapter) Columns(ctx context.Context, conn *sql.DB, schema, table s
 SELECT column_name, column_type, is_nullable = 'YES',
        column_key = 'PRI',
        COALESCE(extra, '') LIKE '%auto_increment%'
-       OR COALESCE(generation_expression, '') <> ''
+       OR COALESCE(generation_expression, '') <> '',
+       CASE WHEN LOWER(column_type) LIKE 'enum(%' THEN column_type ELSE '' END
 FROM information_schema.columns
 WHERE table_schema = ?
   AND table_name = ?
@@ -67,13 +68,17 @@ func (a mysqlAdapter) Rows(ctx context.Context, conn *sql.DB, query RowQuery) (R
 		return RowPage{}, err
 	}
 	limit := normalizeLimit(query.Limit)
-	sqlText := mysqlSelectSQL(query.Schema, query.Table, columns)
-	rows, err := conn.QueryContext(ctx, sqlText, limit+1, normalizeOffset(query.Offset))
+	offset := normalizeOffset(query.Offset)
+	sqlText, args, err := mysqlSelectSQL(query.Schema, query.Table, columns, query, limit, offset)
+	if err != nil {
+		return RowPage{}, err
+	}
+	rows, err := conn.QueryContext(ctx, sqlText, args...)
 	if err != nil {
 		return RowPage{}, err
 	}
 	defer rows.Close()
-	return scanRows(rows, columns, limit, normalizeOffset(query.Offset))
+	return scanRows(rows, columns, limit, offset)
 }
 
 func (a mysqlAdapter) Insert(ctx context.Context, conn *sql.DB, mutation Mutation) error {
@@ -115,11 +120,54 @@ func (a mysqlAdapter) Delete(ctx context.Context, conn *sql.DB, mutation Mutatio
 	return err
 }
 
-func mysqlSelectSQL(schema, table string, columns []Column) string {
+func mysqlSelectSQL(schema, table string, columns []Column, query RowQuery, limit, offset int) (string, []any, error) {
 	names := quotedColumnList(columns, quoteMySQLIdent)
+	where, args, err := mysqlWhereClause(columns, query)
+	if err != nil {
+		return "", nil, err
+	}
 	order := mysqlOrderClause(columns)
-	return fmt.Sprintf("SELECT %s FROM %s.%s%s LIMIT ? OFFSET ?",
-		names, quoteMySQLIdent(schema), quoteMySQLIdent(table), order)
+	args = append(args, limit+1, offset)
+	return fmt.Sprintf("SELECT %s FROM %s.%s%s%s LIMIT ? OFFSET ?",
+		names, quoteMySQLIdent(schema), quoteMySQLIdent(table), where, order), args, nil
+}
+
+func mysqlWhereClause(columns []Column, query RowQuery) (string, []any, error) {
+	clauses := make([]string, 0)
+	args := make([]any, 0)
+
+	filters, err := enumFilters(query.Filters, columns)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, filter := range filters {
+		clauses = append(clauses, quoteMySQLIdent(filter.Column.Name)+" = ?")
+		args = append(args, filter.Value)
+	}
+
+	search, err := normalizeRowSearch(query.Search)
+	if err != nil {
+		return "", nil, err
+	}
+	if search != "" {
+		searchable := searchableColumns(columns)
+		if len(searchable) == 0 {
+			clauses = append(clauses, "1 = 0")
+		} else {
+			pattern := likePattern(search)
+			parts := make([]string, 0, len(searchable))
+			for _, column := range searchable {
+				parts = append(parts, "CAST("+quoteMySQLIdent(column.Name)+" AS CHAR) LIKE ? ESCAPE '\\\\'")
+				args = append(args, pattern)
+			}
+			clauses = append(clauses, "("+strings.Join(parts, " OR ")+")")
+		}
+	}
+
+	if len(clauses) == 0 {
+		return "", args, nil
+	}
+	return " WHERE " + strings.Join(clauses, " AND "), args, nil
 }
 
 func mysqlOrderClause(columns []Column) string {

@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compose Doctor preflight in detect-mode with public service/port recommendation, required env detection, build context checks, host-port warnings, and unsafe Compose config flags
 - Detect-mode env discovery now scans nested env example files for monorepo-style repositories without turning Dockerfile build/image defaults into project env vars
 - DB Studio Lite for project databases, with PostgreSQL/MySQL/MariaDB connection discovery, schema/table browsing, paginated rows, temporary write mode, and guarded insert/update/delete by primary key
+- DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
@@ -88,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard quota now separates configured memory/CPU allocation from best-effort live Docker Stats runtime usage
 - After-deploy ADRs for idle sleep/wake-on-request, autosizing recommendations, and optional single-host replicas
 - README now documents the paste-ready Linux VM installer flow from Quick Start
+- VM install wizard now uses a polished MyPaas control-plane layout with clearer progress, validation, responsive states, and save feedback
 
 ### Deprecated
 

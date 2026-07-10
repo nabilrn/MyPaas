@@ -204,119 +204,188 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <style>
     :root {{
       color-scheme: light dark;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f6f7f8;
-      color: #111827;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-muted: #f2f5f8;
+      --surface-soft: #f8fafc;
+      --border: #d9e0e8;
+      --border-strong: #b8c3cf;
+      --ink: #111827;
+      --muted: #4b5563;
+      --subtle: #6b7280;
+      --accent: #047857;
+      --accent-strong: #065f46;
+      --accent-soft: #dff7ed;
+      --danger: #b91c1c;
+      --danger-soft: #fef2f2;
+      --warning: #92400e;
+      --warning-soft: #fffbeb;
+      --info: #1d4ed8;
+      --info-soft: #eff6ff;
+      --focus: rgba(4, 120, 87, .18);
+      background: var(--bg);
+      color: var(--ink);
     }}
-    body {{ margin: 0; }}
-    main {{ max-width: 1180px; margin: 0 auto; padding: 32px 20px 48px; }}
-    header {{ margin-bottom: 22px; }}
-    h1 {{ margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: 0; }}
-    h2 {{ margin: 0 0 12px; font-size: 16px; }}
-    h3 {{ margin: 18px 0 8px; font-size: 14px; }}
-    p {{ margin: 0; color: #4b5563; line-height: 1.55; }}
-    a {{ color: #047857; }}
-    .layout {{ display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }}
-    .panel {{ border: 1px solid #d9dee6; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
-    .panel-header {{ border-bottom: 1px solid #e5e7eb; padding: 18px; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; background: var(--bg); color: var(--ink); }}
+    main {{ width: min(100%, 1180px); margin: 0 auto; padding: 28px 20px 44px; }}
+    header {{ display: grid; gap: 12px; margin-bottom: 18px; }}
+    h1 {{ margin: 0; font-size: 26px; line-height: 1.18; letter-spacing: 0; }}
+    h2 {{ margin: 0 0 6px; font-size: 17px; line-height: 1.3; }}
+    h3 {{ margin: 0; font-size: 14px; line-height: 1.35; }}
+    p {{ margin: 0; color: var(--muted); line-height: 1.55; }}
+    a {{ color: var(--accent-strong); text-underline-offset: 2px; }}
+    a:hover {{ color: var(--accent); }}
+    .topline {{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; }}
+    .product-mark {{ display: inline-flex; align-items: center; gap: 8px; color: var(--accent-strong); font-size: 13px; font-weight: 750; }}
+    .mark-dot {{ width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }}
+    .header-copy {{ display: grid; gap: 6px; max-width: 780px; }}
+    .install-meta {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+    .meta-chip {{ display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 5px 8px; color: var(--muted); font-size: 12px; }}
+    .layout {{ display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }}
+    .panel {{ border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
+    .panel-header {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface-muted) 58%, transparent); padding: 18px; }}
+    .panel-title {{ min-width: 0; }}
+    .panel-title p {{ max-width: 68ch; }}
+    .step-count {{ flex: 0 0 auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 5px 8px; color: var(--subtle); font-size: 12px; font-weight: 700; }}
     .panel-body {{ padding: 18px; }}
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
-    .field {{ display: flex; flex-direction: column; gap: 6px; }}
-    label {{ font-size: 12px; font-weight: 650; color: #4b5563; }}
-    input {{ min-height: 40px; border: 1px solid #cfd6df; border-radius: 6px; padding: 8px 10px; font: inherit; background: #fff; color: #111827; }}
-    input:focus {{ outline: none; border-color: #047857; box-shadow: 0 0 0 3px rgba(4, 120, 87, .14); }}
+    .field {{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }}
+    label {{ font-size: 12px; font-weight: 700; color: var(--muted); }}
+    input {{ width: 100%; min-height: 42px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; font: inherit; background: var(--surface); color: var(--ink); }}
+    input::placeholder {{ color: var(--subtle); }}
+    input:hover {{ border-color: var(--subtle); }}
+    input:focus {{ outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }}
+    form.was-validated .wizard-step:not([hidden]) input:invalid {{ border-color: var(--danger); }}
     .full {{ grid-column: 1 / -1; }}
-    .hint {{ font-size: 12px; color: #6b7280; }}
-    .alert {{ margin-bottom: 14px; border: 1px solid #fecaca; border-radius: 6px; background: #fef2f2; color: #991b1b; padding: 10px 12px; font-size: 14px; }}
-    .notice {{ border: 1px solid #bfdbfe; border-radius: 6px; background: #eff6ff; color: #1e3a8a; padding: 10px 12px; font-size: 13px; }}
-    .warning {{ border: 1px solid #fde68a; border-radius: 6px; background: #fffbeb; color: #92400e; padding: 10px 12px; font-size: 13px; }}
-    details {{ border-top: 1px solid #e5e7eb; }}
-    summary {{ cursor: pointer; padding: 16px 18px; font-weight: 650; color: #374151; }}
-    button {{ min-height: 42px; border: 1px solid #065f46; border-radius: 6px; background: #047857; color: #fff; padding: 0 16px; font-weight: 700; cursor: pointer; }}
-    button:hover {{ background: #065f46; }}
-    button.secondary {{ border-color: #d1d5db; background: #fff; color: #374151; }}
-    button.secondary:hover {{ background: #f9fafb; }}
-    .actions {{ display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #e5e7eb; padding: 16px 18px; }}
-    .actions-right {{ display: flex; gap: 10px; }}
-    ol {{ margin: 10px 0 0 20px; padding: 0; color: #374151; line-height: 1.55; }}
-    li + li {{ margin-top: 10px; }}
-    code {{ background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 1px 4px; font-size: 12px; }}
+    .hint {{ font-size: 12px; color: var(--subtle); line-height: 1.45; }}
+    .alert {{ margin-bottom: 14px; border: 1px solid #fca5a5; border-radius: 6px; background: var(--danger-soft); color: var(--danger); padding: 10px 12px; font-size: 14px; }}
+    .notice {{ border: 1px solid #bfdbfe; border-radius: 6px; background: var(--info-soft); color: var(--info); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
+    .warning {{ border: 1px solid #fde68a; border-radius: 6px; background: var(--warning-soft); color: var(--warning); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
+    details {{ border-top: 1px solid var(--border); }}
+    summary {{ cursor: pointer; padding: 16px 18px; font-weight: 700; color: var(--muted); }}
+    summary:focus-visible {{ outline: none; box-shadow: inset 0 0 0 3px var(--focus); }}
+    button {{ min-height: 42px; border: 1px solid var(--accent-strong); border-radius: 6px; background: var(--accent); color: #fff; padding: 0 16px; font-weight: 750; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease; }}
+    button:hover {{ background: var(--accent-strong); }}
+    button:focus-visible {{ outline: none; box-shadow: 0 0 0 3px var(--focus); }}
+    button:disabled {{ cursor: not-allowed; opacity: .68; }}
+    button.secondary {{ border-color: var(--border-strong); background: var(--surface); color: var(--muted); }}
+    button.secondary:hover {{ background: var(--surface-muted); color: var(--ink); }}
+    .actions {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); padding: 16px 18px; }}
+    .actions-right {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }}
+    .action-hint {{ color: var(--subtle); font-size: 12px; }}
+    ol {{ margin: 10px 0 0 20px; padding: 0; color: var(--muted); line-height: 1.55; }}
+    li + li {{ margin-top: 8px; }}
+    code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-muted); padding: 1px 4px; color: var(--ink); font-size: 12px; }}
     .stack {{ display: grid; gap: 14px; }}
     .stepper {{ position: sticky; top: 20px; display: grid; gap: 8px; padding: 10px; }}
-    .step-tab {{ display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid transparent; border-radius: 8px; padding: 10px; color: #6b7280; }}
-    .step-number {{ display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 7px; background: #f3f4f6; color: #4b5563; font-size: 12px; font-weight: 800; }}
-    .step-title {{ display: block; color: #111827; font-size: 13px; font-weight: 750; }}
+    .step-tab {{ display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid transparent; border-radius: 8px; padding: 10px; color: var(--subtle); transition: background-color .16s ease, border-color .16s ease; }}
+    .step-number {{ display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 7px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 800; }}
+    .step-title {{ display: block; color: var(--ink); font-size: 13px; font-weight: 750; }}
     .step-body {{ display: block; margin-top: 2px; font-size: 12px; }}
-    .step-tab.active {{ border-color: #a7f3d0; background: #ecfdf5; color: #047857; }}
-    .step-tab.active .step-number {{ background: #047857; color: #fff; }}
-    .step-tab.done .step-number {{ background: #d1fae5; color: #047857; }}
+    .step-tab.active {{ border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); background: var(--accent-soft); color: var(--accent-strong); }}
+    .step-tab.active .step-number {{ background: var(--accent); color: #fff; }}
+    .step-tab.done .step-number {{ background: var(--accent-soft); color: var(--accent-strong); }}
     .wizard-step[hidden] {{ display: none; }}
     .guide {{ display: grid; gap: 12px; margin-bottom: 16px; }}
-    .guide-card {{ border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; padding: 14px; }}
-    .guide-card strong {{ color: #111827; }}
+    .guide-card {{ border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); padding: 14px; }}
+    .guide-card strong {{ display: block; margin-bottom: 4px; color: var(--ink); }}
     .example-grid {{ display: grid; gap: 8px; margin-top: 12px; }}
     .example-row {{ display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }}
+    .example-row span {{ color: var(--subtle); }}
     .review {{ display: grid; gap: 10px; }}
-    .review-row {{ display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 12px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px; }}
-    .review-row span:first-child {{ color: #6b7280; }}
+    .review-row {{ display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
+    .review-row span:first-child {{ color: var(--subtle); }}
     .review-row span:last-child {{ min-width: 0; overflow-wrap: anywhere; font-weight: 650; }}
-    @media (max-width: 900px) {{ .layout {{ grid-template-columns: 1fr; }} .grid {{ grid-template-columns: 1fr; }} }}
+    @media (max-width: 900px) {{
+      main {{ padding: 20px 14px 34px; }}
+      .layout {{ grid-template-columns: 1fr; }}
+      .stepper {{ position: static; grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; }}
+      .grid {{ grid-template-columns: 1fr; }}
+      .panel-header {{ flex-direction: column; }}
+    }}
+    @media (max-width: 620px) {{
+      h1 {{ font-size: 23px; }}
+      .stepper {{ grid-template-columns: 1fr; }}
+      .actions {{ align-items: stretch; flex-direction: column; }}
+      .actions-right, .actions-right button, .actions > button {{ width: 100%; }}
+      .review-row, .example-row {{ grid-template-columns: 1fr; gap: 4px; }}
+    }}
+    @media (prefers-reduced-motion: reduce) {{
+      *, *::before, *::after {{ scroll-behavior: auto !important; transition-duration: .01ms !important; }}
+    }}
     @media (prefers-color-scheme: dark) {{
-      :root {{ background: #030712; color: #f9fafb; }}
-      .panel {{ background: #111827; border-color: #273244; }}
-      .panel-header, details, .actions {{ border-color: #273244; }}
-      p, label, .hint, ol {{ color: #cbd5e1; }}
-      input {{ background: #030712; color: #f9fafb; border-color: #374151; }}
-      code {{ background: #030712; border-color: #374151; }}
-      .notice {{ background: rgba(30, 58, 138, .25); border-color: #1d4ed8; color: #bfdbfe; }}
-      .warning {{ background: rgba(146, 64, 14, .22); border-color: #92400e; color: #fde68a; }}
-      button.secondary {{ border-color: #374151; background: #111827; color: #e5e7eb; }}
-      button.secondary:hover {{ background: #1f2937; }}
-      .step-title {{ color: #f9fafb; }}
-      .step-number {{ background: #1f2937; color: #cbd5e1; }}
-      .step-tab.active {{ border-color: #047857; background: rgba(4, 120, 87, .16); color: #a7f3d0; }}
-      .step-tab.done .step-number {{ background: rgba(4, 120, 87, .25); color: #a7f3d0; }}
-      .guide-card {{ background: #0b1220; border-color: #273244; }}
-      .guide-card strong {{ color: #f9fafb; }}
-      .review-row {{ border-color: #273244; }}
-      .review-row span:first-child {{ color: #94a3b8; }}
+      :root {{
+        --bg: #0f172a;
+        --surface: #111827;
+        --surface-muted: #1f2937;
+        --surface-soft: #0b1220;
+        --border: #2d3748;
+        --border-strong: #475569;
+        --ink: #f8fafc;
+        --muted: #cbd5e1;
+        --subtle: #94a3b8;
+        --accent: #34d399;
+        --accent-strong: #a7f3d0;
+        --accent-soft: rgba(16, 185, 129, .16);
+        --danger: #fecaca;
+        --danger-soft: rgba(127, 29, 29, .28);
+        --warning: #fde68a;
+        --warning-soft: rgba(146, 64, 14, .22);
+        --info: #bfdbfe;
+        --info-soft: rgba(30, 64, 175, .24);
+        --focus: rgba(52, 211, 153, .22);
+      }}
     }}
   </style>
 </head>
 <body>
   <main>
     <header>
-      <h1>MyPaas Install Wizard</h1>
-      <p>Fill the production credentials once. The wizard writes <code>{esc(ENV_FILE)}</code>, shuts down, and the installer continues.</p>
+      <div class="topline">
+        <div class="product-mark"><span class="mark-dot" aria-hidden="true"></span>MyPaas installer</div>
+        <div class="install-meta" aria-label="Install context">
+          <span class="meta-chip">Environment <code>{esc(ENV_FILE)}</code></span>
+          <span class="meta-chip">Fresh Linux VM</span>
+        </div>
+      </div>
+      <div class="header-copy">
+        <h1>Configure production credentials</h1>
+        <p>Fill the required values once. The wizard writes the production config, shuts down, and lets the terminal installer continue.</p>
+      </div>
     </header>
     <div class="layout">
-      <aside class="panel stepper" aria-label="Install steps">
-        <div class="step-tab active" data-progress="0">
+      <aside class="panel stepper" aria-label="Install steps" role="list">
+        <div class="step-tab active" data-progress="0" role="listitem" aria-current="step">
           <span class="step-number">1</span>
           <span><span class="step-title">Domain</span><span class="step-body">Base URL and owner</span></span>
         </div>
-        <div class="step-tab" data-progress="1">
+        <div class="step-tab" data-progress="1" role="listitem">
           <span class="step-number">2</span>
           <span><span class="step-title">GitHub</span><span class="step-body">OAuth login</span></span>
         </div>
-        <div class="step-tab" data-progress="2">
+        <div class="step-tab" data-progress="2" role="listitem">
           <span class="step-number">3</span>
           <span><span class="step-title">Cloudflare</span><span class="step-body">Tunnel routing</span></span>
         </div>
-        <div class="step-tab" data-progress="3">
+        <div class="step-tab" data-progress="3" role="listitem">
           <span class="step-number">4</span>
           <span><span class="step-title">Review</span><span class="step-body">Save and deploy</span></span>
         </div>
       </aside>
 
-      <form class="panel" method="post" action="/save">
+      <form class="panel" method="post" action="/save" aria-labelledby="step-heading">
         <input type="hidden" name="token" value="{esc(TOKEN)}">
         <div class="panel-header">
-          <h2 id="step-heading">Domain and owner</h2>
-          <p id="step-description">Start with the public domain MyPaas will control.</p>
+          <div class="panel-title">
+            <h2 id="step-heading">Domain and owner</h2>
+            <p id="step-description">Start with the public domain MyPaas will control.</p>
+          </div>
+          <span class="step-count" id="step-position">Step 1 of 4</span>
         </div>
         <div class="panel-body">
-          {f'<div class="alert">{esc(error)}</div>' if error else ''}
+          {f'<div class="alert" role="alert">{esc(error)}</div>' if error else ''}
 
           <section class="wizard-step" data-step="0">
             <div class="guide">
@@ -342,12 +411,12 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             <div class="grid">
               <div class="field">
                 <label for="PUBLIC_DOMAIN">Public MyPaas domain</label>
-                <input id="PUBLIC_DOMAIN" name="PUBLIC_DOMAIN" required placeholder="mypaas.example.com" value="{esc(domain)}">
+                <input id="PUBLIC_DOMAIN" name="PUBLIC_DOMAIN" required inputmode="url" autocomplete="off" placeholder="mypaas.example.com" value="{esc(domain)}">
                 <span class="hint">Use the hostname only, without <code>https://</code>. A dedicated subdomain like <code>mypaas.example.com</code> is recommended.</span>
               </div>
               <div class="field">
                 <label for="OWNER_EMAIL">Owner GitHub primary email</label>
-                <input id="OWNER_EMAIL" name="OWNER_EMAIL" required placeholder="you@example.com" value="{esc(values.get("OWNER_EMAIL", ""))}">
+                <input id="OWNER_EMAIL" name="OWNER_EMAIL" required type="email" autocomplete="email" placeholder="you@example.com" value="{esc(values.get("OWNER_EMAIL", ""))}">
                 <span class="hint">Only this whitelisted email can log in as the first owner.</span>
               </div>
             </div>
@@ -369,15 +438,15 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             <div class="grid">
             <div class="field">
               <label for="GITHUB_CLIENT_ID">OAuth Client ID</label>
-              <input id="GITHUB_CLIENT_ID" name="GITHUB_CLIENT_ID" required value="{esc(values.get("GITHUB_CLIENT_ID", ""))}">
+              <input id="GITHUB_CLIENT_ID" name="GITHUB_CLIENT_ID" required autocomplete="off" value="{esc(values.get("GITHUB_CLIENT_ID", ""))}">
             </div>
             <div class="field">
               <label for="GITHUB_CLIENT_SECRET">OAuth Client Secret</label>
-              <input id="GITHUB_CLIENT_SECRET" name="GITHUB_CLIENT_SECRET" required value="{esc(values.get("GITHUB_CLIENT_SECRET", ""))}">
+              <input id="GITHUB_CLIENT_SECRET" name="GITHUB_CLIENT_SECRET" required autocomplete="off" value="{esc(values.get("GITHUB_CLIENT_SECRET", ""))}">
             </div>
             <div class="field full">
               <label for="GITHUB_CALLBACK_URL">GitHub OAuth callback URL</label>
-              <input id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required data-generated="{str(callback_is_generated).lower()}" value="{esc(callback)}">
+              <input id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required type="url" autocomplete="off" data-generated="{str(callback_is_generated).lower()}" value="{esc(callback)}">
               <span class="hint">Must match the callback URL in the GitHub OAuth app exactly.</span>
             </div>
             </div>
@@ -419,7 +488,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             <div class="grid">
               <div class="field full">
               <label for="CLOUDFLARE_TUNNEL_TOKEN">Cloudflare Tunnel token</label>
-              <input id="CLOUDFLARE_TUNNEL_TOKEN" name="CLOUDFLARE_TUNNEL_TOKEN" required value="{esc(values.get("CLOUDFLARE_TUNNEL_TOKEN", ""))}">
+              <input id="CLOUDFLARE_TUNNEL_TOKEN" name="CLOUDFLARE_TUNNEL_TOKEN" required autocomplete="off" value="{esc(values.get("CLOUDFLARE_TUNNEL_TOKEN", ""))}">
               <span class="hint">Use a Cloudflare Zero Trust tunnel token, not an API token.</span>
             </div>
           </div>
@@ -449,11 +518,11 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
                 {advanced_field("METRICS_PASSWORD", "Metrics password", values)}
                 <div class="field full">
                   <label for="JWT_SECRET">JWT secret</label>
-                  <input id="JWT_SECRET" name="JWT_SECRET" required value="{esc(values.get("JWT_SECRET", ""))}">
+                  <input id="JWT_SECRET" name="JWT_SECRET" required autocomplete="off" value="{esc(values.get("JWT_SECRET", ""))}">
                 </div>
                 <div class="field full">
                   <label for="ENCRYPTION_KEY">Env encryption key</label>
-                  <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required value="{esc(values.get("ENCRYPTION_KEY", ""))}">
+                  <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required autocomplete="off" value="{esc(values.get("ENCRYPTION_KEY", ""))}">
                 </div>
               </div>
             </details>
@@ -461,9 +530,10 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
         </div>
         <div class="actions">
           <button class="secondary" type="button" id="back-button">Back</button>
+          <span class="action-hint" id="action-hint">Required fields are checked before continuing.</span>
           <div class="actions-right">
             <button type="button" id="next-button">Continue</button>
-            <button type="submit" id="submit-button">Save .env and continue install</button>
+            <button type="submit" id="submit-button" data-default-label="Save .env and continue install" hidden>Save .env and continue install</button>
           </div>
         </div>
       </form>
@@ -472,8 +542,11 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <script>
     const steps = Array.from(document.querySelectorAll('.wizard-step'));
     const progress = Array.from(document.querySelectorAll('[data-progress]'));
+    const form = document.querySelector('form');
     const heading = document.getElementById('step-heading');
     const description = document.getElementById('step-description');
+    const stepPosition = document.getElementById('step-position');
+    const actionHint = document.getElementById('action-hint');
     const backButton = document.getElementById('back-button');
     const nextButton = document.getElementById('next-button');
     const submitButton = document.getElementById('submit-button');
@@ -518,16 +591,27 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       progress.forEach((item, itemIndex) => {{
         item.classList.toggle('active', itemIndex === currentStep);
         item.classList.toggle('done', itemIndex < currentStep);
+        if (itemIndex === currentStep) {{
+          item.setAttribute('aria-current', 'step');
+        }} else {{
+          item.removeAttribute('aria-current');
+        }}
       }});
       heading.textContent = titles[currentStep][0];
       description.textContent = titles[currentStep][1];
+      stepPosition.textContent = `Step ${{currentStep + 1}} of ${{steps.length}}`;
+      form.classList.remove('was-validated');
       backButton.hidden = currentStep === 0;
       nextButton.hidden = currentStep === steps.length - 1;
       submitButton.hidden = currentStep !== steps.length - 1;
+      actionHint.textContent = currentStep === steps.length - 1
+        ? 'Saving writes the production .env and closes this wizard.'
+        : 'Required fields are checked before continuing.';
       updateDerivedText();
     }}
 
     function validateCurrentStep() {{
+      form.classList.add('was-validated');
       const invalid = Array.from(steps[currentStep].querySelectorAll('input[required]'))
         .find((input) => !input.checkValidity());
       if (!invalid) return true;
@@ -538,6 +622,21 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     backButton.addEventListener('click', () => showStep(currentStep - 1));
     nextButton.addEventListener('click', () => {{
       if (validateCurrentStep()) showStep(currentStep + 1);
+    }});
+    form.addEventListener('submit', (event) => {{
+      if (currentStep !== steps.length - 1) {{
+        event.preventDefault();
+        if (validateCurrentStep()) showStep(currentStep + 1);
+        return;
+      }}
+      if (!validateCurrentStep()) {{
+        event.preventDefault();
+        return;
+      }}
+      submitButton.disabled = true;
+      submitButton.textContent = 'Saving config...';
+      backButton.disabled = true;
+      nextButton.disabled = true;
     }});
     callback.addEventListener('input', () => callbackTouched = true);
     domain.addEventListener('input', () => {{
@@ -559,7 +658,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
 def advanced_field(name: str, label: str, values: dict[str, str]) -> str:
     return f"""<div class="field">
       <label for="{esc(name)}">{esc(label)}</label>
-      <input id="{esc(name)}" name="{esc(name)}" required value="{esc(values.get(name, ""))}">
+      <input id="{esc(name)}" name="{esc(name)}" required autocomplete="off" value="{esc(values.get(name, ""))}">
     </div>"""
 
 
@@ -615,18 +714,44 @@ def success_html() -> bytes:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyPaas Install Wizard Complete</title>
   <style>
-    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f6f7f8; color: #111827; }}
-    main {{ max-width: 680px; margin: 0 auto; padding: 48px 20px; }}
-    section {{ border: 1px solid #d9dee6; border-radius: 8px; background: #fff; padding: 24px; }}
-    h1 {{ margin: 0 0 10px; font-size: 24px; }}
-    p {{ margin: 0; color: #4b5563; line-height: 1.55; }}
-    code {{ background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; padding: 1px 4px; }}
+    :root {{
+      color-scheme: light dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --border: #d9e0e8;
+      --ink: #111827;
+      --muted: #4b5563;
+      --accent: #047857;
+      --accent-soft: #dff7ed;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; background: var(--bg); color: var(--ink); }}
+    main {{ width: min(100%, 680px); margin: 0 auto; padding: 48px 20px; }}
+    section {{ display: grid; gap: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 24px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
+    .status-mark {{ display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 900; }}
+    h1 {{ margin: 0; font-size: 24px; line-height: 1.2; }}
+    p {{ margin: 0; color: var(--muted); line-height: 1.55; }}
+    code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: #f3f4f6; padding: 1px 4px; color: var(--ink); }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: #0f172a;
+        --surface: #111827;
+        --border: #2d3748;
+        --ink: #f8fafc;
+        --muted: #cbd5e1;
+        --accent: #34d399;
+        --accent-soft: rgba(16, 185, 129, .16);
+      }}
+      code {{ background: #1f2937; }}
+    }}
   </style>
 </head>
 <body>
   <main>
     <section>
-      <h1>Saved</h1>
+      <span class="status-mark" aria-hidden="true">✓</span>
+      <h1>Production config saved</h1>
       <p>Production config was written to <code>{esc(ENV_FILE)}</code>. You can close this tab. The terminal installer will continue automatically.</p>
     </section>
   </main>

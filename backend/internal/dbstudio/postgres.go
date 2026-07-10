@@ -50,19 +50,28 @@ func (a postgresAdapter) Columns(ctx context.Context, conn *sql.DB, schema, tabl
 	rows, err := conn.QueryContext(ctx, `
 SELECT c.column_name, c.data_type, c.is_nullable = 'YES',
        COALESCE(tc.constraint_name IS NOT NULL, false),
-       c.column_default IS NOT NULL AND c.column_default <> ''
+       c.column_default IS NOT NULL AND c.column_default <> '',
+       COALESCE(enum_values.labels, '')
 FROM information_schema.columns c
 LEFT JOIN information_schema.key_column_usage k
   ON k.table_schema = c.table_schema
  AND k.table_name = c.table_name
  AND k.column_name = c.column_name
 LEFT JOIN information_schema.table_constraints tc
-  ON tc.constraint_schema = k.constraint_schema
+ ON tc.constraint_schema = k.constraint_schema
  AND tc.constraint_name = k.constraint_name
  AND tc.constraint_type = 'PRIMARY KEY'
+LEFT JOIN LATERAL (
+  SELECT string_agg(e.enumlabel, $3::text ORDER BY e.enumsortorder) AS labels
+  FROM pg_catalog.pg_type t
+  JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+  JOIN pg_catalog.pg_enum e ON e.enumtypid = t.oid
+  WHERE n.nspname = c.udt_schema
+    AND t.typname = c.udt_name
+) enum_values ON true
 WHERE c.table_schema = $1
   AND c.table_name = $2
-ORDER BY c.ordinal_position`, schema, table)
+ORDER BY c.ordinal_position`, schema, table, enumValueSeparator)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +85,17 @@ func (a postgresAdapter) Rows(ctx context.Context, conn *sql.DB, query RowQuery)
 		return RowPage{}, err
 	}
 	limit := normalizeLimit(query.Limit)
-	sqlText := postgresSelectSQL(query.Schema, query.Table, columns)
-	rows, err := conn.QueryContext(ctx, sqlText, limit+1, normalizeOffset(query.Offset))
+	offset := normalizeOffset(query.Offset)
+	sqlText, args, err := postgresSelectSQL(query.Schema, query.Table, columns, query, limit, offset)
+	if err != nil {
+		return RowPage{}, err
+	}
+	rows, err := conn.QueryContext(ctx, sqlText, args...)
 	if err != nil {
 		return RowPage{}, err
 	}
 	defer rows.Close()
-	return scanRows(rows, columns, limit, normalizeOffset(query.Offset))
+	return scanRows(rows, columns, limit, offset)
 }
 
 func (a postgresAdapter) Insert(ctx context.Context, conn *sql.DB, mutation Mutation) error {
@@ -124,11 +137,54 @@ func (a postgresAdapter) Delete(ctx context.Context, conn *sql.DB, mutation Muta
 	return err
 }
 
-func postgresSelectSQL(schema, table string, columns []Column) string {
+func postgresSelectSQL(schema, table string, columns []Column, query RowQuery, limit, offset int) (string, []any, error) {
 	names := quotedColumnList(columns, quotePostgresIdent)
+	where, args, err := postgresWhereClause(columns, query)
+	if err != nil {
+		return "", nil, err
+	}
 	order := postgresOrderClause(columns)
-	return fmt.Sprintf("SELECT %s FROM %s.%s%s LIMIT $1 OFFSET $2",
-		names, quotePostgresIdent(schema), quotePostgresIdent(table), order)
+	args = append(args, limit+1, offset)
+	return fmt.Sprintf("SELECT %s FROM %s.%s%s%s LIMIT $%d OFFSET $%d",
+		names, quotePostgresIdent(schema), quotePostgresIdent(table), where, order, len(args)-1, len(args)), args, nil
+}
+
+func postgresWhereClause(columns []Column, query RowQuery) (string, []any, error) {
+	clauses := make([]string, 0)
+	args := make([]any, 0)
+
+	filters, err := enumFilters(query.Filters, columns)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, filter := range filters {
+		args = append(args, filter.Value)
+		clauses = append(clauses, fmt.Sprintf("%s = $%d", quotePostgresIdent(filter.Column.Name), len(args)))
+	}
+
+	search, err := normalizeRowSearch(query.Search)
+	if err != nil {
+		return "", nil, err
+	}
+	if search != "" {
+		searchable := searchableColumns(columns)
+		if len(searchable) == 0 {
+			clauses = append(clauses, "1 = 0")
+		} else {
+			pattern := likePattern(search)
+			parts := make([]string, 0, len(searchable))
+			for _, column := range searchable {
+				args = append(args, pattern)
+				parts = append(parts, fmt.Sprintf("CAST(%s AS TEXT) ILIKE $%d ESCAPE '\\'", quotePostgresIdent(column.Name), len(args)))
+			}
+			clauses = append(clauses, "("+strings.Join(parts, " OR ")+")")
+		}
+	}
+
+	if len(clauses) == 0 {
+		return "", args, nil
+	}
+	return " WHERE " + strings.Join(clauses, " AND "), args, nil
 }
 
 func postgresOrderClause(columns []Column) string {
