@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After-deploy ADRs for idle sleep/wake-on-request, autosizing recommendations, and optional single-host replicas
 - README now documents the paste-ready Linux VM installer flow from Quick Start
 - VM install wizard now uses a polished MyPaas control-plane layout with clearer progress, validation, responsive states, and save feedback
+- Timeline now includes an HTTP `QUERY` adoption session that starts with RFC/IANA research, audits read-only routes with codebase-memory-mcp, and targets DB Studio row browsing as the first candidate endpoint with GET fallback.
 
 ### Deprecated
 

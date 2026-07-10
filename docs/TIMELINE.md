@@ -19,10 +19,10 @@ Timeline implementasi MyPaas yang dipecah per-session untuk menjaga context Clau
 | Async & Webhook | Day 6-7 | Job queue, webhook | 3 session |
 | Frontend | Day 8-10 | Dashboard UI | 6 session |
 | Observability | Day 11-12 | Streaming, metrics, logs | 4 session |
-| Advanced | Day 13-14 | Rollback, quota, polish | 4 session |
+| Advanced | Day 13-14 | Rollback, quota, polish, HTTP QUERY adoption | 6 session |
 | Deploy | Day 15 | Self-deploy, CLI tool | 2 session |
 
-**Total:** 29 session, ~70-100 jam coding time dalam 15 hari.
+**Total:** 31 session, ~75-110 jam coding time dalam 15 hari.
 
 ---
 
@@ -713,6 +713,73 @@ After-deploy design only:
 
 **Prompt Claude Code:**
 > "Baca PRD FR-PROJ-8..9, FR-LIFE-8..9, FR-QUOTA-4..10, NFR-PERF-7..8, dan Delivery goal grouping. Implement hanya pre-deploy gate: resource profiles, configured-vs-real quota display, static no-container hosting, minimal shared Postgres provisioning, env discovery dari `.env.example`/Compose variables, Compose stale volume guard/reset action, dan dogfood 5 sample projects <= 2GB configured app memory. Buat ADR untuk after-deploy items: idle sleep/wake-on-request, autosizing recommendation, optional single-host replicas. Jangan implement Kubernetes/multi-node autoscaling."
+
+---
+
+### Session 6.6 — HTTP QUERY method adoption plan (1-2 jam)
+
+**Context:**
+- HTTP `QUERY` sudah terdaftar sebagai RFC 10008 (June 2026) dan masuk IANA HTTP Method Registry sebagai method safe + idempotent.
+- `QUERY` cocok untuk read/query operation yang butuh request body karena filter terlalu besar/terstruktur untuk query string, tetapi tetap tidak boleh mengubah state server.
+- Untuk kompatibilitas browser/proxy, endpoint lama harus tetap tersedia sebagai fallback sampai CORS, Cloudflare Tunnel, Caddy, frontend `fetch`, dan client tooling terbukti mendukung `QUERY`.
+
+**Scope:**
+- Riset singkat RFC 10008 dan IANA registry sebelum coding:
+  - Semantik: safe, idempotent, response cacheable, request content expected.
+  - Request `Content-Type` wajib ada dan harus valid untuk format query.
+  - Response dapat expose `Accept-Query: application/json`.
+  - Cache/proxy harus memperhitungkan request body + metadata jika caching diaktifkan.
+- Analyze codebase dengan `codebase-memory-mcp` sebelum grep:
+  - Gunakan `search_graph` untuk route/handler read-only.
+  - Gunakan `trace_path`/`get_code_snippet` untuk handler kandidat.
+  - Baru fallback ke `rg` untuk konfigurasi CORS, frontend client, dan non-code docs.
+- Buat shortlist endpoint kandidat berdasarkan kriteria:
+  - Operasi read-only dan idempotent.
+  - Saat ini memakai query string panjang/terstruktur atau POST yang sebenarnya query.
+  - Tidak trigger deploy, write session, audit mutation, webhook, Docker lifecycle, atau perubahan state lain.
+- Pilihan awal yang paling cocok: `GET /projects/{id}/db/rows`.
+  - Alasan: DB Studio row browsing saat ini memakai query string untuk `schema`, `table`, `limit`, `offset`, `search`, dan `filter[column]`; fitur filter/sort lanjutan akan lebih jelas sebagai body JSON.
+  - Endpoint baru: `QUERY /projects/{id}/db/rows`.
+  - Body JSON awal:
+    ```json
+    {
+      "schema": "public",
+      "table": "users",
+      "limit": 100,
+      "offset": 0,
+      "search": "nabil",
+      "filters": {
+        "role": "owner"
+      }
+    }
+    ```
+  - Tetap pertahankan `GET /projects/{id}/db/rows` sebagai fallback kompatibilitas dan untuk deep-link sederhana.
+- Backend:
+  - Tambah route Chi dengan method literal `QUERY`.
+  - Reuse `dbstudio.RowQuery` dan service `Rows`; jangan duplikasi SQL builder.
+  - Validasi `Content-Type: application/json`; missing/unsupported media type return 400/415 sesuai RFC 10008 guidance.
+  - Tambahkan `Accept-Query: application/json` di response endpoint rows atau OPTIONS/discovery response.
+  - Update CORS `Access-Control-Allow-Methods` agar include `QUERY`.
+- Frontend:
+  - Tambah helper API untuk `QUERY /projects/{id}/db/rows` dengan JSON body.
+  - Fallback otomatis ke GET query string jika request `QUERY` gagal karena method blocked/preflight/proxy, bukan karena validasi domain.
+  - Jaga UI DB Studio tetap sama; perubahan ini hanya transport/API semantics.
+- Docs:
+  - Update PRD API contract jika implementasi sudah stabil: tulis `QUERY /projects/:id/db/rows` dan fallback `GET`.
+  - Catat risiko kompatibilitas di CHANGELOG.
+
+**Definition of done:**
+- [ ] Catatan riset RFC 10008 + IANA registry tercantum di PR/commit message atau docs.
+- [ ] Codebase route audit selesai dan alasan pemilihan endpoint dicatat.
+- [ ] `QUERY /projects/{id}/db/rows` menerima JSON body dan return payload sama dengan GET.
+- [ ] `GET /projects/{id}/db/rows` masih bekerja sebagai fallback.
+- [ ] CORS preflight untuk `QUERY` pass di dev.
+- [ ] Unit/handler test mencakup valid `QUERY`, missing `Content-Type`, unsupported content type, invalid JSON, dan fallback GET.
+- [ ] Frontend DB Studio row browsing memakai `QUERY` dengan fallback GET.
+- [ ] Tidak ada endpoint mutasi yang memakai `QUERY`.
+
+**Prompt Claude Code:**
+> "Cari tahu dulu HTTP QUERY method dari RFC 10008 dan IANA registry. Setelah itu analyze codebase pakai codebase-memory-mcp: mapping semua route read-only dan pilih endpoint yang paling cocok untuk `QUERY`, bukan endpoint mutasi. Implement endpoint terpilih dengan fallback kompatibel. Kandidat awal: DB Studio row browsing `/projects/:id/db/rows` karena filter query-nya mulai kompleks. Pastikan CORS allow `QUERY`, response advertise `Accept-Query: application/json`, frontend pakai `QUERY` dengan fallback GET, dan tests mencakup validasi media type."
 
 ---
 
