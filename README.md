@@ -5,13 +5,13 @@
 MyPaas is a lightweight, self-hosted platform for deploying multi-service applications with automatic SSL, realtime logs, and a clean dashboard. Perfect for solo developers or small teams.
 
 **Key features:**
-- 🚀 **Auto-deploy** on git push via webhooks
-- 🐳 **Docker + Compose** support — single container or multi-service
-- 🔒 **SSL with Cloudflare** — no certificate management
-- 📊 **Realtime dashboard** — logs, metrics, deployment history
-- ⏮️ **Instant rollback** — go back to any previous deployment
-- 🔐 **GitHub OAuth** — whitelisted collaborators only
-- 🧰 **VM install script** — prepare a fresh Linux VM and start MyPaas with one command
+- **Auto-deploy** on git push via webhooks
+- **Docker + Compose** support — single container or multi-service
+- **SSL with Cloudflare** — no certificate management
+- **Realtime dashboard** — logs, metrics, deployment history
+- **Instant rollback** — go back to any previous deployment
+- **GitHub OAuth** — whitelisted collaborators only
+- **VM install script** — prepare a fresh Linux VM and start MyPaas with one command
 
 ---
 
@@ -287,10 +287,10 @@ MIT — See [LICENSE](LICENSE)
 
 ## Getting Help
 
-- 📖 **Docs:** See `docs/` for detailed guides
-- 🐛 **Bug report:** File an issue with reproduction steps
-- 💬 **Discussion:** Use GitHub Discussions
-- 🔒 **Security:** Email security-related concerns (not issues)
+- **Docs:** See `docs/` for detailed guides
+- **Bug report:** File an issue with reproduction steps
+- **Discussion:** Use GitHub Discussions
+- **Security:** Email security-related concerns (not issues)
 
 ---
 
