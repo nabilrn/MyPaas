@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Ephemeral HTTPS access for the install wizard through an automatically cleaned-up Cloudflare Quick Tunnel, with SSH port forwarding retained as a fallback.
 - Public one-line VM bootstrap installer that installs Git when needed, safely checks out or updates MyPaas, and launches the browser setup wizard without a manual clone.
 - Initial project structure and setup
 - Rollback endpoint and dashboard action for Dockerfile deployments

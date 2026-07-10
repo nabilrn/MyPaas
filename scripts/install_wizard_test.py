@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 WIZARD_PATH = ROOT_DIR / "scripts" / "install-wizard.py"
+RUNNER_PATH = ROOT_DIR / "scripts" / "run-install-wizard.sh"
 SPEC = importlib.util.spec_from_file_location("install_wizard", WIZARD_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("unable to load install wizard")
@@ -43,6 +44,21 @@ class InstallConfigTest(unittest.TestCase):
             "CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-${DOCKER_BIND_HOST:-host.docker.internal}}",
             compose,
         )
+
+    def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
+        installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
+
+        self.assertIn('WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"', installer)
+        self.assertIn('bash "$ROOT_DIR/scripts/run-install-wizard.sh"', installer)
+
+    def test_wizard_runner_uses_ephemeral_cloudflare_tunnel_and_cleanup(self) -> None:
+        runner = RUNNER_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("cloudflare/cloudflared:latest", runner)
+        self.assertIn("--network host", runner)
+        self.assertIn("trycloudflare\\.com", runner)
+        self.assertIn("trap cleanup EXIT INT TERM", runner)
+        self.assertIn("SSH fallback", runner)
 
 
 if __name__ == "__main__":

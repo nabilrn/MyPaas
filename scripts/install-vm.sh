@@ -10,6 +10,7 @@ FORCE_ENV="${FORCE_ENV:-false}"
 INSTALL_WIZARD="${INSTALL_WIZARD:-false}"
 WIZARD_HOST="${WIZARD_HOST:-127.0.0.1}"
 WIZARD_PORT="${WIZARD_PORT:-8787}"
+WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
 
 cd "$ROOT_DIR"
 
@@ -220,10 +221,6 @@ run_install_wizard() {
   wizard_token="${WIZARD_TOKEN:-$(random_hex 16)}"
 
   log "Starting install wizard"
-  printf 'Wizard URL: http://127.0.0.1:%s/?token=%s\n' "$WIZARD_PORT" "$wizard_token"
-  printf 'If this VM is remote, open a new terminal on your laptop and run:\n'
-  printf '  ssh -L %s:%s:%s <user>@<vm-ip>\n' "$WIZARD_PORT" "$WIZARD_HOST" "$WIZARD_PORT"
-  printf 'Then open the Wizard URL above in your local browser.\n'
 
   WIZARD_ENV_FILE="$ENV_FILE" \
   WIZARD_TOKEN="$wizard_token" \
@@ -243,7 +240,9 @@ run_install_wizard() {
   WIZARD_DEFAULT_METRICS_PASSWORD="$metrics_password" \
   WIZARD_DEFAULT_PROJECT_NETWORK="$project_network" \
   WIZARD_DEFAULT_DOCKER_BIND_HOST="$docker_bind_host" \
-  python3 "$ROOT_DIR/scripts/install-wizard.py"
+  WIZARD_SCRIPT="$ROOT_DIR/scripts/install-wizard.py" \
+  WIZARD_PUBLIC_TUNNEL="$WIZARD_PUBLIC_TUNNEL" \
+  bash "$ROOT_DIR/scripts/run-install-wizard.sh"
 }
 
 write_env_file() {

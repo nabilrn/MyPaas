@@ -23,16 +23,23 @@ For a fresh Ubuntu/Debian VM, run the public bootstrap installer:
 curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | bash
 ```
 
-The bootstrap installs Git when needed, checks out `main` into `~/MyPaas`, and starts the browser setup wizard. It can be rerun safely when the checkout is clean. Override the installed ref or directory by piping to `env MYPAAS_REF=<tag> MYPAAS_INSTALL_DIR=<path> bash`.
+The bootstrap installs Git when needed, checks out `main` into `~/MyPaas`, and starts the browser setup wizard. The installer prints a temporary HTTPS `*.trycloudflare.com` URL and removes it automatically after setup, so no inbound firewall rule or SSH port forwarding is required. It can be rerun safely when the checkout is clean.
 
-Use the browser wizard when you want a guided setup for GitHub OAuth, Cloudflare DNS, Cloudflare Tunnel, owner email, and production secrets. On a remote VM, open the wizard through SSH port forwarding from your laptop:
+Use the browser wizard when you want a guided setup for GitHub OAuth, Cloudflare DNS, Cloudflare Tunnel, owner email, and production secrets. If the temporary URL cannot be created, the installer prints this SSH fallback:
 ```bash
 ssh -L 8787:127.0.0.1:8787 <user>@<vm-ip>
 ```
 
-For terminal-only setup:
+For non-interactive setup without the browser wizard, provide all required credentials:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env INSTALL_WIZARD=false bash
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env \
+  INSTALL_WIZARD=false \
+  PUBLIC_DOMAIN=mypaas.example.com \
+  OWNER_EMAIL=you@example.com \
+  GITHUB_CLIENT_ID=your_client_id \
+  GITHUB_CLIENT_SECRET=your_client_secret \
+  CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token \
+  bash
 ```
 
 The installer checks Docker + Compose, installs Docker on Ubuntu/Debian when needed, generates `.env`, prepares `/var/lib/mypaas`, runs migrations, and starts `docker-compose.prod.yml`. See [Deployment](#deployment) for non-interactive env flags and verification commands.
@@ -212,12 +219,12 @@ The bootstrap defaults to branch `main` and `~/MyPaas`. To pin another branch/ta
 curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env MYPAAS_REF=<tag> MYPAAS_INSTALL_DIR=<path> bash
 ```
 
-The wizard binds to `127.0.0.1` on the VM and prints a one-time URL. For a remote VM, open another terminal on your laptop and forward the port first:
+The wizard remains bound to `127.0.0.1` on the VM. During setup, the installer starts an ephemeral Cloudflare Quick Tunnel and prints a token-protected HTTPS URL. The tunnel is removed as soon as the wizard saves `.env`. If Quick Tunnel startup fails, use the printed SSH fallback:
 ```bash
 ssh -L 8787:127.0.0.1:8787 <user>@<vm-ip>
 ```
 
-Then open the printed `http://127.0.0.1:8787/?token=...` URL locally. The step-by-step wizard explains the public domain/subdomain model, Cloudflare nameserver/DNS requirements, GitHub OAuth setup, Cloudflare Tunnel token and public hostname routes, writes the production `.env`, shuts down, and lets the installer continue.
+The step-by-step wizard explains the public domain/subdomain model, Cloudflare nameserver/DNS requirements, GitHub OAuth setup, Cloudflare Tunnel token and public hostname routes, writes the production `.env`, shuts down, and lets the installer continue.
 
 Cloudflare requirements before the dashboard can resolve:
 - The MyPaas domain must be active in Cloudflare DNS. If the domain was bought elsewhere, add it to Cloudflare and change nameservers at the registrar; registrar transfer is not required.
@@ -239,6 +246,7 @@ SKIP_DEPLOY=true bash scripts/install-vm.sh          # prepare VM and .env only
 FORCE_ENV=true bash scripts/install-vm.sh            # regenerate .env
 SKIP_DOCKER_INSTALL=true bash scripts/install-vm.sh  # require Docker to already exist
 INSTALL_WIZARD=true bash scripts/install-vm.sh       # use browser wizard for credentials
+WIZARD_PUBLIC_TUNNEL=false INSTALL_WIZARD=true bash scripts/install-vm.sh  # require SSH forwarding instead
 ```
 
 **Production checklist:**
