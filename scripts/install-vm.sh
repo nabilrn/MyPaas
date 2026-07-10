@@ -342,7 +342,7 @@ LOG_LEVEL=info
 LOG_FORMAT=json
 
 CADDY_ADMIN=127.0.0.1:2019
-CADDY_UPSTREAM_HOST=host.docker.internal
+CADDY_UPSTREAM_HOST=$docker_bind_host
 STATIC_ROOT=/var/lib/mypaas/static
 CADDY_STATIC_ROOT=/var/lib/mypaas/static
 CADDY_METRICS=true

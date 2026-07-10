@@ -38,7 +38,7 @@ services:
       DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
       PROJECT_NETWORK: ${PROJECT_NETWORK:-mypaas-prod}
       CADDY_ADMIN: caddy:2019
-      CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-host.docker.internal}
+      CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-${DOCKER_BIND_HOST:-host.docker.internal}}
       STATIC_ROOT: ${STATIC_ROOT:-/var/lib/mypaas/static}
       CADDY_STATIC_ROOT: ${CADDY_STATIC_ROOT:-/var/lib/mypaas/static}
       SHARED_POSTGRES_ENABLED: ${SHARED_POSTGRES_ENABLED:-true}
