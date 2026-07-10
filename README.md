@@ -18,12 +18,12 @@ MyPaas is a lightweight, self-hosted platform for deploying multi-service applic
 ## Quick Start
 
 ### Production VM install
-For a fresh Ubuntu/Debian VM, clone the repository and run the installer:
+For a fresh Ubuntu/Debian VM, run the public bootstrap installer:
 ```bash
-git clone <your-mypaas-repo-url> mypaas
-cd mypaas
-INSTALL_WIZARD=true bash scripts/install-vm.sh
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | bash
 ```
+
+The bootstrap installs Git when needed, checks out `main` into `~/MyPaas`, and starts the browser setup wizard. It can be rerun safely when the checkout is clean. Override the installed ref or directory by piping to `env MYPAAS_REF=<tag> MYPAAS_INSTALL_DIR=<path> bash`.
 
 Use the browser wizard when you want a guided setup for GitHub OAuth, Cloudflare DNS, Cloudflare Tunnel, owner email, and production secrets. On a remote VM, open the wizard through SSH port forwarding from your laptop:
 ```bash
@@ -32,7 +32,7 @@ ssh -L 8787:127.0.0.1:8787 <user>@<vm-ip>
 
 For terminal-only setup:
 ```bash
-bash scripts/install-vm.sh
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env INSTALL_WIZARD=false bash
 ```
 
 The installer checks Docker + Compose, installs Docker on Ubuntu/Debian when needed, generates `.env`, prepares `/var/lib/mypaas`, runs migrations, and starts `docker-compose.prod.yml`. See [Deployment](#deployment) for non-interactive env flags and verification commands.
@@ -197,14 +197,19 @@ pnpm dev
 
 ## Deployment
 
-For a fresh Linux VM, run the installer from the repository root:
+For a fresh Linux VM, bootstrap the repository and browser wizard in one command:
 ```bash
-bash scripts/install-vm.sh
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | bash
 ```
 
-To use the browser wizard for first-time credentials:
+For an existing checkout, run the installer directly:
 ```bash
 INSTALL_WIZARD=true bash scripts/install-vm.sh
+```
+
+The bootstrap defaults to branch `main` and `~/MyPaas`. To pin another branch/tag or directory:
+```bash
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env MYPAAS_REF=<tag> MYPAAS_INSTALL_DIR=<path> bash
 ```
 
 The wizard binds to `127.0.0.1` on the VM and prints a one-time URL. For a remote VM, open another terminal on your laptop and forward the port first:
