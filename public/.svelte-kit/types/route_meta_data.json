@@ -1,0 +1,16 @@
+{
+	"/": [],
+	"/admin/audit-logs": [],
+	"/admin/users": [],
+	"/docs": [],
+	"/login": [],
+	"/projects": [],
+	"/projects/new": [],
+	"/projects/[id]": [],
+	"/projects/[id]/database": [],
+	"/projects/[id]/deployments": [],
+	"/projects/[id]/env": [],
+	"/projects/[id]/logs": [],
+	"/projects/[id]/metrics": [],
+	"/projects/[id]/settings": []
+}

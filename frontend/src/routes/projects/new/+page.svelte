@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Upload, X } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -1011,10 +1012,7 @@
 						/>
 						<ActionButton type="button" variant="secondary" size="xs" on:click={triggerEnvFileImport}>
 							<span class="inline-flex items-center gap-1.5">
-								<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0-12l-4 4m4-4l4 4" />
-									<path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
-								</svg>
+								<Upload class="h-3.5 w-3.5" aria-hidden="true" />
 								Import .env
 							</span>
 						</ActionButton>
@@ -1063,9 +1061,7 @@
 									type="button"
 									on:click={() => removeEnvVar(index)}
 								>
-									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
-									</svg>
+									<X class="h-4 w-4" aria-hidden="true" />
 								</IconButton>
 							</div>
 						{/each}

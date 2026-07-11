@@ -1,0 +1,1 @@
+import"./Bzak7iHL.js";import{s as r,r as s}from"./CDMxTIWt.js";import{I as e}from"./C0ANPJ2T.js";function c(o,p){let t=s(p,["$$slots","$$events","$$legacy"]);const a=[["path",{d:"M12 3v12"}],["path",{d:"m17 8-5-5-5 5"}],["path",{d:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"}]];e(o,r({name:"upload"},()=>t,{get iconNode(){return a}}))}export{c as U};

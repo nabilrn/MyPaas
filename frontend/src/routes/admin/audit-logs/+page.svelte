@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChevronDown, ChevronUp, RefreshCw, User } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
@@ -76,14 +77,10 @@
 	<PageHeader title="Audit logs" description="Recent authenticated changes across projects, deployments, env vars, and admin users.">
 		<svelte:fragment slot="actions">
 			<IconButton label="Refresh audit logs" variant="brand" {loading} on:click={load}>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-				</svg>
+				<RefreshCw class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 			<IconButton label="User whitelist" href="/admin/users" variant="default">
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8" />
-				</svg>
+				<User class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 		</svelte:fragment>
 	</PageHeader>
@@ -132,13 +129,11 @@
 						</td>
 						<td class="px-5 py-4 text-right">
 							<IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} audit log details`} variant="ghost" on:click={() => toggle(row.id)}>
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									{#if expanded.has(row.id)}
-										<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
-									{:else}
-										<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-									{/if}
-								</svg>
+								{#if expanded.has(row.id)}
+									<ChevronUp class="h-4 w-4" aria-hidden="true" />
+								{:else}
+									<ChevronDown class="h-4 w-4" aria-hidden="true" />
+								{/if}
 							</IconButton>
 						</td>
 					</tr>

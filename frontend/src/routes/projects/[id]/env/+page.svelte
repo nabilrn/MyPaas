@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Plus } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -65,7 +66,7 @@
 
 		vars = vars.map((v) => (v.id === id ? { ...v, revealing: true } : v));
 		try {
-			const revealed = await api.env.reveal($page.params.id, row.key);
+			const revealed = await api.env.reveal($page.params.id ?? '', row.key);
 			vars = vars.map((v) => (v.id === id ? { ...v, value: revealed.value, revealed: true, revealing: false } : v));
 		} catch (err) {
 			vars = vars.map((v) => (v.id === id ? { ...v, revealing: false } : v));
@@ -92,7 +93,7 @@
 		if (deletingKeys.has(key)) return;
 		deletingKeys = new Set(deletingKeys).add(key);
 		try {
-			await api.env.delete($page.params.id, key);
+			await api.env.delete($page.params.id ?? '', key);
 			vars = vars.filter((v) => v.id !== id);
 			toast.success(`Deleted ${key}`);
 		} catch (err) {
@@ -108,7 +109,7 @@
 		if (savingChanges) return;
 		savingChanges = true;
 		try {
-			await api.env.bulkUpdate($page.params.id, {
+			await api.env.bulkUpdate($page.params.id ?? '', {
 				vars: vars.filter((v) => v.dirty).map((v) => ({ key: v.key, value: v.value }))
 			});
 			toast.success('Environment variables saved');
@@ -124,7 +125,7 @@
 		if (!newKey.trim() || savingNewVar) return;
 		savingNewVar = true;
 		try {
-			await api.env.bulkUpdate($page.params.id, { vars: [{ key: normalizeEnvKey(newKey), value: newValue }] });
+			await api.env.bulkUpdate($page.params.id ?? '', { vars: [{ key: normalizeEnvKey(newKey), value: newValue }] });
 			newKey   = '';
 			newValue = '';
 			adding   = false;
@@ -186,7 +187,7 @@
 
 		savingImport = true;
 		try {
-			await api.env.bulkUpdate($page.params.id, {
+			await api.env.bulkUpdate($page.params.id ?? '', {
 				vars: importReadyRows.map((row) => ({ key: row.key, value: row.value }))
 			});
 			toast.success(`Imported ${importReadyRows.length} environment variables`);
@@ -208,7 +209,7 @@
 		}
 		error = '';
 		try {
-			const rows = await api.env.list($page.params.id);
+			const rows = await api.env.list($page.params.id ?? '');
 			vars = rows.map((v) => ({ ...v, value: '', revealed: false, dirty: false, revealing: false }));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load environment variables';
@@ -314,9 +315,7 @@
 			{/if}
 			{#if !adding}
 				<IconButton label="Add variable" variant="primary" on:click={() => (adding = true)}>
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-					</svg>
+					<Plus class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 			{/if}
 		</div>

@@ -34,6 +34,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.24.0",
     "chart.js": "^4.4.1",
     "date-fns": "^3.0.0"
   },

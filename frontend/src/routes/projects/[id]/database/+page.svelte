@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Pencil, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -42,7 +43,7 @@
 	let now = Date.now();
 	let lastPageIndex = 0;
 
-	$: projectId = $page.params.id;
+	$: projectId = $page.params.id ?? '';
 	$: connection = status?.connection ?? null;
 	$: writeAccess = status?.writeAccess ?? null;
 	$: writeExpiresAt = writeAccess ? new Date(writeAccess.expiresAt).getTime() : 0;
@@ -489,9 +490,7 @@
 													on:click={() => openEdit(row)}
 													disabled={!writeActive || primaryColumns.length === 0}
 												>
-													<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-														<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487a2.121 2.121 0 013 3L8.25 18.1 4 19.5l1.4-4.25L16.862 3.487zM14.75 5.6l3 3" />
-													</svg>
+													<Pencil class="h-4 w-4" aria-hidden="true" />
 												</IconButton>
 												<IconButton
 													label={`Delete database row ${pageIndex * pageSize + rowIndex + 1}`}
@@ -499,13 +498,7 @@
 													on:click={() => openDelete(row)}
 													disabled={!writeActive || primaryColumns.length === 0}
 												>
-													<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-														<path
-															stroke-linecap="round"
-															stroke-linejoin="round"
-															d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-														/>
-													</svg>
+													<Trash2 class="h-4 w-4" aria-hidden="true" />
 												</IconButton>
 											</div>
 										</td>

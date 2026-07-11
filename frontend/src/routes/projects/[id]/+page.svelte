@@ -72,8 +72,8 @@
 		}
 		try {
 			const [projectResult, deploymentRows] = await Promise.all([
-				api.projects.get($page.params.id),
-				api.deployments.list($page.params.id)
+				api.projects.get($page.params.id ?? ''),
+				api.deployments.list($page.params.id ?? '')
 			]);
 			project = projectResult;
 			deployments = deploymentRows;
@@ -90,7 +90,7 @@
 		if (metricsInFlight) return;
 		metricsInFlight = true;
 		try {
-			metrics = await api.metrics.snapshot($page.params.id);
+			metrics = await api.metrics.snapshot($page.params.id ?? '');
 		} catch {
 			metrics = null;
 		} finally {

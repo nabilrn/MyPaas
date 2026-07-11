@@ -132,7 +132,7 @@
 			error = '';
 		}
 		try {
-			project = await api.projects.get($page.params.id);
+			project = await api.projects.get($page.params.id ?? '');
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Failed to load project';
 			if (!background || !project) {

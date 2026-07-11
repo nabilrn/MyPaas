@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ChevronDown, ChevronUp, RotateCcw } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import StatusBadge from '$components/StatusBadge.svelte';
@@ -90,7 +91,7 @@
 		loadInFlight = true;
 		const requestedPage = currentPage;
 		const requestedFocusId = focusId;
-		const projectId = $page.params.id;
+		const projectId = $page.params.id ?? '';
 		const foreground = loadedPage === -1 || requestedPage !== loadedPage;
 		if (foreground) loading = true;
 		try {
@@ -210,13 +211,9 @@
 					<div class="flex shrink-0 gap-2 lg:justify-end">
 						<IconButton label={`${expanded.has(d.id) ? 'Hide' : 'Show'} build log for ${d.commitSha?.slice(0, 8) ?? 'deployment'}`} on:click={() => toggle(d.id)}>
 							{#if expanded.has(d.id)}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
-								</svg>
+								<ChevronUp class="h-4 w-4" aria-hidden="true" />
 							{:else}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-								</svg>
+								<ChevronDown class="h-4 w-4" aria-hidden="true" />
 							{/if}
 						</IconButton>
 						{#if d.status === 'running' || d.status === 'stopped'}
@@ -234,9 +231,7 @@
 								</ActionButton>
 							{:else}
 								<IconButton label={`Rollback deployment ${d.commitSha?.slice(0, 8) ?? d.id}`} variant="danger" on:click={() => requestRollback(d.id)} disabled={rollingBackId !== ''}>
-									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1015.5-6.2M3 4v5h5" />
-									</svg>
+									<RotateCcw class="h-4 w-4" aria-hidden="true" />
 								</IconButton>
 							{/if}
 						{/if}

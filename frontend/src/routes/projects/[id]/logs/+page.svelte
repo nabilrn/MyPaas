@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ArrowDown, Check, Copy, RefreshCw, Trash2, Upload } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -67,7 +68,7 @@
 		}
 		error = '';
 		try {
-			const history = await api.logs.list($page.params.id, 500);
+			const history = await api.logs.list($page.params.id ?? '', 500);
 			const now = new Date().toISOString();
 			const entries = history.items?.length
 				? history.items
@@ -236,14 +237,9 @@
 				disabled={filteredLogs.length === 0}
 			>
 				{#if logsCopied}
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-					</svg>
+					<Check class="h-4 w-4" aria-hidden="true" />
 				{:else}
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
-						<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
-					</svg>
+					<Copy class="h-4 w-4" aria-hidden="true" />
 				{/if}
 			</IconButton>
 			<IconButton
@@ -252,10 +248,7 @@
 				on:click={downloadLogs}
 				disabled={filteredLogs.length === 0}
 			>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v11m0 0l-4-4m4 4l4-4" />
-					<path stroke-linecap="round" stroke-linejoin="round" d="M5 19h14" />
-				</svg>
+				<Upload class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 			</div>
 		</svelte:fragment>
@@ -327,16 +320,11 @@
 		<div class="flex items-center gap-3">
 			{#if paused}
 				<IconButton label="Resume auto-scroll" variant="brand" type="button" on:click={scrollToBottom}>
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
-					</svg>
+					<ArrowDown class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 			{/if}
 			<IconButton label="Clear local log view" variant="ghost" type="button" on:click={clearLogs} disabled={logs.length === 0}>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16" />
-					<path stroke-linecap="round" stroke-linejoin="round" d="M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" />
-				</svg>
+				<Trash2 class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 			<IconButton
 				label="Reload log history"
@@ -345,9 +333,7 @@
 				on:click={() => loadHistory(true)}
 				loading={reloadingHistory}
 			>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-				</svg>
+				<RefreshCw class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 		</div>
 	</div>

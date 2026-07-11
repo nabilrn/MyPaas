@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Plus, RefreshCw, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import IconButton from '$components/IconButton.svelte';
@@ -98,14 +99,10 @@
 	<PageHeader title="User whitelist" description="Only listed users can sign in via GitHub OAuth.">
 		<svelte:fragment slot="actions">
 			<IconButton label="Refresh users" variant="brand" {loading} on:click={load}>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-				</svg>
+				<RefreshCw class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 			<IconButton label="Add user" variant="primary" disabled={adding} on:click={() => (adding = true)}>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-				</svg>
+				<Plus class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 		</svelte:fragment>
 	</PageHeader>
@@ -200,13 +197,7 @@
 									</ActionButton>
 								{:else}
 									<IconButton label={`Remove ${user.email}`} variant="danger" on:click={() => requestRemove(user.id)} disabled={removingUserId !== ''}>
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-											/>
-										</svg>
+										<Trash2 class="h-4 w-4" aria-hidden="true" />
 									</IconButton>
 								{/if}
 							</div>

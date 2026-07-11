@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { RefreshCw } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
@@ -50,7 +51,7 @@
 		}
 		refreshing = true;
 		try {
-			const result = await api.metrics.snapshot($page.params.id);
+			const result = await api.metrics.snapshot($page.params.id ?? '');
 			const nextServices = result.items.map((item) => item.service);
 			if (!selectedService || !nextServices.includes(selectedService)) {
 				selectedService = nextServices[0] ?? '';
@@ -85,9 +86,7 @@
 			</p>
 		</div>
 		<IconButton label="Refresh metrics" variant="brand" loading={refreshing} on:click={() => void load()}>
-			<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-			</svg>
+			<RefreshCw class="h-4 w-4" aria-hidden="true" />
 		</IconButton>
 	</div>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ExternalLink, Pause, Play, Plus, RefreshCw, Search, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -248,14 +249,10 @@
 			</div>
 			<div class="flex justify-end gap-2">
 				<IconButton label="Refresh dashboard data" variant="brand" {loading} on:click={() => refreshDashboardData()}>
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-					</svg>
+					<RefreshCw class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 				<IconButton label="New project" href="/projects/new" variant="primary">
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-					</svg>
+					<Plus class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 			</div>
 		</div>
@@ -374,9 +371,7 @@
 			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
 				<label class="relative block w-full sm:w-72">
 					<span class="sr-only">Search projects</span>
-					<svg class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m1.35-5.15a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
-					</svg>
+					<Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 					<input
 						type="text"
 						inputmode="search"
@@ -393,16 +388,12 @@
 							aria-label="Clear search"
 							title="Clear search"
 						>
-							<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
-							</svg>
+							<X class="h-3.5 w-3.5" aria-hidden="true" />
 						</button>
 					{/if}
 				</label>
 				<IconButton label="Refresh dashboard data" variant="ghost" {loading} on:click={() => refreshDashboardData()}>
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
-					</svg>
+					<RefreshCw class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 			</div>
 		</svelte:fragment>
@@ -464,9 +455,7 @@
 					</div>
 					<div class="flex items-center justify-start gap-1.5 lg:justify-end">
 						<IconButton label="Open project" href="/projects/{project.id}" variant="default">
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3M20 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2h5" />
-							</svg>
+							<ExternalLink class="h-4 w-4" aria-hidden="true" />
 						</IconButton>
 						<IconButton
 							label={projectPrimaryLabel(project)}
@@ -476,13 +465,9 @@
 							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
 						>
 							{#if projectPrimaryAction(project) === 'stop'}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8 5v14M16 5v14" />
-								</svg>
+								<Pause class="h-4 w-4" aria-hidden="true" />
 							{:else}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8 5v14l11-7-11-7z" />
-								</svg>
+								<Play class="h-4 w-4" aria-hidden="true" />
 							{/if}
 						</IconButton>
 					</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Check, CircleAlert, Copy, Eye, EyeOff, X } from '@lucide/svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -68,7 +69,7 @@
 		loading = true;
 		loadError = '';
 		try {
-			project = await api.projects.get($page.params.id);
+			project = await api.projects.get($page.params.id ?? '');
 			name = project.name;
 			branch = project.branch;
 			appPort = project.appPort;
@@ -308,10 +309,7 @@
 			>
 				<svelte:fragment slot="actions">
 					<IconButton label="Webhook setup instructions" variant="brand" on:click={() => (showWebhookHelp = true)}>
-						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h1.5v6h-1.5zM12 7.5h.01" />
-							<path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
+						<CircleAlert class="h-4 w-4" aria-hidden="true" />
 					</IconButton>
 				</svelte:fragment>
 				<div class="space-y-4 p-5">
@@ -324,14 +322,9 @@
 								on:click={() => copyWebhookURL(project?.id ?? '')}
 							>
 								{#if copiedTarget === 'webhook-url'}
-									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-									</svg>
+									<Check class="h-4 w-4" aria-hidden="true" />
 								{:else}
-									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
-										<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
-									</svg>
+									<Copy class="h-4 w-4" aria-hidden="true" />
 								{/if}
 							</IconButton>
 						</div>
@@ -345,16 +338,9 @@
 							<div class="flex gap-3">
 								<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Show webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>
 									{#if showWebhookSecret}
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18" />
-											<path stroke-linecap="round" stroke-linejoin="round" d="M10.6 10.6a2 2 0 002.8 2.8" />
-											<path stroke-linecap="round" stroke-linejoin="round" d="M9.9 4.2A10.7 10.7 0 0112 4c5 0 8.5 4 10 8a15.1 15.1 0 01-3.1 4.7M6.6 6.6A14.6 14.6 0 002 12c1.5 4 5 8 10 8a10.8 10.8 0 005.4-1.5" />
-										</svg>
+										<EyeOff class="h-4 w-4" aria-hidden="true" />
 									{:else}
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8-10-8-10-8z" />
-											<path stroke-linecap="round" stroke-linejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
-										</svg>
+										<Eye class="h-4 w-4" aria-hidden="true" />
 									{/if}
 								</IconButton>
 								<IconButton
@@ -363,14 +349,9 @@
 									on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}
 								>
 									{#if copiedTarget === 'webhook-secret'}
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-										</svg>
+										<Check class="h-4 w-4" aria-hidden="true" />
 									{:else}
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
-											<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
-										</svg>
+										<Copy class="h-4 w-4" aria-hidden="true" />
 									{/if}
 								</IconButton>
 							</div>
@@ -511,9 +492,7 @@
 					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Configure push deploys for the selected repository.</p>
 				</div>
 				<IconButton label="Close webhook setup" variant="ghost" on:click={() => (showWebhookHelp = false)}>
-					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
-					</svg>
+					<X class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
 			</div>
 
@@ -530,14 +509,9 @@
 							on:click={() => copyWebhookURL(project?.id ?? '')}
 						>
 							{#if copiedTarget === 'webhook-url'}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-								</svg>
+								<Check class="h-4 w-4" aria-hidden="true" />
 							{:else}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
-									<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
-								</svg>
+								<Copy class="h-4 w-4" aria-hidden="true" />
 							{/if}
 						</IconButton>
 					</div>
@@ -553,14 +527,9 @@
 							on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}
 						>
 							{#if copiedTarget === 'webhook-secret'}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-								</svg>
+								<Check class="h-4 w-4" aria-hidden="true" />
 							{:else}
-								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M8 7h10a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" />
-									<path stroke-linecap="round" stroke-linejoin="round" d="M4 15H3a2 2 0 01-2-2V5a2 2 0 012-2h10a2 2 0 012 2v1" />
-								</svg>
+								<Copy class="h-4 w-4" aria-hidden="true" />
 							{/if}
 						</IconButton>
 					</div>
