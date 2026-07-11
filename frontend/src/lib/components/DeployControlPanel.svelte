@@ -17,6 +17,8 @@
 	}>();
 
 	$: isBusy = project.status === 'building' || pendingAction !== null;
+	$: deployLoading = pendingAction === 'deploy' || (pendingAction === null && project.status === 'building');
+	$: deployLoadingLabel = pendingAction === 'deploy' ? 'Queueing...' : 'Deploying...';
 	$: deployDisabled = project.status === 'building' || (pendingAction !== null && pendingAction !== 'deploy');
 	$: restartDisabled = pendingAction !== null && pendingAction !== 'restart';
 	$: stopDisabled = project.status === 'stopped' || (pendingAction !== null && pendingAction !== 'stop');
@@ -78,31 +80,9 @@
 				{isBusy ? 'One operation is active. Other actions are guarded until it finishes.' : 'Deploy from the configured branch or recover the current container.'}
 			</p>
 			<div class="mt-4 flex flex-wrap gap-2">
-				<ActionButton
-					variant="primary"
-					on:click={() => dispatch('deploy')}
-					disabled={deployDisabled}
-					loading={pendingAction === 'deploy'}
-					loadingLabel="Queueing..."
-				>
-					Deploy
-				</ActionButton>
-				<ActionButton
-					on:click={() => dispatch('restart')}
-					disabled={restartDisabled}
-					loading={pendingAction === 'restart'}
-					loadingLabel="Restarting..."
-				>
-					Restart
-				</ActionButton>
-				<ActionButton
-					on:click={() => dispatch('stop')}
-					disabled={stopDisabled}
-					loading={pendingAction === 'stop'}
-					loadingLabel="Stopping..."
-				>
-					Stop
-				</ActionButton>
+				<ActionButton variant="primary" on:click={() => dispatch('deploy')} disabled={deployDisabled} loading={deployLoading} loadingLabel={deployLoadingLabel}>Deploy</ActionButton>
+				<ActionButton on:click={() => dispatch('restart')} disabled={restartDisabled} loading={pendingAction === 'restart'} loadingLabel="Restarting...">Restart</ActionButton>
+				<ActionButton on:click={() => dispatch('stop')} disabled={stopDisabled} loading={pendingAction === 'stop'} loadingLabel="Stopping...">Stop</ActionButton>
 				<a
 					href={logsHref}
 					class="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 transition-colors hover:border-gray-400 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-gray-700 dark:bg-gray-950/80 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-900 dark:focus-visible:ring-brand-500 dark:focus-visible:ring-offset-gray-950"

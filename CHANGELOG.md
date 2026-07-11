@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
+- Deploy actions now open deployment history with the queued deployment focused, its build output expanded immediately, and non-overlapping polling that fills the viewer as logs arrive.
+- Compact dashboard actions now use consistent accessible icon controls, coarse-pointer touch targets, and guarded loading and disabled states across deployments, environment variables, database rows, audit logs, projects, and admin users.
 - Production installs now route Caddy to the same Docker network gateway used to bind deployed project ports, preventing fresh-VM `502 Bad Gateway` errors when `host.docker.internal` resolves to a different bridge.
 - Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
 - Settings now shows the routable `/api/webhook/{projectId}` GitHub webhook URL and clearer webhook secret copy behavior

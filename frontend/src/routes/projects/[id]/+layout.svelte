@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import Breadcrumbs from '$components/Breadcrumbs.svelte';
 	import DeployControlPanel from '$components/DeployControlPanel.svelte';
@@ -22,31 +22,28 @@
 	let lastStreamStatus: ProjectStatus | null = null;
 
 	const tabs = [
-		{ label: 'Overview',     href: '' },
-		{ label: 'Deployments',  href: '/deployments' },
-		{ label: 'Logs',         href: '/logs' },
-		{ label: 'Metrics',      href: '/metrics' },
-		{ label: 'Environment',  href: '/env' },
-		{ label: 'Database',     href: '/database' },
-		{ label: 'Settings',     href: '/settings' }
+		{ label: 'Overview', href: '' },
+		{ label: 'Deployments', href: '/deployments' },
+		{ label: 'Logs', href: '/logs' },
+		{ label: 'Metrics', href: '/metrics' },
+		{ label: 'Environment', href: '/env' },
+		{ label: 'Database', href: '/database' },
+		{ label: 'Settings', href: '/settings' }
 	];
 
-	$: base     = `/projects/${$page.params.id}`;
+	$: base = `/projects/${$page.params.id}`;
 	$: pathname = $page.url.pathname;
 	$: currentPath = normalizePath(pathname);
-	$: routeActiveHref = tabs.slice().reverse().find((t) => isTabActive(t.href, currentPath, base))?.href ?? '';
+	$: routeActiveHref =
+		tabs
+			.slice()
+			.reverse()
+			.find((t) => isTabActive(t.href, currentPath, base))?.href ?? '';
 	$: activeHref = optimisticHref ?? routeActiveHref;
 	$: activeTab = tabs.find((tab) => tab.href === activeHref) ?? tabs[0];
 	$: breadcrumbs = project
-		? [
-				{ label: 'Projects', href: '/projects' },
-				{ label: project.name, href: activeHref ? base : undefined },
-				...(activeHref ? [{ label: activeTab.label }] : [])
-			]
-		: [
-				{ label: 'Projects', href: '/projects' },
-				{ label: 'Project' }
-			];
+		? [{ label: 'Projects', href: '/projects' }, { label: project.name, href: activeHref ? base : undefined }, ...(activeHref ? [{ label: activeTab.label }] : [])]
+		: [{ label: 'Projects', href: '/projects' }, { label: 'Project' }];
 	$: publicProjectHost = project ? projectHost(project.subdomain, $page.url.hostname) : '';
 	$: publicProjectURL = project ? projectURL(project.subdomain, $page.url.protocol, $page.url.hostname) : '';
 	$: logsHref = `${base}/logs`;
@@ -122,11 +119,7 @@
 	}
 
 	function isProjectStatus(status: string | undefined): status is ProjectStatus {
-		return status === 'pending'
-			|| status === 'running'
-			|| status === 'stopped'
-			|| status === 'crashed'
-			|| status === 'building';
+		return status === 'pending' || status === 'running' || status === 'stopped' || status === 'crashed' || status === 'building';
 	}
 
 	async function loadProject(background = false) {
@@ -185,9 +178,9 @@
 		if (!project || pendingAction) return;
 		pendingAction = 'deploy';
 		try {
-			await api.projects.deploy(project.id);
+			const deployment = await api.projects.deploy(project.id);
 			toast.success(`Deployment queued for ${project.name}`);
-			await loadProject(true);
+			await goto(`/projects/${project.id}/deployments?focus=${encodeURIComponent(deployment.id)}`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to deploy project');
 		} finally {
@@ -219,24 +212,10 @@
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
 	{:else}
-		<DeployControlPanel
-			{project}
-			{publicProjectHost}
-			{publicProjectURL}
-			{logsHref}
-			{pendingAction}
-			on:stop={handleStop}
-			on:restart={handleRestart}
-			on:deploy={handleDeploy}
-		>
+		<DeployControlPanel {project} {publicProjectHost} {publicProjectURL} {logsHref} {pendingAction} on:stop={handleStop} on:restart={handleRestart} on:deploy={handleDeploy}>
 			<nav class="scrollbar-thin flex gap-1 overflow-x-auto border-t border-gray-100 px-3 py-2 dark:border-gray-800" data-sveltekit-preload-data="tap" aria-label={`${project.name} sections`}>
 				{#each tabs as tab}
-					<a
-						href={base + tab.href}
-						on:click={() => handleTabClick(tab.href)}
-						aria-current={activeHref === tab.href ? 'page' : undefined}
-						class={tabClass(activeHref === tab.href)}
-					>
+					<a href={base + tab.href} on:click={() => handleTabClick(tab.href)} aria-current={activeHref === tab.href ? 'page' : undefined} class={tabClass(activeHref === tab.href)}>
 						{tab.label}
 					</a>
 				{/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import ActionButton from '$components/ActionButton.svelte';
 	import Breadcrumbs from '$components/Breadcrumbs.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
@@ -46,15 +47,9 @@
 
 	$: normalizedSearch = searchQuery.trim().toLowerCase();
 	$: filteredProjects = normalizedSearch
-		? projects.filter((project) => [
-				project.name,
-				project.subdomain,
-				project.repoUrl,
-				project.branch,
-				project.deployMode,
-				project.mainService ?? '',
-				project.status
-			].join(' ').toLowerCase().includes(normalizedSearch))
+		? projects.filter((project) =>
+				[project.name, project.subdomain, project.repoUrl, project.branch, project.deployMode, project.mainService ?? '', project.status].join(' ').toLowerCase().includes(normalizedSearch)
+			)
 		: projects;
 	$: memoryConfiguredPercent = quota && quota.memoryLimitMb > 0 ? Math.min(100, (quota.memoryUsedMb / quota.memoryLimitMb) * 100) : 0;
 	$: memoryRuntimePercent = quota && quota.memoryUsedMb > 0 ? Math.min(100, (quota.memoryRuntimeMb / quota.memoryUsedMb) * 100) : 0;
@@ -69,9 +64,7 @@
 	$: composeCount = projects.filter((project) => project.deployMode === 'compose').length;
 	$: staticCount = projects.filter((project) => project.deployMode === 'static').length;
 	$: latestProject = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-	$: healthyCopy = issueCount > 0
-		? `${issueCount} project${issueCount !== 1 ? 's' : ''} need attention`
-		: `${runningCount} running, no crashed projects`;
+	$: healthyCopy = issueCount > 0 ? `${issueCount} project${issueCount !== 1 ? 's' : ''} need attention` : `${runningCount} running, no crashed projects`;
 	$: syncLabel = error ? 'Sync needs attention' : loading ? 'Syncing workspace' : 'Workspace synced';
 	$: syncDetail = lastRefreshedAt ? `Updated ${formatRefreshTime(lastRefreshedAt)}` : 'Waiting for first refresh';
 	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-sky-500 animate-pulse' : 'bg-brand-500';
@@ -88,7 +81,7 @@
 		{ label: 'Static', value: staticCount, barClass: 'bg-gray-400 dark:bg-gray-500', textClass: 'text-gray-600 dark:text-gray-300' }
 	] satisfies DeployModeSegment[];
 	$: deployModeTotal = deployModeSegments.reduce((sum, segment) => sum + segment.value, 0);
-	$: dominantDeployMode = deployModeSegments.reduce((top, segment) => segment.value > top.value ? segment : top, deployModeSegments[0]);
+	$: dominantDeployMode = deployModeSegments.reduce((top, segment) => (segment.value > top.value ? segment : top), deployModeSegments[0]);
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) {
 		currentPage = maxPage;
@@ -207,21 +200,23 @@
 
 		const refreshToken = uptimeRefreshToken;
 		uptimeLoadingIds = new Set([...uptimeLoadingIds, ...pending.map((project) => project.id)]);
-		await Promise.all(pending.map(async (project) => {
-			try {
-				const snapshot = await api.metrics.snapshot(project.id);
-				if (refreshToken !== uptimeRefreshToken) return;
-				projectUptimes = { ...projectUptimes, [project.id]: snapshot.items[0]?.uptime ?? '-' };
-			} catch {
-				if (refreshToken !== uptimeRefreshToken) return;
-				projectUptimes = { ...projectUptimes, [project.id]: '-' };
-			} finally {
-				if (refreshToken !== uptimeRefreshToken) return;
-				const next = new Set(uptimeLoadingIds);
-				next.delete(project.id);
-				uptimeLoadingIds = next;
-			}
-		}));
+		await Promise.all(
+			pending.map(async (project) => {
+				try {
+					const snapshot = await api.metrics.snapshot(project.id);
+					if (refreshToken !== uptimeRefreshToken) return;
+					projectUptimes = { ...projectUptimes, [project.id]: snapshot.items[0]?.uptime ?? '-' };
+				} catch {
+					if (refreshToken !== uptimeRefreshToken) return;
+					projectUptimes = { ...projectUptimes, [project.id]: '-' };
+				} finally {
+					if (refreshToken !== uptimeRefreshToken) return;
+					const next = new Set(uptimeLoadingIds);
+					next.delete(project.id);
+					uptimeLoadingIds = next;
+				}
+			})
+		);
 	}
 </script>
 
@@ -242,7 +237,9 @@
 		</div>
 
 		<div class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-			<div class="flex min-h-10 w-full items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-left shadow-sm shadow-gray-950/[0.03] dark:border-gray-800 dark:bg-gray-950 sm:min-w-[15rem]">
+			<div
+				class="flex min-h-10 w-full items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-left shadow-sm shadow-gray-950/[0.03] dark:border-gray-800 dark:bg-gray-950 sm:min-w-[15rem]"
+			>
 				<span class={`h-2 w-2 shrink-0 rounded-full ${syncDotClass}`}></span>
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-900 dark:text-white">{syncLabel}</p>
@@ -250,7 +247,7 @@
 				</div>
 			</div>
 			<div class="flex justify-end gap-2">
-				<IconButton label="Refresh dashboard data" variant="brand" loading={loading} on:click={() => refreshDashboardData()}>
+				<IconButton label="Refresh dashboard data" variant="brand" {loading} on:click={() => refreshDashboardData()}>
 					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
 					</svg>
@@ -265,18 +262,8 @@
 	</div>
 
 	<div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-		<StatTile
-			label="Fleet health"
-			value={issueCount > 0 ? 'Attention' : 'Healthy'}
-			detail={healthyCopy}
-			tone={issueCount > 0 ? 'danger' : 'success'}
-		/>
-		<StatTile
-			label="Running now"
-			value={String(runningCount)}
-			detail={`${buildingCount} building, ${pendingCount} pending`}
-			tone={buildingCount > 0 ? 'warning' : 'success'}
-		/>
+		<StatTile label="Fleet health" value={issueCount > 0 ? 'Attention' : 'Healthy'} detail={healthyCopy} tone={issueCount > 0 ? 'danger' : 'success'} />
+		<StatTile label="Running now" value={String(runningCount)} detail={`${buildingCount} building, ${pendingCount} pending`} tone={buildingCount > 0 ? 'warning' : 'success'} />
 		<StatTile
 			label="Latest activity"
 			value={latestProject?.name ?? 'No activity'}
@@ -284,9 +271,7 @@
 			tone="neutral"
 		>
 			{#if latestProject}
-				<a href="/projects/{latestProject.id}" class="text-xs font-medium text-brand-700 hover:underline dark:text-brand-100">
-					Open project
-				</a>
+				<a href="/projects/{latestProject.id}" class="text-xs font-medium text-brand-700 hover:underline dark:text-brand-100"> Open project </a>
 			{/if}
 		</StatTile>
 		<StatTile
@@ -298,11 +283,7 @@
 	</div>
 
 	<div class="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-		<SectionPanel
-			title="Capacity and deploy modes"
-			description="Configured quota, live resource shape, and runtime composition across connected projects."
-			contentClass="p-0"
-		>
+		<SectionPanel title="Capacity and deploy modes" description="Configured quota, live resource shape, and runtime composition across connected projects." contentClass="p-0">
 			{#if quota}
 				<div class="grid gap-px bg-gray-100 dark:bg-gray-800 sm:grid-cols-2 xl:grid-cols-4">
 					<CapacityMetricChart
@@ -374,11 +355,7 @@
 			{/if}
 		</SectionPanel>
 
-		<FleetStatusChart
-			segments={healthSegments}
-			title="Fleet health"
-			subtitle="Status composition across connected projects."
-		/>
+		<FleetStatusChart segments={healthSegments} title="Fleet health" subtitle="Status composition across connected projects." />
 	</div>
 
 	<TableShell
@@ -422,7 +399,7 @@
 						</button>
 					{/if}
 				</label>
-				<IconButton label="Refresh dashboard data" variant="ghost" loading={loading} on:click={() => refreshDashboardData()}>
+				<IconButton label="Refresh dashboard data" variant="ghost" {loading} on:click={() => refreshDashboardData()}>
 					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8.1 8.1 0 00-15.5-3M4 4v4h4m-4 5a8.1 8.1 0 0015.5 3M20 20v-4h-4" />
 					</svg>
@@ -432,14 +409,21 @@
 
 		<svelte:fragment slot="notice">
 			{#if error}
-				<div class="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-					{error}
-					<button type="button" on:click={() => refreshDashboardData()} class="ml-2 font-medium underline">Retry</button>
+				<div
+					role="alert"
+					class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
+				>
+					<span class="min-w-0 flex-1">
+						{error}
+					</span>
+					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying...">Retry</ActionButton>
 				</div>
 			{/if}
 		</svelte:fragment>
 
-		<div class="hidden w-full grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] items-center gap-x-4 border-b border-gray-100 bg-gray-50/70 px-4 py-2 text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-400 lg:grid">
+		<div
+			class="hidden w-full grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] items-center gap-x-4 border-b border-gray-100 bg-gray-50/70 px-4 py-2 text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-400 lg:grid"
+		>
 			<span>Project</span>
 			<span>Status</span>
 			<span>App URL</span>
@@ -450,7 +434,9 @@
 		</div>
 		<div class="divide-y divide-gray-100 dark:divide-gray-800">
 			{#each visibleProjects as project}
-				<div class="grid gap-y-3 px-4 py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-900/70 lg:w-full lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] lg:items-center lg:gap-x-4">
+				<div
+					class="grid gap-y-3 px-4 py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-900/70 lg:w-full lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] lg:items-center lg:gap-x-4"
+				>
 					<div class="min-w-0">
 						<a href="/projects/{project.id}" class="block truncate text-sm font-semibold text-gray-950 hover:underline dark:text-white">
 							{project.name}
@@ -460,12 +446,7 @@
 						</p>
 					</div>
 					<div><StatusBadge status={project.status} pulse /></div>
-					<a
-						href={appUrl(project)}
-						target="_blank"
-						rel="noopener"
-						class="truncate font-mono text-xs text-gray-600 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white"
-					>
+					<a href={appUrl(project)} target="_blank" rel="noopener" class="truncate font-mono text-xs text-gray-600 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
 						{appUrl(project).replace(/^https?:\/\//, '')}
 					</a>
 					<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -482,11 +463,7 @@
 						{formatDate(project.updatedAt)}
 					</div>
 					<div class="flex items-center justify-start gap-1.5 lg:justify-end">
-						<IconButton
-							label="Open project"
-							href="/projects/{project.id}"
-							variant="default"
-						>
+						<IconButton label="Open project" href="/projects/{project.id}" variant="default">
 							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3M20 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2h5" />
 							</svg>

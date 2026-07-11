@@ -4,6 +4,7 @@
 	import ActionButton from '$components/ActionButton.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
@@ -290,26 +291,17 @@
 	</div>
 {:else if !status?.configured}
 	<SectionPanel title="Database Studio" description="No supported database connection was detected from this project's environment variables.">
-		<EmptyState
-			title="No database connection found."
-			description="Add DATABASE_URL or DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD in Environment, then redeploy or refresh this page."
-		/>
+		<EmptyState title="No database connection found." description="Add DATABASE_URL or DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD in Environment, then redeploy or refresh this page." />
 	</SectionPanel>
 {:else}
 	<div class="space-y-5">
 		<SectionPanel title="Database Studio" description="Browse and lightly edit project database rows without opening a full SQL client.">
 			<svelte:fragment slot="actions">
-				<ActionButton variant="secondary" on:click={() => void load()} disabled={loadingRows || loadingTables}>
-					Refresh
-				</ActionButton>
+				<ActionButton variant="secondary" on:click={() => void load()} disabled={loadingRows || loadingTables}>Refresh</ActionButton>
 				{#if writeActive}
-					<ActionButton variant="ghostDanger" on:click={revokeWriteMode} loading={revokingWrite} loadingLabel="Revoking...">
-						Disable write
-					</ActionButton>
+					<ActionButton variant="ghostDanger" on:click={revokeWriteMode} loading={revokingWrite} loadingLabel="Revoking...">Disable write</ActionButton>
 				{:else}
-					<ActionButton variant="primary" on:click={startWriteMode} loading={startingWrite} loadingLabel="Enabling...">
-						Enable write
-					</ActionButton>
+					<ActionButton variant="primary" on:click={startWriteMode} loading={startingWrite} loadingLabel="Enabling...">Enable write</ActionButton>
 				{/if}
 			</svelte:fragment>
 
@@ -352,12 +344,7 @@
 								<option value={schema.name}>{schema.name}</option>
 							{/each}
 						</select>
-						<input
-							value={tableSearch}
-							placeholder="Search tables"
-							class="field mt-3 w-full"
-							on:input={(event) => (tableSearch = (event.currentTarget as HTMLInputElement).value)}
-						/>
+						<input value={tableSearch} placeholder="Search tables" class="field mt-3 w-full" on:input={(event) => (tableSearch = (event.currentTarget as HTMLInputElement).value)} />
 					</div>
 					{#if tableError}
 						<ErrorState message={tableError} on:retry={() => void loadTables()} />
@@ -374,7 +361,9 @@
 							{#each filteredTables as table}
 								<button
 									type="button"
-									class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors {selectedSchema === table.schema && selectedTable === table.name ? 'bg-brand-50 text-brand-900 dark:bg-brand-500/10 dark:text-brand-100' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-white'}"
+									class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors {selectedSchema === table.schema && selectedTable === table.name
+										? 'bg-brand-50 text-brand-900 dark:bg-brand-500/10 dark:text-brand-100'
+										: 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-white'}"
 									on:click={() => void chooseTable(table)}
 								>
 									<span class="truncate font-mono">{table.name}</span>
@@ -388,7 +377,9 @@
 					title={selectedTableLabel}
 					description={activeFilterCount > 0
 						? `${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'} · ${primaryColumns.length > 0 ? `Primary key: ${primaryColumns.map((column) => column.name).join(', ')}` : 'No primary key'}`
-						: primaryColumns.length > 0 ? `Primary key: ${primaryColumns.map((column) => column.name).join(', ')}` : 'Edit/delete disabled because this table has no primary key.'}
+						: primaryColumns.length > 0
+							? `Primary key: ${primaryColumns.map((column) => column.name).join(', ')}`
+							: 'Edit/delete disabled because this table has no primary key.'}
 					loading={loadingRows}
 					error={rowsError}
 					empty={false}
@@ -396,32 +387,11 @@
 					on:retry={() => void loadRows()}
 				>
 					<svelte:fragment slot="actions">
-						<ActionButton
-							variant="secondary"
-							size="xs"
-							on:click={() => void loadRows()}
-							disabled={!selectedTable || loadingRows}
-						>
-							Refresh rows
-						</ActionButton>
+						<ActionButton variant="secondary" size="xs" on:click={() => void loadRows()} disabled={!selectedTable || loadingRows}>Refresh rows</ActionButton>
 						{#if activeFilterCount > 0}
-							<ActionButton
-								variant="ghost"
-								size="xs"
-								on:click={() => void clearRowFilters()}
-								disabled={loadingRows}
-							>
-								Clear filters
-							</ActionButton>
+							<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows}>Clear filters</ActionButton>
 						{/if}
-						<ActionButton
-							variant="primary"
-							size="xs"
-							on:click={openInsert}
-							disabled={!writeActive || columns.length === 0}
-						>
-							Insert row
-						</ActionButton>
+						<ActionButton variant="primary" size="xs" on:click={openInsert} disabled={!writeActive || columns.length === 0}>Insert row</ActionButton>
 					</svelte:fragment>
 
 					<div class="border-b border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/60">
@@ -442,14 +412,7 @@
 								/>
 							</label>
 							<div class="flex flex-wrap gap-2">
-								<ActionButton
-									variant={filterDirty ? 'primary' : 'secondary'}
-									size="xs"
-									on:click={() => void applyRowFilters()}
-									disabled={loadingRows || !filterDirty}
-								>
-									Apply filters
-								</ActionButton>
+								<ActionButton variant={filterDirty ? 'primary' : 'secondary'} size="xs" on:click={() => void applyRowFilters()} disabled={loadingRows || !filterDirty}>Apply filters</ActionButton>
 								<ActionButton
 									variant="ghost"
 									size="xs"
@@ -474,16 +437,14 @@
 										>
 											<option value="">Any value</option>
 											{#each column.enumValues ?? [] as value}
-												<option value={value}>{value}</option>
+												<option {value}>{value}</option>
 											{/each}
 										</select>
 									</label>
 								{/each}
 							</div>
 						{/if}
-						<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-							Search and enum filters are applied in SQL with pagination; MyPaas does not load the whole table into memory.
-						</p>
+						<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Search and enum filters are applied in SQL with pagination; MyPaas does not load the whole table into memory.</p>
 					</div>
 
 					{#if !rows || rows.rows.length === 0}
@@ -513,7 +474,7 @@
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-								{#each rows?.rows ?? [] as row}
+								{#each rows?.rows ?? [] as row, rowIndex}
 									<tr class="hover:bg-gray-50/70 dark:hover:bg-gray-900/60">
 										{#each columns as column}
 											<td class="max-w-72 truncate px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-200" title={formatCell(row[column.name])}>
@@ -522,22 +483,30 @@
 										{/each}
 										<td class="px-3 py-2">
 											<div class="flex justify-end gap-1">
-												<ActionButton
-													size="xs"
+												<IconButton
+													label={`Edit database row ${pageIndex * pageSize + rowIndex + 1}`}
 													variant="ghost"
 													on:click={() => openEdit(row)}
 													disabled={!writeActive || primaryColumns.length === 0}
 												>
-													Edit
-												</ActionButton>
-												<ActionButton
-													size="xs"
-													variant="ghostDanger"
+													<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 3.487a2.121 2.121 0 013 3L8.25 18.1 4 19.5l1.4-4.25L16.862 3.487zM14.75 5.6l3 3" />
+													</svg>
+												</IconButton>
+												<IconButton
+													label={`Delete database row ${pageIndex * pageSize + rowIndex + 1}`}
+													variant="danger"
 													on:click={() => openDelete(row)}
 													disabled={!writeActive || primaryColumns.length === 0}
 												>
-													Delete
-												</ActionButton>
+													<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+														/>
+													</svg>
+												</IconButton>
 											</div>
 										</td>
 									</tr>
@@ -547,14 +516,7 @@
 					{/if}
 
 					<svelte:fragment slot="footer">
-						<Pagination
-							bind:page={pageIndex}
-							{pageSize}
-							totalShown={rows?.rows.length ?? 0}
-							hasNext={rows?.hasMore ?? false}
-							loading={loadingRows}
-							label="Rows"
-						/>
+						<Pagination bind:page={pageIndex} {pageSize} totalShown={rows?.rows.length ?? 0} hasNext={rows?.hasMore ?? false} loading={loadingRows} label="Rows" />
 					</svelte:fragment>
 				</TableShell>
 			</div>
@@ -573,9 +535,7 @@
 			</div>
 			<div class="max-h-[70vh] overflow-auto p-5">
 				{#if mutationMode === 'delete'}
-					<p class="text-sm leading-6 text-gray-600 dark:text-gray-300">
-						Delete this row by primary key. This action runs immediately and cannot be undone by MyPaas.
-					</p>
+					<p class="text-sm leading-6 text-gray-600 dark:text-gray-300">Delete this row by primary key. This action runs immediately and cannot be undone by MyPaas.</p>
 					<div class="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-800 dark:bg-gray-900">
 						{#each primaryColumns as column}
 							<p><span class="font-mono font-medium">{column.name}</span>: {formatCell(selectedRow?.[column.name])}</p>
@@ -602,12 +562,7 @@
 			</div>
 			<div class="flex justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">
 				<ActionButton variant="ghost" on:click={closeMutation} disabled={mutating}>Cancel</ActionButton>
-				<ActionButton
-					variant={mutationMode === 'delete' ? 'danger' : 'primary'}
-					on:click={() => void submitMutation()}
-					loading={mutating}
-					loadingLabel="Saving..."
-				>
+				<ActionButton variant={mutationMode === 'delete' ? 'danger' : 'primary'} on:click={() => void submitMutation()} loading={mutating} loadingLabel="Saving...">
 					{mutationMode === 'delete' ? 'Delete row' : 'Save row'}
 				</ActionButton>
 			</div>
