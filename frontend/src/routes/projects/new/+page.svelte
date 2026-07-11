@@ -119,7 +119,7 @@
 	);
 	$: missingRequiredEnvKeys = normalizedComposeRequiredEnvKeys
 		.filter((key) => !(managedDatabaseUrl && key === 'DATABASE_URL'))
-		.filter((key) => !((envDraftValueByKey.get(key)?.trim().length ?? 0) > 0));
+		.filter((key) => !((envDraftValueByKey.get(key)?.trim()?.length ?? 0) > 0));
 	$: composeDisabledReason = composeBlockingIssues[0]?.message
 		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
 	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !composeDisabledReason && !submitting && !detecting && !inspectingRepo);
@@ -229,7 +229,7 @@
 			form.appPort = '';
 			appPortSource = 'fallback';
 		}
-		detectedServices = detected.services;
+		detectedServices = detected.services ?? [];
 		mergeDiscoveredEnvVars(detected.envVars ?? []);
 		const branchSuffix = detected.branch ? ` on ${detected.branch}` : '';
 		detectMessage = detected.deployMode === 'compose'
