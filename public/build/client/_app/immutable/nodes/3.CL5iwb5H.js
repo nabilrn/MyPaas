@@ -1,1 +1,0 @@
-import{R as o}from"../chunks/CWeFt6jb.js";function r(e,t){throw new o(e,t.toString())}const n=()=>{throw r(307,"/projects")},i=Object.freeze(Object.defineProperty({__proto__:null,load:n},Symbol.toStringTag,{value:"Module"}));export{i as universal};

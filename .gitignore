@@ -27,6 +27,10 @@ frontend/build/
 frontend/.svelte-kit/
 frontend/dist/
 frontend/.vercel/
+public/node_modules/
+public/.astro/
+public/dist/
+public/.pnpm-store/
 
 # Node / pnpm
 npm-debug.log
