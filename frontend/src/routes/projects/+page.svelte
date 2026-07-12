@@ -45,6 +45,7 @@
 	let uptimeLoadingIds = new Set<string>();
 	let uptimeRefreshToken = 0;
 	let lastRefreshedAt: Date | null = null;
+	let projectsInFlight = false;
 
 	$: normalizedSearch = searchQuery.trim().toLowerCase();
 	$: filteredProjects = normalizedSearch
@@ -94,9 +95,14 @@
 		void loadUptimesFor(visibleProjects);
 	}
 
-	onMount(refreshDashboardData);
+	onMount(() => {
+		void refreshDashboardData();
+		const dashboardRefresh = setInterval(() => void loadProjects(true), 5000);
+		return () => clearInterval(dashboardRefresh);
+	});
 
 	async function refreshDashboardData(background = false) {
+		if (projectsInFlight) return;
 		uptimeRefreshToken += 1;
 		projectUptimes = {};
 		uptimeLoadingIds = new Set();
@@ -104,6 +110,8 @@
 	}
 
 	async function loadProjects(background = false) {
+		if (projectsInFlight) return;
+		projectsInFlight = true;
 		if (!background) {
 			loading = true;
 		}
@@ -117,6 +125,7 @@
 			if (!background) {
 				loading = false;
 			}
+			projectsInFlight = false;
 		}
 	}
 
