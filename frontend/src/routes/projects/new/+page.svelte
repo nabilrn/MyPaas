@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Upload, X } from '@lucide/svelte';
+	import { Check, Copy, Upload, X } from '@lucide/svelte';
+	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -65,6 +66,8 @@
 	let newEnvKey = '';
 	let appPortSource: PortSource = 'fallback';
 	let envFileInput: HTMLInputElement | null = null;
+	let copiedHandoffPrompt = '';
+	let handoffCopyTimer: ReturnType<typeof setTimeout> | undefined;
 	let form = {
 		name: '',
 		repoUrl: '',
@@ -97,6 +100,20 @@
 	$: selectedProfile = resourceProfiles.find((profile) => profile.id === form.resourceProfile);
 	$: managedDatabaseUrl = form.sharedPostgres && form.deployMode !== 'static';
 	$: effectiveAppPort = form.deployMode === 'static' ? '80' : form.appPort || DEFAULT_APP_PORT;
+	$: handoffEnvKeys = Array.from(new Set([
+		...envDrafts.map((item) => normalizeEnvKey(item.key)).filter(Boolean),
+		...(managedDatabaseUrl ? ['DATABASE_URL'] : [])
+	])).sort();
+	$: handoffPrompt = buildDeploymentHandoffPrompt(
+		form.deployMode,
+		form.name,
+		form.repoUrl,
+		form.branch,
+		form.mainService,
+		form.appPort,
+		appPortSource,
+		handoffEnvKeys
+	);
 	$: deployModeOptions = deployModes.map((mode) => ({
 		value: mode.id,
 		label: mode.title,
@@ -590,6 +607,92 @@
 		appPortSource = form.appPort ? 'manual' : 'fallback';
 	}
 
+	function buildDeploymentHandoffPrompt(
+		mode: DeployModeChoice,
+		projectName: string,
+		repoUrl: string,
+		branch: string,
+		mainService: string,
+		appPort: string,
+		portSource: PortSource,
+		envKeys: string[]
+	) {
+		if (mode !== 'dockerfile' && mode !== 'compose') return '';
+
+		const selectedPort = appPort.trim();
+		const portRequirement = selectedPort && portSource !== 'fallback'
+			? `- MyPaas App port is ${selectedPort}. Make the public process listen on 0.0.0.0:${selectedPort}, and keep Docker EXPOSE or the Compose container port consistent with it.`
+			: '- Inspect the application and determine its real container port. Make the public process listen on 0.0.0.0, keep Docker EXPOSE or the Compose container port consistent, and report the chosen port for the MyPaas App port field. Do not assume port 3000 unless the application actually uses it.';
+		const envRequirement = envKeys.length > 0
+			? `- Preserve and document these environment keys already discovered by MyPaas: ${envKeys.join(', ')}. Do not put their values or any secrets in Git.`
+			: '- Discover the runtime environment keys the application needs. Add keys only to .env.example with safe placeholders; never put secret values in Git.';
+		const repositoryContext = [
+			projectName.trim() ? `- MyPaas project: ${projectName.trim()}` : '',
+			repoUrl.trim() ? `- Repository: ${repoUrl.trim()}` : '',
+			branch.trim() ? `- Branch: ${branch.trim()}` : ''
+		].filter(Boolean);
+		const modeRequirements = mode === 'dockerfile'
+			? [
+				'- Create or repair a root-level Dockerfile and .dockerignore. Focus on the Dockerfile deployment contract; do not add Compose only for this deployment.',
+				'- Reuse the project\'s existing package manager, lockfile, build command, and production start command. Use a multi-stage build when it materially reduces the runtime image.',
+				'- The final container must run the application in the foreground and start without an interactive shell.',
+				portRequirement,
+				'- Run as a non-root user when the framework and filesystem requirements allow it.'
+			]
+			: [
+				'- Create or repair a root-level compose.yml. Every build context and Dockerfile path must resolve from the repository.',
+				mainService.trim()
+					? `- The MyPaas public service is \`${mainService.trim()}\`. Keep that service name and make it the HTTP entrypoint.`
+					: '- Choose one clear HTTP service as the public service and report its service name for the MyPaas Main service field.',
+				portRequirement,
+				'- Prefer expose/container ports over fixed host port bindings. MyPaas supplies the host binding and Caddy route for the selected public service.',
+				'- Internal services must communicate by Compose service name, not localhost. Use named volumes for persistent data and healthchecks where they improve startup ordering.',
+				'- Do not use container_name, network_mode: host, privileged containers, or a /var/run/docker.sock mount. Avoid external networks unless the MyPaas host is explicitly prepared for them.'
+			];
+
+		return [
+			'Prepare this repository for deployment on MyPaas, a self-hosted PaaS.',
+			'',
+			...(repositoryContext.length > 0 ? ['Repository context:', ...repositoryContext, ''] : []),
+			`Deployment mode: ${mode === 'compose' ? 'Docker Compose' : 'Dockerfile'}`,
+			'',
+			'Work required:',
+			'- Inspect the repository, framework, existing scripts, and current deployment files before editing.',
+			...modeRequirements,
+			'- Keep configuration in environment variables and do not bake credentials, tokens, URLs with secrets, or machine-specific paths into the image.',
+			envRequirement,
+			'- Preserve current application behavior. Make only the code/config changes required for a reliable production container.',
+			'- Update the README with local container commands and the exact MyPaas values to enter: deployment mode, App port, Main service when applicable, and required environment keys.',
+			'',
+			'Validation:',
+			mode === 'compose'
+				? '- Run the relevant project checks, build the images, and run `docker compose config` before finishing.'
+				: '- Run the relevant project checks and a production `docker build` before finishing.',
+			'- Do not deploy, push, or commit unless I explicitly ask. Finish with a concise summary of files changed, validation performed, and the MyPaas settings I should use.'
+		].join('\n');
+	}
+
+	async function copyHandoffPrompt() {
+		if (!handoffPrompt) return;
+		try {
+			if (!navigator.clipboard) throw new Error('Clipboard API is unavailable');
+			await navigator.clipboard.writeText(handoffPrompt);
+			copiedHandoffPrompt = handoffPrompt;
+			if (handoffCopyTimer) clearTimeout(handoffCopyTimer);
+			handoffCopyTimer = setTimeout(() => {
+				copiedHandoffPrompt = '';
+				handoffCopyTimer = undefined;
+			}, 1800);
+			toast.success('Coding agent prompt copied');
+		} catch {
+			toast.error('Failed to copy prompt');
+		}
+	}
+
+	onDestroy(() => {
+		if (handoffCopyTimer) clearTimeout(handoffCopyTimer);
+	});
+
 	function issueTone(issue: ComposeIssue) {
 		if (issue.severity === 'error') return 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200';
 		if (issue.severity === 'warning') return 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900/60 dark:bg-yellow-950/20 dark:text-yellow-100';
@@ -871,6 +974,31 @@
 							</div>
 						{/if}
 					</div>
+
+					{#if handoffPrompt}
+						<div class="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+							<div class="flex flex-col gap-3 border-b border-gray-100 px-3 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+								<div class="min-w-0">
+									<p class="text-sm font-medium text-gray-950 dark:text-white">Coding agent handoff</p>
+									<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">
+										Copy a deployment brief tailored to the selected runtime and current repository fields.
+									</p>
+								</div>
+								<ActionButton variant="secondary" size="xs" type="button" on:click={copyHandoffPrompt}>
+									<span class="inline-flex items-center gap-1.5">
+										{#if copiedHandoffPrompt === handoffPrompt}
+											<Check size={14} aria-hidden="true" />
+											Copied
+										{:else}
+											<Copy size={14} aria-hidden="true" />
+											Copy prompt
+										{/if}
+									</span>
+								</ActionButton>
+							</div>
+							<pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words px-3 py-3 font-mono text-xs leading-5 text-gray-600 dark:text-gray-300">{handoffPrompt}</pre>
+						</div>
+					{/if}
 
 					{#if composePlan}
 						<div class="rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">

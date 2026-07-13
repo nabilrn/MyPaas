@@ -94,3 +94,16 @@ func TestHasLiveRuntime(t *testing.T) {
 		})
 	}
 }
+
+func TestIdleMetricsCannotImplyRunningStatus(t *testing.T) {
+	items := idleMetrics(db.Project{DeployMode: "dockerfile", Status: "stopped"})
+	if len(items) != 1 {
+		t.Fatalf("idleMetrics() returned %d items, want 1", len(items))
+	}
+	if items[0].Uptime != "n/a" {
+		t.Fatalf("idle uptime = %q, want n/a", items[0].Uptime)
+	}
+	if hasLiveRuntime("stopped") {
+		t.Fatal("stopped project must not be treated as a live runtime")
+	}
+}

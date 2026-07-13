@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
+- Dashboard action, navigation, status, and utility icons now use the official `@lucide/svelte` library for consistent geometry, sizing, and stroke rendering; chart and GitHub brand SVGs remain purpose-specific.
 - Deploy actions now open deployment history with the queued deployment focused, its build output expanded immediately, and non-overlapping polling that fills the viewer as logs arrive.
 - Compact dashboard actions now use consistent accessible icon controls, coarse-pointer touch targets, and guarded loading and disabled states across deployments, environment variables, database rows, audit logs, projects, and admin users.
 - Production installs now route Caddy to the same Docker network gateway used to bind deployed project ports, preventing fresh-VM `502 Bad Gateway` errors when `host.docker.internal` resolves to a different bridge.
@@ -102,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+- Stop/start/restart lifecycle actions now keep Caddy routes aligned with container state, and project SSE metrics no longer overwrite a stopped project back to running.
 - Ignore the Linux Docker socket `DOCKER_HOST` value for local Windows Docker CLI calls and use the non-deprecated `docker stop --timeout` flag
 - Treat missing Docker containers as empty log output instead of logging an internal server error while a project has not deployed successfully yet
 - Bind Caddy Admin API inside dev/prod containers on `0.0.0.0:2019` so the API can manage routes through the published local port or Docker network

@@ -302,9 +302,6 @@ func (s *projectStream) emitMetrics(ctx context.Context) {
 	snapshot := MetricsSnapshotFromContainers(metrics)
 	for _, item := range snapshot.Items {
 		_ = s.send("metrics", item)
-		if item.Uptime != "" {
-			_ = s.send("status", map[string]string{"status": "running", "uptime": item.Uptime})
-		}
 	}
 }
 

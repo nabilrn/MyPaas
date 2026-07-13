@@ -194,9 +194,15 @@ func (s *Service) Start(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.StartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
+		if err := s.addRuntimeRoute(ctx, project); err != nil {
+			return err
+		}
 		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
 	}
 	if err := s.docker.Start(ctx, containerName(project.Name)); err != nil {
+		return err
+	}
+	if err := s.addRuntimeRoute(ctx, project); err != nil {
 		return err
 	}
 	return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
@@ -217,9 +223,15 @@ func (s *Service) Stop(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.StopComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
+		if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
+			return err
+		}
 		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "stopped"})
 	}
 	if err := s.docker.Stop(ctx, containerName(project.Name)); err != nil {
+		return err
+	}
+	if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
 		return err
 	}
 	return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "stopped"})
@@ -240,12 +252,25 @@ func (s *Service) Restart(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.RestartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
+		if err := s.addRuntimeRoute(ctx, project); err != nil {
+			return err
+		}
 		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
 	}
 	if err := s.docker.Restart(ctx, containerName(project.Name)); err != nil {
 		return err
 	}
+	if err := s.addRuntimeRoute(ctx, project); err != nil {
+		return err
+	}
 	return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "running"})
+}
+
+func (s *Service) addRuntimeRoute(ctx context.Context, project db.Project) error {
+	if project.AllocatedPort == nil {
+		return fmt.Errorf("%w: project does not have an allocated port", errs.ErrValidation)
+	}
+	return s.caddy.AddRoute(ctx, s.host(project), *project.AllocatedPort)
 }
 
 func (s *Service) ContainerLogs(ctx context.Context, projectID uuid.UUID, tail int) ([]string, error) {
