@@ -147,6 +147,8 @@
 		.filter((key) => !((envDraftValueByKey.get(key)?.trim()?.length ?? 0) > 0));
 	$: composeDisabledReason = composeBlockingIssues[0]?.message
 		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
+	$: portToServiceMap = buildPortToServiceMap(composePlan?.services ?? []);
+	$: localhostEnvWarnings = detectLocalhostInEnvDrafts(envDrafts, portToServiceMap);
 	$: canSubmit = Boolean(form.name.trim() && form.repoUrl.trim() && form.branch.trim() && !composeDisabledReason && !submitting && !detecting && !inspectingRepo);
 	$: createDisabledReason = !form.name.trim()
 		? 'Project name is required'
@@ -859,6 +861,48 @@
 			.map((entry) => entry.trim())
 			.filter(Boolean);
 	}
+
+	function buildPortToServiceMap(services: ComposeServicePlan[]): Map<number, string> {
+		const map = new Map<number, string>();
+		for (const service of services) {
+			for (const port of service.ports ?? []) {
+				if (port.target > 0 && !map.has(port.target)) {
+					map.set(port.target, service.name);
+				}
+			}
+			for (const port of service.expose ?? []) {
+				if (port > 0 && !map.has(port)) {
+					map.set(port, service.name);
+				}
+			}
+		}
+		return map;
+	}
+
+	const LOCALHOST_EXPR = /(?:[a-z]+:\/\/)?(?:localhost|127\.0\.0\.1)(?::(\d+))?/gi;
+
+	function detectLocalhostInEnvDrafts(
+		drafts: EnvDraft[],
+		portToService: Map<number, string>
+	): Map<number, { host: string; port: number; service: string; suggested: string }> {
+		const warnings = new Map<number, { host: string; port: number; service: string; suggested: string }>();
+		drafts.forEach((draft, index) => {
+			const value = draft.value.trim();
+			if (!value) return;
+			LOCALHOST_EXPR.lastIndex = 0;
+			const match = LOCALHOST_EXPR.exec(value);
+			if (!match) return;
+			const host = match[0];
+			const portStr = match[1];
+			const port = portStr ? parseInt(portStr, 10) : 0;
+			const service = port > 0 ? (portToService.get(port) ?? '') : '';
+			const suggested = service
+				? value.replace(host.replace(/:\d+$/, ''), service)
+				: '';
+			warnings.set(index, { host, port, service, suggested });
+		});
+		return warnings;
+	}
 </script>
 
 <svelte:head>
@@ -1358,6 +1402,29 @@
 									<X class="h-4 w-4" aria-hidden="true" />
 								</IconButton>
 							</div>
+							{#if localhostEnvWarnings.has(index)}
+								{@const warning = localhostEnvWarnings.get(index)!}
+								<div class="border-b border-gray-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800 dark:border-gray-800 dark:bg-amber-950/20 dark:text-amber-200">
+									<p>
+										<span class="font-medium">{draft.key}</span> uses <span class="font-mono">{warning.host}</span>.
+										In Docker, localhost means the container itself, not another service.
+									</p>
+									{#if warning.service}
+										<p class="mt-1">
+											Compose service <span class="font-mono font-medium">{warning.service}</span> exposes port {warning.port}.
+											<button
+												type="button"
+												class="ml-1 underline hover:text-amber-900 dark:hover:text-amber-100"
+												on:click={() => updateEnvDraftValue(index, warning.suggested)}
+											>
+												Use {warning.suggested}
+											</button>
+										</p>
+									{:else}
+										<p class="mt-1">Replace <span class="font-mono">localhost</span> with the compose service name (e.g. <span class="font-mono">db</span>, <span class="font-mono">redis</span>, <span class="font-mono">nats</span>).</p>
+									{/if}
+								</div>
+							{/if}
 						{/each}
 						{#if envDrafts.length === 0 && !managedDatabaseUrl}
 							<p class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">No project environment variables configured.</p>

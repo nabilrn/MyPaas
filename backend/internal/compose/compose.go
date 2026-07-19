@@ -18,7 +18,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"mypaas/internal/errs"
@@ -28,6 +30,11 @@ import (
 // than this are ignored to keep discovery fast on large monorepos and to avoid
 // following nested git histories or vendored trees.
 const MaxScanDepth = 4
+
+// LocalhostPortExpr matches `localhost:PORT` or `127.0.0.1:PORT` with an
+// optional protocol prefix (postgres://, redis://, http://, etc.). The port
+// is captured in group 1. Also matches bare `localhost` without a port.
+var LocalhostPortExpr = regexp.MustCompile(`(?i)(?:[a-z]+://)?(?:localhost|127\.0\.0\.1)(?::(\d+))?`)
 
 // skipDirs are directory names we never descend into during recursive
 // discovery. They are heavy, rarely contain deployable compose files, or are
@@ -335,3 +342,58 @@ var ErrComposeFileNotFound = errs.ErrComposeFileNotFound
 // EnsureErrComposeFileNotFound is a compile-time guarantee that this package's
 // exported sentinel stays aligned with errs.ErrComposeFileNotFound.
 var _ = errors.Is(ErrComposeFileNotFound, errs.ErrComposeFileNotFound)
+
+// LocalhostWarning describes a localhost reference found in an env var value.
+// Used by the compose doctor and the deployment engine to warn users before
+// their app fails to connect inside a container.
+type LocalhostWarning struct {
+	Key       string // env var key, e.g. "DATABASE_URL"
+	Value     string // full env var value, e.g. "postgres://user:pass@localhost:5432/db"
+	Port      int    // port extracted from the localhost reference (0 if none)
+	Service   string // compose service name that exposes the port (empty if no match)
+	Suggested string // value with localhost replaced by the service name (empty if no match)
+}
+
+// DetectLocalhostInEnv scans a key→value map for localhost/127.0.0.1
+// references and returns actionable warnings. portToService is optional —
+// when nil, warnings are emitted without a service suggestion.
+func DetectLocalhostInEnv(envs map[string]string, portToService map[int32]string) []LocalhostWarning {
+	if portToService == nil {
+		portToService = map[int32]string{}
+	}
+	keys := make([]string, 0, len(envs))
+	for key := range envs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var warnings []LocalhostWarning
+	for _, key := range keys {
+		value := envs[key]
+		matches := LocalhostPortExpr.FindAllStringSubmatch(value, -1)
+		if len(matches) == 0 {
+			continue
+		}
+		for _, match := range matches {
+			w := LocalhostWarning{
+				Key:   key,
+				Value: value,
+			}
+			if match[1] != "" {
+				if port, err := strconv.Atoi(match[1]); err == nil && port > 0 {
+					w.Port = port
+					if svc, ok := portToService[int32(port)]; ok {
+						w.Service = svc
+						// Replace only the host portion, keeping :port intact
+						// so localhost:5432 → db:5432, not just db.
+						hostPart := match[0]
+						hostPart = strings.TrimSuffix(hostPart, ":"+match[1])
+						w.Suggested = strings.Replace(value, hostPart, svc, 1)
+					}
+				}
+			}
+			warnings = append(warnings, w)
+		}
+	}
+	return warnings
+}

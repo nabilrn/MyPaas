@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -616,6 +617,7 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
+	logLocalhostEnvWarnings(log, envs, project.DeployMode)
 	envFile := filepath.Join(workspace, ".env")
 	if err := envvar.WriteEnvFile(envFile, envs); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
@@ -1174,6 +1176,28 @@ func resolveComposeLayout(workspace string, project db.Project, envFile string) 
 		"docker-compose.mypaas.sanitized.json",
 		envFile,
 	)
+}
+
+// logLocalhostEnvWarnings scans decrypted env vars for localhost/127.0.0.1
+// references and logs actionable warnings before docker compose up. Inside a
+// container, localhost means the container itself — not the host or another
+// service — so a DATABASE_URL=postgres://...@localhost:5432 will fail. When
+// the port matches a compose service, the warning includes a concrete
+// suggestion (e.g. "use db:5432 instead").
+func logLocalhostEnvWarnings(log func(string), envs map[string]string, deployMode string) {
+	warnings := compose.DetectLocalhostInEnv(envs, nil)
+	for _, w := range warnings {
+		base := fmt.Sprintf("WARNING: env var %s contains localhost", w.Key)
+		if w.Port > 0 {
+			base += fmt.Sprintf(":%d", w.Port)
+		}
+		base += ". In Docker, localhost means the container itself, not the host or another service."
+		if w.Service != "" {
+			log(fmt.Sprintf("%s Compose service %q exposes port %d. Use %s instead of %s", base, w.Service, w.Port, strconv.Quote(w.Suggested), strconv.Quote(w.Value)))
+		} else {
+			log(fmt.Sprintf("%s Replace localhost with the compose service name (e.g. db, redis, nats).", base))
+		}
+	}
 }
 
 func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpuLimit float64, projectNetwork, imageTag string) error {

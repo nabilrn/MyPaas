@@ -204,6 +204,73 @@ services:
 	}
 }
 
+func TestAddLocalhostEnvIssuesWarnsOnComposeEnvironmentBlock(t *testing.T) {
+	portToService := map[int32]string{
+		5432: "db",
+		6379: "redis",
+	}
+
+	issue := localhostEnvIssue("app", "DATABASE_URL", "postgres://user:pass@localhost:5432/mydb", portToService)
+	if issue == nil {
+		t.Fatal("localhostEnvIssue() = nil, want an issue")
+	}
+	if issue.Severity != "warning" {
+		t.Fatalf("Severity = %q, want warning", issue.Severity)
+	}
+	if issue.Code != "LOCALHOST_ENV" {
+		t.Fatalf("Code = %q, want LOCALHOST_ENV", issue.Code)
+	}
+	if !hasComposeIssue([]ComposeIssue{*issue}, "LOCALHOST_ENV") {
+		t.Fatalf("Expected LOCALHOST_ENV issue, got: %#v", issue)
+	}
+	if issue.Message == "" {
+		t.Fatal("Expected non-empty message with suggestion")
+	}
+}
+
+func TestAddLocalhostEnvIssuesWarnsOnBareLocalhost(t *testing.T) {
+	issue := localhostEnvIssue("app", "API_URL", "http://localhost/api", map[int32]string{})
+	if issue == nil {
+		t.Fatal("localhostEnvIssue() = nil, want an issue")
+	}
+	if issue.Code != "LOCALHOST_ENV" {
+		t.Fatalf("Code = %q, want LOCALHOST_ENV", issue.Code)
+	}
+}
+
+func TestAddLocalhostEnvIssuesReturnsNilForCleanValues(t *testing.T) {
+	issue := localhostEnvIssue("app", "DATABASE_URL", "postgres://user:pass@db:5432/mydb", map[int32]string{5432: "db"})
+	if issue != nil {
+		t.Fatalf("localhostEnvIssue() = %#v, want nil for clean value", issue)
+	}
+}
+
+func TestBuildPortToServiceMapMapsExposeAndPorts(t *testing.T) {
+	services := map[string]composeServiceConfig{
+		"db": {
+			Expose: json.RawMessage(`["5432"]`),
+		},
+		"redis": {
+			Ports: json.RawMessage(`[{"target": 6379, "published": "6379"}]`),
+		},
+		"app": {
+			Ports: json.RawMessage(`[{"target": 3000, "published": "3000"}]`),
+			Expose: json.RawMessage(`["3000"]`),
+		},
+	}
+
+	portToService := buildPortToServiceMap(services)
+	if portToService[5432] != "db" {
+		t.Fatalf("port 5432 -> %q, want db", portToService[5432])
+	}
+	if portToService[6379] != "redis" {
+		t.Fatalf("port 6379 -> %q, want redis", portToService[6379])
+	}
+	if portToService[3000] != "app" {
+		t.Fatalf("port 3000 -> %q, want app", portToService[3000])
+	}
+}
+
 func hasComposeIssue(issues []ComposeIssue, code string) bool {
 	for _, issue := range issues {
 		if issue.Code == code {

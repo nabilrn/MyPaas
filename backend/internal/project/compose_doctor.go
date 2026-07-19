@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"mypaas/internal/compose"
 	"mypaas/internal/envdiscover"
 	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
@@ -128,6 +129,7 @@ func inspectComposePlan(ctx context.Context, workspace, composeFile string, serv
 		addComposeServiceIssues(plan, composeDir, serviceName, item, spec)
 	}
 	addComposePlanIssues(plan, doc, mainService, appPort)
+	addLocalhostEnvIssues(plan, doc, envVars)
 	sortComposeIssues(plan.Issues)
 	return plan, nil
 }
@@ -537,6 +539,164 @@ func int32FromString(value string) int32 {
 		return 0
 	}
 	return int32(parsed)
+}
+
+// addLocalhostEnvIssues scans compose `environment:` blocks and discovered env
+// var defaults for `localhost:PORT` or `127.0.0.1:PORT` references. Inside a
+// Docker container, `localhost` means the container itself — not the host or
+// another service. When the port matches a compose service that exposes it,
+// the issue includes a concrete suggestion (e.g. "use db:5432 instead of
+// localhost:5432"). Warnings are emitted even without a port match so the
+// user is reminded to fix the value.
+func addLocalhostEnvIssues(plan *ComposePlan, doc composeConfigDoc, envVars []envdiscover.Var) {
+	portToService := buildPortToServiceMap(doc.Services)
+
+	seen := make(map[string]struct{})
+
+	// Scan compose `environment:` blocks for hardcoded localhost values.
+	for serviceName, spec := range doc.Services {
+		envEntries := parseComposeEnvironmentEntries(spec.Environment)
+		for key, value := range envEntries {
+			issueKey := serviceName + ":" + key
+			if _, ok := seen[issueKey]; ok {
+				continue
+			}
+			if issue := localhostEnvIssue(serviceName, key, value, portToService); issue != nil {
+				seen[issueKey] = struct{}{}
+				plan.Issues = append(plan.Issues, *issue)
+			}
+		}
+	}
+
+	// Scan discovered env var defaults for localhost values.
+	for _, item := range envVars {
+		if item.DefaultValue == nil {
+			continue
+		}
+		issueKey := "env:" + item.Key
+		if _, ok := seen[issueKey]; ok {
+			continue
+		}
+		if issue := localhostEnvIssue("", item.Key, *item.DefaultValue, portToService); issue != nil {
+			seen[issueKey] = struct{}{}
+			plan.Issues = append(plan.Issues, *issue)
+		}
+	}
+}
+
+// localhostEnvIssue builds a single warning issue for a localhost reference in
+// an env var value. Returns nil if the value does not contain localhost or
+// 127.0.0.1.
+func localhostEnvIssue(serviceName, key, value string, portToService map[int32]string) *ComposeIssue {
+	matches := compose.LocalhostPortExpr.FindAllStringSubmatch(value, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	var service *string
+	if serviceName != "" {
+		service = &serviceName
+	}
+
+	// Try to find a port match for a concrete suggestion.
+	for _, match := range matches {
+		portStr := match[1]
+		if portStr == "" {
+			continue
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port <= 0 {
+			continue
+		}
+		svc, ok := portToService[int32(port)]
+		if !ok {
+			continue
+		}
+		// Replace only the host portion, keeping :port intact
+		// so localhost:5432 → db:5432, not just db.
+		hostPart := match[0]
+		hostPart = strings.TrimSuffix(hostPart, ":"+portStr)
+		suggested := strings.Replace(value, hostPart, svc, 1)
+		message := fmt.Sprintf(
+			"%s uses %s. In Docker, localhost means the container itself, not the database. Compose service %q exposes port %d. Use %q instead.",
+			key, match[0], svc, port, suggested,
+		)
+		return &ComposeIssue{
+			Severity: "warning",
+			Code:     "LOCALHOST_ENV",
+			Service:  service,
+			Message:  message,
+		}
+	}
+
+	// No port match — still warn so the user knows to fix it.
+	first := matches[0][0]
+	message := fmt.Sprintf(
+		"%s uses %s. In Docker, localhost means the container itself, not the host. Replace localhost with the compose service name (e.g. db, redis, nats).",
+		key, first,
+	)
+	return &ComposeIssue{
+		Severity: "warning",
+		Code:     "LOCALHOST_ENV",
+		Service:  service,
+		Message:  message,
+	}
+}
+
+// buildPortToServiceMap creates a port→service-name lookup from each
+// service's `expose` and `ports` (container target) declarations. The first
+// service to claim a port wins; ties are resolved by service name sort order.
+func buildPortToServiceMap(services map[string]composeServiceConfig) map[int32]string {
+	portToService := make(map[int32]string)
+	names := make([]string, 0, len(services))
+	for name := range services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		spec := services[name]
+		for _, port := range composeExposePorts(spec.Expose) {
+			if port > 0 && portToService[port] == "" {
+				portToService[port] = name
+			}
+		}
+		for _, port := range composePortPlans(spec.Ports) {
+			if port.Target > 0 && portToService[port.Target] == "" {
+				portToService[port.Target] = name
+			}
+		}
+	}
+	return portToService
+}
+
+// parseComposeEnvironmentEntries extracts key→value pairs from a compose
+// service's `environment:` block, which can be either a map or a list of
+// `KEY=VALUE` strings.
+func parseComposeEnvironmentEntries(raw json.RawMessage) map[string]string {
+	out := make(map[string]string)
+	if len(raw) == 0 || string(raw) == "null" {
+		return out
+	}
+	var asMap map[string]any
+	if err := json.Unmarshal(raw, &asMap); err == nil {
+		for key, value := range asMap {
+			if value == nil {
+				continue
+			}
+			out[key] = fmt.Sprint(value)
+		}
+		return out
+	}
+	var asList []string
+	if err := json.Unmarshal(raw, &asList); err == nil {
+		for _, item := range asList {
+			key, value, ok := strings.Cut(item, "=")
+			if !ok {
+				continue
+			}
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func sortComposeIssues(issues []ComposeIssue) {
