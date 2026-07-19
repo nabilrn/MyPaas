@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Microservice env support: per-service `.env.example` templates are auto-discovered in subdirectories. At deploy time, MyPaas generates a `.env` file next to each template by substituting the user's env var values. Existing `.env` files are never overwritten. Build log shows "Generated apps/api/.env from .env.example" for each file.
+- Env var service attribution: compose `environment:` references are matched to discovered env vars so the UI shows which compose service needs each var (badge per service).
+- Env var conflict detection: when the same key has different default values across service `.env.example` files, a warning shows the conflicting values and which services declare them.
 - Flexible Compose configuration: compose files anywhere in the repository (subdirectory, monorepo package, `infra/`, etc.), user-chained override files (`-f` ordering), `COMPOSE_PROFILES` support, and an explicit working-directory override. Persisted as `compose_file_path`, `compose_override_paths`, `compose_profiles`, `compose_workdir` on `projects` (migration `000009`). New `POST /projects/detect-compose` endpoint returns ranked compose file candidates. Create form and settings page expose the new fields. See ADR-016.
 - `UpdateProject` API and settings page can now change `mainService` for compose projects (previously create-only).
 - Ephemeral HTTPS access for the install wizard through an automatically cleaned-up Cloudflare Quick Tunnel, with SSH port forwarding retained as a fallback.

@@ -68,11 +68,22 @@ export interface EnvVar {
 	updatedAt: string;
 }
 
+export interface EnvVarConflictValue {
+	value: string;
+	sources: string[];
+}
+
+export interface EnvVarConflict {
+	values: EnvVarConflictValue[];
+}
+
 export interface EnvVarDiscovery {
 	key: string;
 	source: string;
 	sensitive: boolean;
 	defaultValue?: string;
+	services?: string[];
+	conflict?: EnvVarConflict | null;
 }
 
 export interface RepoTreeEntry {

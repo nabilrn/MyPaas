@@ -467,6 +467,8 @@
 				source: mergeEnvSources(item.source, discovered.source),
 				sensitive: item.sensitive || discovered.sensitive,
 				defaultValue: item.defaultValue ?? discovered.defaultValue,
+				services: discovered.services ?? item.services,
+				conflict: discovered.conflict ?? item.conflict,
 				value: item.value || defaultValue
 			};
 		});
@@ -1380,18 +1382,39 @@
 						{/if}
 						{#each envDrafts as draft, index}
 							<div class="grid gap-2 border-b border-gray-100 px-3 py-3 last:border-b-0 dark:border-gray-800 lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem] lg:items-center">
-								<input
-									value={draft.key}
-									on:input={(event) => updateEnvDraftKey(index, (event.currentTarget as HTMLInputElement).value)}
-									class="field w-full font-mono uppercase"
-								/>
-								<input
-									type={draft.sensitive ? 'password' : 'text'}
-									value={draft.value}
-									on:input={(event) => updateEnvDraftValue(index, (event.currentTarget as HTMLInputElement).value)}
-									placeholder={draft.defaultValue ? `sample: ${draft.defaultValue}` : ''}
-									class="field w-full font-mono"
-								/>
+								<div class="min-w-0">
+									<input
+										value={draft.key}
+										on:input={(event) => updateEnvDraftKey(index, (event.currentTarget as HTMLInputElement).value)}
+										class="field w-full font-mono uppercase"
+									/>
+									{#if draft.services && draft.services.length > 0}
+										<div class="mt-1 flex flex-wrap gap-1">
+											{#each draft.services as svc}
+												<span class="rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[10px] text-brand-700 dark:bg-brand-500/10 dark:text-brand-200" title={`Used by ${svc}`}>
+													{svc}
+												</span>
+											{/each}
+										</div>
+									{/if}
+								</div>
+								<div class="min-w-0">
+									<input
+										type={draft.sensitive ? 'password' : 'text'}
+										value={draft.value}
+										on:input={(event) => updateEnvDraftValue(index, (event.currentTarget as HTMLInputElement).value)}
+										placeholder={draft.defaultValue ? `sample: ${draft.defaultValue}` : ''}
+										class="field w-full font-mono"
+									/>
+									{#if draft.conflict}
+										<p class="mt-1 text-[11px] text-amber-600 dark:text-amber-300">
+											Different defaults across services:
+											{#each draft.conflict.values as cv, i}
+												{#if i > 0}, {/if}<span class="font-mono">{cv.value || '(empty)'}</span> ({cv.sources.join(', ')})
+											{/each}
+										</p>
+									{/if}
+								</div>
 								<span class="truncate text-xs text-gray-500 dark:text-gray-400" title={draft.source}><span class="lg:hidden">Source: </span>{draft.source}</span>
 								<IconButton
 									label={`Remove ${draft.key || 'environment variable'}`}

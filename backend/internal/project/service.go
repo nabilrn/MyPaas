@@ -273,6 +273,11 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		if err != nil {
 			return DetectResult{}, err
 		}
+		// Attribute env vars to compose services using the docker compose
+		// config JSON so the UI can show which service needs which var.
+		if rawConfig, err := composeConfigJSON(ctx, workspace, composeFile); err == nil {
+			envVars = envdiscover.AttributeServicesFromConfig(envVars, rawConfig)
+		}
 		composeFilePtr := composeFile
 		return DetectResult{
 			DeployMode:        "compose",

@@ -27,6 +27,7 @@ import (
 	"mypaas/internal/config"
 	"mypaas/internal/container"
 	"mypaas/internal/db"
+	"mypaas/internal/envdiscover"
 	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
 	"mypaas/internal/port"
@@ -624,6 +625,16 @@ func (s *Service) runDeployment(projectID, deploymentID uuid.UUID) {
 		return
 	}
 
+	// For compose projects, auto-generate per-service .env files from
+	// .env.example templates found in the repo. This lets microservice
+	// repos where each service folder has its own .env.example deploy
+	// without the user manually creating every .env file.
+	if project.DeployMode == "compose" {
+		if err := generatePerServiceEnvFiles(workspace, envs, log); err != nil {
+			slog.Warn("generate per-service env files", "projectId", project.ID, "error", err)
+		}
+	}
+
 	if project.DeployMode == "compose" {
 		if err := s.runComposeFromWorkspace(ctx, project, deploymentID, workspace, envFile, stringValue(imageTag), log); err != nil {
 			s.fail(ctx, deploymentID, projectID, originalStatus, err)
@@ -1198,6 +1209,67 @@ func logLocalhostEnvWarnings(log func(string), envs map[string]string, deployMod
 			log(fmt.Sprintf("%s Replace localhost with the compose service name (e.g. db, redis, nats).", base))
 		}
 	}
+}
+
+// generatePerServiceEnvFiles walks the workspace for .env.example templates
+// and generates a .env file next to each one, substituting values from the
+// user's decrypted env vars. This supports microservice/monorepo repos where
+// each service folder has its own .env.example with service-specific vars.
+//
+// Behavior:
+//   - If a .env file already exists next to .env.example, it is NOT
+//     overwritten — the user's committed .env takes precedence.
+//   - If no .env.example exists in a directory, no .env is generated there.
+//   - Keys in the user's env vars that aren't in the template are appended.
+//   - The root workspace .env (already written above) is skipped.
+func generatePerServiceEnvFiles(workspace string, envs map[string]string, log func(string)) error {
+	templateNames := map[string]struct{}{
+		".env.example":         {},
+		".env.sample":          {},
+		".env.template":        {},
+		".env.local.example":   {},
+	}
+
+	generated := 0
+	err := filepath.WalkDir(workspace, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if _, isTemplate := templateNames[entry.Name()]; !isTemplate {
+			return nil
+		}
+		dir := filepath.Dir(path)
+		// Skip the root workspace — its .env is already written by the caller.
+		if dir == filepath.Clean(workspace) {
+			return nil
+		}
+		envPath := filepath.Join(dir, ".env")
+		// Don't overwrite an existing .env — user's committed file wins.
+		if _, err := os.Stat(envPath); err == nil {
+			return nil
+		}
+		content, err := envdiscover.GenerateEnvFromTemplate(path, envs)
+		if err != nil {
+			return nil // skip this template, don't fail the whole deploy
+		}
+		if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
+			return nil
+		}
+		relDir, _ := filepath.Rel(workspace, dir)
+		log(fmt.Sprintf("Generated %s/.env from %s", filepath.ToSlash(relDir), entry.Name()))
+		generated++
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if generated > 0 {
+		log(fmt.Sprintf("Generated %d per-service .env file(s) from .env.example templates", generated))
+	}
+	return nil
 }
 
 func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpuLimit float64, projectNetwork, imageTag string) error {
