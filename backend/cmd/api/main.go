@@ -274,6 +274,7 @@ func registerRoutes(
 			r.Get("/", projectHandler.List)
 			r.Post("/", projectHandler.Create)
 			r.Post("/detect-mode", projectHandler.DetectMode)
+			r.Post("/detect-compose", projectHandler.DetectCompose)
 			r.Get("/{id}", projectHandler.Get)
 			r.Patch("/{id}", projectHandler.Update)
 			r.Delete("/{id}", projectHandler.Delete)

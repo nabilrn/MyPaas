@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mypaas/internal/caddy"
+	"mypaas/internal/compose"
 	"mypaas/internal/config"
 	"mypaas/internal/container"
 	"mypaas/internal/db"
@@ -749,7 +749,7 @@ func (s *Service) runStaticFromWorkspace(ctx context.Context, project db.Project
 }
 
 func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Project, deploymentID uuid.UUID, workspace, envFile, imageTag string, log func(string)) error {
-	composeFile, err := findComposeFile(workspace)
+	layout, err := resolveComposeLayout(workspace, project, envFile)
 	if err != nil {
 		return err
 	}
@@ -758,7 +758,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
 	}
 
-	services, err := s.docker.ComposeServices(ctx, workspace, envFile, composeFile)
+	services, err := s.docker.ComposeServices(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles...)
 	if err != nil {
 		return err
 	}
@@ -766,7 +766,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
 	}
 	overrideImageTag := ""
-	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile, composeFile)
+	buildServices, err := s.docker.ComposeBuildServices(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles...)
 	if err != nil {
 		log("WARNING: could not detect Compose build services; rollback image tagging is disabled for this deployment")
 		slog.Warn("detect compose build services", "projectId", project.ID, "error", err)
@@ -806,25 +806,24 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		}
 	}()
 
-	overrideFile := filepath.Join(workspace, "docker-compose.mypaas.override.yml")
-	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
+	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
 		return err
 	}
-	sanitizedComposeFile := filepath.Join(workspace, "docker-compose.mypaas.sanitized.json")
-	if err := s.docker.WriteSanitizedComposeConfig(ctx, workspace, envFile, composeFile, sanitizedComposeFile); err != nil {
+	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
 		return err
 	}
 
 	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
 		return err
 	}
-	log("Starting compose project " + composeProjectName(project.Name))
+	log("Starting compose project " + composeProjectName(project.Name) + " from " + layout.PrimaryRel)
 	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
 		ProjectName:  composeProjectName(project.Name),
-		WorkDir:      workspace,
-		ComposeFile:  sanitizedComposeFile,
-		OverrideFile: overrideFile,
-		EnvFile:      envFile,
+		WorkDir:      layout.WorkDir,
+		ComposeFiles: []string{layout.SanitizedFile},
+		OverrideFile: layout.OverrideFile,
+		EnvFile:      layout.EnvFile,
+		Profiles:     project.ComposeProfiles,
 	}, log); err != nil {
 		return err
 	}
@@ -952,7 +951,7 @@ func (s *Service) writeProjectEnvFile(ctx context.Context, projectID uuid.UUID, 
 
 func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, target db.Deployment, workspace, envFile string, log func(string)) error {
 	imageTag := strings.TrimSpace(stringValue(target.ImageTag))
-	composeFile, err := findComposeFile(workspace)
+	layout, err := resolveComposeLayout(workspace, project, envFile)
 	if err != nil {
 		return err
 	}
@@ -960,7 +959,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 	if main == "" {
 		return fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
 	}
-	services, err := s.docker.ComposeServices(ctx, workspace, envFile, composeFile)
+	services, err := s.docker.ComposeServices(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles...)
 	if err != nil {
 		return err
 	}
@@ -968,7 +967,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
 	}
 	overrideImageTag := ""
-	buildServices, err := s.docker.ComposeBuildServices(ctx, workspace, envFile, composeFile)
+	buildServices, err := s.docker.ComposeBuildServices(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles...)
 	if err != nil {
 		log("WARNING: could not detect Compose build services; rollback will not override the main service image")
 		slog.Warn("detect compose build services during rollback", "projectId", project.ID, "error", err)
@@ -1005,23 +1004,22 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		}
 	}()
 
-	overrideFile := filepath.Join(workspace, "docker-compose.mypaas.override.yml")
-	if err := writeComposeOverride(overrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
+	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag); err != nil {
 		return err
 	}
-	sanitizedComposeFile := filepath.Join(workspace, "docker-compose.mypaas.sanitized.json")
-	if err := s.docker.WriteSanitizedComposeConfig(ctx, workspace, envFile, composeFile, sanitizedComposeFile); err != nil {
+	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
 		return err
 	}
 
-	log("Starting compose rollback " + composeProjectName(project.Name))
+	log("Starting compose rollback " + composeProjectName(project.Name) + " from " + layout.PrimaryRel)
 	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
 		ProjectName:  composeProjectName(project.Name),
-		WorkDir:      workspace,
-		ComposeFile:  sanitizedComposeFile,
-		OverrideFile: overrideFile,
-		EnvFile:      envFile,
+		WorkDir:      layout.WorkDir,
+		ComposeFiles: []string{layout.SanitizedFile},
+		OverrideFile: layout.OverrideFile,
+		EnvFile:      layout.EnvFile,
 		NoBuild:      true,
+		Profiles:     project.ComposeProfiles,
 	}, log); err != nil {
 		return err
 	}
@@ -1156,59 +1154,26 @@ func (s *Service) allocateProjectPort(ctx context.Context, project db.Project) (
 	return port, true, nil
 }
 
-func findComposeFile(workspace string) (string, error) {
-	for _, name := range composeFileCandidates(workspace) {
-		if _, err := os.Stat(filepath.Join(workspace, name)); err == nil {
-			return name, nil
-		}
+// resolveComposeLayout turns the cloned workspace + persisted project compose
+// fields into an absolute compose.Layout for docker compose. When the project
+// has no persisted compose_file_path, falls back to recursive discovery so
+// existing projects keep working with the same root-only behaviour as before.
+func resolveComposeLayout(workspace string, project db.Project, envFile string) (*compose.Layout, error) {
+	primaryRel := stringValue(project.ComposeFilePath)
+	workdirRel := stringValue(project.ComposeWorkdir)
+	overrideRel := project.ComposeOverridePaths
+	if overrideRel == nil {
+		overrideRel = nil
 	}
-	return "", errs.ErrComposeFileNotFound
-}
-
-func composeFileCandidates(workspace string) []string {
-	candidates := []string{
-		"docker-compose.yml",
-		"docker-compose.yaml",
-		"compose.yml",
-		"compose.yaml",
-		"docker-compose.prod.yml",
-		"docker-compose.prod.yaml",
-		"compose.prod.yml",
-		"compose.prod.yaml",
-		"docker-compose.production.yml",
-		"docker-compose.production.yaml",
-		"compose.production.yml",
-		"compose.production.yaml",
-	}
-	seen := make(map[string]struct{}, len(candidates))
-	for _, name := range candidates {
-		seen[name] = struct{}{}
-	}
-
-	for _, pattern := range []string{"docker-compose.*.yml", "docker-compose.*.yaml", "compose.*.yml", "compose.*.yaml"} {
-		matches, err := filepath.Glob(filepath.Join(workspace, pattern))
-		if err != nil {
-			continue
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			name := filepath.Base(match)
-			if ignoredComposeCandidate(name) {
-				continue
-			}
-			if _, ok := seen[name]; ok {
-				continue
-			}
-			seen[name] = struct{}{}
-			candidates = append(candidates, name)
-		}
-	}
-	return candidates
-}
-
-func ignoredComposeCandidate(name string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	return strings.Contains(normalized, "override") || strings.Contains(normalized, "test")
+	return compose.ResolveLayout(
+		workspace,
+		primaryRel,
+		overrideRel,
+		workdirRel,
+		"docker-compose.mypaas.override.yml",
+		"docker-compose.mypaas.sanitized.json",
+		envFile,
+	)
 }
 
 func writeComposeOverride(path, service, portMapping string, memoryMB int32, cpuLimit float64, projectNetwork, imageTag string) error {

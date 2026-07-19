@@ -66,25 +66,29 @@ type PortRegistry struct {
 }
 
 type Project struct {
-	ID                 uuid.UUID        `json:"id"`
-	UserID             uuid.UUID        `json:"user_id"`
-	Name               string           `json:"name"`
-	RepoUrl            string           `json:"repo_url"`
-	Branch             string           `json:"branch"`
-	Subdomain          string           `json:"subdomain"`
-	DeployMode         string           `json:"deploy_mode"`
-	MainService        *string          `json:"main_service"`
-	AppPort            int32            `json:"app_port"`
-	WebhookSecret      string           `json:"webhook_secret"`
-	AllocatedPort      *int32           `json:"allocated_port"`
-	MemoryLimitMb      int32            `json:"memory_limit_mb"`
-	CpuLimit           pgtype.Numeric   `json:"cpu_limit"`
-	Status             string           `json:"status"`
-	ActiveDeploymentID pgtype.UUID      `json:"active_deployment_id"`
-	CreatedAt          pgtype.Timestamp `json:"created_at"`
-	UpdatedAt          pgtype.Timestamp `json:"updated_at"`
-	DeletedAt          pgtype.Timestamp `json:"deleted_at"`
-	ResourceProfile    string           `json:"resource_profile"`
+	ID                   uuid.UUID        `json:"id"`
+	UserID               uuid.UUID        `json:"user_id"`
+	Name                 string           `json:"name"`
+	RepoUrl              string           `json:"repo_url"`
+	Branch               string           `json:"branch"`
+	Subdomain            string           `json:"subdomain"`
+	DeployMode           string           `json:"deploy_mode"`
+	MainService          *string          `json:"main_service"`
+	AppPort              int32            `json:"app_port"`
+	WebhookSecret        string           `json:"webhook_secret"`
+	AllocatedPort        *int32           `json:"allocated_port"`
+	MemoryLimitMb        int32            `json:"memory_limit_mb"`
+	CpuLimit             pgtype.Numeric   `json:"cpu_limit"`
+	Status               string           `json:"status"`
+	ActiveDeploymentID   pgtype.UUID      `json:"active_deployment_id"`
+	CreatedAt            pgtype.Timestamp `json:"created_at"`
+	UpdatedAt            pgtype.Timestamp `json:"updated_at"`
+	DeletedAt            pgtype.Timestamp `json:"deleted_at"`
+	ResourceProfile      string           `json:"resource_profile"`
+	ComposeFilePath      *string          `json:"compose_file_path"`
+	ComposeOverridePaths []string         `json:"compose_override_paths"`
+	ComposeProfiles      []string         `json:"compose_profiles"`
+	ComposeWorkdir       *string          `json:"compose_workdir"`
 }
 
 type User struct {

@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mypaas/internal/compose"
 	"mypaas/internal/db"
 	"mypaas/internal/envdiscover"
 	"mypaas/internal/errs"
@@ -47,26 +48,35 @@ type Service struct {
 }
 
 type CreateInput struct {
-	UserID          uuid.UUID
-	Name            string
-	RepoURL         string
-	Branch          string
-	DeployMode      string
-	ResourceProfile string
-	MainService     *string
-	AppPort         int32
-	MemoryLimitMb   int32
-	CPULimit        float64
+	UserID               uuid.UUID
+	Name                 string
+	RepoURL              string
+	Branch               string
+	DeployMode           string
+	ResourceProfile      string
+	MainService          *string
+	AppPort              int32
+	MemoryLimitMb        int32
+	CPULimit             float64
+	ComposeFilePath      *string
+	ComposeOverridePaths []string
+	ComposeProfiles      []string
+	ComposeWorkdir       *string
 }
 
 type UpdateInput struct {
-	ID              uuid.UUID
-	Name            string
-	Branch          string
-	ResourceProfile string
-	AppPort         int32
-	MemoryLimitMb   int32
-	CPULimit        float64
+	ID                   uuid.UUID
+	Name                 string
+	Branch               string
+	ResourceProfile      string
+	MainService          *string
+	AppPort              int32
+	MemoryLimitMb        int32
+	CPULimit             float64
+	ComposeFilePath      *string
+	ComposeOverridePaths []string
+	ComposeProfiles      []string
+	ComposeWorkdir       *string
 }
 
 type DetectInput struct {
@@ -75,20 +85,36 @@ type DetectInput struct {
 	InspectOnly bool
 }
 
+type DetectComposeInput struct {
+	RepoURL string
+	Branch  string
+}
+
+// DetectComposeResult is the response for the detect-compose endpoint: the
+// ranked candidate list plus branch metadata so the frontend picker can
+// render without re-fetching.
+type DetectComposeResult struct {
+	Branch        string                `json:"branch"`
+	DefaultBranch string                `json:"defaultBranch"`
+	Branches      []string              `json:"branches"`
+	Candidates    []compose.Candidate   `json:"candidates"`
+}
+
 type DetectResult struct {
-	DeployMode    string
-	Branch        string
-	DefaultBranch string
-	Branches      []string
-	MainService   *string
-	Services      []string
-	ComposeFile   *string
-	HasDockerfile bool
-	EnvVars       []envdiscover.Var
-	AppPort       int32
-	ComposePlan   *ComposePlan
-	Tree          []RepoTreeEntry
-	TreeTruncated bool
+	DeployMode           string
+	Branch               string
+	DefaultBranch        string
+	Branches             []string
+	MainService          *string
+	Services             []string
+	ComposeFile          *string
+	HasDockerfile        bool
+	EnvVars              []envdiscover.Var
+	AppPort              int32
+	ComposePlan          *ComposePlan
+	Tree                 []RepoTreeEntry
+	TreeTruncated        bool
+	ComposeCandidates    []compose.Candidate
 }
 
 type RepoTreeEntry struct {
@@ -159,6 +185,51 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	return result, nil
 }
 
+// DetectCompose lists every compose file in the repository branch, ranked by
+// preference. Used by the project create form to populate the compose file
+// picker without performing full deploy-mode detection.
+func (s *Service) DetectCompose(ctx context.Context, input DetectComposeInput) (DetectComposeResult, error) {
+	repoURL := strings.TrimSpace(input.RepoURL)
+	if repoURL == "" {
+		return DetectComposeResult{}, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
+	defer cancel()
+
+	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL)
+	if err != nil {
+		return DetectComposeResult{}, err
+	}
+	branch := strings.TrimSpace(input.Branch)
+	if branch == "" {
+		branch = defaultBranch
+	}
+	if branch == "" {
+		return DetectComposeResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
+	}
+
+	workspace, err := os.MkdirTemp("", "mypaas-detect-compose-*")
+	if err != nil {
+		return DetectComposeResult{}, fmt.Errorf("create detect-compose workspace: %w", err)
+	}
+	defer os.RemoveAll(workspace)
+
+	if err := cloneForDetect(ctx, workspace, repoURL, branch); err != nil {
+		return DetectComposeResult{}, err
+	}
+	candidates, err := compose.Discover(workspace)
+	if err != nil {
+		return DetectComposeResult{}, err
+	}
+	return DetectComposeResult{
+		Branch:        branch,
+		DefaultBranch: defaultBranch,
+		Branches:      branches,
+		Candidates:    candidates,
+	}, nil
+}
+
 func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResult, error) {
 	if branch == "" {
 		return DetectResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
@@ -178,7 +249,11 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		return DetectResult{}, fmt.Errorf("list repository tree: %w", err)
 	}
 
-	composeFile := detectComposeFile(workspace)
+	composeCandidates, _ := compose.Discover(workspace)
+	var composeFile string
+	if len(composeCandidates) > 0 {
+		composeFile = composeCandidates[0].Path
+	}
 	hasDockerfile := fileExists(filepath.Join(workspace, "Dockerfile"))
 	envVars, err := envdiscover.Discover(workspace, composeFile)
 	if err != nil {
@@ -198,18 +273,20 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch string) (DetectResu
 		if err != nil {
 			return DetectResult{}, err
 		}
+		composeFilePtr := composeFile
 		return DetectResult{
-			DeployMode:    "compose",
-			Branch:        branch,
-			MainService:   &mainService,
-			Services:      services,
-			ComposeFile:   &composeFile,
-			HasDockerfile: hasDockerfile,
-			EnvVars:       envVars,
-			AppPort:       appPort,
-			ComposePlan:   composePlan,
-			Tree:          tree,
-			TreeTruncated: treeTruncated,
+			DeployMode:        "compose",
+			Branch:            branch,
+			MainService:       &mainService,
+			Services:          services,
+			ComposeFile:       &composeFilePtr,
+			HasDockerfile:     hasDockerfile,
+			EnvVars:           envVars,
+			AppPort:           appPort,
+			ComposePlan:       composePlan,
+			Tree:              tree,
+			TreeTruncated:     treeTruncated,
+			ComposeCandidates: composeCandidates,
 		}, nil
 	}
 	if hasDockerfile {
@@ -258,6 +335,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, er
 	if input.AppPort <= 0 || input.AppPort > 65535 {
 		return db.Project{}, fmt.Errorf("%w: app port must be between 1 and 65535", errs.ErrValidation)
 	}
+	if err := validateComposeConfigInput(input.DeployMode, input.ComposeFilePath, input.ComposeOverridePaths, input.ComposeWorkdir); err != nil {
+		return db.Project{}, err
+	}
 	profileID, memoryLimitMb, cpuLimit, err := resourceprofile.Resolve(input.ResourceProfile, input.DeployMode, input.MemoryLimitMb, input.CPULimit)
 	if err != nil {
 		return db.Project{}, err
@@ -283,18 +363,22 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, er
 	}
 
 	project, err := s.queries.CreateProject(ctx, db.CreateProjectParams{
-		UserID:          input.UserID,
-		Name:            name,
-		RepoUrl:         strings.TrimSpace(input.RepoURL),
-		Branch:          strings.TrimSpace(input.Branch),
-		Subdomain:       name,
-		DeployMode:      input.DeployMode,
-		ResourceProfile: input.ResourceProfile,
-		MainService:     input.MainService,
-		AppPort:         input.AppPort,
-		WebhookSecret:   secret,
-		MemoryLimitMb:   input.MemoryLimitMb,
-		CpuLimit:        numericFromFloat(input.CPULimit),
+		UserID:               input.UserID,
+		Name:                 name,
+		RepoUrl:              strings.TrimSpace(input.RepoURL),
+		Branch:               strings.TrimSpace(input.Branch),
+		Subdomain:            name,
+		DeployMode:           input.DeployMode,
+		ResourceProfile:      input.ResourceProfile,
+		MainService:          input.MainService,
+		AppPort:              input.AppPort,
+		WebhookSecret:        secret,
+		MemoryLimitMb:        input.MemoryLimitMb,
+		CpuLimit:             numericFromFloat(input.CPULimit),
+		ComposeFilePath:      input.ComposeFilePath,
+		ComposeOverridePaths: normalizeStringSlice(input.ComposeOverridePaths),
+		ComposeProfiles:      normalizeStringSlice(input.ComposeProfiles),
+		ComposeWorkdir:       input.ComposeWorkdir,
 	})
 	if err != nil {
 		if isProjectUniqueViolation(err) {
@@ -343,6 +427,48 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (db.Project, er
 	if strings.TrimSpace(input.ResourceProfile) == "" {
 		input.ResourceProfile = existing.ResourceProfile
 	}
+
+	// MainService: only meaningful for compose projects. Allow mutation when
+	// the project is compose-mode; ignore for non-compose projects so the API
+	// stays permissive for callers that always send the field.
+	mainService := existing.MainService
+	if existing.DeployMode == "compose" {
+		if input.MainService != nil {
+			trimmed := strings.TrimSpace(*input.MainService)
+			if trimmed == "" {
+				return db.Project{}, fmt.Errorf("%w: main service cannot be empty for compose projects", errs.ErrValidation)
+			}
+			mainService = &trimmed
+		}
+		if mainService == nil || strings.TrimSpace(*mainService) == "" {
+			return db.Project{}, fmt.Errorf("%w: main service is required for compose projects", errs.ErrValidation)
+		}
+	}
+
+	// Compose config: merge incoming values with existing when caller omits
+	// them. A nil ComposeFilePath means "leave unchanged"; an explicit empty
+	// string would clear it, but the API layer uses *string so we treat nil
+	// as no-op.
+	composeFilePath := existing.ComposeFilePath
+	if input.ComposeFilePath != nil {
+		composeFilePath = input.ComposeFilePath
+	}
+	composeOverridePaths := existing.ComposeOverridePaths
+	if input.ComposeOverridePaths != nil {
+		composeOverridePaths = normalizeStringSlice(input.ComposeOverridePaths)
+	}
+	composeProfiles := existing.ComposeProfiles
+	if input.ComposeProfiles != nil {
+		composeProfiles = normalizeStringSlice(input.ComposeProfiles)
+	}
+	composeWorkdir := existing.ComposeWorkdir
+	if input.ComposeWorkdir != nil {
+		composeWorkdir = input.ComposeWorkdir
+	}
+	if err := validateComposeConfigInput(existing.DeployMode, composeFilePath, composeOverridePaths, composeWorkdir); err != nil {
+		return db.Project{}, err
+	}
+
 	profileID, memoryLimitMb, cpuLimit, err := resourceprofile.Resolve(input.ResourceProfile, existing.DeployMode, input.MemoryLimitMb, input.CPULimit)
 	if err != nil {
 		return db.Project{}, err
@@ -357,14 +483,19 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (db.Project, er
 	}
 
 	if err := s.queries.UpdateProject(ctx, db.UpdateProjectParams{
-		ID:              input.ID,
-		Name:            name,
-		Subdomain:       name,
-		Branch:          strings.TrimSpace(input.Branch),
-		ResourceProfile: input.ResourceProfile,
-		AppPort:         input.AppPort,
-		MemoryLimitMb:   input.MemoryLimitMb,
-		CpuLimit:        numericFromFloat(input.CPULimit),
+		ID:                   input.ID,
+		Name:                 name,
+		Subdomain:            name,
+		Branch:               strings.TrimSpace(input.Branch),
+		ResourceProfile:      input.ResourceProfile,
+		AppPort:              input.AppPort,
+		MemoryLimitMb:        input.MemoryLimitMb,
+		CpuLimit:             numericFromFloat(input.CPULimit),
+		MainService:          mainService,
+		ComposeFilePath:      composeFilePath,
+		ComposeOverridePaths: composeOverridePaths,
+		ComposeProfiles:      composeProfiles,
+		ComposeWorkdir:       composeWorkdir,
 	}); err != nil {
 		if isProjectUniqueViolation(err) {
 			return db.Project{}, errs.ErrProjectNameTaken
@@ -653,61 +784,6 @@ func firstNonEmptyLine(value string) string {
 		}
 	}
 	return "unknown error"
-}
-
-func detectComposeFile(workspace string) string {
-	for _, name := range composeFileCandidates(workspace) {
-		if fileExists(filepath.Join(workspace, name)) {
-			return name
-		}
-	}
-	return ""
-}
-
-func composeFileCandidates(workspace string) []string {
-	candidates := []string{
-		"docker-compose.yml",
-		"docker-compose.yaml",
-		"compose.yml",
-		"compose.yaml",
-		"docker-compose.prod.yml",
-		"docker-compose.prod.yaml",
-		"compose.prod.yml",
-		"compose.prod.yaml",
-		"docker-compose.production.yml",
-		"docker-compose.production.yaml",
-		"compose.production.yml",
-		"compose.production.yaml",
-	}
-	seen := make(map[string]struct{}, len(candidates))
-	for _, name := range candidates {
-		seen[name] = struct{}{}
-	}
-
-	for _, pattern := range []string{"docker-compose.*.yml", "docker-compose.*.yaml", "compose.*.yml", "compose.*.yaml"} {
-		matches, err := filepath.Glob(filepath.Join(workspace, pattern))
-		if err != nil {
-			continue
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			name := filepath.Base(match)
-			if ignoredComposeCandidate(name) {
-				continue
-			}
-			if _, ok := seen[name]; ok {
-				continue
-			}
-			seen[name] = struct{}{}
-			candidates = append(candidates, name)
-		}
-	}
-	return candidates
-}
-
-func ignoredComposeCandidate(name string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	return strings.Contains(normalized, "override") || strings.Contains(normalized, "test")
 }
 
 func detectComposeServices(ctx context.Context, workspace, composeFile string) ([]string, error) {
@@ -1066,4 +1142,53 @@ func isProjectUniqueViolation(err error) bool {
 	default:
 		return false
 	}
+}
+
+// validateComposeConfigInput enforces that compose_* fields are only set on
+// compose-mode projects and that any user-supplied paths are safe
+// (repo-relative, no traversal, forward slashes only).
+func validateComposeConfigInput(deployMode string, composeFilePath *string, overridePaths []string, workdir *string) error {
+	hasComposeFields := composeFilePath != nil ||
+		len(normalizeStringSlice(overridePaths)) > 0 ||
+		workdir != nil
+	if deployMode != "compose" && hasComposeFields {
+		return fmt.Errorf("%w: compose path fields are only valid for compose-mode projects", errs.ErrValidation)
+	}
+	if composeFilePath != nil {
+		if err := compose.ValidateUserPath(*composeFilePath); err != nil {
+			return err
+		}
+	}
+	for _, path := range normalizeStringSlice(overridePaths) {
+		if err := compose.ValidateUserPath(path); err != nil {
+			return err
+		}
+	}
+	if workdir != nil {
+		if err := compose.ValidateUserPath(*workdir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// normalizeStringSlice trims every entry and drops empty ones so persisted
+// arrays stay clean. Returns nil for empty input so the DB column default
+// (empty array) is preserved and existing rows without overrides do not
+// change shape.
+func normalizeStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

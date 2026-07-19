@@ -109,6 +109,42 @@ func TestComposeConfigArgsIncludesComposeFileAfterEnvFile(t *testing.T) {
 	}
 }
 
+func TestComposeConfigArgsMultiPreservesOrderAndSkipsEmpty(t *testing.T) {
+	got := composeConfigArgsMulti("/tmp/.env", []string{"docker-compose.yml", "", "docker-compose.prod.yml", ""})
+	want := []string{"compose", "--env-file", "/tmp/.env", "-f", "docker-compose.yml", "-f", "docker-compose.prod.yml"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("composeConfigArgsMulti() = %v, want %v", got, want)
+	}
+}
+
+func TestComposeUpFilesOrdersPrimaryThenUserThenMyPaasOverride(t *testing.T) {
+	got := composeUpFiles(ComposeUpOptions{
+		ComposeFile:  "docker-compose.yml",
+		ComposeFiles: []string{"docker-compose.prod.yml", "docker-compose.cache.yml"},
+		OverrideFile: "docker-compose.mypaas.override.yml",
+	})
+	want := []string{
+		"docker-compose.yml",
+		"docker-compose.prod.yml",
+		"docker-compose.cache.yml",
+		"docker-compose.mypaas.override.yml",
+	}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("composeUpFiles() = %v, want %v", got, want)
+	}
+}
+
+func TestComposeUpFilesSupportsLegacySingleFileCallers(t *testing.T) {
+	got := composeUpFiles(ComposeUpOptions{
+		ComposeFile:  "sanitized.json",
+		OverrideFile: "override.yml",
+	})
+	want := []string{"sanitized.json", "override.yml"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("composeUpFiles() = %v, want %v", got, want)
+	}
+}
+
 func TestIsMypaasInternalEnvFiltersLeakyComposeVars(t *testing.T) {
 	for _, key := range []string{"DATABASE_URL", "POSTGRES_PASSWORD", "JWT_SECRET", "CADDY_ADMIN"} {
 		t.Run(key, func(t *testing.T) {

@@ -409,6 +409,9 @@ make sqlc             # Generate sqlc code
 - Priority: `docker-compose.yml` atau `compose.yml` > `Dockerfile`
 - Keduanya ada → Compose mode
 - Tidak ada → error
+- Compose file discovery: recursive walk (depth ≤ 4) via `internal/compose.Discover`. Root prod-variants rank highest, then root base names, then subdirectory matches. `node_modules`, `vendor`, `.git`, `.next`, `dist`, `build` skipped. See ADR-016.
+- Compose file path, override paths, profiles, and workdir are persisted on `projects` (`compose_file_path`, `compose_override_paths`, `compose_profiles`, `compose_workdir`). NULL fields trigger the discovery fallback so existing projects keep working.
+- User-supplied paths must be repo-relative, forward-slash only, no `..` segments. Validated at DB CHECK constraint, `compose.ValidateUserPath`, and `compose.ResolveLayout`.
 
 **Resource limits default:**
 - Per project main: 512MB RAM, 0.5 CPU (customizable)
@@ -442,6 +445,7 @@ Detail di `docs/adr/`.
 - **ADR-009:** Compose via exec CLI (`docker compose`). Simpler, battle-tested.
 - **ADR-010:** sqlc untuk query, bukan ORM. Type-safe, zero overhead.
 - **ADR-011:** In-memory queue + DB state. Single-node, cukup untuk personal.
+- **ADR-016:** Flexible Compose configuration. Compose file anywhere in repo, user-chained overrides, profiles, workdir override. Single source of truth in `internal/compose/`.
 
 ---
 
@@ -475,5 +479,5 @@ Detail di `docs/adr/`.
 
 ---
 
-*Last updated: 2026-07-10*
+*Last updated: 2026-07-19*
 *Maintainer: Nabil Rizki Navisa*

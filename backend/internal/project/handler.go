@@ -71,18 +71,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name            string         `json:"name"`
-		RepoURL         string         `json:"repoUrl"`
-		Branch          string         `json:"branch"`
-		DeployMode      string         `json:"deployMode"`
-		ResourceProfile string         `json:"resourceProfile"`
-		MainService     *string        `json:"mainService"`
-		AppPort         int32          `json:"appPort"`
-		MemoryLimitMb   int32          `json:"memoryLimitMb"`
-		MemoryMb        int32          `json:"memoryMb"`
-		CPULimit        float64        `json:"cpuLimit"`
-		SharedPostgres  bool           `json:"sharedPostgres"`
-		EnvVars         []envvar.Value `json:"envVars"`
+		Name                 string         `json:"name"`
+		RepoURL              string         `json:"repoUrl"`
+		Branch               string         `json:"branch"`
+		DeployMode           string         `json:"deployMode"`
+		ResourceProfile      string         `json:"resourceProfile"`
+		MainService          *string        `json:"mainService"`
+		AppPort              int32          `json:"appPort"`
+		MemoryLimitMb        int32          `json:"memoryLimitMb"`
+		MemoryMb             int32          `json:"memoryMb"`
+		CPULimit             float64        `json:"cpuLimit"`
+		SharedPostgres       bool           `json:"sharedPostgres"`
+		EnvVars              []envvar.Value `json:"envVars"`
+		ComposeFilePath      *string        `json:"composeFilePath"`
+		ComposeOverridePaths []string       `json:"composeOverridePaths"`
+		ComposeProfiles      []string       `json:"composeProfiles"`
+		ComposeWorkdir       *string        `json:"composeWorkdir"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
@@ -93,16 +97,20 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	project, err := h.service.Create(r.Context(), CreateInput{
-		UserID:          user.ID,
-		Name:            req.Name,
-		RepoURL:         req.RepoURL,
-		Branch:          req.Branch,
-		DeployMode:      req.DeployMode,
-		ResourceProfile: req.ResourceProfile,
-		MainService:     req.MainService,
-		AppPort:         req.AppPort,
-		MemoryLimitMb:   req.MemoryLimitMb,
-		CPULimit:        req.CPULimit,
+		UserID:               user.ID,
+		Name:                 req.Name,
+		RepoURL:              req.RepoURL,
+		Branch:               req.Branch,
+		DeployMode:           req.DeployMode,
+		ResourceProfile:      req.ResourceProfile,
+		MainService:          req.MainService,
+		AppPort:              req.AppPort,
+		MemoryLimitMb:        req.MemoryLimitMb,
+		CPULimit:             req.CPULimit,
+		ComposeFilePath:      req.ComposeFilePath,
+		ComposeOverridePaths: req.ComposeOverridePaths,
+		ComposeProfiles:      req.ComposeProfiles,
+		ComposeWorkdir:       req.ComposeWorkdir,
 	})
 	if err != nil {
 		httpx.DomainError(w, err)
@@ -168,6 +176,27 @@ func (h *Handler) DetectMode(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, DetectResponseFromResult(result))
 }
 
+func (h *Handler) DetectCompose(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RepoURL string `json:"repoUrl"`
+		Branch  string `json:"branch"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
+		return
+	}
+
+	result, err := h.service.DetectCompose(r.Context(), DetectComposeInput{
+		RepoURL: req.RepoURL,
+		Branch:  req.Branch,
+	})
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, DetectComposeResponseFromResult(result))
+}
+
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := projectID(w, r)
 	if !ok {
@@ -180,13 +209,18 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name            string  `json:"name"`
-		Branch          string  `json:"branch"`
-		ResourceProfile string  `json:"resourceProfile"`
-		AppPort         int32   `json:"appPort"`
-		MemoryLimitMb   int32   `json:"memoryLimitMb"`
-		MemoryMb        int32   `json:"memoryMb"`
-		CPULimit        float64 `json:"cpuLimit"`
+		Name                 string   `json:"name"`
+		Branch               string   `json:"branch"`
+		ResourceProfile      string   `json:"resourceProfile"`
+		MainService          *string  `json:"mainService"`
+		AppPort              int32    `json:"appPort"`
+		MemoryLimitMb        int32    `json:"memoryLimitMb"`
+		MemoryMb             int32    `json:"memoryMb"`
+		CPULimit             float64  `json:"cpuLimit"`
+		ComposeFilePath      *string  `json:"composeFilePath"`
+		ComposeOverridePaths []string `json:"composeOverridePaths"`
+		ComposeProfiles      []string `json:"composeProfiles"`
+		ComposeWorkdir       *string  `json:"composeWorkdir"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
@@ -197,13 +231,18 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	project, err := h.service.Update(r.Context(), UpdateInput{
-		ID:              id,
-		Name:            req.Name,
-		Branch:          req.Branch,
-		ResourceProfile: req.ResourceProfile,
-		AppPort:         req.AppPort,
-		MemoryLimitMb:   req.MemoryLimitMb,
-		CPULimit:        req.CPULimit,
+		ID:                   id,
+		Name:                 req.Name,
+		Branch:               req.Branch,
+		ResourceProfile:      req.ResourceProfile,
+		MainService:          req.MainService,
+		AppPort:              req.AppPort,
+		MemoryLimitMb:        req.MemoryLimitMb,
+		CPULimit:             req.CPULimit,
+		ComposeFilePath:      req.ComposeFilePath,
+		ComposeOverridePaths: req.ComposeOverridePaths,
+		ComposeProfiles:      req.ComposeProfiles,
+		ComposeWorkdir:       req.ComposeWorkdir,
 	})
 	if err != nil {
 		httpx.DomainError(w, err)

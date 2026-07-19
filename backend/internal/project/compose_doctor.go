@@ -99,6 +99,11 @@ func inspectComposePlan(ctx context.Context, workspace, composeFile string, serv
 		return nil, fmt.Errorf("%w: compose file does not define any services", errs.ErrValidation)
 	}
 
+	// Docker Compose resolves build.context relative to the compose file's
+	// directory, not the cwd. Mirror that here so subdir compose files get
+	// accurate build-context existence checks.
+	composeDir := filepath.Dir(filepath.Join(workspace, composeFile))
+
 	plan := &ComposePlan{
 		RecommendedMainService: mainService,
 		RecommendedAppPort:     appPort,
@@ -113,14 +118,14 @@ func inspectComposePlan(ctx context.Context, workspace, composeFile string, serv
 		if !ok {
 			continue
 		}
-		item := composeServicePlanFromConfig(workspace, serviceName, spec)
+		item := composeServicePlanFromConfig(composeDir, serviceName, spec)
 		if serviceName == mainService {
 			item.Role = "public"
 		} else {
 			item.Role = "internal"
 		}
 		plan.Services = append(plan.Services, item)
-		addComposeServiceIssues(plan, workspace, serviceName, item, spec)
+		addComposeServiceIssues(plan, composeDir, serviceName, item, spec)
 	}
 	addComposePlanIssues(plan, doc, mainService, appPort)
 	sortComposeIssues(plan.Issues)

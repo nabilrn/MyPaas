@@ -21,9 +21,14 @@
 	let name        = '';
 	let branch      = '';
 	let appPort     = 3000;
+	let mainService = '';
 	let resourceProfile: ResourceProfile = 'custom';
 	let memoryMb    = 512;
 	let cpuLimit    = 0.5;
+	let composeFilePath      = '';
+	let composeOverridePaths = '';
+	let composeProfiles      = '';
+	let composeWorkdir       = '';
 	let deleteInput = '';
 	let showWebhookSecret = false;
 	let savingSettings = false;
@@ -47,6 +52,11 @@
 
 	$: nameChanged = project && (name !== project.name || branch !== project.branch ||
 	                 (project.deployMode !== 'static' && appPort !== project.appPort) ||
+	                 (project.deployMode === 'compose' && (mainService || '') !== (project.mainService || '')) ||
+	                 (project.deployMode === 'compose' && composeFilePath !== (project.composeFilePath || '')) ||
+	                 (project.deployMode === 'compose' && composeWorkdir !== (project.composeWorkdir || '')) ||
+	                 (project.deployMode === 'compose' && composeOverridePaths !== (project.composeOverridePaths || []).join(', ')) ||
+	                 (project.deployMode === 'compose' && composeProfiles !== (project.composeProfiles || []).join(', ')) ||
 	                 resourceProfile !== project.resourceProfile ||
 	                 memoryMb !== project.memoryLimitMb || cpuLimit !== project.cpuLimit);
 	$: changedProjectHost = projectHost(name || 'your-app', $page.url.hostname);
@@ -73,9 +83,14 @@
 			name = project.name;
 			branch = project.branch;
 			appPort = project.appPort;
+			mainService = project.mainService ?? '';
 			resourceProfile = project.resourceProfile;
 			memoryMb = project.memoryLimitMb;
 			cpuLimit = project.cpuLimit;
+			composeFilePath = project.composeFilePath ?? '';
+			composeOverridePaths = (project.composeOverridePaths ?? []).join(', ');
+			composeProfiles = (project.composeProfiles ?? []).join(', ');
+			composeWorkdir = project.composeWorkdir ?? '';
 			if (project.deployMode === 'compose') {
 				await loadComposeResources(project.id);
 			}
@@ -115,20 +130,35 @@
 		if (!project || savingSettings) return;
 		savingSettings = true;
 		try {
-			project = await api.projects.update(project.id, {
+			const payload: Record<string, unknown> = {
 				name,
 				branch,
 				resourceProfile,
 				appPort: Number(appPort),
 				memoryLimitMb: Number(memoryMb),
 				cpuLimit: Number(cpuLimit)
-			});
+			};
+			if (project.deployMode === 'compose') {
+				payload.mainService = mainService.trim() || null;
+				payload.composeFilePath = composeFilePath.trim() || null;
+				payload.composeOverridePaths = splitCommaList(composeOverridePaths);
+				payload.composeProfiles = splitCommaList(composeProfiles);
+				payload.composeWorkdir = composeWorkdir.trim() || null;
+			}
+			project = await api.projects.update(project.id, payload);
 			toast.success('Settings saved');
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to save settings');
 		} finally {
 			savingSettings = false;
 		}
+	}
+
+	function splitCommaList(value: string): string[] {
+		return value
+			.split(',')
+			.map((entry) => entry.trim())
+			.filter(Boolean);
 	}
 
 	function requestRegenerateSecret() {
@@ -256,8 +286,68 @@
 							<input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" />
 						</div>
 					{/if}
+					{#if project.deployMode === 'compose'}
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainService">Main service</label>
+							<input id="mainService" type="text" bind:value={mainService} placeholder="app" class="field w-full font-mono" />
+						</div>
+					{/if}
 				</div>
 			</SectionPanel>
+
+			{#if project.deployMode === 'compose'}
+				<SectionPanel
+					title="Compose configuration"
+					description="Point MyPaas at a compose file anywhere in the repository, chain override files, and pick profiles. Leave path blank to auto-discover the top-ranked candidate."
+				>
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeFilePath">Compose file path</label>
+							<input
+								id="composeFilePath"
+								type="text"
+								bind:value={composeFilePath}
+								placeholder="auto-detect"
+								class="field w-full font-mono"
+							/>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Repo-relative, forward slashes only. e.g. <span class="font-mono">infra/docker-compose.yml</span>.</p>
+						</div>
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeWorkdir">Working directory override</label>
+							<input
+								id="composeWorkdir"
+								type="text"
+								bind:value={composeWorkdir}
+								placeholder="auto (parent of compose file)"
+								class="field w-full font-mono"
+							/>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Set only if build contexts or env files resolve against a different directory.</p>
+						</div>
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeOverridePaths">Override files</label>
+							<input
+								id="composeOverridePaths"
+								type="text"
+								bind:value={composeOverridePaths}
+								placeholder="docker-compose.prod.yml"
+								class="field w-full font-mono"
+							/>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated, repo-relative. Applied before MyPaas' generated override.</p>
+						</div>
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeProfiles">Profiles</label>
+							<input
+								id="composeProfiles"
+								type="text"
+								bind:value={composeProfiles}
+								placeholder="app, worker"
+								class="field w-full font-mono"
+							/>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated <span class="font-mono">COMPOSE_PROFILES</span> values.</p>
+						</div>
+					</div>
+				</SectionPanel>
+			{/if}
 
 			<SectionPanel
 				title="Resource limits"

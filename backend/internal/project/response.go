@@ -8,49 +8,62 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mypaas/internal/compose"
 	"mypaas/internal/db"
 	"mypaas/internal/envdiscover"
 )
 
 type Response struct {
-	ID                 string  `json:"id"`
-	UserID             string  `json:"userId"`
-	Name               string  `json:"name"`
-	RepoURL            string  `json:"repoUrl"`
-	Branch             string  `json:"branch"`
-	Subdomain          string  `json:"subdomain"`
-	DeployMode         string  `json:"deployMode"`
-	ResourceProfile    string  `json:"resourceProfile"`
-	MainService        *string `json:"mainService"`
-	AppPort            int32   `json:"appPort"`
-	WebhookSecret      string  `json:"webhookSecret"`
-	AllocatedPort      *int32  `json:"allocatedPort"`
-	MemoryLimitMb      int32   `json:"memoryLimitMb"`
-	CPULimit           float64 `json:"cpuLimit"`
-	Status             string  `json:"status"`
-	ActiveDeploymentID *string `json:"activeDeploymentId"`
-	CreatedAt          string  `json:"createdAt"`
-	UpdatedAt          string  `json:"updatedAt"`
+	ID                   string   `json:"id"`
+	UserID               string   `json:"userId"`
+	Name                 string   `json:"name"`
+	RepoURL              string   `json:"repoUrl"`
+	Branch               string   `json:"branch"`
+	Subdomain            string   `json:"subdomain"`
+	DeployMode           string   `json:"deployMode"`
+	ResourceProfile      string   `json:"resourceProfile"`
+	MainService          *string  `json:"mainService"`
+	AppPort              int32    `json:"appPort"`
+	WebhookSecret        string   `json:"webhookSecret"`
+	AllocatedPort        *int32   `json:"allocatedPort"`
+	MemoryLimitMb        int32    `json:"memoryLimitMb"`
+	CPULimit             float64  `json:"cpuLimit"`
+	Status               string   `json:"status"`
+	ActiveDeploymentID   *string  `json:"activeDeploymentId"`
+	ComposeFilePath      *string  `json:"composeFilePath"`
+	ComposeOverridePaths []string `json:"composeOverridePaths"`
+	ComposeProfiles      []string `json:"composeProfiles"`
+	ComposeWorkdir       *string  `json:"composeWorkdir"`
+	CreatedAt            string   `json:"createdAt"`
+	UpdatedAt            string   `json:"updatedAt"`
 }
 
 type DetectResponse struct {
-	DeployMode    string            `json:"deployMode"`
-	Branch        string            `json:"branch"`
-	DefaultBranch string            `json:"defaultBranch"`
-	Branches      []string          `json:"branches"`
-	MainService   *string           `json:"mainService"`
-	Services      []string          `json:"services"`
-	ComposeFile   *string           `json:"composeFile"`
-	HasDockerfile bool              `json:"hasDockerfile"`
-	EnvVars       []envdiscover.Var `json:"envVars"`
-	AppPort       int32             `json:"appPort"`
-	ComposePlan   *ComposePlan      `json:"composePlan"`
-	Tree          []RepoTreeEntry   `json:"tree"`
-	TreeTruncated bool              `json:"treeTruncated"`
+	DeployMode        string            `json:"deployMode"`
+	Branch            string            `json:"branch"`
+	DefaultBranch     string            `json:"defaultBranch"`
+	Branches          []string          `json:"branches"`
+	MainService       *string           `json:"mainService"`
+	Services          []string          `json:"services"`
+	ComposeFile       *string           `json:"composeFile"`
+	HasDockerfile     bool              `json:"hasDockerfile"`
+	EnvVars           []envdiscover.Var `json:"envVars"`
+	AppPort           int32             `json:"appPort"`
+	ComposePlan       *ComposePlan      `json:"composePlan"`
+	Tree              []RepoTreeEntry   `json:"tree"`
+	TreeTruncated     bool              `json:"treeTruncated"`
+	ComposeCandidates []compose.Candidate `json:"composeCandidates"`
+}
+
+type DetectComposeResponse struct {
+	Branch        string              `json:"branch"`
+	DefaultBranch string              `json:"defaultBranch"`
+	Branches      []string            `json:"branches"`
+	Candidates    []compose.Candidate `json:"candidates"`
 }
 
 func ResponseFromDB(project db.Project) Response {
-	return Response{
+	resp := Response{
 		ID:                 project.ID.String(),
 		UserID:             project.UserID.String(),
 		Name:               project.Name,
@@ -67,27 +80,56 @@ func ResponseFromDB(project db.Project) Response {
 		CPULimit:           numericToResponseFloat(project.CpuLimit),
 		Status:             project.Status,
 		ActiveDeploymentID: uuidString(project.ActiveDeploymentID),
+		ComposeFilePath:      project.ComposeFilePath,
+		ComposeOverridePaths: project.ComposeOverridePaths,
+		ComposeProfiles:      project.ComposeProfiles,
+		ComposeWorkdir:       project.ComposeWorkdir,
 		CreatedAt:          formatTimestamp(project.CreatedAt.Time, project.CreatedAt.Valid),
 		UpdatedAt:          formatTimestamp(project.UpdatedAt.Time, project.UpdatedAt.Valid),
 	}
+	if resp.ComposeOverridePaths == nil {
+		resp.ComposeOverridePaths = []string{}
+	}
+	if resp.ComposeProfiles == nil {
+		resp.ComposeProfiles = []string{}
+	}
+	return resp
 }
 
 func DetectResponseFromResult(result DetectResult) DetectResponse {
-	return DetectResponse{
-		DeployMode:    result.DeployMode,
+	resp := DetectResponse{
+		DeployMode:        result.DeployMode,
+		Branch:            result.Branch,
+		DefaultBranch:     result.DefaultBranch,
+		Branches:          result.Branches,
+		MainService:       result.MainService,
+		Services:          result.Services,
+		ComposeFile:       result.ComposeFile,
+		HasDockerfile:     result.HasDockerfile,
+		EnvVars:           result.EnvVars,
+		AppPort:           result.AppPort,
+		ComposePlan:       result.ComposePlan,
+		Tree:              result.Tree,
+		TreeTruncated:     result.TreeTruncated,
+		ComposeCandidates: result.ComposeCandidates,
+	}
+	if resp.ComposeCandidates == nil {
+		resp.ComposeCandidates = []compose.Candidate{}
+	}
+	return resp
+}
+
+func DetectComposeResponseFromResult(result DetectComposeResult) DetectComposeResponse {
+	resp := DetectComposeResponse{
 		Branch:        result.Branch,
 		DefaultBranch: result.DefaultBranch,
 		Branches:      result.Branches,
-		MainService:   result.MainService,
-		Services:      result.Services,
-		ComposeFile:   result.ComposeFile,
-		HasDockerfile: result.HasDockerfile,
-		EnvVars:       result.EnvVars,
-		AppPort:       result.AppPort,
-		ComposePlan:   result.ComposePlan,
-		Tree:          result.Tree,
-		TreeTruncated: result.TreeTruncated,
+		Candidates:    result.Candidates,
 	}
+	if resp.Candidates == nil {
+		resp.Candidates = []compose.Candidate{}
+	}
+	return resp
 }
 
 func ResponsesFromDB(projects []db.Project) []Response {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"mypaas/internal/compose"
 	"mypaas/internal/envdiscover"
 )
 
@@ -198,9 +199,12 @@ func TestDetectComposeFilePrefersProdVariant(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "docker-compose.test.yml"), "services: {}\n")
 	writeFile(t, filepath.Join(dir, "docker-compose.prod.yml"), "services: {}\n")
 
-	got := detectComposeFile(dir)
+	got, err := compose.First(dir)
+	if err != nil {
+		t.Fatalf("compose.First() error = %v", err)
+	}
 	if got != "docker-compose.prod.yml" {
-		t.Fatalf("detectComposeFile() = %q, want docker-compose.prod.yml", got)
+		t.Fatalf("compose.First() = %q, want docker-compose.prod.yml", got)
 	}
 }
 

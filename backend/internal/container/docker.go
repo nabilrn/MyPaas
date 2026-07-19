@@ -55,10 +55,12 @@ type RunOptions struct {
 type ComposeUpOptions struct {
 	ProjectName  string
 	WorkDir      string
-	ComposeFile  string
-	OverrideFile string
+	ComposeFile  string   // primary compose file (relative to WorkDir or absolute). Kept for backwards compatibility; merged into ComposeFiles when non-empty.
+	OverrideFile string   // MyPaas generated override (relative to WorkDir or absolute). Appended after ComposeFiles.
+	ComposeFiles []string // additional -f files in order; ComposeFile is prepended when set
 	EnvFile      string
 	NoBuild      bool
+	Profiles     []string // COMPOSE_PROFILES values exported to the docker compose process
 }
 
 const ManagedImageLabel = "mypaas.managed=true"
@@ -137,7 +139,7 @@ func (d *DockerCLI) CleanupUnusedManagedImages(ctx context.Context, until string
 }
 
 func (d *DockerCLI) ComposeServices(ctx context.Context, dir, envFile string, composeFile ...string) ([]string, error) {
-	args := composeConfigArgs(envFile, firstString(composeFile))
+	args := composeConfigArgsMulti(envFile, composeFile)
 	args = append(args, "config", "--services")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
@@ -155,7 +157,7 @@ func (d *DockerCLI) ComposeServices(ctx context.Context, dir, envFile string, co
 }
 
 func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile string, composeFile ...string) ([]string, error) {
-	args := composeConfigArgs(envFile, firstString(composeFile))
+	args := composeConfigArgsMulti(envFile, composeFile)
 	args = append(args, "config", "--format", "json")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
@@ -166,7 +168,15 @@ func (d *DockerCLI) ComposeBuildServices(ctx context.Context, dir, envFile strin
 }
 
 func (d *DockerCLI) WriteSanitizedComposeConfig(ctx context.Context, dir, envFile, composeFile, outputPath string) error {
-	args := composeConfigArgs(envFile, composeFile)
+	return d.WriteSanitizedComposeConfigMulti(ctx, dir, envFile, []string{composeFile}, outputPath)
+}
+
+// WriteSanitizedComposeConfigMulti renders the merged compose config (with all
+// -f files applied) as JSON with host `ports:` stripped, writing the result to
+// outputPath. Used by the deployment engine so MyPaas can pass the sanitized
+// JSON as the final -f file and keep control of host port bindings.
+func (d *DockerCLI) WriteSanitizedComposeConfigMulti(ctx context.Context, dir, envFile string, composeFiles []string, outputPath string) error {
+	args := composeConfigArgsMulti(envFile, composeFiles)
 	args = append(args, "config", "--format", "json")
 	out, err := withDir(commandContext(ctx, "docker", args...), dir).CombinedOutput()
 	if err != nil {
@@ -182,19 +192,40 @@ func (d *DockerCLI) WriteSanitizedComposeConfig(ctx context.Context, dir, envFil
 
 func (d *DockerCLI) ComposeUp(ctx context.Context, opts ComposeUpOptions, log func(string)) error {
 	args := composeBaseArgs(opts.EnvFile)
-	args = append(args,
-		"-p", opts.ProjectName,
-		"-f", opts.ComposeFile,
-		"-f", opts.OverrideFile,
-		"up", "-d",
-	)
+	args = append(args, "-p", opts.ProjectName)
+	for _, file := range composeUpFiles(opts) {
+		args = append(args, "-f", file)
+	}
+	args = append(args, "up", "-d")
 	if opts.NoBuild {
 		args = append(args, "--no-build")
 	} else {
 		args = append(args, "--build")
 	}
 	args = append(args, "--remove-orphans")
-	return runLogged(ctx, opts.WorkDir, log, "docker", args...)
+	cmd := commandContext(ctx, "docker", args...)
+	if opts.WorkDir != "" {
+		cmd.Dir = opts.WorkDir
+	}
+	if len(opts.Profiles) > 0 {
+		cmd.Env = append(cmd.Env, "COMPOSE_PROFILES="+strings.Join(opts.Profiles, ","))
+	}
+	return runLoggedCmd(ctx, cmd, log)
+}
+
+// composeUpFiles returns the ordered list of -f files for a ComposeUp call:
+// primary ComposeFile first, then any additional ComposeFiles, then the
+// MyPaas generated OverrideFile last so its port binding always wins.
+func composeUpFiles(opts ComposeUpOptions) []string {
+	files := make([]string, 0, len(opts.ComposeFiles)+2)
+	if opts.ComposeFile != "" {
+		files = append(files, opts.ComposeFile)
+	}
+	files = append(files, opts.ComposeFiles...)
+	if opts.OverrideFile != "" {
+		files = append(files, opts.OverrideFile)
+	}
+	return files
 }
 
 func (d *DockerCLI) ImageExists(ctx context.Context, image string) (bool, error) {
@@ -594,7 +625,10 @@ func runLogged(ctx context.Context, dir string, log func(string), name string, a
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	return runLoggedCmd(ctx, cmd, log)
+}
 
+func runLoggedCmd(ctx context.Context, cmd *exec.Cmd, log func(string)) error {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -605,7 +639,7 @@ func runLogged(ctx context.Context, dir string, log func(string), name string, a
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("%s start: %w", name, err)
+		return fmt.Errorf("%s start: %w", cmd.Path, err)
 	}
 
 	done := make(chan struct{}, 2)
@@ -615,7 +649,7 @@ func runLogged(ctx context.Context, dir string, log func(string), name string, a
 	<-done
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+		return fmt.Errorf("%s %s: %w", cmd.Path, strings.Join(cmd.Args[1:], " "), err)
 	}
 	return nil
 }
@@ -796,6 +830,20 @@ func composeConfigArgs(envFile, composeFile string) []string {
 	composeFile = strings.TrimSpace(composeFile)
 	if composeFile != "" {
 		args = append(args, "-f", composeFile)
+	}
+	return args
+}
+
+// composeConfigArgsMulti builds a `docker compose` argv prefix from multiple
+// -f files. Empty strings are skipped so callers can pass a mixed slice
+// without filtering first.
+func composeConfigArgsMulti(envFile string, composeFiles []string) []string {
+	args := composeBaseArgs(envFile)
+	for _, file := range composeFiles {
+		file = strings.TrimSpace(file)
+		if file != "" {
+			args = append(args, "-f", file)
+		}
 	}
 	return args
 }

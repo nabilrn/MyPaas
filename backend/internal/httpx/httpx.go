@@ -57,7 +57,7 @@ func DomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errs.ErrQuotaExceeded):
 		Error(w, http.StatusConflict, "QUOTA_EXCEEDED", err.Error(), nil)
 	case errors.Is(err, errs.ErrComposeFileNotFound):
-		Error(w, http.StatusBadRequest, "COMPOSE_FILE_NOT_FOUND", "Compose file was not found in the repository root.", nil)
+		Error(w, http.StatusBadRequest, "COMPOSE_FILE_NOT_FOUND", "Compose file was not found in the repository.", nil)
 	case errors.Is(err, errs.ErrComposeUnsupported):
 		Error(w, http.StatusBadRequest, "COMPOSE_UNSUPPORTED", "This action is not supported for Compose projects yet.", nil)
 	case errors.Is(err, errs.ErrDockerfileNotFound):

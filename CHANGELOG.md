@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Flexible Compose configuration: compose files anywhere in the repository (subdirectory, monorepo package, `infra/`, etc.), user-chained override files (`-f` ordering), `COMPOSE_PROFILES` support, and an explicit working-directory override. Persisted as `compose_file_path`, `compose_override_paths`, `compose_profiles`, `compose_workdir` on `projects` (migration `000009`). New `POST /projects/detect-compose` endpoint returns ranked compose file candidates. Create form and settings page expose the new fields. See ADR-016.
+- `UpdateProject` API and settings page can now change `mainService` for compose projects (previously create-only).
 - Ephemeral HTTPS access for the install wizard through an automatically cleaned-up Cloudflare Quick Tunnel, with SSH port forwarding retained as a fallback.
 - Public one-line VM bootstrap installer that installs Git when needed, safely checks out or updates MyPaas, and launches the browser setup wizard without a manual clone.
 - Initial project structure and setup
@@ -60,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
+- Compose file discovery moved to a shared `internal/compose/` package. `project/` and `deployment/` no longer duplicate candidate lists; both use `compose.Discover` / `compose.ResolveLayout`. Compose Doctor now resolves `build.context` against the compose file's directory (matching docker compose semantics) instead of the repository root, so subdirectory compose files get accurate build-context existence checks.
+- `container.ComposeUpOptions` adds `ComposeFiles []string` and `Profiles []string`. The sanitized compose JSON is now rendered from all user `-f` files merged via `docker compose config --format json`, so user overrides are baked in and the MyPaas port-binding override always wins.
 - Dashboard action, navigation, status, and utility icons now use the official `@lucide/svelte` library for consistent geometry, sizing, and stroke rendering; chart and GitHub brand SVGs remain purpose-specific.
 - Deploy actions now open deployment history with the queued deployment focused, its build output expanded immediately, and non-overlapping polling that fills the viewer as logs arrive.
 - Compact dashboard actions now use consistent accessible icon controls, coarse-pointer touch targets, and guarded loading and disabled states across deployments, environment variables, database rows, audit logs, projects, and admin users.

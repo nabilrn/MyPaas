@@ -12,7 +12,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost, projectURL } from '$lib/utils/urls';
-	import type { ComposeIssue, ComposePlan, ComposePortPlan, ComposeServicePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
+	import type { ComposeCandidate, ComposeIssue, ComposePlan, ComposePortPlan, ComposeServicePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type DeployModeChoice = 'auto' | 'dockerfile' | 'compose' | 'static';
 	type EnvDraft = EnvVarDiscovery & { value: string };
@@ -62,6 +62,9 @@
 	let repoTreeTruncated = false;
 	let composePlan: ComposePlan | null = null;
 	let detectedServices: string[] = [];
+	let composeCandidates: ComposeCandidate[] = [];
+	let composeCandidatesLoading = false;
+	let composeCandidatesError = '';
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
 	let appPortSource: PortSource = 'fallback';
@@ -78,7 +81,11 @@
 		resourceProfile: 'node-python' as ResourceProfile,
 		memoryMb: '256',
 		cpuLimit: '0.35',
-		sharedPostgres: false
+		sharedPostgres: false,
+		composeFilePath: '',
+		composeOverridePaths: '',
+		composeProfiles: '',
+		composeWorkdir: ''
 	};
 
 	const deployModes: Array<{ id: DeployModeChoice; title: string; body: string }> = [
@@ -203,6 +210,8 @@
 		form.deployMode = mode;
 		if (mode !== 'compose') {
 			composePlan = null;
+			composeCandidates = [];
+			composeCandidatesError = '';
 		}
 		if (mode === 'static') {
 			form.appPort = '80';
@@ -230,9 +239,13 @@
 		repoTree = detected.tree ?? repoTree;
 		repoTreeTruncated = detected.treeTruncated ?? repoTreeTruncated;
 		composePlan = normalizeComposePlan(detected.composePlan);
+		composeCandidates = Array.isArray(detected.composeCandidates) ? detected.composeCandidates : [];
 		chooseDeployMode(detected.deployMode);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
+		}
+		if (detected.composeFile && !form.composeFilePath) {
+			form.composeFilePath = detected.composeFile;
 		}
 		if (detected.deployMode === 'static') {
 			form.appPort = '80';
@@ -256,6 +269,38 @@
 				? 'Static site'
 				: 'Dockerfile';
 		detectMessage += branchSuffix;
+	}
+
+	async function refreshComposeCandidates(showToast = false): Promise<void> {
+		if (form.deployMode !== 'compose') return;
+		const repoUrl = form.repoUrl.trim();
+		const branch = form.branch.trim();
+		if (!repoUrl || !branch) return;
+		composeCandidatesLoading = true;
+		composeCandidatesError = '';
+		try {
+			const result = await api.projects.detectCompose({ repoUrl, branch });
+			composeCandidates = Array.isArray(result.candidates) ? result.candidates : [];
+			if (composeCandidates.length > 0 && !form.composeFilePath) {
+				form.composeFilePath = composeCandidates[0].path;
+			}
+			if (showToast) {
+				toast.success(`Found ${composeCandidates.length} compose candidate${composeCandidates.length === 1 ? '' : 's'}`);
+			}
+		} catch (err) {
+			composeCandidates = [];
+			composeCandidatesError = err instanceof Error ? err.message : 'Failed to scan for compose files';
+			if (showToast) {
+				toast.error(composeCandidatesError);
+			}
+		} finally {
+			composeCandidatesLoading = false;
+		}
+	}
+
+	function selectComposeCandidate(path: string) {
+		form.composeFilePath = path;
+		form.composeWorkdir = '';
 	}
 
 	function normalizeComposePlan(plan: ComposePlan | null | undefined): ComposePlan | null {
@@ -337,6 +382,9 @@
 		form.branch = (event.currentTarget as HTMLSelectElement).value;
 		detectMessage = '';
 		composePlan = null;
+		composeCandidates = [];
+		form.composeFilePath = '';
+		form.composeWorkdir = '';
 		detectedServices = [];
 		void inspectRepository(false, true).catch(() => undefined);
 	}
@@ -769,6 +817,15 @@
 				.filter((item) => normalizeEnvKey(item.key) && item.value.length > 0)
 				.map((item) => ({ key: normalizeEnvKey(item.key), value: item.value }));
 
+			const composeFilePath = deployMode === 'compose' ? form.composeFilePath.trim() || null : null;
+			const composeOverridePaths = deployMode === 'compose'
+				? splitCommaList(form.composeOverridePaths)
+				: [];
+			const composeProfiles = deployMode === 'compose'
+				? splitCommaList(form.composeProfiles)
+				: [];
+			const composeWorkdir = deployMode === 'compose' ? form.composeWorkdir.trim() || null : null;
+
 			const project = await api.projects.create({
 				name: form.name,
 				repoUrl: form.repoUrl,
@@ -780,7 +837,11 @@
 				memoryLimitMb: Number(form.memoryMb),
 				cpuLimit: Number(form.cpuLimit),
 				sharedPostgres: form.sharedPostgres,
-				envVars
+				envVars,
+				composeFilePath,
+				composeOverridePaths,
+				composeProfiles,
+				composeWorkdir
 			});
 			toast.success('Project created');
 			await goto(`/projects/${project.id}`);
@@ -790,6 +851,13 @@
 		} finally {
 			submitting = false;
 		}
+	}
+
+	function splitCommaList(value: string): string[] {
+		return value
+			.split(',')
+			.map((entry) => entry.trim())
+			.filter(Boolean);
 	}
 </script>
 
@@ -945,35 +1013,133 @@
 						on:change={(event) => chooseDeployMode(event.detail as DeployModeChoice)}
 					/>
 
-					<div class="grid gap-4 sm:grid-cols-2">
-						{#if form.deployMode === 'compose'}
+				<div class="grid gap-4 sm:grid-cols-2">
+					{#if form.deployMode === 'compose'}
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainService">Main service</label>
+							<input id="mainService" type="text" bind:value={form.mainService} placeholder="app" class="field w-full font-mono" />
+						</div>
+					{/if}
+					{#if form.deployMode !== 'static'}
+						<div>
+							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="appPort">App port</label>
+							<input
+								id="appPort"
+								type="number"
+								min="1"
+								max="65535"
+								value={form.appPort}
+								placeholder={DEFAULT_APP_PORT}
+								on:input={handleAppPortInput}
+								class="field w-full font-mono"
+							/>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{portStateLabel}</p>
+						</div>
+					{:else}
+						<div class="soft-panel p-3 text-sm sm:col-span-2">
+							<p class="font-medium text-gray-950 dark:text-white">Static deployment</p>
+							<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Static projects are served by the file server on port 80, so app port and database options are disabled.</p>
+						</div>
+					{/if}
+				</div>
+
+				{#if form.deployMode === 'compose'}
+					<div class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40">
+						<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainService">Main service</label>
-								<input id="mainService" type="text" bind:value={form.mainService} placeholder="app" class="field w-full font-mono" />
+								<p class="text-xs font-medium text-gray-700 dark:text-gray-200">Compose file</p>
+								<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Pick a discovered file or enter a repo-relative path manually. Leave blank to use the top-ranked candidate.</p>
 							</div>
-						{/if}
-						{#if form.deployMode !== 'static'}
+							<ActionButton
+								variant="secondary"
+								size="xs"
+								type="button"
+								disabled={composeCandidatesLoading || !form.repoUrl.trim() || !form.branch.trim()}
+								loading={composeCandidatesLoading}
+								loadingLabel="Scanning..."
+								on:click={() => void refreshComposeCandidates(true)}
+							>
+								Scan for compose files
+							</ActionButton>
+						</div>
+
+						<div class="grid gap-3 sm:grid-cols-2">
 							<div>
-								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="appPort">App port</label>
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeFilePath">Compose file path</label>
 								<input
-									id="appPort"
-									type="number"
-									min="1"
-									max="65535"
-									value={form.appPort}
-									placeholder={DEFAULT_APP_PORT}
-									on:input={handleAppPortInput}
+									id="composeFilePath"
+									type="text"
+									bind:value={form.composeFilePath}
+									placeholder="docker-compose.yml"
 									class="field w-full font-mono"
 								/>
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{portStateLabel}</p>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Repo-relative, forward slashes only (e.g. <span class="font-mono">infra/docker-compose.yml</span>).</p>
 							</div>
-						{:else}
-							<div class="soft-panel p-3 text-sm sm:col-span-2">
-								<p class="font-medium text-gray-950 dark:text-white">Static deployment</p>
-								<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Static projects are served by the file server on port 80, so app port and database options are disabled.</p>
+							<div>
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeWorkdir">Working directory override</label>
+								<input
+									id="composeWorkdir"
+									type="text"
+									bind:value={form.composeWorkdir}
+									placeholder="auto (parent of compose file)"
+									class="field w-full font-mono"
+								/>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Set only if build contexts or env files resolve against a different directory.</p>
+							</div>
+						</div>
+
+						<div class="mt-3 grid gap-3 sm:grid-cols-2">
+							<div>
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeOverridePaths">Override files</label>
+								<input
+									id="composeOverridePaths"
+									type="text"
+									bind:value={form.composeOverridePaths}
+									placeholder="docker-compose.prod.yml, docker-compose.cache.yml"
+									class="field w-full font-mono"
+								/>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated, repo-relative. Applied before MyPaas' generated override.</p>
+							</div>
+							<div>
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="composeProfiles">Profiles</label>
+								<input
+									id="composeProfiles"
+									type="text"
+									bind:value={form.composeProfiles}
+									placeholder="app, worker"
+									class="field w-full font-mono"
+								/>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated <span class="font-mono">COMPOSE_PROFILES</span> values.</p>
+							</div>
+						</div>
+
+						{#if composeCandidatesError}
+							<p class="mt-3 text-xs text-red-600 dark:text-red-300">{composeCandidatesError}</p>
+						{/if}
+						{#if composeCandidates.length > 0}
+							<div class="mt-3">
+								<p class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-300">Discovered compose files</p>
+								<div class="grid gap-1.5 sm:grid-cols-2">
+									{#each composeCandidates as candidate}
+										<button
+											type="button"
+											class={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-xs transition
+												${form.composeFilePath === candidate.path
+													? 'border-brand-500 bg-brand-50 text-brand-900 dark:border-brand-500/60 dark:bg-brand-500/10 dark:text-brand-100'
+													: 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300'}`}
+											on:click={() => selectComposeCandidate(candidate.path)}
+										>
+											<span class="truncate font-mono">{candidate.path}</span>
+											<span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600 dark:bg-gray-900 dark:text-gray-300">
+												{candidate.depth === 0 ? 'root' : `depth ${candidate.depth}`}
+											</span>
+										</button>
+									{/each}
+								</div>
 							</div>
 						{/if}
 					</div>
+				{/if}
 
 					{#if handoffPrompt}
 						<div class="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
@@ -1272,12 +1438,24 @@
 						<dt class="text-xs text-gray-500 dark:text-gray-400">Profile</dt>
 						<dd class="mt-1 text-gray-950 dark:text-white">{selectedProfile?.title ?? form.resourceProfile}</dd>
 					</div>
-					{#if form.deployMode !== 'static'}
-						<div class="px-5 py-3">
-							<dt class="text-xs text-gray-500 dark:text-gray-400">Database</dt>
-							<dd class="mt-1 text-gray-950 dark:text-white">{form.sharedPostgres ? 'Shared PostgreSQL' : '-'}</dd>
-						</div>
-					{/if}
+				{#if form.deployMode !== 'static'}
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Database</dt>
+						<dd class="mt-1 text-gray-950 dark:text-white">{form.sharedPostgres ? 'Shared PostgreSQL' : '-'}</dd>
+					</div>
+				{/if}
+				{#if form.deployMode === 'compose' && form.composeFilePath}
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Compose file</dt>
+						<dd class="mt-1 truncate font-mono text-gray-950 dark:text-white">{form.composeFilePath}</dd>
+					</div>
+				{/if}
+				{#if form.deployMode === 'compose' && form.composeProfiles}
+					<div class="px-5 py-3">
+						<dt class="text-xs text-gray-500 dark:text-gray-400">Profiles</dt>
+						<dd class="mt-1 truncate font-mono text-gray-950 dark:text-white">{form.composeProfiles}</dd>
+					</div>
+				{/if}
 				</dl>
 				<div class="border-t border-gray-100 p-5 dark:border-gray-800">
 					<ActionButton

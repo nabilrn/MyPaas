@@ -2,6 +2,7 @@ import type {
 	Project,
 	Deployment,
 	DeployModeDetection,
+	ComposeFileDetection,
 	EnvVar,
 	MetricsSnapshot,
 	QuotaUsage,
@@ -75,6 +76,8 @@ export const api = {
 		get:    (id: string):          Promise<Project>    => request(`/projects/${id}`),
 		create: (data: unknown):       Promise<Project>    => request('/projects',      { method: 'POST',   body: JSON.stringify(data) }),
 		detectMode: (data: unknown):   Promise<DeployModeDetection> => request('/projects/detect-mode', { method: 'POST', body: JSON.stringify(data) }),
+		detectCompose: (data: unknown): Promise<ComposeFileDetection> =>
+			request('/projects/detect-compose', { method: 'POST', body: JSON.stringify(data) }),
 		inspectRepository: (data: unknown): Promise<RepoInspection> =>
 			request('/projects/detect-mode', { method: 'POST', body: JSON.stringify({ ...(data as object), inspectOnly: true }) }),
 		update: (id: string, d: unknown): Promise<Project> => request(`/projects/${id}`, { method: 'PATCH',  body: JSON.stringify(d) }),

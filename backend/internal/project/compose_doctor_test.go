@@ -106,6 +106,40 @@ func TestComposeServicePlanHandlesAbsoluteBuildContextFromComposeConfig(t *testi
 	}
 }
 
+// TestComposeServicePlanResolvesBuildContextAgainstComposeDir verifies that
+// when a compose file lives in a subdirectory, `build.context: .` resolves to
+// the compose file's directory (matching docker compose semantics), not the
+// repository root.
+func TestComposeServicePlanResolvesBuildContextAgainstComposeDir(t *testing.T) {
+	workspace := t.TempDir()
+	infraDir := filepath.Join(workspace, "infra")
+	serverDir := filepath.Join(infraDir, "server")
+	if err := os.MkdirAll(serverDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverDir, "Dockerfile"), []byte("FROM alpine\n"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	rawBuild, err := json.Marshal(map[string]any{
+		"context":    "./server",
+		"dockerfile": "Dockerfile",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	item := composeServicePlanFromConfig(infraDir, "backend", composeServiceConfig{Build: rawBuild})
+	if item.BuildContext == nil || *item.BuildContext != "server" {
+		t.Fatalf("BuildContext = %#v, want server", item.BuildContext)
+	}
+
+	plan := &ComposePlan{Issues: make([]ComposeIssue, 0)}
+	addComposeServiceIssues(plan, infraDir, "backend", item, composeServiceConfig{})
+	if hasComposeIssue(plan.Issues, "BUILD_CONTEXT_MISSING") || hasComposeIssue(plan.Issues, "DOCKERFILE_MISSING") {
+		t.Fatalf("subdir build context should resolve against compose dir, got issues: %#v", plan.Issues)
+	}
+}
+
 func TestComposeServiceIssuesDetectReservedPortAndMissingDockerfile(t *testing.T) {
 	workspace := t.TempDir()
 	context := "client"

@@ -21,12 +21,12 @@ export interface User {
 }
 
 export interface Project {
-	id:                  string;
-	userId:              string;
-	name:                string;
-	repoUrl:             string;
-	branch:              string;
-	subdomain:           string;
+	id:                   string;
+	userId:               string;
+	name:                 string;
+	repoUrl:              string;
+	branch:               string;
+	subdomain:            string;
 	deployMode:          DeployMode;
 	resourceProfile:     ResourceProfile;
 	mainService:         string | null;
@@ -37,8 +37,12 @@ export interface Project {
 	cpuLimit:            number;
 	status:              ProjectStatus;
 	activeDeploymentId:  string | null;
-	createdAt:           string;
-	updatedAt:           string;
+	composeFilePath:      string | null;
+	composeOverridePaths: string[];
+	composeProfiles:      string[];
+	composeWorkdir:       string | null;
+	createdAt:            string;
+	updatedAt:            string;
 }
 
 export interface Deployment {
@@ -219,6 +223,19 @@ export interface QuotaUsage {
 	projectCount: number;
 }
 
+export interface ComposeCandidate {
+	path: string;
+	score: number;
+	depth: number;
+}
+
+export interface ComposeFileDetection {
+	branch:        string;
+	defaultBranch: string;
+	branches:      string[];
+	candidates:    ComposeCandidate[];
+}
+
 export interface DeployModeDetection extends RepoInspection {
 	deployMode: DeployMode;
 	mainService: string | null;
@@ -228,6 +245,7 @@ export interface DeployModeDetection extends RepoInspection {
 	envVars: EnvVarDiscovery[];
 	appPort: number;
 	composePlan: ComposePlan | null;
+	composeCandidates: ComposeCandidate[];
 }
 
 export interface AuditLog {
