@@ -285,7 +285,7 @@ func addComposeServiceIssues(plan *ComposePlan, workspace, serviceName string, i
 		}
 	}
 	if spec.Container != "" {
-		plan.Issues = append(plan.Issues, composeIssue("warning", "CONTAINER_NAME", &serviceName, "container_name can collide between deployments; MyPaas compose project names are safer."))
+		plan.Issues = append(plan.Issues, composeIssue("info", "CONTAINER_NAME", &serviceName, "container_name is stripped from the sanitized compose config MyPaas runs, so collisions across projects are prevented automatically. No action required."))
 	}
 	if spec.NetworkMode == "host" {
 		plan.Issues = append(plan.Issues, composeIssue("error", "HOST_NETWORK", &serviceName, "network_mode: host is not compatible with MyPaas routing."))

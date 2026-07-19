@@ -190,24 +190,30 @@ func TestParseComposeBuildServicesJSON(t *testing.T) {
 	}
 }
 
-func TestRemoveComposeHostPorts(t *testing.T) {
+func TestSanitizeComposeConfigStripsPortsAndContainerName(t *testing.T) {
 	raw := []byte(`{
 		"services": {
 			"web": {
 				"image": "demo",
+				"container_name": "myapp-web",
 				"ports": [{"target": 8080, "published": "8080"}],
 				"expose": ["8080"]
 			},
 			"db": {
 				"image": "postgres:16",
+				"container_name": "myapp-db",
 				"ports": [{"target": 5432, "published": "5432"}]
+			},
+			"cache": {
+				"image": "redis:7",
+				"container_name": "myapp-cache"
 			}
 		}
 	}`)
 
-	out, err := removeComposeHostPorts(raw)
+	out, err := sanitizeComposeConfig(raw)
 	if err != nil {
-		t.Fatalf("removeComposeHostPorts() error = %v", err)
+		t.Fatalf("sanitizeComposeConfig() error = %v", err)
 	}
 	var doc struct {
 		Services map[string]map[string]any `json:"services"`
@@ -215,11 +221,13 @@ func TestRemoveComposeHostPorts(t *testing.T) {
 	if err := json.Unmarshal(out, &doc); err != nil {
 		t.Fatalf("sanitized json invalid: %v", err)
 	}
-	if _, ok := doc.Services["web"]["ports"]; ok {
-		t.Fatalf("web ports should be removed, got %s", string(out))
-	}
-	if _, ok := doc.Services["db"]["ports"]; ok {
-		t.Fatalf("db ports should be removed, got %s", string(out))
+	for _, service := range []string{"web", "db", "cache"} {
+		if _, ok := doc.Services[service]["ports"]; ok {
+			t.Fatalf("%s ports should be stripped, got %s", service, string(out))
+		}
+		if _, ok := doc.Services[service]["container_name"]; ok {
+			t.Fatalf("%s container_name should be stripped, got %s", service, string(out))
+		}
 	}
 	if _, ok := doc.Services["web"]["expose"]; !ok {
 		t.Fatalf("non-host exposure metadata should be preserved, got %s", string(out))

@@ -183,7 +183,7 @@ func (d *DockerCLI) WriteSanitizedComposeConfigMulti(ctx context.Context, dir, e
 		return fmt.Errorf("docker compose config --format json: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
-	sanitized, err := removeComposeHostPorts(out)
+	sanitized, err := sanitizeComposeConfig(out)
 	if err != nil {
 		return err
 	}
@@ -736,7 +736,16 @@ func parseComposeBuildServicesJSON(raw []byte) ([]string, error) {
 	return services, nil
 }
 
-func removeComposeHostPorts(raw []byte) ([]byte, error) {
+// sanitizeComposeConfig strips fields MyPaas overrides at runtime so the
+// sanitized JSON can be passed to `docker compose up` without colliding with
+// MyPaas' own generated override. Currently strips:
+//   - services[*].ports — MyPaas rewrites host port bindings via the override
+//     file so user-published ports never clash with Caddy or other projects.
+//   - services[*].container_name — two MyPaas projects both declaring
+//     `container_name: mysql` would collide on the host. Docker Compose
+//     generates safe project-scoped names (e.g. `mypaas-myapp-mysql-1`) when
+//     container_name is absent, so stripping is the safest fix.
+func sanitizeComposeConfig(raw []byte) ([]byte, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse compose config json: %w", err)
@@ -752,6 +761,7 @@ func removeComposeHostPorts(raw []byte) ([]byte, error) {
 			continue
 		}
 		delete(service, "ports")
+		delete(service, "container_name")
 	}
 
 	out, err := json.MarshalIndent(doc, "", "  ")
