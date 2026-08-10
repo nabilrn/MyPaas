@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
+	"mypaas/internal/container"
+	"mypaas/internal/db"
 	"mypaas/internal/statd"
 )
 
@@ -25,6 +28,59 @@ func TestStatdRuntimeID(t *testing.T) {
 	}
 	if _, err := statdRuntimeID(projectID, strings.Repeat("x", 100)); err == nil {
 		t.Fatal("expected overlong runtime id error")
+	}
+}
+
+func TestStatdRuntimeCacheGenerationAndCopy(t *testing.T) {
+	projectID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
+	deploymentID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+	project := db.Project{
+		ID: projectID,
+		ActiveDeploymentID: pgtype.UUID{Bytes: deploymentID, Valid: true},
+	}
+	runtimes := []container.RuntimeProcess{{ID: "container-1", Service: "api", PID: 42}}
+	var cache statdRuntimeCache
+
+	if _, ok := cache.get(project); ok {
+		t.Fatal("empty cache must miss")
+	}
+	cache.put(project, runtimes)
+	got, ok := cache.get(project)
+	if !ok || len(got) != 1 || got[0].PID != 42 {
+		t.Fatalf("cache get = %+v, %v", got, ok)
+	}
+	got[0].PID = 999
+	again, ok := cache.get(project)
+	if !ok || again[0].PID != 42 {
+		t.Fatal("cache must return a defensive copy")
+	}
+
+	project.ActiveDeploymentID = pgtype.UUID{
+		Bytes: uuid.MustParse("bbbbbbbb-cccc-dddd-eeee-ffffffffffff"),
+		Valid: true,
+	}
+	if _, ok := cache.get(project); ok {
+		t.Fatal("active deployment change must invalidate generation")
+	}
+
+	cache.invalidate(projectID)
+	if _, ok := cache.get(db.Project{ID: projectID, ActiveDeploymentID: pgtype.UUID{Bytes: deploymentID, Valid: true}}); ok {
+		t.Fatal("explicit invalidation must remove entry")
+	}
+}
+
+func TestStatdRuntimeCacheBound(t *testing.T) {
+	var cache statdRuntimeCache
+	runtime := []container.RuntimeProcess{{ID: "container", Service: "api", PID: 1}}
+	for i := 0; i < statdRuntimeCacheMaxProjects+1; i++ {
+		project := db.Project{ID: uuid.New()}
+		cache.put(project, runtime)
+	}
+	cache.mu.RLock()
+	count := len(cache.entries)
+	cache.mu.RUnlock()
+	if count > statdRuntimeCacheMaxProjects {
+		t.Fatalf("cache entries = %d, max = %d", count, statdRuntimeCacheMaxProjects)
 	}
 }
 

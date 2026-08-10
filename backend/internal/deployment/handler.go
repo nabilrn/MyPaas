@@ -26,7 +26,8 @@ const (
 )
 
 type Handler struct {
-	service *Service
+	service    *Service
+	statdCache statdRuntimeCache
 }
 
 func NewHandler(service *Service) *Handler {
@@ -131,7 +132,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	metrics, err := h.service.PreferredContainerMetricsList(r.Context(), id)
+	metrics, err := h.service.PreferredContainerMetricsList(r.Context(), id, &h.statdCache)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -178,6 +179,7 @@ func (h *Handler) ResetComposeResources(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	h.statdCache.invalidate(id)
 	if err := h.service.ResetComposeResources(r.Context(), id); err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -238,6 +240,7 @@ func (h *Handler) lifecycle(w http.ResponseWriter, r *http.Request, fn func(cont
 	if !ok {
 		return
 	}
+	h.statdCache.invalidate(id)
 	if err := fn(r.Context(), id); err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -316,7 +319,7 @@ func (s *projectStream) emitSnapshot(ctx context.Context) bool {
 }
 
 func (s *projectStream) emitMetrics(ctx context.Context) {
-	metrics, err := s.handler.service.PreferredContainerMetricsList(ctx, s.projectID)
+	metrics, err := s.handler.service.PreferredContainerMetricsList(ctx, s.projectID, &s.handler.statdCache)
 	if err != nil {
 		return
 	}
