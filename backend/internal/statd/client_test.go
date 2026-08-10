@@ -99,19 +99,19 @@ func TestSnapshot(t *testing.T) {
 	waitServer(t, server.done)
 }
 
-func TestRegisterProtocolError(t *testing.T) {
+func TestRegisterByPIDProtocolError(t *testing.T) {
 	server := startFakeServer(t, func(reader *bufio.Reader, conn net.Conn) error {
 		if err := hello(reader, conn); err != nil {
 			return err
 		}
-		if err := expectLine(reader, "{\"op\":\"register\",\"id\":\"runtime-1\",\"cgroup\":\"system.slice/runtime.scope\"}\n"); err != nil {
+		if err := expectLine(reader, "{\"op\":\"register\",\"id\":\"runtime-1\",\"pid\":4321}\n"); err != nil {
 			return err
 		}
 		_, err := conn.Write([]byte("{\"ok\":false,\"error\":{\"code\":\"REGISTRATION_LIMIT\"}}\n"))
 		return err
 	})
 
-	err := NewClient(server.path).Register(context.Background(), "runtime-1", "system.slice/runtime.scope")
+	err := NewClient(server.path).Register(context.Background(), "runtime-1", 4321)
 	var protocolErr *ProtocolError
 	if !errors.As(err, &protocolErr) || protocolErr.Code != "REGISTRATION_LIMIT" {
 		t.Fatalf("expected registration protocol error, got %v", err)
@@ -141,11 +141,16 @@ func TestStatus(t *testing.T) {
 	waitServer(t, server.done)
 }
 
-func TestRejectsNonCanonicalStringBeforeDial(t *testing.T) {
+func TestRegisterRejectsInvalidInputBeforeDial(t *testing.T) {
 	client := NewClient(filepath.Join(t.TempDir(), "missing.sock"))
-	err := client.Register(context.Background(), "bad\"id", "workload")
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("expected invalid input, got %v", err)
+	if err := client.Register(context.Background(), "bad\"id", 123); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected invalid id, got %v", err)
+	}
+	if err := client.Register(context.Background(), "runtime-1", 0); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected invalid pid, got %v", err)
+	}
+	if err := client.Register(context.Background(), "runtime-1", -1); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected invalid pid, got %v", err)
 	}
 }
 
