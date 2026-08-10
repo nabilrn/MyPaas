@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,12 +18,80 @@ import (
 	"mypaas/internal/statd"
 )
 
-const statdSocketEnv = "STATD_SOCKET"
+const (
+	statdSocketEnv               = "STATD_SOCKET"
+	statdRuntimeCacheMaxProjects = 128
+)
+
+type statdRuntimeCacheEntry struct {
+	activeDeployment      [16]byte
+	activeDeploymentValid bool
+	runtimes              []container.RuntimeProcess
+}
+
+// statdRuntimeCache is owned by the deployment Handler. It remembers only
+// cold-path Docker runtime metadata needed to address statd snapshots. The
+// cache is deliberately small and bounded; it is not a source of truth.
+type statdRuntimeCache struct {
+	mu      sync.RWMutex
+	entries map[uuid.UUID]statdRuntimeCacheEntry
+}
+
+func (c *statdRuntimeCache) get(project db.Project) ([]container.RuntimeProcess, bool) {
+	if c == nil {
+		return nil, false
+	}
+	c.mu.RLock()
+	entry, ok := c.entries[project.ID]
+	c.mu.RUnlock()
+	if !ok || entry.activeDeploymentValid != project.ActiveDeploymentID.Valid ||
+		entry.activeDeployment != project.ActiveDeploymentID.Bytes {
+		return nil, false
+	}
+	return cloneRuntimeProcesses(entry.runtimes), true
+}
+
+func (c *statdRuntimeCache) put(project db.Project, runtimes []container.RuntimeProcess) {
+	if c == nil || len(runtimes) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.entries == nil {
+		c.entries = make(map[uuid.UUID]statdRuntimeCacheEntry)
+	}
+	if _, exists := c.entries[project.ID]; !exists && len(c.entries) >= statdRuntimeCacheMaxProjects {
+		clear(c.entries)
+	}
+	c.entries[project.ID] = statdRuntimeCacheEntry{
+		activeDeployment:      project.ActiveDeploymentID.Bytes,
+		activeDeploymentValid: project.ActiveDeploymentID.Valid,
+		runtimes:              cloneRuntimeProcesses(runtimes),
+	}
+}
+
+func (c *statdRuntimeCache) invalidate(projectID uuid.UUID) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	delete(c.entries, projectID)
+	c.mu.Unlock()
+}
+
+func cloneRuntimeProcesses(runtimes []container.RuntimeProcess) []container.RuntimeProcess {
+	if len(runtimes) == 0 {
+		return nil
+	}
+	out := make([]container.RuntimeProcess, len(runtimes))
+	copy(out, runtimes)
+	return out
+}
 
 // PreferredContainerMetricsList uses mypaas-statd when it is explicitly
 // configured and falls back to the existing Docker metrics path on any statd
 // availability/integration failure. This keeps rollout reversible.
-func (s *Service) PreferredContainerMetricsList(ctx context.Context, projectID uuid.UUID) ([]container.Metrics, error) {
+func (s *Service) PreferredContainerMetricsList(ctx context.Context, projectID uuid.UUID, cache *statdRuntimeCache) ([]container.Metrics, error) {
 	project, err := s.project(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -39,7 +108,7 @@ func (s *Service) PreferredContainerMetricsList(ctx context.Context, projectID u
 	client := statd.NewClient(socketPath)
 	var metrics []container.Metrics
 	if project.DeployMode == "compose" {
-		metrics, err = s.composeStatdMetrics(ctx, project, client)
+		metrics, err = s.composeStatdMetrics(ctx, project, client, cache)
 	} else {
 		metrics, err = s.singleStatdMetrics(ctx, project, client)
 	}
@@ -84,12 +153,45 @@ func (s *Service) singleStatdMetrics(ctx context.Context, project db.Project, cl
 	return []container.Metrics{metricFromStatd(service, snapshot, startedAt)}, nil
 }
 
-func (s *Service) composeStatdMetrics(ctx context.Context, project db.Project, client *statd.Client) ([]container.Metrics, error) {
-	runtimes, err := s.docker.ComposeRuntimeProcesses(ctx, composeProjectName(project.Name))
-	if err != nil {
+func (s *Service) composeStatdMetrics(ctx context.Context, project db.Project, client *statd.Client, cache *statdRuntimeCache) ([]container.Metrics, error) {
+	runtimes, cached := cache.get(project)
+	if !cached {
+		var err error
+		runtimes, err = s.docker.ComposeRuntimeProcesses(ctx, composeProjectName(project.Name))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	metrics, err := composeStatdSnapshots(ctx, project, client, runtimes)
+	if err == nil {
+		cache.put(project, runtimes)
+		return metrics, nil
+	}
+	if !cached {
 		return nil, err
 	}
 
+	// Cached PIDs normally let statd re-register after a daemon restart without
+	// touching Docker. Re-discover only when that cached runtime identity no
+	// longer works (container replacement/restart outside the known lifecycle).
+	cache.invalidate(project.ID)
+	freshRuntimes, discoveryErr := s.docker.ComposeRuntimeProcesses(ctx, composeProjectName(project.Name))
+	if discoveryErr != nil {
+		return nil, fmt.Errorf("refresh compose runtime metadata after statd failure: %w", discoveryErr)
+	}
+	metrics, err = composeStatdSnapshots(ctx, project, client, freshRuntimes)
+	if err != nil {
+		return nil, err
+	}
+	cache.put(project, freshRuntimes)
+	return metrics, nil
+}
+
+func composeStatdSnapshots(ctx context.Context, project db.Project, client *statd.Client, runtimes []container.RuntimeProcess) ([]container.Metrics, error) {
+	if client == nil || len(runtimes) == 0 {
+		return nil, errors.New("statd client and compose runtimes are required")
+	}
 	metrics := make([]container.Metrics, 0, len(runtimes))
 	for _, runtime := range runtimes {
 		id, err := statdRuntimeID(project.ID, runtime.Service)
