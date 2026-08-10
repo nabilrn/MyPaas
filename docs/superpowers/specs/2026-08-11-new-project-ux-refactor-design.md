@@ -24,7 +24,7 @@ Frontend-only refactor of `frontend/src/routes/projects/new/+page.svelte` plus s
 - Do not expose `Base directory` by default. Blank means repository root. Never use `/` as the placeholder because absolute paths are rejected by validation.
 - Treat deployment mode, container port, Compose file/workdir/overrides/profiles, and resource overrides as advanced configuration.
 - Keep detected container port read-only in the normal flow.
-- Collapse healthy Compose Doctor output to a concise ready summary; expand detailed diagnostics only when requested or when blocking issues exist.
+- Keep Compose Doctor as the compatibility authority; advanced Compose file selection is collapsed while blocking Doctor findings remain visible and actionable.
 - Show coding-agent handoff only when deployment analysis fails and the generated prompt is useful.
 - Keep shared PostgreSQL available, but present it as an optional database capability instead of a small header checkbox.
 
@@ -33,7 +33,6 @@ Frontend-only refactor of `frontend/src/routes/projects/new/+page.svelte` plus s
 The create CTA follows these states:
 
 - `Waiting for source`
-- `Validating repository`
 - `Analyzing deployment`
 - `Needs configuration`
 - `Ready to create`
@@ -42,11 +41,15 @@ For Git sources, `Ready to create` requires a current repository inspection and 
 
 ## Testing
 
-Add focused Vitest coverage for pure UX helpers:
+Focused Vitest coverage validates:
 
 - deriving a safe project-name suggestion from repository/image input;
-- determining whether a Git project has completed runtime analysis;
-- generating readiness state/reason so `auto` never reports ready before detection;
-- root base directory remains represented by an empty string, never `/`.
+- preventing Git `auto` mode from reporting ready before runtime analysis finishes;
+- requiring a resolved container port for detected non-static runtimes;
+- existing payload/path validation, including repository-relative paths and runtime port bounds.
 
 Existing project validation tests remain the source of truth for payload validation.
+
+## Implementation boundary
+
+This refactor intentionally does not change project creation APIs, backend detection, deployment orchestration, or persisted project fields. It changes how existing capabilities are presented and when the create action is considered ready.
