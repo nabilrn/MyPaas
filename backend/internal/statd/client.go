@@ -15,7 +15,6 @@ const (
 	protocolVersion = 1
 	responseMax     = 4096
 	runtimeIDMax    = 127
-	cgroupPathMax   = 4096
 	defaultTimeout  = 2 * time.Second
 )
 
@@ -80,14 +79,16 @@ type wireResponse struct {
 	} `json:"error"`
 }
 
-func (c *Client) Register(ctx context.Context, id, cgroup string) error {
+// Register associates a MyPaaS runtime ID with the host PID reported by Docker.
+// statd resolves cgroup v2 membership from /proc/<pid>/cgroup on the host.
+func (c *Client) Register(ctx context.Context, id string, pid int) error {
 	if err := validateASCII("id", id, runtimeIDMax); err != nil {
 		return err
 	}
-	if err := validateASCII("cgroup", cgroup, cgroupPathMax); err != nil {
-		return err
+	if pid <= 0 {
+		return fmt.Errorf("%w: pid must be positive", ErrInvalidInput)
 	}
-	request := fmt.Sprintf("{\"op\":\"register\",\"id\":\"%s\",\"cgroup\":\"%s\"}\n", id, cgroup)
+	request := fmt.Sprintf("{\"op\":\"register\",\"id\":\"%s\",\"pid\":%d}\n", id, pid)
 	return c.exchange(ctx, request, nil)
 }
 
