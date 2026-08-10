@@ -1,5 +1,95 @@
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 
+export interface ProjectCreationReadinessInput {
+  name: string;
+  sourceType: "git" | "registry";
+  sourceReady: boolean;
+  deployMode: string;
+  appPort: string;
+  composeDisabledReason: string;
+  busy: boolean;
+}
+
+export interface ProjectCreationReadiness {
+  ready: boolean;
+  state: "Waiting for source" | "Analyzing deployment" | "Needs configuration" | "Ready to create";
+  reason: string;
+}
+
+export function suggestProjectName(source: string): string {
+  let value = source.trim();
+  if (!value) return "";
+
+  value = value.replace(/[?#].*$/, "");
+  value = value.replace(/\/+$/, "");
+
+  const sshSeparator = value.lastIndexOf(":");
+  const slash = value.lastIndexOf("/");
+  if (slash >= 0) {
+    value = value.slice(slash + 1);
+  } else if (value.startsWith("git@") && sshSeparator >= 0) {
+    value = value.slice(sshSeparator + 1);
+  }
+
+  value = value.replace(/\.git$/i, "");
+  value = value.replace(/@sha256:[a-f0-9]+$/i, "");
+  value = value.replace(/:[^:]+$/, "");
+
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30)
+    .replace(/-$/g, "");
+}
+
+export function projectCreationReadiness(
+  input: ProjectCreationReadinessInput,
+): ProjectCreationReadiness {
+  const normalizedName = input.name.trim().toLowerCase();
+  if (!normalizedName) {
+    return { ready: false, state: "Waiting for source", reason: "Project name is required" };
+  }
+  if (!PROJECT_NAME_PATTERN.test(normalizedName)) {
+    return {
+      ready: false,
+      state: "Needs configuration",
+      reason: "Project name must be 3-30 characters and use only letters, numbers, or dashes",
+    };
+  }
+  if (!input.sourceReady) {
+    return {
+      ready: false,
+      state: "Waiting for source",
+      reason: input.sourceType === "registry" ? "Container image is required" : "Repository validation is required",
+    };
+  }
+  if (input.busy) {
+    return { ready: false, state: "Analyzing deployment", reason: "MyPaas is analyzing the selected source" };
+  }
+  if (input.sourceType === "git" && input.deployMode === "auto") {
+    return {
+      ready: false,
+      state: "Analyzing deployment",
+      reason: "Runtime analysis must finish before this project can be created",
+    };
+  }
+  if (input.deployMode !== "static" && !input.appPort.trim()) {
+    return {
+      ready: false,
+      state: "Needs configuration",
+      reason: input.sourceType === "registry"
+        ? "Container port is required for registry images. Set it in Advanced runtime settings."
+        : "Application port could not be detected. Re-analyze the repository or set an Advanced override.",
+    };
+  }
+  if (input.composeDisabledReason) {
+    return { ready: false, state: "Needs configuration", reason: input.composeDisabledReason };
+  }
+  return { ready: true, state: "Ready to create", reason: "" };
+}
+
 function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("Project payload must be an object");
