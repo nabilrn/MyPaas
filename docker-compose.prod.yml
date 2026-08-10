@@ -39,6 +39,7 @@ services:
       CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-${DOCKER_BIND_HOST:-host.docker.internal}}
       STATIC_ROOT: ${STATIC_ROOT:-/var/lib/mypaas/static}
       CADDY_STATIC_ROOT: ${CADDY_STATIC_ROOT:-/var/lib/mypaas/static}
+      STATD_SOCKET: ${STATD_SOCKET:-}
       SHARED_POSTGRES_ENABLED: ${SHARED_POSTGRES_ENABLED:-true}
       SHARED_POSTGRES_HOST: ${SHARED_POSTGRES_HOST:-postgres}
       SHARED_POSTGRES_PORT: ${SHARED_POSTGRES_PORT:-5432}
@@ -59,6 +60,7 @@ services:
     volumes:
       - ./.env:/mypaas/.env:ro
       - ${DOCKER_SOCKET}:${DOCKER_SOCKET}
+      - /run/mypaas:/run/mypaas
       - /var/lib/mypaas/volumes:/var/lib/mypaas/volumes
       - /var/lib/mypaas/compose:/var/lib/mypaas/compose
       - /var/lib/mypaas/static:/var/lib/mypaas/static
