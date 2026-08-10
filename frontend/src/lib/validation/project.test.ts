@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  projectCreationReadiness,
   resolveProjectAppPort,
+  suggestProjectName,
   validateProjectCreateInput,
   validateProjectUpdateInput,
 } from "./project";
@@ -21,6 +23,55 @@ function validCreate(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("new project UX helpers", () => {
+  it("suggests a safe project name from git and registry sources", () => {
+    expect(suggestProjectName("https://github.com/howlil/sop-generate-app.git")).toBe("sop-generate-app");
+    expect(suggestProjectName("ghcr.io/howlil/my-api:v1.4.0")).toBe("my-api");
+  });
+
+  it("does not report a git project ready while runtime mode is still auto", () => {
+    expect(projectCreationReadiness({
+      name: "demo-app",
+      sourceType: "git",
+      sourceReady: true,
+      deployMode: "auto",
+      appPort: "",
+      composeDisabledReason: "",
+      busy: false,
+    })).toEqual({
+      ready: false,
+      state: "Analyzing deployment",
+      reason: "Runtime analysis must finish before this project can be created",
+    });
+  });
+
+  it("reports a detected dockerfile project ready only after its port is resolved", () => {
+    expect(projectCreationReadiness({
+      name: "demo-app",
+      sourceType: "git",
+      sourceReady: true,
+      deployMode: "dockerfile",
+      appPort: "",
+      composeDisabledReason: "",
+      busy: false,
+    }).ready).toBe(false);
+
+    expect(projectCreationReadiness({
+      name: "demo-app",
+      sourceType: "git",
+      sourceReady: true,
+      deployMode: "dockerfile",
+      appPort: "3000",
+      composeDisabledReason: "",
+      busy: false,
+    })).toEqual({
+      ready: true,
+      state: "Ready to create",
+      reason: "",
+    });
+  });
+});
 
 describe("resolveProjectAppPort", () => {
   it("keeps static deployments on port 80", () => {
