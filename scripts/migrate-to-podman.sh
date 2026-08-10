@@ -1,37 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SUDO=""
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  SUDO="sudo"
-fi
+usage() {
+  cat <<'EOF'
+MyPaas Docker -> Podman in-place migration has been retired.
 
-echo "==========================================================="
-echo " Migrating MyPaas from Docker Engine to Podman Engine... "
-echo "==========================================================="
+Why:
+  Docker Engine and Podman keep engine-managed containers and named volumes in
+  different storage. Removing Docker Engine and switching the socket can leave
+  MyPaas control-plane or project data behind.
 
-echo "[1/5] Stopping existing Docker daemon..."
-$SUDO systemctl stop docker docker.socket || true
+Supported path:
+  1. Prepare a VM migration package from MyPaas Admin -> Settings -> VM Migration.
+  2. Provision a fresh Ubuntu/Debian VM with Podman:
 
-echo "[2/5] Uninstalling Docker Engine (keeping CLI & Compose Plugin)..."
-$SUDO apt-get remove -y docker-ce containerd.io docker.io || true
-$SUDO apt-get autoremove -y || true
+       curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/main/scripts/bootstrap.sh | env USE_PODMAN=true bash
 
-echo "[3/5] Installing Podman & Docker CLI..."
-$SUDO apt-get update
-$SUDO apt-get install -y podman docker-ce-cli docker-compose-plugin
+  3. Restore the migration package on the new VM.
 
-echo "[4/5] Enabling Podman Socket (Docker API compatibility)..."
-$SUDO systemctl enable --now podman.socket
+For disposable development hosts, reinstalling from scratch with USE_PODMAN=true
+is also safe when no state needs to be preserved.
+EOF
+}
 
-echo "[5/5] Bridging Docker Socket to Podman..."
-$SUDO ln -sf /run/podman/podman.sock /var/run/docker.sock
-
-echo "==========================================================="
-echo " Verification:"
-$SUDO docker info | grep -i -E "name|podman|engine" || true
-echo "==========================================================="
-echo "Migration complete!"
-echo "NOTE: All your previous containers in Docker are gone (daemon changed)."
-echo "Please run: bash scripts/deploy-to-vm.sh to boot MyPaas on Podman."
-echo "Then, open the dashboard and click 'Deploy' on each of your projects."
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  "")
+    usage >&2
+    printf '\nERROR: refusing destructive in-place engine migration; use a fresh Podman VM and the VM migration workflow.\n' >&2
+    exit 2
+    ;;
+  *)
+    printf 'ERROR: unknown argument: %s\n\n' "$1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
