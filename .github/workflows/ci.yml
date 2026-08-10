@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Bash syntax
         run: bash -n scripts/*.sh
-      - name: Bootstrap regression tests
-        run: python3 -m unittest scripts/bootstrap_test.py
+      - name: Script regression tests
+        run: python3 -m unittest discover -s scripts -p '*_test.py'
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
