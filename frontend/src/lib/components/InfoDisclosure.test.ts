@@ -13,4 +13,14 @@ describe("InfoDisclosure", () => {
     state.close();
     expect(state.expanded).toBe(false);
   });
+
+  it("toggles disclosure state without external dependencies", () => {
+    const state = infoDisclosureState();
+
+    state.toggle();
+    expect(state.expanded).toBe(true);
+
+    state.toggle();
+    expect(state.expanded).toBe(false);
+  });
 });
