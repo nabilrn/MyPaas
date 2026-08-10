@@ -12,7 +12,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { projectHost, projectURL } from '$lib/utils/urls';
-	import { resolveProjectAppPort } from '$lib/validation/project';
+	import { projectCreationReadiness, resolveProjectAppPort, suggestProjectName } from '$lib/validation/project';
 	import type { ComposeCandidate, ComposeIssue, ComposePlan, ComposePortPlan, ComposeServicePlan, DeployModeDetection, EnvVarDiscovery, RepoInspection, RepoTreeEntry, ResourceProfile } from '$types';
 
 	type SourceType = 'git' | 'registry';
@@ -69,6 +69,8 @@
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
 	let appPortSource: PortSource = 'unresolved';
+	let projectNameTouched = false;
+	let deployModeManual = false;
 	let envFileInput: HTMLInputElement | null = null;
 	let copiedHandoffPrompt = '';
 	let handoffCopyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -158,12 +160,8 @@
 		.filter((key) => !((envDraftValueByKey.get(key)?.trim()?.length ?? 0) > 0));
 	$: composeDisabledReason = composeBlockingIssues[0]?.message
 		?? (missingRequiredEnvKeys.length > 0 ? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}` : '');
-	$: runtimePortMissing = form.deployMode !== 'static' && form.deployMode !== 'auto' && !form.appPort.trim();
 	$: portToServiceMap = buildPortToServiceMap(composePlan?.services ?? []);
 	$: localhostEnvWarnings = detectLocalhostInEnvDrafts(envDrafts, portToServiceMap);
-	$: sourceReady = form.sourceType === 'registry'
-		? Boolean(form.imageRef.trim())
-		: Boolean(form.repoUrl.trim() && form.branch.trim() && repositoryInspectionCurrent);
 	$: currentRepoInspectKey = [form.repoUrl.trim(), form.branch.trim(), form.baseDirectory.trim()].join('\n');
 	$: repositoryInspectionCurrent = Boolean(
 		form.repoUrl.trim()
@@ -171,41 +169,27 @@
 		&& lastRepoInspectKey === currentRepoInspectKey
 		&& !repoInspectError
 	);
-	$: canSubmit = Boolean(
-		form.name.trim()
-		&& sourceReady
-		&& !runtimePortMissing
-		&& !composeDisabledReason
-		&& !submitting
-		&& !detecting
-		&& !inspectingRepo
-	);
-	$: createDisabledReason = !form.name.trim()
-		? 'Project name is required'
-		: form.sourceType === 'registry' && !form.imageRef.trim()
-			? 'Container image is required'
-			: form.sourceType === 'git' && !form.repoUrl.trim()
-				? 'Repository URL is required'
-				: form.sourceType === 'git' && !form.branch.trim()
-					? 'Branch is required'
-					: form.sourceType === 'git' && repoInspectError
-						? repoInspectError
-						: form.sourceType === 'git' && !repositoryInspectionCurrent
-							? 'Repository validation is required for the current branch and base directory'
-							: runtimePortMissing
-								? form.sourceType === 'registry'
-									? 'Container port is required for registry images. Set it in Advanced runtime settings.'
-									: 'Application port has not been detected. Run Detect runtime or set an Advanced override.'
-								: composeDisabledReason
-								? composeDisabledReason
-								: inspectingRepo
-									? 'Repository branches are loading'
-									: detecting
-										? 'Repository detection is running'
-										: submitting
-											? 'Project creation is running'
-											: '';
-	$: reviewStateLabel = canSubmit ? 'Ready to create' : createDisabledReason || 'Complete required fields';
+	$: sourceReady = form.sourceType === 'registry'
+		? Boolean(form.imageRef.trim())
+		: Boolean(form.repoUrl.trim() && form.branch.trim() && repositoryInspectionCurrent);
+	$: creationReadiness = projectCreationReadiness({
+		name: form.name,
+		sourceType: form.sourceType,
+		sourceReady,
+		deployMode: form.deployMode,
+		appPort: form.appPort,
+		composeDisabledReason,
+		busy: submitting || detecting || inspectingRepo
+	});
+	$: canSubmit = creationReadiness.ready;
+	$: createDisabledReason = form.sourceType === 'git' && !form.repoUrl.trim()
+		? 'Repository URL is required'
+		: form.sourceType === 'git' && !form.branch.trim() && form.repoUrl.trim()
+			? 'Select a branch after repository validation'
+			: form.sourceType === 'git' && repoInspectError
+				? repoInspectError
+				: creationReadiness.reason;
+	$: reviewStateLabel = creationReadiness.state;
 	$: detectionStateLabel = detecting
 		? 'Inspecting runtime'
 		: inspectingRepo
@@ -216,7 +200,7 @@
 				? repoInspectMessage
 			: form.repoUrl.trim()
 				? form.branch.trim()
-					? 'Ready for detection'
+					? 'Ready for automatic analysis'
 					: 'Select a branch'
 				: 'Waiting for repository URL';
 	$: detectionStateBody = detecting
@@ -231,7 +215,7 @@
 				? repoInspectError
 			: form.repoUrl.trim()
 				? form.branch.trim()
-					? 'Run detection to fill runtime, container port, service, and discovered environment defaults.'
+					? 'MyPaas analyzes runtime, container port, services, and environment defaults automatically.'
 					: 'Branches load automatically after the repository URL is entered.'
 				: 'Paste a repository URL before running detection.';
 
@@ -255,6 +239,7 @@
 	function chooseSourceType(sourceType: SourceType) {
 		if (form.sourceType === sourceType) return;
 		form.sourceType = sourceType;
+		deployModeManual = false;
 		error = '';
 		detectMessage = '';
 		composePlan = null;
@@ -278,7 +263,8 @@
 		}
 	}
 
-	function chooseDeployMode(mode: DeployModeChoice) {
+	function chooseDeployMode(mode: DeployModeChoice, manual = true) {
+		deployModeManual = manual && mode !== 'auto';
 		form.deployMode = mode;
 		if (mode !== 'compose') {
 			composePlan = null;
@@ -313,7 +299,7 @@
 		composePlan = normalizeComposePlan(detected.composePlan);
 		composeCandidates = Array.isArray(detected.composeCandidates) ? detected.composeCandidates : [];
 		staticFrontendCandidates = Array.isArray(detected.staticFrontendCandidates) ? detected.staticFrontendCandidates : [];
-		chooseDeployMode(detected.deployMode);
+		chooseDeployMode(detected.deployMode, false);
 		if (detected.mainService) {
 			form.mainService = detected.mainService;
 		}
@@ -439,6 +425,19 @@
 		form.staticFrontendPath = '';
 		detectedServices = [];
 		lastRepoInspectKey = '';
+		if (!deployModeManual && form.sourceType === 'git') {
+			form.deployMode = 'auto';
+			form.mainService = '';
+			if (appPortSource !== 'manual') {
+				form.appPort = '';
+				appPortSource = 'unresolved';
+			}
+		}
+	}
+
+	function handleNameInput(event: Event) {
+		projectNameTouched = true;
+		form.name = (event.currentTarget as HTMLInputElement).value;
 	}
 
 	function handleRepoUrlInput(event: Event) {
@@ -446,8 +445,16 @@
 		if (value === form.repoUrl) return;
 		form.repoUrl = value;
 		form.branch = '';
+		deployModeManual = false;
+		if (!projectNameTouched) form.name = suggestProjectName(value);
 		resetRepositoryInspection();
 		scheduleRepositoryInspection();
+	}
+
+	function handleImageRefInput(event: Event) {
+		const value = (event.currentTarget as HTMLInputElement).value;
+		form.imageRef = value;
+		if (!projectNameTouched) form.name = suggestProjectName(value);
 	}
 
 	function handleBaseDirectoryInput(event: Event) {
@@ -519,6 +526,12 @@
 			lastRepoInspectKey = repositoryInspectionKey();
 			if (showToast) {
 				toast.success('Repository validated');
+			}
+			if (!deployModeManual) {
+				setTimeout(() => {
+					if (detecting || deployModeManual || lastRepoInspectKey !== repositoryInspectionKey()) return;
+					void handleDetectMode(false).catch(() => undefined);
+				}, 0);
 			}
 			return inspection;
 		} catch (err) {
@@ -1079,7 +1092,8 @@
 				<div class="grid gap-4">
 					<div>
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="name">Project name</label>
-						<input id="name" type="text" bind:value={form.name} placeholder="my-app" class="field w-full" />
+						<input id="name" type="text" value={form.name} on:input={handleNameInput} placeholder="my-app" class="field w-full" />
+						<p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Suggested from the source until you edit it. Route preview: <span class="font-mono">{previewHost}</span>.</p>
 					</div>
 
 					<SegmentedChoice
@@ -1129,19 +1143,22 @@
 								</ActionButton>
 							</div>
 						</div>
-						<div>
-							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="baseDirectory">Base directory</label>
-							<input
-								id="baseDirectory"
-								type="text"
-								value={form.baseDirectory}
-								placeholder="/"
-								class="field w-full font-mono"
-								on:input={handleBaseDirectoryInput}
-								on:blur={() => void inspectRepository(false).catch(() => undefined)}
-							/>
-							<p class="mt-1 text-[11px] text-gray-500">Deploy from a specific subdirectory. E.g. <code>frontend</code> or <code>backend/api</code>.</p>
-						</div>
+						<details class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40">
+							<summary class="cursor-pointer text-sm font-medium text-gray-950 dark:text-white">Advanced source settings</summary>
+							<div class="mt-3">
+								<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="baseDirectory">Project directory</label>
+								<input
+									id="baseDirectory"
+									type="text"
+									value={form.baseDirectory}
+									placeholder="Leave blank for repository root"
+									class="field w-full font-mono"
+									on:input={handleBaseDirectoryInput}
+									on:blur={() => void inspectRepository(false).catch(() => undefined)}
+								/>
+								<p class="mt-1 text-[11px] text-gray-500">Only set this for monorepos. Use <code>frontend</code> or <code>apps/api</code>; blank means repository root.</p>
+							</div>
+						</details>
 						{#if repoInspectError}
 							<p class="text-xs leading-5 text-red-600 dark:text-red-300">{repoInspectError}</p>
 						{/if}
@@ -1166,7 +1183,7 @@
 					{:else}
 						<div>
 							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="imageRef">Container image</label>
-							<input id="imageRef" type="text" bind:value={form.imageRef} placeholder="ghcr.io/example/my-api:v1.4.0" class="field w-full font-mono" autocomplete="off" />
+							<input id="imageRef" type="text" value={form.imageRef} on:input={handleImageRefInput} placeholder="ghcr.io/example/my-api:v1.4.0" class="field w-full font-mono" autocomplete="off" />
 							<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Public Docker Hub, GHCR, or another OCI-compatible registry. MyPaas pulls this image directly; private registry credentials are not managed in this MVP.</p>
 						</div>
 						<div class="soft-panel p-3 text-sm">
@@ -1184,7 +1201,7 @@
 				<svelte:fragment slot="actions">
 					{#if form.sourceType === 'git'}
 						<ActionButton variant="secondary" type="button" on:click={() => void handleDetectMode().catch(() => undefined)} disabled={detecting || inspectingRepo || !form.repoUrl.trim() || !form.branch.trim()} loading={detecting} loadingLabel="Detecting...">
-							Detect runtime
+							Re-analyze
 						</ActionButton>
 					{/if}
 				</svelte:fragment>
@@ -1199,7 +1216,11 @@
 								</div>
 							</div>
 						</div>
-						<SegmentedChoice label="Deployment mode" value={form.deployMode} options={deployModeOptions} on:change={(event) => chooseDeployMode(event.detail as DeployModeChoice)} />
+						<div class="soft-panel p-3 text-sm">
+							<p class="font-medium text-gray-950 dark:text-white">Deployment runtime</p>
+							<p class="mt-1 text-sm text-gray-950 dark:text-white">{form.deployMode === 'auto' ? 'Analyzing automatically…' : form.deployMode === 'dockerfile' ? 'Dockerfile' : form.deployMode === 'compose' ? 'Docker Compose' : 'Static site'}</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">MyPaas uses the repository as the source of truth. Override only when detection is wrong.</p>
+						</div>
 					{:else}
 						<div class="rounded-md border border-brand-500/30 bg-brand-50 px-3 py-3 text-sm dark:border-brand-500/40 dark:bg-brand-500/10">
 							<p class="font-medium text-brand-900 dark:text-brand-100">Container image runtime</p>
@@ -1231,9 +1252,15 @@
 					{/if}
 				</div>
 
-				{#if form.deployMode !== 'static'}
+				{#if form.sourceType === 'git' || form.deployMode !== 'static'}
 					<details class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40" open={form.sourceType === 'registry' && !form.appPort}>
 						<summary class="cursor-pointer text-sm font-medium text-gray-950 dark:text-white">Advanced runtime settings</summary>
+						{#if form.sourceType === 'git'}
+							<div class="mt-3">
+								<SegmentedChoice label="Deployment mode override" value={form.deployMode} options={deployModeOptions} on:change={(event) => chooseDeployMode(event.detail as DeployModeChoice)} />
+							</div>
+						{/if}
+						{#if form.deployMode !== 'static'}
 						<div class="mt-3 max-w-sm">
 							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="appPort">Container port override</label>
 							<input
@@ -1248,6 +1275,7 @@
 							/>
 							<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Normally leave this alone. Use it only when repository detection cannot determine the port, or for a pre-built registry image. This is the container port, not Caddy's public port.</p>
 						</div>
+						{/if}
 					</details>
 				{/if}
 				
@@ -1279,7 +1307,9 @@
 				{/if}
 
 				{#if form.deployMode === 'compose'}
-					<div class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40">
+					<details class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40">
+						<summary class="cursor-pointer text-sm font-medium text-gray-950 dark:text-white">Advanced Compose settings</summary>
+						<div class="mt-3">
 						<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 							<div>
 								<p class="text-xs font-medium text-gray-700 dark:text-gray-200">Compose file</p>
@@ -1373,10 +1403,11 @@
 								</div>
 							</div>
 						{/if}
-					</div>
+						</div>
+					</details>
 				{/if}
 
-					{#if handoffPrompt}
+					{#if error && handoffPrompt}
 						<div class="overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
 							<div class="flex flex-col gap-3 border-b border-gray-100 px-3 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
 								<div class="min-w-0">
@@ -1488,9 +1519,18 @@
 
 			<SectionPanel
 				title="Resources"
-				description="Keep defaults small for the self-hosted VM quota, or switch to custom values when needed."
+				description="MyPaas selects a conservative default from the detected runtime; tune it only when needed."
 			>
-				<div class="grid gap-4 sm:grid-cols-3">
+				<div class="soft-panel mb-3 flex flex-col gap-1 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p class="font-medium text-gray-950 dark:text-white">{selectedProfile?.title ?? form.resourceProfile}</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Recommended starting allocation.</p>
+					</div>
+					<p class="font-mono text-xs text-gray-700 dark:text-gray-300">{form.memoryMb} MB · {form.cpuLimit} CPU</p>
+				</div>
+				<details class="rounded-md border border-gray-200 bg-gray-50/60 p-3 dark:border-gray-800 dark:bg-gray-950/40">
+					<summary class="cursor-pointer text-sm font-medium text-gray-950 dark:text-white">Customize resources</summary>
+					<div class="mt-3 grid gap-4 sm:grid-cols-3">
 					<div>
 						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Profile</label>
 						<select id="profile" bind:value={form.resourceProfile} on:change={() => applyResourceProfile(form.resourceProfile)} class="field w-full">
@@ -1522,8 +1562,9 @@
 							<option value="2">2.00</option>
 						</select>
 					</div>
-				</div>
-				<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Changing memory or CPU directly switches the profile to Custom.</p>
+					</div>
+					<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Changing memory or CPU directly switches the profile to Custom.</p>
+				</details>
 			</SectionPanel>
 
 			<SectionPanel
@@ -1545,15 +1586,28 @@
 								Import .env
 							</span>
 						</ActionButton>
-						{#if form.deployMode !== 'static'}
-							<label class="inline-flex min-h-8 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-								<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
-								Shared PostgreSQL
-							</label>
-						{/if}
+
 					</div>
 				</svelte:fragment>
 				<div>
+					{#if form.deployMode !== 'static'}
+						<div class="soft-panel mb-4 flex flex-col gap-3 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+							<div>
+								<p class="font-medium text-gray-950 dark:text-white">Database</p>
+								<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Optional managed PostgreSQL for projects that need it.</p>
+							</div>
+							<label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+								<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
+								Use shared PostgreSQL
+							</label>
+						</div>
+					{/if}
+					{#if missingRequiredEnvKeys.length > 0}
+						<div class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-100">
+							<p class="font-medium">{missingRequiredEnvKeys.length} required environment value{missingRequiredEnvKeys.length === 1 ? '' : 's'} missing</p>
+							<p class="mt-1 font-mono text-xs">{missingRequiredEnvKeys.join(', ')}</p>
+						</div>
+					{/if}
 					<div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
 						<div class="hidden gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-[11px] font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400 lg:grid lg:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1.4fr)_6rem_2rem]">
 							<span>Key</span>
@@ -1659,7 +1713,7 @@
 		<aside class="lg:sticky lg:top-6 lg:self-start">
 			<SectionPanel
 				title="Review"
-				description="Confirm route, runtime, and quota before create."
+				description="Confirm the source and deployment plan before create."
 				contentClass="p-0"
 			>
 				<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800" aria-live="polite">
