@@ -72,7 +72,7 @@ MIGRATE_DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:
 
 echo "Running migrations..."
 $DOCKER_BIN run --rm \
-  --network mypaas-prod \
+  --network "${PROJECT_NETWORK:-mypaas-prod}" \
   -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
   migrate/migrate:latest \
   -path=/migrations \
