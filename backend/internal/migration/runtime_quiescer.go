@@ -31,18 +31,26 @@ type runtimeTarget struct {
 }
 
 type dockerRuntimeQuiescer struct {
-	cfg    *config.Config
-	engine runtimeEngine
+	cfg       *config.Config
+	engine    runtimeEngine
+	preflight StoragePreflight
 }
 
 func newRuntimeQuiescer(cfg *config.Config) RuntimeQuiescer {
 	return &dockerRuntimeQuiescer{
-		cfg:    cfg,
-		engine: container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+		cfg:       cfg,
+		engine:    container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+		preflight: newStoragePreflight(),
 	}
 }
 
 func (q *dockerRuntimeQuiescer) Quiesce(ctx context.Context) (ResumeFunc, error) {
+	if q.preflight != nil {
+		if err := q.preflight.Check(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	pool, err := db.Connect(ctx, q.cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("connect for runtime quiesce: %w", err)
@@ -79,8 +87,8 @@ func quiesceTargets(ctx context.Context, engine runtimeEngine, targets []runtime
 		}
 		if err := stopTarget(ctx, engine, target); err != nil {
 			resumeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
 			rollbackErr := resumeTargets(resumeCtx, engine, stopped)
+			cancel()
 			return nil, errors.Join(fmt.Errorf("stop runtime %s: %w", target.name, err), rollbackErr)
 		}
 		stopped = append(stopped, target)
