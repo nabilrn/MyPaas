@@ -71,7 +71,7 @@ MyPaas currently targets a **single Linux VM**, not a Kubernetes cluster. The ru
 - **Scheduled PostgreSQL backups** with daily/weekly retention.
 - **Scoped cleanup of unused MyPaas-managed images** on a configurable schedule.
 - **GitHub OAuth + user whitelist**, owner/collaborator roles, mutation audit logging, and admin user management.
-- **Prometheus-compatible API process metrics** with optional Basic Auth plus `/health` and `/ready` endpoints.
+- **Prometheus-compatible API process metrics**; in production, `/metrics` requires configured Basic Auth credentials. The API also exposes `/health` and `/ready`.
 - **Host/resource settings** for quotas, concurrent deploys, defaults, and build timeout.
 
 ### Operator and automation tooling
@@ -144,16 +144,18 @@ Podman mode intentionally keeps the Docker CLI and Compose plugin as compatibili
 
 Therefore commands such as `docker compose`, `docker inspect`, and `docker stats` may still appear in operations and source code while **Podman is the actual engine**.
 
-### Migrating an existing Docker host to Podman
+### Existing Docker host → Podman helper is destructive
 
-A helper exists for an already-installed VM:
+`scripts/migrate-to-podman.sh` switches an existing host from Docker Engine to Podman, but it does **not** migrate Docker engine-local containers or named volumes. The production Compose stack stores the MyPaas PostgreSQL control-plane database in the `postgres_data` named volume, so this helper must not be treated as a safe in-place production migration.
+
+For a stateful production installation, export/back up MyPaas and plan an explicit restore before changing engines. Prefer provisioning a fresh VM directly with Podman and using the migration/export workflow. Treat `scripts/migrate-to-podman.sh` as a disposable/development-host helper until the script explicitly preserves engine-local volumes.
+
+For disposable hosts only:
 
 ```bash
 cd ~/MyPaas
 bash scripts/migrate-to-podman.sh
 ```
-
-This stops/removes Docker Engine and switches the compatibility socket to Podman. Existing Docker runtime containers are not carried across the daemon change, so project workloads must be redeployed afterward.
 
 ---
 
@@ -240,6 +242,8 @@ Persistent application data lives outside the Git checkout. Important host paths
 /var/lib/mypaas/backups
 /tmp/mypaas/builds
 ```
+
+The control-plane PostgreSQL data itself is stored in the container engine's named `postgres_data` volume, so include that state in any engine-migration plan rather than assuming all persistent data is under `/var/lib/mypaas`.
 
 Do not treat `~/MyPaas` as the persistent data directory.
 
@@ -346,7 +350,7 @@ The control-plane API also exposes:
 /metrics
 ```
 
-`/metrics` is Prometheus-compatible and can be protected with Basic Auth using the configured metrics credentials.
+`/metrics` is Prometheus-compatible. In production it is served only when metrics Basic Auth credentials are configured, and valid credentials are required to read it.
 
 ---
 
@@ -433,7 +437,7 @@ Admin Settings can prepare an export containing:
 - `/var/lib/mypaas/static`;
 - an export manifest.
 
-The resulting archive is token-protected and expires after the configured export window. A new VM can import it through `scripts/install-vm.sh --migrate-url <url>`.
+The resulting archive is token-protected and expires after **24 hours**. A new VM can import it through `scripts/install-vm.sh --migrate-url <url>`.
 
 The database portion uses logical dumps. Persistent directories are archived from the host filesystem, so applications with write-heavy file/volume state should be quiesced or otherwise validated for consistency before treating the archive as a point-in-time application snapshot.
 
