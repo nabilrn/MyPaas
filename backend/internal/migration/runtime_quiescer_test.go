@@ -16,6 +16,14 @@ type fakeRuntimeEngine struct {
 	operations []string
 }
 
+type fakeStoragePreflight struct {
+	err error
+}
+
+func (f fakeStoragePreflight) Check(context.Context) error {
+	return f.err
+}
+
 func (f *fakeRuntimeEngine) StackExists(_ context.Context, name, _ string) bool {
 	return f.exists[name]
 }
@@ -42,7 +50,7 @@ func (f *fakeRuntimeEngine) StartComposeProject(_ context.Context, name string) 
 
 func TestRuntimeTargetsSkipsStaticProjects(t *testing.T) {
 	projects := []db.Project{
-		{Name: "api", DeployMode: "dockerfile"},
+		{Name: "demo", DeployMode: "dockerfile"},
 		{Name: "stack", DeployMode: "compose"},
 		{Name: "site", DeployMode: "static"},
 		{Name: "image", DeployMode: "image"},
@@ -50,7 +58,7 @@ func TestRuntimeTargetsSkipsStaticProjects(t *testing.T) {
 
 	got := runtimeTargets(projects)
 	want := []runtimeTarget{
-		{name: "mypaas-api", mode: "dockerfile"},
+		{name: "mypaas-demo", mode: "dockerfile"},
 		{name: "mypaas-stack", mode: "compose"},
 		{name: "mypaas-image", mode: "image"},
 	}
@@ -59,10 +67,34 @@ func TestRuntimeTargetsSkipsStaticProjects(t *testing.T) {
 	}
 }
 
+func TestRuntimeQuiescerPreflightFailsBeforeRuntimeOrDatabaseWork(t *testing.T) {
+	preflightErr := errors.New("unportable volume")
+	engine := &fakeRuntimeEngine{
+		exists:   map[string]bool{"mypaas-demo": true},
+		stopErr:  map[string]error{},
+		startErr: map[string]error{},
+	}
+	quiescer := &dockerRuntimeQuiescer{
+		engine:    engine,
+		preflight: fakeStoragePreflight{err: preflightErr},
+	}
+
+	resume, err := quiescer.Quiesce(context.Background())
+	if !errors.Is(err, preflightErr) {
+		t.Fatalf("Quiesce() error = %v, want preflight error", err)
+	}
+	if resume != nil {
+		t.Fatal("resume must be nil when storage preflight fails")
+	}
+	if len(engine.operations) != 0 {
+		t.Fatalf("runtime operations = %#v, want none", engine.operations)
+	}
+}
+
 func TestQuiesceTargetsStopsOnlyExistingAndResumes(t *testing.T) {
 	engine := &fakeRuntimeEngine{
 		exists: map[string]bool{
-			"mypaas-api":   true,
+			"mypaas-demo":  true,
 			"mypaas-stack": true,
 			"mypaas-gone":  false,
 		},
@@ -70,7 +102,7 @@ func TestQuiesceTargetsStopsOnlyExistingAndResumes(t *testing.T) {
 		startErr: map[string]error{},
 	}
 	targets := []runtimeTarget{
-		{name: "mypaas-api", mode: "dockerfile"},
+		{name: "mypaas-demo", mode: "dockerfile"},
 		{name: "mypaas-stack", mode: "compose"},
 		{name: "mypaas-gone", mode: "image"},
 	}
@@ -84,9 +116,9 @@ func TestQuiesceTargetsStopsOnlyExistingAndResumes(t *testing.T) {
 	}
 
 	want := []string{
-		"stop:mypaas-api",
+		"stop:mypaas-demo",
 		"stop-compose:mypaas-stack",
-		"start:mypaas-api",
+		"start:mypaas-demo",
 		"start-compose:mypaas-stack",
 	}
 	if !reflect.DeepEqual(engine.operations, want) {
