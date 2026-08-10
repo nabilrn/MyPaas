@@ -71,6 +71,36 @@ describe("new project UX helpers", () => {
       reason: "",
     });
   });
+
+  it("keeps a required registry container port actionable in the normal flow", () => {
+    expect(projectCreationReadiness({
+      name: "demo-app",
+      sourceType: "registry",
+      sourceReady: true,
+      deployMode: "image",
+      appPort: "",
+      composeDisabledReason: "",
+      busy: false,
+    })).toEqual({
+      ready: false,
+      state: "Needs configuration",
+      reason: "Container port is required for registry images. Enter the container port below.",
+    });
+
+    expect(projectCreationReadiness({
+      name: "demo-app",
+      sourceType: "registry",
+      sourceReady: true,
+      deployMode: "image",
+      appPort: "8080",
+      composeDisabledReason: "",
+      busy: false,
+    })).toEqual({
+      ready: true,
+      state: "Ready to create",
+      reason: "",
+    });
+  });
 });
 
 describe("resolveProjectAppPort", () => {
@@ -208,7 +238,6 @@ describe("validateProjectCreateInput", () => {
     expect(() =>
       validateProjectCreateInput(
         validCreate({ deployMode: "image" }),
-      ),
     ).toThrow(/requires registry source/);
   });
 });
