@@ -9,11 +9,13 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import type { Deployment } from '$types';
+	import type { Deployment, Project } from '$types';
 	import { expandFocusedDeployment, normalizeDeploymentFocus, pinFocusedDeployment } from '$lib/utils/deploymentFocus';
+	import { canRollbackDeployment, deploymentHistoryLabel, isPipelineActive } from '$lib/utils/deploymentHistory';
 
 	const pageSize = 20;
 	let deployments: Deployment[] = [];
+	let project: Project | null = null;
 	let loading = true;
 	let error = '';
 	let expanded = new Set<string>();
@@ -30,7 +32,7 @@
 
 	$: visibleDeployments = deployments.slice(0, pageSize);
 	$: activeCount = visibleDeployments.filter((item) => isPipelineActive(item.status)).length;
-	$: healthyCount = visibleDeployments.filter((item) => ['running', 'stopped', 'rolled_back'].includes(item.status)).length;
+	$: recoverableCount = visibleDeployments.filter((item) => canRollbackDeployment(item.status, item.id, project?.activeDeploymentId)).length;
 	$: failedCount = visibleDeployments.filter((item) => item.status === 'failed').length;
 	$: focusId = normalizeDeploymentFocus($page.url.searchParams.get('focus'));
 	$: if (focusId !== appliedFocusId) {
@@ -44,10 +46,6 @@
 	}
 	$: if (mounted && currentPage !== loadedPage && !loadInFlight) {
 		void load();
-	}
-
-	function isPipelineActive(status: Deployment['status']) {
-		return status === 'queued' || status === 'cloning' || status === 'building' || status === 'starting';
 	}
 
 	function requestRollback(id: string) {
@@ -103,10 +101,14 @@
 		const foreground = loadedPage === -1 || requestedPage !== loadedPage;
 		if (foreground) loading = true;
 		try {
-			const rows = await api.deployments.list(projectId, requestedPage, pageSize, true);
+			const [rows, currentProject] = await Promise.all([
+				api.deployments.list(projectId, requestedPage, pageSize, true),
+				api.projects.get(projectId)
+			]);
 			const focused = requestedPage === 0 ? await resolveFocusedDeployment(rows, requestedFocusId, projectId) : null;
 			if (requestedPage !== currentPage || requestedFocusId !== focusId) return;
 			deployments = pinFocusedDeployment(rows, focused);
+			project = currentProject;
 			hasNext = rows.length > pageSize;
 			loadedPage = requestedPage;
 			error = '';
@@ -183,7 +185,7 @@
 		</div>
 		<div class="border-b border-gray-100 px-5 py-3 dark:border-gray-800 sm:border-b-0 sm:border-r">
 			<p class="metric-label">Recoverable targets</p>
-			<p class="mt-1 font-mono text-lg font-semibold text-gray-950 dark:text-white">{healthyCount}</p>
+			<p class="mt-1 font-mono text-lg font-semibold text-gray-950 dark:text-white">{recoverableCount}</p>
 		</div>
 		<div class="px-5 py-3">
 			<p class="metric-label">Failed attempts</p>
@@ -204,7 +206,10 @@
 							<span class="max-w-full truncate font-mono text-sm font-semibold text-gray-950 dark:text-white" title={deploymentSource(d)}>
 								{deploymentSource(d)}
 							</span>
-							<StatusBadge status={d.status} />
+							<StatusBadge
+								status={d.status}
+								label={deploymentHistoryLabel(d.status, d.id, project?.activeDeploymentId, project?.status)}
+							/>
 							<span class="rounded border border-gray-200 px-1.5 py-0.5 text-[11px] font-medium capitalize text-gray-500 dark:border-gray-800 dark:text-gray-400">
 								{d.triggeredBy}
 							</span>
@@ -224,7 +229,7 @@
 								<ChevronDown class="h-4 w-4" aria-hidden="true" />
 							{/if}
 						</IconButton>
-						{#if d.status === 'running' || d.status === 'stopped'}
+						{#if canRollbackDeployment(d.status, d.id, project?.activeDeploymentId)}
 							{#if confirmRollbackId === d.id}
 								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRollbackId = '')}>Cancel</ActionButton>
 								<ActionButton

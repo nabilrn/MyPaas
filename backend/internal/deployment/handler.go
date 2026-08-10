@@ -89,7 +89,7 @@ func (h *Handler) Rollback(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, errs.ErrNotFound)
 		return
 	}
-	deployment, err := h.service.Rollback(r.Context(), id, user.ID)
+	deployment, err := h.service.RollbackHistorical(r.Context(), id, user.ID)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -136,7 +136,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
-	
+
 	resp := MetricsSnapshotFromContainers(metrics)
 	cfData, _ := h.service.CloudflareAnalytics(r.Context(), id)
 	if cfData != nil {
@@ -156,7 +156,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 			Timeseries:    ts,
 		}
 	}
-	
+
 	httpx.JSON(w, http.StatusOK, resp)
 }
 

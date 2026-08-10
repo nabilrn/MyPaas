@@ -3,6 +3,7 @@
 
 	export let status: ProjectStatus | DeployStatus;
 	export let pulse = false;
+	export let label: string | undefined = undefined;
 
 	const cfg: Record<string, { label: string; classes: string; dot: string }> = {
 		running:     { label: 'Running',     classes: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200', dot: 'bg-emerald-500' },
@@ -30,5 +31,5 @@
 	{:else}
 		<span class="h-1.5 w-1.5 rounded-full {c.dot}"></span>
 	{/if}
-	{c.label}
+	{label ?? c.label}
 </span>
