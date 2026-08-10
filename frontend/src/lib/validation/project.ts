@@ -5,6 +5,7 @@ export interface ProjectCreationReadinessInput {
   sourceType: "git" | "registry";
   sourceReady: boolean;
   deployMode: string;
+  mainService?: string;
   appPort: string;
   composeDisabledReason: string;
   busy: boolean;
@@ -75,13 +76,20 @@ export function projectCreationReadiness(
       reason: "Runtime analysis must finish before this project can be created",
     };
   }
+  if (input.deployMode === "compose" && !input.mainService?.trim()) {
+    return {
+      ready: false,
+      state: "Needs configuration",
+      reason: "Choose the public Compose service before creating this project",
+    };
+  }
   if (input.deployMode !== "static" && !input.appPort.trim()) {
     return {
       ready: false,
       state: "Needs configuration",
       reason: input.sourceType === "registry"
-        ? "Container port is required for registry images. Set it in Advanced runtime settings."
-        : "Application port could not be detected. Re-analyze the repository or set an Advanced override.",
+        ? "Container port is required for registry images. Enter the container port below."
+        : "Application port could not be detected. Re-analyze the repository or enter the container port below.",
     };
   }
   if (input.composeDisabledReason) {
