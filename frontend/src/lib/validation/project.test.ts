@@ -238,6 +238,7 @@ describe("validateProjectCreateInput", () => {
     expect(() =>
       validateProjectCreateInput(
         validCreate({ deployMode: "image" }),
+      ),
     ).toThrow(/requires registry source/);
   });
 });
