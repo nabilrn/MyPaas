@@ -51,9 +51,41 @@ func TestPreflightProjectWorkspaceRequiresSelectedRuntime(t *testing.T) {
 	}
 }
 
+func TestPreflightProjectWorkspaceWritesRootEnvForComposeEnvFile(t *testing.T) {
+	repo := initLifecycleGitRepo(t, map[string]string{
+		"docker-compose.yml": `
+services:
+  web:
+    image: nginx:alpine
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV}
+    expose:
+      - "8080"
+`,
+	})
+	mainService := "web"
+	input := CreateInput{
+		RepoURL:         repo,
+		Branch:          "main",
+		DeployMode:      "compose",
+		MainService:     &mainService,
+		AppPort:         8080,
+		ResourceProfile: "compose-main",
+	}
+
+	err := preflightProjectWorkspace(context.Background(), &input, []envvar.Value{
+		{Key: "APP_ENV", Value: "staging"},
+	}, false)
+	if err != nil {
+		t.Fatalf("compose preflight with env_file .env failed: %v", err)
+	}
+}
+
 func TestDetectModeValidatedScopesInspectTreeToBaseDirectory(t *testing.T) {
 	repo := initLifecycleGitRepo(t, map[string]string{
-		"README.md":          "root\n",
+		"README.md":           "root\n",
 		"apps/api/Dockerfile": "FROM scratch\n",
 		"apps/api/main.go":    "package main\n",
 		"apps/web/index.html": "<html></html>\n",

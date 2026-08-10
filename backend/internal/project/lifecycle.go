@@ -336,6 +336,12 @@ func preflightComposeWorkspace(ctx context.Context, workspace string, input *Cre
 	if err := envvar.WriteEnvFile(layout.EnvFile, previewValues); err != nil {
 		return fmt.Errorf("write compose preflight env: %w", err)
 	}
+	rootEnvPath := filepath.Join(workspace, ".env")
+	if rootEnvPath != layout.EnvFile && !pathExists(rootEnvPath) {
+		if err := envvar.WriteEnvFile(rootEnvPath, previewValues); err != nil {
+			return fmt.Errorf("write compose preflight root env: %w", err)
+		}
+	}
 	rawConfig, err := composeConfigJSONMulti(ctx, layout)
 	if err != nil {
 		return err

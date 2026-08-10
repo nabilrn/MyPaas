@@ -37,6 +37,12 @@ class InstallConfigTest(unittest.TestCase):
 
         self.assertIn("CADDY_UPSTREAM_HOST=$docker_bind_host", installer)
 
+    def test_podman_installer_installs_catatonit_for_buildkit(self) -> None:
+        installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
+
+        self.assertIn("! command_exists catatonit", installer)
+        self.assertIn("podman catatonit docker-ce-cli", installer)
+
     def test_production_compose_falls_back_to_docker_bind_host(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
 

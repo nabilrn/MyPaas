@@ -205,7 +205,7 @@ install_docker_debian() {
 
   sudo_cmd apt-get update
   if [[ "$USE_PODMAN" == "true" ]]; then
-    sudo_cmd apt-get install -y podman docker-ce-cli docker-compose-plugin git openssl
+    sudo_cmd apt-get install -y podman catatonit docker-ce-cli docker-compose-plugin git openssl
     if command_exists systemctl; then
       sudo_cmd systemctl enable --now podman.socket >/dev/null 2>&1 || true
     fi
@@ -224,7 +224,7 @@ ensure_dependencies() {
   ensure_nixpacks
 
   if [[ "$USE_PODMAN" == "true" ]]; then
-    if ! command_exists podman || ! docker compose version >/dev/null 2>&1; then
+    if ! command_exists podman || ! docker compose version >/dev/null 2>&1 || ! command_exists catatonit; then
       log "Installing Podman Engine and Compose plugin"
       command_exists apt-get || die "automatic dependency install requires apt-get."
       install_docker_debian
