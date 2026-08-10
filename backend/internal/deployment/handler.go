@@ -131,7 +131,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	metrics, err := h.service.ContainerMetricsList(r.Context(), id)
+	metrics, err := h.service.PreferredContainerMetricsList(r.Context(), id)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -316,7 +316,7 @@ func (s *projectStream) emitSnapshot(ctx context.Context) bool {
 }
 
 func (s *projectStream) emitMetrics(ctx context.Context) {
-	metrics, err := s.handler.service.ContainerMetricsList(ctx, s.projectID)
+	metrics, err := s.handler.service.PreferredContainerMetricsList(ctx, s.projectID)
 	if err != nil {
 		return
 	}
