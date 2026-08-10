@@ -26,7 +26,10 @@ echo "Checking production containers..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 
 echo "Checking Cloudflare Tunnel container..."
-$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps cloudflared
+if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>/dev/null)" != "true" ]]; then
+  echo "Cloudflare Tunnel container is not running." >&2
+  exit 1
+fi
 
 echo "Checking API health..."
 curl -fsS http://127.0.0.1:8080/health >/dev/null
