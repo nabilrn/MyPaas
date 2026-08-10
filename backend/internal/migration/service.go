@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	archiveDir     = "/tmp/mypaas/migrations"
-	archiveMaxAge  = 24 * time.Hour
+	archiveDir      = "/tmp/mypaas/migrations"
+	archiveMaxAge   = 24 * time.Hour
 	StatusPreparing = "preparing"
 	StatusReady     = "ready"
 	StatusFailed    = "failed"
@@ -52,14 +52,15 @@ type manifest struct {
 
 // Service manages migration exports. Only one export is allowed at a time.
 type Service struct {
-	cfg *config.Config
+	cfg     *config.Config
+	runtime RuntimeQuiescer
 
 	mu      sync.Mutex
 	current *Migration
 }
 
 func NewService(cfg *config.Config) *Service {
-	return &Service{cfg: cfg}
+	return &Service{cfg: cfg, runtime: newRuntimeQuiescer(cfg)}
 }
 
 // Prepare starts a migration export in a background goroutine.
@@ -153,6 +154,32 @@ func (s *Service) runExport(m *Migration) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	resumeRuntime := ResumeFunc(func(context.Context) error { return nil })
+	runtimeQuiesced := false
+	runtimeResumed := false
+	if s.runtime != nil {
+		slog.Info("migration: quiescing running project runtimes")
+		resume, err := s.runtime.Quiesce(ctx)
+		if err != nil {
+			s.fail(m, fmt.Errorf("quiesce project runtimes: %w", err))
+			return
+		}
+		if resume != nil {
+			resumeRuntime = resume
+		}
+		runtimeQuiesced = true
+	}
+	defer func() {
+		if !runtimeQuiesced || runtimeResumed {
+			return
+		}
+		resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer resumeCancel()
+		if err := resumeRuntime(resumeCtx); err != nil {
+			slog.Error("migration: failed to resume project runtimes after export failure", "error", err)
+		}
+	}()
+
 	dbDir := filepath.Join(workDir, "databases")
 	if err := os.MkdirAll(dbDir, 0700); err != nil {
 		s.fail(m, fmt.Errorf("create databases dir: %w", err))
@@ -186,7 +213,7 @@ func (s *Service) runExport(m *Migration) {
 	// 4. Copy .env if accessible.
 	s.copyDotEnv(workDir)
 
-	// 6. Write manifest.
+	// 5. Write manifest.
 	hostname, _ := os.Hostname()
 	parsed, _ := url.Parse(s.cfg.DatabaseURL)
 	dbName := strings.TrimPrefix(parsed.Path, "/")
@@ -200,12 +227,12 @@ func (s *Service) runExport(m *Migration) {
 	mfData, _ := json.MarshalIndent(mf, "", "  ")
 	_ = os.WriteFile(filepath.Join(workDir, "manifest.json"), mfData, 0600)
 
-	// 7. Create tar.gz archive directly from multiple sources to avoid disk duplication
+	// 6. Create tar.gz archive directly from multiple sources to avoid disk duplication.
 	slog.Info("migration: creating archive")
 	archivePath := filepath.Join(archiveDir, fmt.Sprintf("mypaas-export-%s.tar.gz", m.ID))
-	
+
 	sources := map[string]string{
-		"": workDir, // Root of archive comes from workDir (databases, dot-env, manifest)
+		"": workDir, // Root of archive comes from workDir (databases, dot-env, manifest).
 	}
 	persistentDirs := []string{"volumes", "compose", "static"}
 	for _, dir := range persistentDirs {
@@ -224,6 +251,21 @@ func (s *Service) runExport(m *Migration) {
 	if err != nil {
 		s.fail(m, fmt.Errorf("stat archive: %w", err))
 		return
+	}
+
+	// Do not advertise a downloadable archive until every runtime that was
+	// quiesced has been started again. A resume failure is an export failure.
+	if runtimeQuiesced {
+		resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if err := resumeRuntime(resumeCtx); err != nil {
+			resumeCancel()
+			_ = os.Remove(archivePath)
+			s.fail(m, fmt.Errorf("resume project runtimes: %w", err))
+			return
+		}
+		resumeCancel()
+		runtimeResumed = true
+		slog.Info("migration: project runtimes resumed")
 	}
 
 	s.mu.Lock()
@@ -381,7 +423,7 @@ func createMultiTarGz(archivePath string, sources map[string]string) error {
 	for prefix, sourceDir := range sources {
 		err := filepath.WalkDir(sourceDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
-				return err // skip files we can't read
+				return err
 			}
 
 			rel, err := filepath.Rel(sourceDir, path)
@@ -402,7 +444,7 @@ func createMultiTarGz(archivePath string, sources map[string]string) error {
 				return err
 			}
 
-			// Handle symlinks
+			// Handle symlinks.
 			if info.Mode()&os.ModeSymlink != 0 {
 				link, err := os.Readlink(path)
 				if err == nil {
