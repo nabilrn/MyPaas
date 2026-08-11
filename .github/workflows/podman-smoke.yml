@@ -23,15 +23,12 @@ jobs:
           sudo rm -f /var/run/docker.sock
           sudo systemctl enable --now podman.socket
           sudo ln -s /run/podman/podman.sock /var/run/docker.sock
-          # The hosted runner user needs to exercise the Docker CLI directly;
-          # this permission change is limited to the disposable CI VM.
-          sudo chmod 0666 /run/podman/podman.sock
 
       - name: Verify Docker CLI is backed by Podman
         run: |
-          docker version
-          docker info | grep -i podman
-          docker compose version
+          sudo docker version
+          sudo docker info | grep -i podman
+          sudo docker compose version
 
       - name: Run MyPaaS Podman compatibility smoke
-        run: bash scripts/podman_compat_smoke.sh
+        run: sudo -E bash scripts/podman_compat_smoke.sh
