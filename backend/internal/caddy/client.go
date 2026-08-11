@@ -51,12 +51,16 @@ func NewClient(adminAddress, upstreamHost string) *Client {
 }
 
 func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
+	dial, err := c.upstreamDial(ctx, port)
+	if err != nil {
+		return err
+	}
 	route, err := json.Marshal(map[string]any{
 		"match": []map[string]any{{"host": []string{host}}},
 		"handle": []map[string]any{{
 			"handler": "reverse_proxy",
 			"upstreams": []map[string]any{{
-				"dial": fmt.Sprintf("%s:%d", c.upstreamHost, port),
+				"dial": dial,
 			}},
 			"load_balancing": map[string]any{
 				"try_duration": "10s",
@@ -90,6 +94,10 @@ func (c *Client) AddFileServerRoute(ctx context.Context, host, root string) erro
 }
 
 func (c *Client) AddHybridRoute(ctx context.Context, host, root string, port int32) error {
+	dial, err := c.upstreamDial(ctx, port)
+	if err != nil {
+		return err
+	}
 	route, err := json.Marshal(map[string]any{
 		"match": []map[string]any{{"host": []string{host}}},
 		"handle": []map[string]any{
@@ -101,7 +109,7 @@ func (c *Client) AddHybridRoute(ctx context.Context, host, root string, port int
 						"handle": []map[string]any{{
 							"handler": "reverse_proxy",
 							"upstreams": []map[string]any{{
-								"dial": fmt.Sprintf("%s:%d", c.upstreamHost, port),
+								"dial": dial,
 							}},
 						}},
 					},
@@ -253,6 +261,7 @@ func routeMatchesHost(raw json.RawMessage, host string) bool {
 			if item == host {
 				return true
 			}
+		}
 	}
 	return false
 }
