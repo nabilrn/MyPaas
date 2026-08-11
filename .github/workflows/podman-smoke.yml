@@ -26,8 +26,8 @@ jobs:
 
       - name: Verify Docker CLI is backed by Podman
         run: |
-          sudo docker version
-          sudo docker info | grep -i podman
+          sudo docker version | tee /tmp/mypaas-docker-version.txt
+          grep -q 'Podman Engine' /tmp/mypaas-docker-version.txt
           sudo docker compose version
 
       - name: Run MyPaaS Podman compatibility smoke
