@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 )
 
 const runtimeUpstreamMode = "runtime"
+const runtimeDNSIDLength = 12
 
 type runtimeInspectRow struct {
 	ID              string `json:"Id"`
@@ -28,9 +28,9 @@ type runtimeInspectRow struct {
 // upstreamDial keeps the existing fixed-host behavior for development and
 // compatibility deployments. Production can set CADDY_UPSTREAM_HOST=runtime
 // to resolve the container that owns the MyPaaS allocated host port and route
-// Caddy directly to that container on PROJECT_NETWORK. The allocated port is
-// therefore only a stable lookup key; traffic does not hairpin through a host
-// published port.
+// Caddy directly to that runtime on PROJECT_NETWORK. The allocated port is a
+// stable lookup key; application traffic does not hairpin through a published
+// host port.
 func (c *Client) upstreamDial(ctx context.Context, hostPort int32) (string, error) {
 	if strings.TrimSpace(c.upstreamHost) != runtimeUpstreamMode {
 		return fmt.Sprintf("%s:%d", c.upstreamHost, hostPort), nil
@@ -90,21 +90,26 @@ func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (
 			continue
 		}
 
-		network, ok := row.NetworkSettings.Networks[projectNetwork]
-		if !ok {
+		if _, ok := row.NetworkSettings.Networks[projectNetwork]; !ok {
 			if candidateErr == nil {
 				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container %s is not attached to project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
 			}
 			continue
 		}
-		ip := strings.TrimSpace(network.IPAddress)
-		if net.ParseIP(ip) == nil {
+
+		containerID := strings.TrimSpace(row.ID)
+		if len(containerID) < runtimeDNSIDLength {
 			if candidateErr == nil {
-				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container %s has no valid IP on project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
+				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container has invalid runtime ID %q", hostPort, containerID)
 			}
 			continue
 		}
-		return net.JoinHostPort(ip, containerPort), nil
+
+		// Podman with netavark/aardvark-dns registers the first 12 characters of
+		// every container ID as a network-scoped DNS alias. Docker compatibility
+		// is continuously gated in CI. The short ID survives container rename,
+		// which is required by MyPaaS rolling Dockerfile/image deployments.
+		return fmt.Sprintf("%s:%s", containerID[:runtimeDNSIDLength], containerPort), nil
 	}
 
 	if candidateErr != nil {
