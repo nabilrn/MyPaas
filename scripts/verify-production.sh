@@ -22,8 +22,45 @@ set +a
 
 : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 
+CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
+PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
+
+container_networks() {
+  $DOCKER_BIN inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$1"
+}
+
+require_network() {
+  local container="$1"
+  local network="$2"
+  local networks
+  networks="$(container_networks "$container")"
+  if [[ " $networks " != *" $network "* ]]; then
+    echo "$container is not attached to required network $network (actual: $networks)." >&2
+    exit 1
+  fi
+}
+
+forbid_network() {
+  local container="$1"
+  local network="$2"
+  local networks
+  networks="$(container_networks "$container")"
+  if [[ " $networks " == *" $network "* ]]; then
+    echo "$container must not be attached to isolated network $network." >&2
+    exit 1
+  fi
+}
+
 echo "Checking production containers..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+
+echo "Checking control-plane network isolation..."
+for container in mypaas-api mypaas-dashboard mypaas-caddy-prod mypaas-cloudflared; do
+  require_network "$container" "$CONTROL_NETWORK"
+  forbid_network "$container" "$PROJECT_NETWORK"
+done
+require_network mypaas-postgres-prod "$CONTROL_NETWORK"
+require_network mypaas-postgres-prod "$PROJECT_NETWORK"
 
 echo "Checking Cloudflare Tunnel container..."
 if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>/dev/null)" != "true" ]]; then
