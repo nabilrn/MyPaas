@@ -16,6 +16,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - control
+      - projects
 
   api:
     image: ghcr.io/nabilrn/mypaas-api:${MYPAAS_IMAGE_TAG:-latest}
@@ -34,7 +37,7 @@ services:
       OWNER_EMAIL: ${OWNER_EMAIL:-}
       DOCKER_SOCKET: ${DOCKER_SOCKET}
       DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
-      PROJECT_NETWORK: ${PROJECT_NETWORK:-mypaas-prod}
+      PROJECT_NETWORK: ${PROJECT_NETWORK:-mypaas-projects}
       CADDY_ADMIN: caddy:2019
       CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-host.docker.internal}
       STATIC_ROOT: ${STATIC_ROOT:-/var/lib/mypaas/static}
@@ -69,6 +72,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - control
 
   dashboard:
     image: ghcr.io/nabilrn/mypaas-dashboard:${MYPAAS_IMAGE_TAG:-latest}
@@ -78,6 +83,8 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       ORIGIN: https://${PUBLIC_DOMAIN}
+    networks:
+      - control
 
   caddy:
     image: caddy:2-alpine
@@ -99,6 +106,8 @@ services:
     depends_on:
       - api
       - dashboard
+    networks:
+      - control
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -107,6 +116,8 @@ services:
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
+    networks:
+      - control
 
 volumes:
   postgres_data:
@@ -114,6 +125,9 @@ volumes:
   caddy_config:
 
 networks:
-  default:
-    name: ${PROJECT_NETWORK:-mypaas-prod}
+  control:
+    name: ${CONTROL_NETWORK:-mypaas-control}
+    external: true
+  projects:
+    name: ${PROJECT_NETWORK:-mypaas-projects}
     external: true
