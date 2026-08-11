@@ -22,6 +22,20 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('exec -T api test -S "$STATD_SOCKET"', content)
         self.assertIn("Skipping mypaas-statd verification because STATD_SOCKET is empty.", content)
 
+    def test_control_plane_network_isolation_is_verified(self) -> None:
+        content = VERIFY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"', content)
+        self.assertIn('PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"', content)
+        self.assertIn("require_network", content)
+        self.assertIn("forbid_network", content)
+        self.assertIn(
+            "for container in mypaas-api mypaas-dashboard mypaas-caddy-prod mypaas-cloudflared",
+            content,
+        )
+        self.assertIn('require_network mypaas-postgres-prod "$CONTROL_NETWORK"', content)
+        self.assertIn('require_network mypaas-postgres-prod "$PROJECT_NETWORK"', content)
+
 
 if __name__ == "__main__":
     unittest.main()
