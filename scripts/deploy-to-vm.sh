@@ -58,10 +58,34 @@ do
   $SUDO mkdir -p "$dir"
 done
 
+network_gateway() {
+  $DOCKER_BIN network inspect "$1" --format '{{(index .IPAM.Config 0).Gateway}}'
+}
+
 CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
 PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
 $DOCKER_BIN network inspect "$CONTROL_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$CONTROL_NETWORK" >/dev/null
 $DOCKER_BIN network inspect "$PROJECT_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$PROJECT_NETWORK" >/dev/null
+
+control_gateway="$(network_gateway "$CONTROL_NETWORK")"
+project_gateway="$(network_gateway "$PROJECT_NETWORK")"
+if [[ -z "$control_gateway" ]]; then
+  echo "Could not determine control-network gateway for $CONTROL_NETWORK." >&2
+  exit 1
+fi
+
+# Installations created before control/project network separation used the
+# project-network gateway as DOCKER_BIND_HOST. Once Caddy moves to the control
+# network that address is no longer the correct managed routing boundary.
+# Shell interpolation overrides --env-file values, so migrate only the known
+# legacy/default shape without rewriting an operator's .env file.
+if [[ -z "${DOCKER_BIND_HOST:-}" || "${DOCKER_BIND_HOST:-}" == "$project_gateway" ]]; then
+  export DOCKER_BIND_HOST="$control_gateway"
+  echo "Using control-network gateway for managed app ports: $DOCKER_BIND_HOST"
+fi
+if [[ -z "${CADDY_UPSTREAM_HOST:-}" || "${CADDY_UPSTREAM_HOST:-}" == "$project_gateway" ]]; then
+  export CADDY_UPSTREAM_HOST="$DOCKER_BIND_HOST"
+fi
 
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
