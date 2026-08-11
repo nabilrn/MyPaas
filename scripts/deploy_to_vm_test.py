@@ -22,14 +22,11 @@ class DeployToVmTest(unittest.TestCase):
         self.assertNotIn('--network "$PROJECT_NETWORK"', content)
         self.assertNotIn("--network mypaas-prod", content)
 
-    def test_legacy_project_gateway_bind_is_overridden_at_runtime(self) -> None:
+    def test_deploy_does_not_rewrite_managed_app_bind_host(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('control_gateway="$(network_gateway "$CONTROL_NETWORK")"', content)
-        self.assertIn('project_gateway="$(network_gateway "$PROJECT_NETWORK")"', content)
-        self.assertIn('"${DOCKER_BIND_HOST:-}" == "$project_gateway"', content)
-        self.assertIn('export DOCKER_BIND_HOST="$control_gateway"', content)
-        self.assertIn('export CADDY_UPSTREAM_HOST="$DOCKER_BIND_HOST"', content)
+        self.assertNotIn('export DOCKER_BIND_HOST="$control_gateway"', content)
+        self.assertNotIn('export CADDY_UPSTREAM_HOST="$DOCKER_BIND_HOST"', content)
 
 
 if __name__ == "__main__":
