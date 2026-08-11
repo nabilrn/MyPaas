@@ -24,6 +24,10 @@ services:
     image: ghcr.io/nabilrn/mypaas-api:${MYPAAS_IMAGE_TAG:-latest}
     container_name: mypaas-api
     restart: always
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       ENVIRONMENT: production
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
