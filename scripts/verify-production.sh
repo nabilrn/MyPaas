@@ -31,6 +31,28 @@ if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>
   exit 1
 fi
 
+if [[ -n "${STATD_SOCKET:-}" ]]; then
+  echo "Checking mypaas-statd service and socket..."
+  if ! command -v systemctl >/dev/null 2>&1; then
+    echo "STATD_SOCKET is configured but systemctl is unavailable." >&2
+    exit 1
+  fi
+  if ! systemctl is-active --quiet mypaas-statd; then
+    echo "mypaas-statd.service is not active." >&2
+    exit 1
+  fi
+  if [[ ! -S "$STATD_SOCKET" ]]; then
+    echo "mypaas-statd socket is missing or is not a Unix socket: $STATD_SOCKET" >&2
+    exit 1
+  fi
+  if ! $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T api test -S "$STATD_SOCKET"; then
+    echo "mypaas-statd socket is not visible inside the API container: $STATD_SOCKET" >&2
+    exit 1
+  fi
+else
+  echo "Skipping mypaas-statd verification because STATD_SOCKET is empty."
+fi
+
 echo "Checking API health..."
 curl -fsS http://127.0.0.1:8080/health >/dev/null
 curl -fsS http://127.0.0.1:8080/ready >/dev/null
