@@ -22,14 +22,28 @@ A socket proxy is intentionally not introduced yet. It would add another privile
 
 Production uses two external container networks:
 
-- `CONTROL_NETWORK` (default `mypaas-control`) for API, dashboard, Caddy, Cloudflare Tunnel, and PostgreSQL control-plane access;
-- `PROJECT_NETWORK` (default `mypaas-projects`) for MyPaaS-managed workloads that need platform-provided connectivity.
+- `CONTROL_NETWORK` (default `mypaas-control`) for API, dashboard, Cloudflare Tunnel, Caddy control-plane connectivity, and PostgreSQL control-plane access;
+- `PROJECT_NETWORK` (default `mypaas-projects`) for MyPaaS-managed workloads, shared PostgreSQL access, and Caddy's application data plane.
 
-The API, dashboard, Caddy, and Cloudflare Tunnel do not join the project network. This prevents ordinary project containers from receiving direct container-network reachability to control-plane services such as the Caddy Admin API.
+The API, dashboard, and Cloudflare Tunnel do not join the project network. Ordinary project containers therefore do not receive direct container-network reachability to those control-plane services.
 
-PostgreSQL intentionally joins both networks while shared PostgreSQL provisioning is enabled. That dual-homing is a product feature, not a general bridge between the networks. Project database credentials remain scoped per provisioned project database/user.
+Caddy intentionally joins both networks because it is the reverse-proxy data-plane endpoint. That dual-homing does not expose its administrative API: production disables TCP admin access and configures Caddy Admin on the shared Unix socket `/run/mypaas/caddy-admin.sock`. The API and Caddy share `/run/mypaas`; project workloads do not receive that host mount.
 
-Caddy reaches deployed applications through MyPaaS-managed host port bindings. Fresh installs derive `DOCKER_BIND_HOST` from the private control-network gateway rather than placing Caddy on the project network.
+PostgreSQL also intentionally joins both networks while shared PostgreSQL provisioning is enabled. That dual-homing is a product feature, not a general bridge between the networks. Project database credentials remain scoped per provisioned project database/user.
+
+Managed application ports remain bound to the private project-network gateway. Caddy reaches those ports from its project-network attachment while its API/dashboard upstreams remain available through the control network.
+
+## Caddy administration
+
+The production Caddyfile configures:
+
+```text
+admin unix//run/mypaas/caddy-admin.sock
+```
+
+There is no production host/container mapping for TCP port `2019`. The Go Caddy client supports the Unix admin endpoint directly with an HTTP transport whose dialer connects to the Unix socket.
+
+This separates Caddy's required project-facing HTTP data plane from its privileged configuration plane. Project workloads may reach Caddy's normal HTTP listener when network policy allows it, but they do not receive the Caddy Admin socket.
 
 ## User Compose execution
 
