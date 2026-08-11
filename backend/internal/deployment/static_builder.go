@@ -14,7 +14,16 @@ import (
 	"mypaas/internal/db"
 )
 
-const staticBuilderNodeImage = "node:22-alpine"
+const (
+	staticBuilderNodeImage = "node:22-alpine"
+	// Static builds are untrusted repository workloads. Keep the v0.1 builder
+	// ceiling deliberately simple and portable across Docker and Podman's
+	// Docker-compatible CLI. The deployment context still provides the outer
+	// build timeout.
+	staticBuilderMemoryMB = 2048
+	staticBuilderCPU      = 2.0
+	staticBuilderPIDs     = 512
+)
 
 type staticPackageJSON struct {
 	PackageManager string            `json:"packageManager"`
@@ -124,6 +133,19 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
+func staticBuilderRunArgs(workspace string, plan staticBuildPlan) []string {
+	return []string{
+		"run", "--rm",
+		"--memory", fmt.Sprintf("%dm", staticBuilderMemoryMB),
+		"--cpus", fmt.Sprintf("%.2f", staticBuilderCPU),
+		"--pids-limit", fmt.Sprint(staticBuilderPIDs),
+		"-v", fmt.Sprintf("%s:/app", workspace),
+		"-w", "/app",
+		plan.Image,
+		"sh", "-c", plan.Command,
+	}
+}
+
 // buildStaticSPA builds the selected static workspace in an ephemeral Node
 // container. The workspace is already scoped to project.BaseDirectory by the
 // deployment lifecycle, so package metadata and lockfiles are resolved from
@@ -138,12 +160,7 @@ func (s *Service) buildStaticSPA(ctx context.Context, project db.Project, deploy
 
 	log(fmt.Sprintf("Static builder detected %s; running build in %s...", plan.PackageManager, plan.Image))
 
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
-		"-v", fmt.Sprintf("%s:/app", workspace),
-		"-w", "/app",
-		plan.Image,
-		"sh", "-c", plan.Command,
-	)
+	cmd := exec.CommandContext(ctx, "docker", staticBuilderRunArgs(workspace, plan)...)
 
 	out, err := cmd.CombinedOutput()
 	if len(out) > 0 {
