@@ -42,7 +42,7 @@ services:
       DOCKER_SOCKET: ${DOCKER_SOCKET}
       DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
       PROJECT_NETWORK: ${PROJECT_NETWORK:-mypaas-projects}
-      CADDY_ADMIN: caddy:2019
+      CADDY_ADMIN: unix//run/mypaas/caddy-admin.sock
       CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-host.docker.internal}
       STATIC_ROOT: ${STATIC_ROOT:-/var/lib/mypaas/static}
       CADDY_STATIC_ROOT: ${CADDY_STATIC_ROOT:-/var/lib/mypaas/static}
@@ -98,21 +98,22 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
-      - "127.0.0.1:2019:2019"
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
+      - /run/mypaas:/run/mypaas
       - /var/lib/mypaas/static:/var/lib/mypaas/static:ro
       - caddy_data:/data
       - caddy_config:/config
       - caddy_logs:/var/log/caddy
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
-      CADDY_ADMIN: "127.0.0.1:2019"
+      CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"
     depends_on:
       - api
       - dashboard
     networks:
       - control
+      - projects
 
   cloudflared:
     image: cloudflare/cloudflared:latest
