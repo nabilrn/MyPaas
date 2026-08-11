@@ -82,6 +82,11 @@ route_ip="$(docker inspect --format "{{(index .NetworkSettings.Networks \"$proje
 test -n "$route_ip"
 docker inspect "$route_name" | grep -q '"HostPort": "18080"'
 
+# Prove the project network itself can reach the resolved runtime IP before
+# involving Caddy. This separates engine-network failures from proxy failures.
+docker run --rm --network "$project_network" alpine:3.20 \
+  wget -qO- "http://${route_ip}:8080" | grep -q '^mypaas-route-ok$'
+
 cat > "$tmpdir/Caddyfile" <<EOF
 {
   admin unix//run/mypaas/caddy-admin.sock
@@ -91,7 +96,10 @@ cat > "$tmpdir/Caddyfile" <<EOF
 }
 EOF
 
-docker run -d \
+# Production Compose attaches Caddy to both external networks before the Caddy
+# process starts. Model that lifecycle exactly instead of hot-attaching a live
+# proxy process.
+docker create \
   --name "$caddy_name" \
   --network "$control_network" \
   --network-alias caddy-edge \
@@ -99,6 +107,22 @@ docker run -d \
   -v "$tmpdir/caddy-run:/run/mypaas" \
   caddy:2-alpine >/dev/null
 docker network connect --alias caddy-edge "$project_network" "$caddy_name"
+docker start "$caddy_name" >/dev/null
+
+# Verify Caddy's own network namespace can reach the exact direct-runtime dial
+# target. A failure here is a Podman multi-network issue, not a Caddy route issue.
+for _ in $(seq 1 20); do
+  if docker exec "$caddy_name" wget -qO- "http://${route_ip}:8080" 2>/dev/null | grep -q '^mypaas-route-ok$'; then
+    caddy_project_reachability=true
+    break
+  fi
+  sleep 0.25
+done
+if [[ "${caddy_project_reachability:-false}" != "true" ]]; then
+  echo "dual-homed Caddy network namespace cannot reach the project runtime IP" >&2
+  docker inspect "$caddy_name" >&2 || true
+  exit 1
+fi
 
 for _ in $(seq 1 30); do
   if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]] && \
