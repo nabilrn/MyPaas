@@ -66,9 +66,10 @@ if docker run --rm --network "$project_network" alpine:3.20 \
   exit 1
 fi
 
-# Exercise the final production routing model with real Caddy:
-# - app lives on the project network and publishes on the project gateway;
+# Exercise the production routing model already proven on the staging VM:
+# - app lives on the project network and publishes on the private project gateway;
 # - Caddy is dual-homed for control-plane + data-plane traffic;
+# - Caddy reaches the published host port through host.containers.internal;
 # - Caddy Admin is Unix-only, never TCP :2019.
 mkdir -p "$tmpdir/caddy-run"
 docker run -d \
@@ -78,12 +79,12 @@ docker run -d \
   alpine:3.20 sh -c \
   'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
 
-cat > "$tmpdir/Caddyfile" <<EOF
+cat > "$tmpdir/Caddyfile" <<'EOF'
 {
   admin unix//run/mypaas/caddy-admin.sock
 }
 :8081 {
-  reverse_proxy ${project_gateway}:18080
+  reverse_proxy host.containers.internal:18080
 }
 EOF
 
@@ -91,10 +92,13 @@ docker run -d \
   --name "$caddy_name" \
   --network "$control_network" \
   --network-alias caddy-data \
+  --add-host host.containers.internal:host-gateway \
   -v "$tmpdir/Caddyfile:/etc/caddy/Caddyfile:ro" \
   -v "$tmpdir/caddy-run:/run/mypaas" \
   caddy:2-alpine >/dev/null
 docker network connect --alias caddy-data "$project_network" "$caddy_name"
+
+docker exec "$caddy_name" getent hosts host.containers.internal >/dev/null
 
 for _ in $(seq 1 30); do
   if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]] && \
@@ -106,7 +110,8 @@ for _ in $(seq 1 30); do
   sleep 0.25
 done
 if [[ "${caddy_ready:-false}" != "true" ]]; then
-  echo "Caddy could not route from the project data plane to the managed project-gateway port" >&2
+  echo "Caddy could not route through host.containers.internal to the managed project port" >&2
+  docker exec "$caddy_name" getent hosts host.containers.internal >&2 || true
   docker logs "$caddy_name" >&2 || true
   exit 1
 fi
