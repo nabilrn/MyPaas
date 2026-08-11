@@ -13,6 +13,15 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn("inspect --format '{{.State.Running}}' mypaas-cloudflared", content)
         self.assertNotIn("ps cloudflared", content)
 
+    def test_configured_statd_is_verified_on_host_and_inside_api(self) -> None:
+        content = VERIFY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('if [[ -n "${STATD_SOCKET:-}" ]]; then', content)
+        self.assertIn("systemctl is-active --quiet mypaas-statd", content)
+        self.assertIn('[[ ! -S "$STATD_SOCKET" ]]', content)
+        self.assertIn('exec -T api test -S "$STATD_SOCKET"', content)
+        self.assertIn("Skipping mypaas-statd verification because STATD_SOCKET is empty.", content)
+
 
 if __name__ == "__main__":
     unittest.main()
