@@ -330,7 +330,8 @@ func registerRoutes(
 				r.Get("/columns", dbStudioHandler.Columns)
 				r.Get("/rows", dbStudioHandler.Rows)
 				r.Post("/rows", dbStudioHandler.Insert)
-				r.Patch("/rows", dbStudioHandler.Update)
+				rPatch := dbStudioHandler.Update
+				r.Patch("/rows", rPatch)
 				r.Delete("/rows", dbStudioHandler.Delete)
 			})
 			r.Get("/{id}/stream", deploymentHandler.Stream)
@@ -446,6 +447,7 @@ func handleMetrics(cfg *config.Config, startedAt time.Time) http.HandlerFunc {
 		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_goroutines gauge\nmypaas_go_goroutines %d\n", runtime.NumGoroutine())
 		_, _ = fmt.Fprintf(w, "# HELP mypaas_go_heap_alloc_bytes Current heap allocation in bytes.\n")
 		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_heap_alloc_bytes gauge\nmypaas_go_heap_alloc_bytes %d\n", mem.HeapAlloc)
+		writeStatdMetrics(w)
 	}
 }
 
