@@ -179,12 +179,13 @@ func (s *Service) singleStatdMetrics(ctx context.Context, project db.Project, cl
 			_ = client.Unregister(ctx, id)
 		}
 		if err := registerAndSnapshot(ctx, client, id, runtime.PID, &snapshot); err != nil {
-			if !cached {
+			if !cached || !runtimeIdentityMayBeStale(err) {
 				return nil, err
 			}
 
 			// A cached PID can become invalid after an out-of-band runtime
-			// replacement. Refresh only after the cached identity actually fails.
+			// replacement. Refresh only after statd explicitly rejects the
+			// cached identity; daemon/socket failures go directly to fallback.
 			cache.invalidate(project.ID)
 			freshRuntime, discoveryErr := s.docker.RuntimeProcess(ctx, containerName(project.Name))
 			if discoveryErr != nil {
@@ -217,13 +218,13 @@ func (s *Service) composeStatdMetrics(ctx context.Context, project db.Project, c
 		cache.put(project, runtimes)
 		return metrics, nil
 	}
-	if !cached {
+	if !cached || !runtimeIdentityMayBeStale(err) {
 		return nil, err
 	}
 
 	// Cached PIDs normally let statd re-register after a daemon restart without
-	// touching Docker. Re-discover only when that cached runtime identity no
-	// longer works (container replacement/restart outside the known lifecycle).
+	// touching Docker. Re-discover only when statd explicitly rejects the
+	// cached identity (container replacement/restart outside known lifecycle).
 	cache.invalidate(project.ID)
 	freshRuntimes, discoveryErr := s.docker.ComposeRuntimeProcesses(ctx, composeProjectName(project.Name))
 	if discoveryErr != nil {
@@ -272,6 +273,11 @@ func recordUnexpectedSnapshotError(err error) {
 		return
 	}
 	statd.RecordSnapshotError()
+}
+
+func runtimeIdentityMayBeStale(err error) bool {
+	var protocolErr *statd.ProtocolError
+	return errors.As(err, &protocolErr) && protocolErr.Code == "REGISTER_FAILED"
 }
 
 func registerAndSnapshot(ctx context.Context, client *statd.Client, id string, pid int, out *statd.Snapshot) error {
