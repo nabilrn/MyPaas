@@ -3,8 +3,10 @@ package caddy
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -117,5 +119,42 @@ func TestAddFileServerRoutePatchesStaticRoot(t *testing.T) {
 		if !strings.Contains(postedBody, want) {
 			t.Fatalf("posted body does not contain %s: %s", want, postedBody)
 		}
+	}
+}
+
+func TestClientUsesUnixAdminSocket(t *testing.T) {
+	const routesPath = "/config/apps/http/servers/srv0/routes"
+	socketPath := filepath.Join(t.TempDir(), "caddy-admin.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen unix socket: %v", err)
+	}
+
+	var postedBody string
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == routesPath:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodPost && r.URL.Path == routesPath:
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				t.Fatalf("read unix post body: %v", readErr)
+			}
+			postedBody = string(body)
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Fatalf("unexpected unix caddy request: %s %s", r.Method, r.URL.Path)
+		}
+	})}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { _ = server.Close() })
+
+	client := NewClient("unix/"+socketPath, "project-gateway")
+	if err := client.AddRoute(context.Background(), "unix.localhost", 4567); err != nil {
+		t.Fatalf("AddRoute over Unix socket returned error: %v", err)
+	}
+	if !strings.Contains(postedBody, `"project-gateway:4567"`) {
+		t.Fatalf("Unix admin request did not preserve upstream host: %s", postedBody)
 	}
 }
