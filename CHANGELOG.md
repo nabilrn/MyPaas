@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
+- Compose repository deployments now inject MyPaas project env vars into the public service, refresh remote image-only services before normal deploys, and wait for the main service to be running/healthy before routing traffic or marking the deployment running. Rollbacks keep their recorded image behavior.
 - Compose file discovery moved to a shared `internal/compose/` package. `project/` and `deployment/` no longer duplicate candidate lists; both use `compose.Discover` / `compose.ResolveLayout`. Compose Doctor now resolves `build.context` against the compose file's directory (matching docker compose semantics) instead of the repository root, so subdirectory compose files get accurate build-context existence checks.
 - `container.ComposeUpOptions` adds `ComposeFiles []string` and `Profiles []string`. The sanitized compose JSON is now rendered from all user `-f` files merged via `docker compose config --format json`, so user overrides are baked in and the MyPaas port-binding override always wins.
 - Dashboard action, navigation, status, and utility icons now use the official `@lucide/svelte` library for consistent geometry, sizing, and stroke rendering; chart and GitHub brand SVGs remain purpose-specific.

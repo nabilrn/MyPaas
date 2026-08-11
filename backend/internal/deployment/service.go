@@ -221,6 +221,9 @@ func (s *Service) Start(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.StartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
+		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), 60*time.Second); err != nil {
+			return err
+		}
 		if err := s.addRuntimeRoute(ctx, project); err != nil {
 			return err
 		}
@@ -277,6 +280,9 @@ func (s *Service) Restart(ctx context.Context, projectID uuid.UUID) error {
 	}
 	if project.DeployMode == "compose" {
 		if err := s.docker.RestartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
+			return err
+		}
+		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), 60*time.Second); err != nil {
 			return err
 		}
 		if err := s.addRuntimeRoute(ctx, project); err != nil {
@@ -984,6 +990,9 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag, project.ServiceResources); err != nil {
 		return err
 	}
+	if err := injectComposeEnvFile(layout.OverrideFile, layout.EnvFile); err != nil {
+		return err
+	}
 	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
 		return err
 	}
@@ -991,15 +1000,24 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	if err := s.setStatus(ctx, deploymentID, "building"); err != nil {
 		return err
 	}
-	log("Starting compose project " + composeProjectName(project.Name) + " from " + layout.PrimaryRel)
-	if err := s.docker.ComposeUp(ctx, container.ComposeUpOptions{
+	composeOpts := container.ComposeUpOptions{
 		ProjectName:  composeProjectName(project.Name),
 		WorkDir:      layout.WorkDir,
 		ComposeFiles: []string{layout.SanitizedFile},
 		OverrideFile: layout.OverrideFile,
 		EnvFile:      layout.EnvFile,
 		Profiles:     project.ComposeProfiles,
-	}, log); err != nil {
+	}
+	log("Pulling remote Compose images")
+	if err := s.docker.ComposePull(ctx, composeOpts, log); err != nil {
+		return err
+	}
+	log("Starting compose project " + composeProjectName(project.Name) + " from " + layout.PrimaryRel)
+	if err := s.docker.ComposeUp(ctx, composeOpts, log); err != nil {
+		return err
+	}
+	log("Waiting for compose main service " + main + " to become ready")
+	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, 60*time.Second); err != nil {
 		return err
 	}
 
@@ -1188,6 +1206,9 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag, project.ServiceResources); err != nil {
 		return err
 	}
+	if err := injectComposeEnvFile(layout.OverrideFile, layout.EnvFile); err != nil {
+		return err
+	}
 	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
 		return err
 	}
@@ -1202,6 +1223,10 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		NoBuild:      true,
 		Profiles:     project.ComposeProfiles,
 	}, log); err != nil {
+		return err
+	}
+	log("Waiting for compose main service " + main + " to become ready")
+	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, 60*time.Second); err != nil {
 		return err
 	}
 
