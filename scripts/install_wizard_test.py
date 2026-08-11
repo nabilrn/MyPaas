@@ -104,6 +104,14 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("name: ${CONTROL_NETWORK:-mypaas-control}", compose)
         self.assertIn("name: ${PROJECT_NETWORK:-mypaas-projects}", compose)
 
+    def test_api_container_drops_capabilities_and_blocks_privilege_gain(self) -> None:
+        compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
+        api = compose.split("  api:\n", 1)[1].split("\n  dashboard:\n", 1)[0]
+
+        self.assertIn("security_opt:\n      - no-new-privileges:true", api)
+        self.assertIn("cap_drop:\n      - ALL", api)
+        self.assertIn("${DOCKER_SOCKET}:${DOCKER_SOCKET}", api)
+
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
 
