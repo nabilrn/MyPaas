@@ -4,13 +4,12 @@ set -euo pipefail
 cleanup_advice() {
   echo "" >&2
   echo "=================================================================" >&2
-  echo "❌ DEPLOYMENT FAILED!" >&2
-  echo "To clean up the failed deployment and start fresh, please run:" >&2
-  echo "   bash scripts/uninstall-vm.sh" >&2
-  echo "=================================================================" >&2
+  echo "❌ DEPLOYMENT FAILED!"
+  echo "To clean up the failed deployment and start fresh, please run:"
+  echo "   bash scripts/uninstall-vm.sh"
+  echo "================================================================="
 }
 trap cleanup_advice ERR
-
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
@@ -60,8 +59,14 @@ done
 
 CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
 PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
-$DOCKER_BIN network inspect "$CONTROL_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$CONTROL_NETWORK" >/dev/null
-$DOCKER_BIN network inspect "$PROJECT_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$PROJECT_NETWORK" >/dev/null
+ROUTING_NETWORK="${ROUTING_NETWORK:-mypaas-routing}"
+if [[ "$CONTROL_NETWORK" == "$PROJECT_NETWORK" || "$CONTROL_NETWORK" == "$ROUTING_NETWORK" || "$PROJECT_NETWORK" == "$ROUTING_NETWORK" ]]; then
+  echo "CONTROL_NETWORK, PROJECT_NETWORK, and ROUTING_NETWORK must be distinct." >&2
+  exit 1
+fi
+for network in "$CONTROL_NETWORK" "$PROJECT_NETWORK" "$ROUTING_NETWORK"; do
+  $DOCKER_BIN network inspect "$network" >/dev/null 2>&1 || $DOCKER_BIN network create "$network" >/dev/null
+done
 
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
