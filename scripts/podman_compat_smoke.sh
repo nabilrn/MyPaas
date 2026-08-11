@@ -6,11 +6,12 @@ control_network="${CONTROL_NETWORK:-mypaas-ci-control}"
 container_name="mypaas-ci-runtime-smoke"
 shared_name="mypaas-ci-shared-smoke"
 admin_name="mypaas-ci-admin-smoke"
+route_name="mypaas-ci-route-smoke"
 compose_project="mypaas-ci-compose-smoke"
 tmpdir="$(mktemp -d)"
 
 cleanup() {
-  docker rm -f "$container_name" "$shared_name" "$admin_name" >/dev/null 2>&1 || true
+  docker rm -f "$container_name" "$shared_name" "$admin_name" "$route_name" >/dev/null 2>&1 || true
   docker compose -p "$compose_project" -f "$tmpdir/compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
   docker network rm "$project_network" >/dev/null 2>&1 || true
   docker network rm "$control_network" >/dev/null 2>&1 || true
@@ -22,6 +23,8 @@ docker version >/dev/null
 
 docker network create "$project_network" >/dev/null
 docker network create "$control_network" >/dev/null
+control_gateway="$(docker network inspect "$control_network" --format '{{(index .IPAM.Config 0).Gateway}}')"
+test -n "$control_gateway"
 
 # Runtime command contract used by MyPaaS and the bounded static builder.
 docker run -d \
@@ -60,6 +63,28 @@ docker run --rm --network "$project_network" alpine:3.20 \
 if docker run --rm --network "$project_network" alpine:3.20 \
   ping -c 1 -W 1 control-admin >/dev/null 2>&1; then
   echo "project network unexpectedly reached a control-only service" >&2
+  exit 1
+fi
+
+# Production keeps the app on the project network but publishes its managed
+# port onto the private control-network gateway. Caddy can then reach the app
+# without joining the workload network.
+docker run -d \
+  --name "$route_name" \
+  --network "$project_network" \
+  -p "${control_gateway}:18080:8080" \
+  alpine:3.20 sh -c \
+  'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
+for _ in $(seq 1 20); do
+  if docker run --rm --network "$control_network" alpine:3.20 \
+    wget -qO- "http://${control_gateway}:18080" 2>/dev/null | grep -q '^mypaas-route-ok$'; then
+    route_ready=true
+    break
+  fi
+  sleep 0.25
+done
+if [[ "${route_ready:-false}" != "true" ]]; then
+  echo "control network could not reach a project app through the control-gateway port binding" >&2
   exit 1
 fi
 
