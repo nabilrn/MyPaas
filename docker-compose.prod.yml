@@ -104,6 +104,7 @@ services:
       - /var/lib/mypaas/static:/var/lib/mypaas/static:ro
       - caddy_data:/data
       - caddy_config:/config
+      - caddy_logs:/var/log/caddy
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
       CADDY_ADMIN: "127.0.0.1:2019"
@@ -127,6 +128,7 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  caddy_logs:
 
 networks:
   control:
