@@ -42,8 +42,8 @@ docker stop --time 5 "$container_name" >/dev/null
 docker start "$container_name" >/dev/null
 docker restart "$container_name" >/dev/null
 
-# Model shared PostgreSQL dual-homing while ordinary control services stay off
-# the project network.
+# Shared PostgreSQL is intentionally dual-homed; ordinary control services are
+# not reachable from the project network.
 docker run -d \
   --name "$shared_name" \
   --network "$control_network" \
@@ -64,11 +64,12 @@ if docker run --rm --network "$project_network" alpine:3.20 \
   exit 1
 fi
 
-# Final routing model under test:
-# - managed apps publish only on host loopback;
-# - trusted Caddy runs in the host network and can reach those loopback ports;
-# - Caddy Admin is a Unix socket, never TCP :2019;
-# - project workloads do not share Caddy's network namespace.
+# Final routing model:
+# - allocated host ports remain present as stable runtime lookup keys;
+# - Caddy does not hairpin through those published ports;
+# - the API resolves the owner container by inspect and Caddy dials its IP and
+#   internal port directly on PROJECT_NETWORK;
+# - Caddy Admin remains Unix-only.
 mkdir -p "$tmpdir/caddy-run"
 docker run -d \
   --name "$route_name" \
@@ -77,62 +78,79 @@ docker run -d \
   alpine:3.20 sh -c \
   'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
 
-cat > "$tmpdir/Caddyfile" <<'EOF'
+route_ip="$(docker inspect --format "{{(index .NetworkSettings.Networks \"$project_network\").IPAddress}}" "$route_name")"
+test -n "$route_ip"
+docker inspect "$route_name" | grep -q '"HostPort": "18080"'
+
+cat > "$tmpdir/Caddyfile" <<EOF
 {
   admin unix//run/mypaas/caddy-admin.sock
 }
 :18081 {
-  reverse_proxy 127.0.0.1:18080
+  reverse_proxy ${route_ip}:8080
 }
 EOF
 
 docker run -d \
   --name "$caddy_name" \
-  --network host \
+  --network "$control_network" \
+  --network-alias caddy-edge \
   -v "$tmpdir/Caddyfile:/etc/caddy/Caddyfile:ro" \
   -v "$tmpdir/caddy-run:/run/mypaas" \
   caddy:2-alpine >/dev/null
+docker network connect --alias caddy-edge "$project_network" "$caddy_name"
 
 for _ in $(seq 1 30); do
   if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]] && \
-    curl -fsS http://127.0.0.1:18081 2>/dev/null | grep -q '^mypaas-route-ok$'; then
+    docker run --rm --network "$control_network" alpine:3.20 \
+      wget -qO- http://caddy-edge:18081 2>/dev/null | grep -q '^mypaas-route-ok$'; then
     caddy_ready=true
     break
   fi
   sleep 0.25
 done
 if [[ "${caddy_ready:-false}" != "true" ]]; then
-  echo "host-network Caddy could not reach the loopback-bound managed app port" >&2
+  echo "dual-homed Caddy could not route directly to the project container IP" >&2
   docker logs "$caddy_name" >&2 || true
   exit 1
 fi
 
-# Model cloudflared as the second trusted host-network edge component. The
-# existing tunnel origin hostname `caddy` is preserved through /etc/hosts while
-# resolving to host loopback.
-docker run --rm \
-  --network host \
-  --add-host caddy:127.0.0.1 \
-  alpine:3.20 wget -qO- http://caddy:18081 | grep -q '^mypaas-route-ok$'
-
-if curl -fsS http://127.0.0.1:2019 >/dev/null 2>&1; then
-  echo "Caddy Admin unexpectedly accepted TCP :2019" >&2
+if docker run --rm --network "$project_network" alpine:3.20 \
+  wget -qO- http://caddy-edge:2019 >/dev/null 2>&1; then
+  echo "Caddy Admin unexpectedly accepted TCP :2019 from the project network" >&2
   exit 1
 fi
 
-cat > "$tmpdir/compose.yml" <<'EOF'
+# Compose contract: the main service keeps a MyPaaS-managed published port and
+# joins the external project network. Its direct network IP must be discoverable
+# from the same Docker-compatible inspect API used by the resolver.
+cat > "$tmpdir/compose.yml" <<EOF
 services:
   app:
     image: alpine:3.20
-    command: ["sleep", "300"]
+    command: ["sh", "-c", "mkdir -p /www && printf 'compose-route-ok\\n' >/www/index.html && httpd -f -p 8080 -h /www"]
+    ports:
+      - "127.0.0.1:18082:8080"
+    networks:
+      - default
+      - mypaas_platform
+networks:
+  mypaas_platform:
+    external: true
+    name: "$project_network"
 EOF
 
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" up -d >/dev/null
 compose_ids="$(docker ps -aq --filter "label=com.docker.compose.project=$compose_project")"
 test -n "$compose_ids"
-# MyPaaS uses batched inspect for Compose runtime discovery.
 # shellcheck disable=SC2086
 docker inspect $compose_ids >/dev/null
+compose_id="$(printf '%s\n' "$compose_ids" | head -n1)"
+compose_ip="$(docker inspect --format "{{(index .NetworkSettings.Networks \"$project_network\").IPAddress}}" "$compose_id")"
+test -n "$compose_ip"
+docker inspect "$compose_id" | grep -q '"HostPort": "18082"'
+docker run --rm --network "$project_network" alpine:3.20 \
+  wget -qO- "http://${compose_ip}:8080" | grep -q '^compose-route-ok$'
 
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" stop >/dev/null
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" start >/dev/null
