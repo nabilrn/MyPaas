@@ -32,14 +32,21 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("DOCKER_BIND_HOST=172.18.0.1", content)
         self.assertIn("CADDY_UPSTREAM_HOST=172.18.0.1", content)
 
-    def test_terminal_installer_derives_bind_host_from_control_network(self) -> None:
+    def test_terminal_installer_derives_bind_host_from_project_network(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
 
         self.assertIn('control_network="${CONTROL_NETWORK:-mypaas-control}"', installer)
         self.assertIn('project_network="${PROJECT_NETWORK:-mypaas-projects}"', installer)
-        self.assertIn('docker_network_gateway "$control_network"', installer)
+        self.assertIn('docker_network_gateway "$project_network"', installer)
+        self.assertNotIn('docker_network_gateway "$control_network"', installer)
         self.assertIn("CADDY_UPSTREAM_HOST=$docker_bind_host", installer)
         self.assertIn("CONTROL_NETWORK=$control_network", installer)
+
+    def test_installer_pins_caddy_admin_to_unix_socket(self) -> None:
+        installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
+
+        self.assertIn("CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock", installer)
+        self.assertIn("sed -i 's#^CADDY_ADMIN=.*#CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock#'", installer)
 
     def test_podman_installer_installs_catatonit_for_buildkit(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
@@ -89,7 +96,7 @@ class InstallConfigTest(unittest.TestCase):
         )
         self.assertNotIn("${CADDY_UPSTREAM_HOST:-${", compose)
 
-    def test_production_compose_separates_control_and_project_networks(self) -> None:
+    def test_production_compose_separates_control_services_from_project_data_plane(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
         postgres = compose.split("  postgres:\n", 1)[1].split("\n  api:\n", 1)[0]
         api = compose.split("  api:\n", 1)[1].split("\n  dashboard:\n", 1)[0]
@@ -100,9 +107,19 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("- control", api)
         self.assertNotIn("- projects", api)
         self.assertIn("- control", caddy)
-        self.assertNotIn("- projects", caddy)
+        self.assertIn("- projects", caddy)
         self.assertIn("name: ${CONTROL_NETWORK:-mypaas-control}", compose)
         self.assertIn("name: ${PROJECT_NETWORK:-mypaas-projects}", compose)
+
+    def test_caddy_admin_is_unix_only_in_production_compose(self) -> None:
+        compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
+        caddy = compose.split("  caddy:\n", 1)[1].split("\n  cloudflared:\n", 1)[0]
+        api = compose.split("  api:\n", 1)[1].split("\n  dashboard:\n", 1)[0]
+
+        self.assertIn("CADDY_ADMIN: unix//run/mypaas/caddy-admin.sock", api)
+        self.assertIn('CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"', caddy)
+        self.assertIn("/run/mypaas:/run/mypaas", caddy)
+        self.assertNotIn("2019:2019", caddy)
 
     def test_api_container_drops_capabilities_and_blocks_privilege_gain(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
