@@ -11,7 +11,6 @@ import (
 )
 
 const runtimeUpstreamMode = "runtime"
-const runtimeDNSIDLength = 12
 
 type runtimeInspectRow struct {
 	ID              string `json:"Id"`
@@ -25,12 +24,21 @@ type runtimeInspectRow struct {
 	} `json:"NetworkSettings"`
 }
 
+type runtimeRouteTarget struct {
+	ContainerID     string
+	ContainerPort   string
+	RoutingAttached bool
+}
+
+func runtimeRouteAlias(hostPort int32) string {
+	return fmt.Sprintf("mypaas-port-%d", hostPort)
+}
+
 // upstreamDial keeps the existing fixed-host behavior for development and
-// compatibility deployments. Production can set CADDY_UPSTREAM_HOST=runtime
-// to resolve the container that owns the MyPaaS allocated host port and route
-// Caddy directly to that runtime on PROJECT_NETWORK. The allocated port is a
-// stable lookup key; application traffic does not hairpin through a published
-// host port.
+// compatibility deployments. Production sets CADDY_UPSTREAM_HOST=runtime. In
+// that mode the allocated host port is only a runtime lookup key: the selected
+// container is attached to a dedicated routing network with an explicit,
+// engine-portable DNS alias and Caddy dials that alias directly.
 func (c *Client) upstreamDial(ctx context.Context, hostPort int32) (string, error) {
 	if strings.TrimSpace(c.upstreamHost) != runtimeUpstreamMode {
 		return fmt.Sprintf("%s:%d", c.upstreamHost, hostPort), nil
@@ -39,6 +47,13 @@ func (c *Client) upstreamDial(ctx context.Context, hostPort int32) (string, erro
 	projectNetwork := strings.TrimSpace(os.Getenv("PROJECT_NETWORK"))
 	if projectNetwork == "" {
 		return "", fmt.Errorf("PROJECT_NETWORK is required when CADDY_UPSTREAM_HOST=%s", runtimeUpstreamMode)
+	}
+	routingNetwork := strings.TrimSpace(os.Getenv("ROUTING_NETWORK"))
+	if routingNetwork == "" {
+		return "", fmt.Errorf("ROUTING_NETWORK is required when CADDY_UPSTREAM_HOST=%s", runtimeUpstreamMode)
+	}
+	if routingNetwork == projectNetwork {
+		return "", fmt.Errorf("ROUTING_NETWORK must be distinct from PROJECT_NETWORK")
 	}
 
 	idsRaw, err := exec.CommandContext(ctx, "docker", "ps", "-q").CombinedOutput()
@@ -55,13 +70,41 @@ func (c *Client) upstreamDial(ctx context.Context, hostPort int32) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("inspect running containers for Caddy upstream: %w: %s", err, strings.TrimSpace(string(inspectRaw)))
 	}
-	return runtimeDialFromInspect(inspectRaw, projectNetwork, hostPort)
+	target, err := runtimeTargetFromInspect(inspectRaw, projectNetwork, routingNetwork, hostPort)
+	if err != nil {
+		return "", err
+	}
+
+	alias := runtimeRouteAlias(hostPort)
+	if !target.RoutingAttached {
+		out, connectErr := exec.CommandContext(
+			ctx,
+			"docker",
+			"network",
+			"connect",
+			"--alias",
+			alias,
+			routingNetwork,
+			target.ContainerID,
+		).CombinedOutput()
+		if connectErr != nil {
+			return "", fmt.Errorf(
+				"attach runtime %s to routing network %q: %w: %s",
+				strings.TrimSpace(target.ContainerID),
+				routingNetwork,
+				connectErr,
+				strings.TrimSpace(string(out)),
+			)
+		}
+	}
+
+	return fmt.Sprintf("%s:%s", alias, target.ContainerPort), nil
 }
 
-func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (string, error) {
+func runtimeTargetFromInspect(raw []byte, projectNetwork, routingNetwork string, hostPort int32) (runtimeRouteTarget, error) {
 	var rows []runtimeInspectRow
 	if err := json.Unmarshal(raw, &rows); err != nil {
-		return "", fmt.Errorf("decode runtime inspect for Caddy upstream: %w", err)
+		return runtimeRouteTarget{}, fmt.Errorf("decode runtime inspect for Caddy upstream: %w", err)
 	}
 
 	wantedHostPort := strconv.Itoa(int(hostPort))
@@ -98,22 +141,22 @@ func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (
 		}
 
 		containerID := strings.TrimSpace(row.ID)
-		if len(containerID) < runtimeDNSIDLength {
+		if containerID == "" {
 			if candidateErr == nil {
-				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container has invalid runtime ID %q", hostPort, containerID)
+				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: matched container has empty runtime ID", hostPort)
 			}
 			continue
 		}
-
-		// Podman with netavark/aardvark-dns registers the first 12 characters of
-		// every container ID as a network-scoped DNS alias. Docker compatibility
-		// is continuously gated in CI. The short ID survives container rename,
-		// which is required by MyPaaS rolling Dockerfile/image deployments.
-		return fmt.Sprintf("%s:%s", containerID[:runtimeDNSIDLength], containerPort), nil
+		_, routingAttached := row.NetworkSettings.Networks[routingNetwork]
+		return runtimeRouteTarget{
+			ContainerID:     containerID,
+			ContainerPort:   containerPort,
+			RoutingAttached: routingAttached,
+		}, nil
 	}
 
 	if candidateErr != nil {
-		return "", candidateErr
+		return runtimeRouteTarget{}, candidateErr
 	}
-	return "", fmt.Errorf("resolve Caddy upstream for host port %d: no running container owns that published port", hostPort)
+	return runtimeRouteTarget{}, fmt.Errorf("resolve Caddy upstream for host port %d: no running container owns that published port", hostPort)
 }
