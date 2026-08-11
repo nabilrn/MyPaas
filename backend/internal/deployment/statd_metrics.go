@@ -125,17 +125,27 @@ func (s *Service) PreferredContainerMetricsList(ctx context.Context, projectID u
 		metrics, err = s.singleStatdMetrics(ctx, project, client, cache)
 	}
 	if err == nil && len(metrics) > 0 {
-		statd.MarkAvailable(true)
+		if statd.MarkAvailable(true) == statd.AvailabilityRecovered {
+			slog.Info("statd metrics path recovered")
+		}
 		return metrics, nil
 	}
 
-	statd.MarkAvailable(false)
+	transition := statd.MarkAvailable(false)
 	statd.RecordFallback()
-	slog.Debug("statd metrics unavailable; using Docker fallback",
-		"projectId", project.ID,
-		"mode", project.DeployMode,
-		"error", err,
-	)
+	if transition == statd.AvailabilityInitialUnavailable || transition == statd.AvailabilityLost {
+		slog.Warn("statd metrics unavailable; using Docker fallback",
+			"projectId", project.ID,
+			"mode", project.DeployMode,
+			"error", err,
+		)
+	} else {
+		slog.Debug("statd metrics unavailable; using Docker fallback",
+			"projectId", project.ID,
+			"mode", project.DeployMode,
+			"error", err,
+		)
+	}
 	return s.ContainerMetricsList(ctx, projectID)
 }
 
@@ -163,6 +173,7 @@ func (s *Service) singleStatdMetrics(ctx context.Context, project db.Project, cl
 	}
 
 	snapshot, snapshotErr := client.Snapshot(ctx, id)
+	recordUnexpectedSnapshotError(snapshotErr)
 	if snapshotErr != nil || snapshot.Stale {
 		if snapshot.Stale {
 			_ = client.Unregister(ctx, id)
@@ -237,6 +248,7 @@ func composeStatdSnapshots(ctx context.Context, project db.Project, client *stat
 			return nil, err
 		}
 		snapshot, snapshotErr := client.Snapshot(ctx, id)
+		recordUnexpectedSnapshotError(snapshotErr)
 		if snapshotErr != nil || snapshot.Stale {
 			if snapshot.Stale {
 				_ = client.Unregister(ctx, id)
@@ -251,6 +263,17 @@ func composeStatdSnapshots(ctx context.Context, project db.Project, client *stat
 	return metrics, nil
 }
 
+func recordUnexpectedSnapshotError(err error) {
+	if err == nil {
+		return
+	}
+	var protocolErr *statd.ProtocolError
+	if errors.As(err, &protocolErr) && protocolErr.Code == "NOT_FOUND" {
+		return
+	}
+	statd.RecordSnapshotError()
+}
+
 func registerAndSnapshot(ctx context.Context, client *statd.Client, id string, pid int, out *statd.Snapshot) error {
 	if client == nil || out == nil {
 		return errors.New("statd client and output are required")
@@ -259,17 +282,21 @@ func registerAndSnapshot(ctx context.Context, client *statd.Client, id string, p
 		var protocolErr *statd.ProtocolError
 		if errors.As(err, &protocolErr) && protocolErr.Code == "REGISTER_FAILED" {
 			if unregisterErr := client.Unregister(ctx, id); unregisterErr != nil {
+				statd.RecordRegistrationError()
 				return fmt.Errorf("replace statd registration: unregister: %w", unregisterErr)
 			}
 			if retryErr := client.Register(ctx, id, pid); retryErr != nil {
+				statd.RecordRegistrationError()
 				return fmt.Errorf("replace statd registration: register: %w", retryErr)
 			}
 		} else {
+			statd.RecordRegistrationError()
 			return err
 		}
 	}
 	snapshot, err := client.Snapshot(ctx, id)
 	if err != nil {
+		statd.RecordSnapshotError()
 		return err
 	}
 	*out = snapshot
