@@ -5,7 +5,7 @@ on:
     branches:
       - fix/compose-runtime-parity
     paths:
-      - devtools/compose-runtime.patch
+      - devtools/apply_compose_runtime_fix.py
       - .github/workflows/apply-compose-runtime-fix.yml
 
 permissions:
@@ -20,15 +20,17 @@ jobs:
         with:
           ref: fix/compose-runtime-parity
           fetch-depth: 0
-      - name: Apply integration patch
+      - name: Apply integration changes
         run: |
-          git apply --check devtools/compose-runtime.patch
-          git apply devtools/compose-runtime.patch
-          gofmt -w backend/internal/deployment/service.go
-      - name: Commit patched source
+          python3 devtools/apply_compose_runtime_fix.py
+          gofmt -w backend/internal/deployment/service.go backend/internal/deployment/compose_runtime.go backend/internal/deployment/compose_runtime_test.go backend/internal/container/compose_runtime.go backend/internal/container/compose_runtime_test.go
+      - name: Verify backend
+        working-directory: backend
+        run: go test ./...
+      - name: Commit verified source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/internal/deployment/service.go
-          git commit -m "fix(compose): gate routes on runtime readiness [compose-runtime-applied]"
+          git add CHANGELOG.md backend/internal/deployment/service.go backend/internal/deployment/compose_runtime.go backend/internal/deployment/compose_runtime_test.go backend/internal/container/compose_runtime.go backend/internal/container/compose_runtime_test.go
+          git commit -m "fix(compose): align runtime behavior with image deploys [compose-runtime-applied]"
           git push origin HEAD:fix/compose-runtime-parity
