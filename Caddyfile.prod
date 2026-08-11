@@ -2,7 +2,9 @@
 # Production config for Cloudflare Tunnel. Cloudflare terminates public TLS.
 
 {
-	admin 0.0.0.0:2019
+	# Keep the configuration plane off TCP entirely. The API and Caddy share
+	# /run/mypaas, and only the API control plane needs this socket.
+	admin unix//run/mypaas/caddy-admin.sock
 	log default {
 		level info
 		format json
