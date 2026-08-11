@@ -4,10 +4,10 @@ set -euo pipefail
 cleanup_advice() {
   echo "" >&2
   echo "=================================================================" >&2
-  echo "❌ DEPLOYMENT FAILED!"
-  echo "To clean up the failed deployment and start fresh, please run:"
-  echo "   bash scripts/uninstall-vm.sh"
-  echo "================================================================="
+  echo "❌ DEPLOYMENT FAILED!" >&2
+  echo "To clean up the failed deployment and start fresh, please run:" >&2
+  echo "   bash scripts/uninstall-vm.sh" >&2
+  echo "=================================================================" >&2
 }
 trap cleanup_advice ERR
 
