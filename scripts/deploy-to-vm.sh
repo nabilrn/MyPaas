@@ -58,7 +58,10 @@ do
   $SUDO mkdir -p "$dir"
 done
 
-$DOCKER_BIN network inspect "${PROJECT_NETWORK:-mypaas-prod}" >/dev/null 2>&1 || $DOCKER_BIN network create "${PROJECT_NETWORK:-mypaas-prod}" >/dev/null
+CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
+PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
+$DOCKER_BIN network inspect "$CONTROL_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$CONTROL_NETWORK" >/dev/null
+$DOCKER_BIN network inspect "$PROJECT_NETWORK" >/dev/null 2>&1 || $DOCKER_BIN network create "$PROJECT_NETWORK" >/dev/null
 
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
@@ -72,7 +75,7 @@ MIGRATE_DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:
 
 echo "Running migrations..."
 $DOCKER_BIN run --rm \
-  --network "${PROJECT_NETWORK:-mypaas-prod}" \
+  --network "$CONTROL_NETWORK" \
   -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
   migrate/migrate:latest \
   -path=/migrations \
