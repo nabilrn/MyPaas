@@ -990,7 +990,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag, project.ServiceResources); err != nil {
 		return err
 	}
-	if err := injectComposeEnvFile(layout.OverrideFile, layout.EnvFile); err != nil {
+	if err := injectComposeEnvFile(ctx, layout.OverrideFile, layout.EnvFile); err != nil {
 		return err
 	}
 	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
@@ -1206,7 +1206,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 	if err := writeComposeOverride(layout.OverrideFile, main, s.docker.ComposePortMapping(port, project.AppPort), project.MemoryLimitMb, numericToFloat(project.CpuLimit), s.cfg.ProjectNetwork, overrideImageTag, project.ServiceResources); err != nil {
 		return err
 	}
-	if err := injectComposeEnvFile(layout.OverrideFile, layout.EnvFile); err != nil {
+	if err := injectComposeEnvFile(ctx, layout.OverrideFile, layout.EnvFile); err != nil {
 		return err
 	}
 	if err := s.docker.WriteSanitizedComposeConfigMulti(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles, layout.SanitizedFile); err != nil {
