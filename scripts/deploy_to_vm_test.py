@@ -7,19 +7,27 @@ DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "deploy-to-vm.sh"
 
 
 class DeployToVmTest(unittest.TestCase):
-    def test_provisions_separate_control_and_project_networks(self) -> None:
+    def test_provisions_distinct_control_project_and_routing_networks(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"', content)
         self.assertIn('PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"', content)
-        self.assertIn('network inspect "$CONTROL_NETWORK"', content)
-        self.assertIn('network inspect "$PROJECT_NETWORK"', content)
+        self.assertIn('ROUTING_NETWORK="${ROUTING_NETWORK:-mypaas-routing}"', content)
+        self.assertIn(
+            'for network in "$CONTROL_NETWORK" "$PROJECT_NETWORK" "$ROUTING_NETWORK"',
+            content,
+        )
+        self.assertIn(
+            "CONTROL_NETWORK, PROJECT_NETWORK, and ROUTING_NETWORK must be distinct.",
+            content,
+        )
 
     def test_migration_container_uses_control_network(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('--network "$CONTROL_NETWORK"', content)
         self.assertNotIn('--network "$PROJECT_NETWORK"', content)
+        self.assertNotIn('--network "$ROUTING_NETWORK"', content)
         self.assertNotIn("--network mypaas-prod", content)
 
     def test_deploy_does_not_rewrite_managed_app_bind_host(self) -> None:
