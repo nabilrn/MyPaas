@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func TestRuntimeDialFromInspectResolvesProjectNetworkContainerPort(t *testing.T) {
+func TestRuntimeDialFromInspectResolvesProjectNetworkRuntimeDNS(t *testing.T) {
 	raw := []byte(`[
   {
-    "Id": "container-a",
+    "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "NetworkSettings": {
       "Ports": {
         "8080/tcp": [
@@ -26,22 +26,22 @@ func TestRuntimeDialFromInspectResolvesProjectNetworkContainerPort(t *testing.T)
 	if err != nil {
 		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
 	}
-	if got != "10.89.2.17:8080" {
-		t.Fatalf("dial = %q, want %q", got, "10.89.2.17:8080")
+	if got != "0123456789ab:8080" {
+		t.Fatalf("dial = %q, want %q", got, "0123456789ab:8080")
 	}
 }
 
-func TestRuntimeDialFromInspectSelectsContainerByAllocatedHostPort(t *testing.T) {
+func TestRuntimeDialFromInspectSelectsReplacementByAllocatedHostPort(t *testing.T) {
 	raw := []byte(`[
   {
-    "Id": "old-runtime",
+    "Id": "aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000",
     "NetworkSettings": {
       "Ports": {"8080/tcp": [{"HostPort": "3455"}]},
       "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.10"}}
     }
   },
   {
-    "Id": "replacement-runtime",
+    "Id": "bbbbbbbbbbbb1111111111111111111111111111111111111111111111111111",
     "NetworkSettings": {
       "Ports": {"3000/tcp": [{"HostPort": "3456"}]},
       "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.11"}}
@@ -53,22 +53,22 @@ func TestRuntimeDialFromInspectSelectsContainerByAllocatedHostPort(t *testing.T)
 	if err != nil {
 		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
 	}
-	if got != "10.89.2.11:3000" {
-		t.Fatalf("dial = %q, want replacement runtime", got)
+	if got != "bbbbbbbbbbbb:3000" {
+		t.Fatalf("dial = %q, want replacement runtime DNS identity", got)
 	}
 }
 
 func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) {
 	raw := []byte(`[
   {
-    "Id": "unrelated-runtime",
+    "Id": "cccccccccccc2222222222222222222222222222222222222222222222222222",
     "NetworkSettings": {
       "Ports": {"9000/tcp": [{"HostPort": "3456"}]},
       "Networks": {"other-network": {"IPAddress": "10.10.0.5"}}
     }
   },
   {
-    "Id": "mypaas-runtime",
+    "Id": "dddddddddddd3333333333333333333333333333333333333333333333333333",
     "NetworkSettings": {
       "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
       "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.23"}}
@@ -80,7 +80,7 @@ func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) 
 	if err != nil {
 		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
 	}
-	if got != "10.89.2.23:8080" {
+	if got != "dddddddddddd:8080" {
 		t.Fatalf("dial = %q, want project runtime", got)
 	}
 }
@@ -88,7 +88,7 @@ func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) 
 func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
 	raw := []byte(`[
   {
-    "Id": "runtime-a",
+    "Id": "eeeeeeeeeeee4444444444444444444444444444444444444444444444444444",
     "NetworkSettings": {
       "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
       "Networks": {"some-other-network": {"IPAddress": "10.10.0.5"}}
@@ -105,10 +105,30 @@ func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
 	}
 }
 
+func TestRuntimeDialFromInspectRejectsInvalidRuntimeID(t *testing.T) {
+	raw := []byte(`[
+  {
+    "Id": "short",
+    "NetworkSettings": {
+      "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
+      "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.17"}}
+    }
+  }
+]`)
+
+	_, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	if err == nil {
+		t.Fatal("expected invalid runtime ID to fail")
+	}
+	if !strings.Contains(err.Error(), "invalid runtime ID") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRuntimeDialFromInspectRejectsUnknownPublishedPort(t *testing.T) {
 	raw := []byte(`[
   {
-    "Id": "runtime-a",
+    "Id": "ffffffffffff5555555555555555555555555555555555555555555555555555",
     "NetworkSettings": {
       "Ports": {"8080/tcp": [{"HostPort": "3455"}]},
       "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.17"}}
