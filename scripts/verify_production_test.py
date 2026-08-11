@@ -22,19 +22,28 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('exec -T api test -S "$STATD_SOCKET"', content)
         self.assertIn("Skipping mypaas-statd verification because STATD_SOCKET is empty.", content)
 
-    def test_control_plane_network_isolation_is_verified(self) -> None:
+    def test_control_and_data_plane_network_boundaries_are_verified(self) -> None:
         content = VERIFY_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"', content)
         self.assertIn('PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"', content)
-        self.assertIn("require_network", content)
-        self.assertIn("forbid_network", content)
         self.assertIn(
-            "for container in mypaas-api mypaas-dashboard mypaas-caddy-prod mypaas-cloudflared",
+            "for container in mypaas-api mypaas-dashboard mypaas-cloudflared",
             content,
         )
-        self.assertIn('require_network mypaas-postgres-prod "$CONTROL_NETWORK"', content)
-        self.assertIn('require_network mypaas-postgres-prod "$PROJECT_NETWORK"', content)
+        self.assertIn(
+            "for container in mypaas-postgres-prod mypaas-caddy-prod",
+            content,
+        )
+        self.assertIn('forbid_network "$container" "$PROJECT_NETWORK"', content)
+
+    def test_caddy_admin_is_verified_only_through_unix_socket(self) -> None:
+        content = VERIFY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('CADDY_ADMIN_SOCKET="${CADDY_ADMIN_SOCKET:-/run/mypaas/caddy-admin.sock}"', content)
+        self.assertIn('curl -fsS --unix-socket "$CADDY_ADMIN_SOCKET"', content)
+        self.assertIn('exec -T api test -S "$CADDY_ADMIN_SOCKET"', content)
+        self.assertNotIn("http://127.0.0.1:2019", content)
 
 
 if __name__ == "__main__":
