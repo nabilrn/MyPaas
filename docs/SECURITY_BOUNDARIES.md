@@ -40,10 +40,13 @@ When a dynamic route is created or reconciled, the API:
 1. lists the currently running containers through the Docker-compatible engine;
 2. inspects them in one batched engine call;
 3. finds the container whose published binding owns the project's allocated host port;
-4. reads that container's IP address on `PROJECT_NETWORK` and the corresponding internal container port;
-5. writes the resulting `IP:port` directly into the Caddy reverse-proxy route.
+4. confirms that container is attached to `PROJECT_NETWORK` and derives its internal container port;
+5. uses the first 12 characters of the container ID as its network-scoped DNS identity;
+6. writes `<short-container-id>:<internal-port>` into the Caddy reverse-proxy route.
 
-This avoids Docker/Podman host-port hairpin behavior entirely. It also preserves rolling deployment behavior: the replacement container owns a newly allocated host port, so the route resolver selects the replacement container before the old runtime is removed. Renaming the replacement container does not change its project-network IP.
+Podman's netavark/aardvark DNS registers a container's short ID as a network alias, and the MyPaaS compatibility workflow gates the same short-ID DNS contract on Docker Engine before switching the runner to Podman. This avoids depending on compatibility-layer `NetworkSettings.*.IPAddress` values, which are not treated as a portable routing contract.
+
+This also avoids Docker/Podman host-port hairpin behavior entirely. It preserves rolling Dockerfile/image deployment behavior because the replacement container owns a newly allocated host port and its container ID remains unchanged when the temporary container is renamed to the stable project name.
 
 The published host binding remains useful for deterministic runtime identification and existing lifecycle/accounting semantics, but it is no longer the Caddy data path. A route resolution failure is fail-closed: MyPaaS does not silently fall back to exposing or dialing an arbitrary host address.
 
