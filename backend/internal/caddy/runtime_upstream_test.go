@@ -58,6 +58,33 @@ func TestRuntimeDialFromInspectSelectsContainerByAllocatedHostPort(t *testing.T)
 	}
 }
 
+func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) {
+	raw := []byte(`[
+  {
+    "Id": "unrelated-runtime",
+    "NetworkSettings": {
+      "Ports": {"9000/tcp": [{"HostPort": "3456"}]},
+      "Networks": {"other-network": {"IPAddress": "10.10.0.5"}}
+    }
+  },
+  {
+    "Id": "mypaas-runtime",
+    "NetworkSettings": {
+      "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
+      "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.23"}}
+    }
+  }
+]`)
+
+	got, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	if err != nil {
+		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
+	}
+	if got != "10.89.2.23:8080" {
+		t.Fatalf("dial = %q, want project runtime", got)
+	}
+}
+
 func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
 	raw := []byte(`[
   {
