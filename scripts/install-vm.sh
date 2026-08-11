@@ -207,8 +207,7 @@ install_docker_debian() {
 
   local arch
   arch="$(dpkg --print-architecture)"
-  printf 'deb [arch=%s signed-by=%s] %s %s %s stable\n' "$arch" "/etc/apt/keyrings/docker.gpg" "https://download.docker.com/linux/$distro" "$codename" "" \
-    | sed 's/  / /g' \
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/%s %s stable\n' "$arch" "$distro" "$codename" \
     | sudo_cmd tee /etc/apt/sources.list.d/docker.list >/dev/null
 
   sudo_cmd apt-get update
@@ -308,10 +307,16 @@ install_statd_source() {
     die "$STATD_DIR exists but is not a git checkout"
   else
     sudo_cmd git clone "$STATD_REPO_URL" "$STATD_DIR"
+    sudo_cmd git -C "$STATD_DIR" fetch --prune --tags origin
   fi
 
-  sudo_cmd git -C "$STATD_DIR" checkout "$STATD_REF"
-  sudo_cmd git -C "$STATD_DIR" pull --ff-only origin "$STATD_REF"
+  if sudo_cmd git -C "$STATD_DIR" rev-parse --verify --quiet "origin/$STATD_REF^{commit}" >/dev/null; then
+    sudo_cmd git -C "$STATD_DIR" checkout --detach "origin/$STATD_REF"
+  elif sudo_cmd git -C "$STATD_DIR" rev-parse --verify --quiet "$STATD_REF^{commit}" >/dev/null; then
+    sudo_cmd git -C "$STATD_DIR" checkout --detach "$STATD_REF"
+  else
+    die "STATD_REF does not resolve to a fetched branch, tag, or commit: $STATD_REF"
+  fi
   sudo_cmd make -C "$STATD_DIR" install PREFIX=/usr/local SYSTEMD_UNIT_DIR=/etc/systemd/system
 }
 
@@ -402,12 +407,15 @@ run_install_wizard() {
   WIZARD_DEFAULT_JWT_SECRET="$jwt_secret" \
   WIZARD_DEFAULT_ENCRYPTION_KEY="$encryption_key" \
   WIZARD_DEFAULT_METRICS_PASSWORD="$metrics_password" \
-  WIZARD_DEFAULT_CONTROL_NETWORK="$control_network" \
   WIZARD_DEFAULT_PROJECT_NETWORK="$project_network" \
   WIZARD_DEFAULT_DOCKER_BIND_HOST="$docker_bind_host" \
   WIZARD_SCRIPT="$ROOT_DIR/scripts/install-wizard.py" \
   WIZARD_PUBLIC_TUNNEL="$WIZARD_PUBLIC_TUNNEL" \
   bash "$ROOT_DIR/scripts/run-install-wizard.sh"
+
+  if ! grep -q '^CONTROL_NETWORK=' "$ENV_FILE"; then
+    printf '\nCONTROL_NETWORK=%s\n' "$control_network" >> "$ENV_FILE"
+  fi
 }
 
 write_env_file() {
