@@ -38,7 +38,8 @@ func TestStatdRuntimeCacheGenerationAndCopy(t *testing.T) {
 		ID: projectID,
 		ActiveDeploymentID: pgtype.UUID{Bytes: deploymentID, Valid: true},
 	}
-	runtimes := []container.RuntimeProcess{{ID: "container-1", Service: "api", PID: 42}}
+	startedAt := time.Now().Add(-90 * time.Minute).UTC().Round(0)
+	runtimes := []container.RuntimeProcess{{ID: "container-1", Service: "api", PID: 42, StartedAt: startedAt}}
 	var cache statdRuntimeCache
 
 	if _, ok := cache.get(project); ok {
@@ -48,6 +49,9 @@ func TestStatdRuntimeCacheGenerationAndCopy(t *testing.T) {
 	got, ok := cache.get(project)
 	if !ok || len(got) != 1 || got[0].PID != 42 {
 		t.Fatalf("cache get = %+v, %v", got, ok)
+	}
+	if !got[0].StartedAt.Equal(startedAt) {
+		t.Fatalf("StartedAt = %s, want %s", got[0].StartedAt, startedAt)
 	}
 	got[0].PID = 999
 	again, ok := cache.get(project)
@@ -66,6 +70,29 @@ func TestStatdRuntimeCacheGenerationAndCopy(t *testing.T) {
 	cache.invalidate(projectID)
 	if _, ok := cache.get(db.Project{ID: projectID, ActiveDeploymentID: pgtype.UUID{Bytes: deploymentID, Valid: true}}); ok {
 		t.Fatal("explicit invalidation must remove entry")
+	}
+}
+
+func TestSingleRuntimeFromCachePreservesStartedAt(t *testing.T) {
+	project := db.Project{ID: uuid.New()}
+	startedAt := time.Now().Add(-3 * time.Hour).UTC().Round(0)
+	var cache statdRuntimeCache
+	cache.put(project, []container.RuntimeProcess{{
+		ID:        "container-1",
+		Service:   "app",
+		PID:       77,
+		StartedAt: startedAt,
+	}})
+
+	runtime, ok := singleRuntimeFromCache(&cache, project, "app")
+	if !ok {
+		t.Fatal("singleRuntimeFromCache() = miss, want hit")
+	}
+	if runtime.PID != 77 || !runtime.StartedAt.Equal(startedAt) {
+		t.Fatalf("runtime = %+v, want cached PID and StartedAt", runtime)
+	}
+	if _, ok := singleRuntimeFromCache(&cache, project, "worker"); ok {
+		t.Fatal("service mismatch must miss")
 	}
 }
 
