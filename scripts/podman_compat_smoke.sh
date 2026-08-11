@@ -24,8 +24,6 @@ docker version >/dev/null
 
 docker network create "$project_network" >/dev/null
 docker network create "$control_network" >/dev/null
-project_gateway="$(docker network inspect "$project_network" --format '{{(index .IPAM.Config 0).Gateway}}')"
-test -n "$project_gateway"
 
 # Runtime command contract used by MyPaaS and the bounded static builder.
 docker run -d \
@@ -44,8 +42,8 @@ docker stop --time 5 "$container_name" >/dev/null
 docker start "$container_name" >/dev/null
 docker restart "$container_name" >/dev/null
 
-# Model shared PostgreSQL dual-homing while control-only services stay off the
-# project network.
+# Model shared PostgreSQL dual-homing while ordinary control services stay off
+# the project network.
 docker run -d \
   --name "$shared_name" \
   --network "$control_network" \
@@ -66,16 +64,16 @@ if docker run --rm --network "$project_network" alpine:3.20 \
   exit 1
 fi
 
-# Exercise the production routing model already proven on the staging VM:
-# - app lives on the project network and publishes on the private project gateway;
-# - Caddy is dual-homed for control-plane + data-plane traffic;
-# - Caddy reaches the published host port through host.containers.internal;
-# - Caddy Admin is Unix-only, never TCP :2019.
+# Final routing model under test:
+# - managed apps publish only on host loopback;
+# - trusted Caddy runs in the host network and can reach those loopback ports;
+# - Caddy Admin is a Unix socket, never TCP :2019;
+# - project workloads do not share Caddy's network namespace.
 mkdir -p "$tmpdir/caddy-run"
 docker run -d \
   --name "$route_name" \
   --network "$project_network" \
-  -p "${project_gateway}:18080:8080" \
+  -p "127.0.0.1:18080:8080" \
   alpine:3.20 sh -c \
   'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
 
@@ -83,41 +81,41 @@ cat > "$tmpdir/Caddyfile" <<'EOF'
 {
   admin unix//run/mypaas/caddy-admin.sock
 }
-:8081 {
-  reverse_proxy host.containers.internal:18080
+:18081 {
+  reverse_proxy 127.0.0.1:18080
 }
 EOF
 
 docker run -d \
   --name "$caddy_name" \
-  --network "$control_network" \
-  --network-alias caddy-data \
-  --add-host host.containers.internal:host-gateway \
+  --network host \
   -v "$tmpdir/Caddyfile:/etc/caddy/Caddyfile:ro" \
   -v "$tmpdir/caddy-run:/run/mypaas" \
   caddy:2-alpine >/dev/null
-docker network connect --alias caddy-data "$project_network" "$caddy_name"
-
-docker exec "$caddy_name" getent hosts host.containers.internal >/dev/null
 
 for _ in $(seq 1 30); do
   if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]] && \
-    docker run --rm --network "$project_network" alpine:3.20 \
-      wget -qO- http://caddy-data:8081 2>/dev/null | grep -q '^mypaas-route-ok$'; then
+    curl -fsS http://127.0.0.1:18081 2>/dev/null | grep -q '^mypaas-route-ok$'; then
     caddy_ready=true
     break
   fi
   sleep 0.25
 done
 if [[ "${caddy_ready:-false}" != "true" ]]; then
-  echo "Caddy could not route through host.containers.internal to the managed project port" >&2
-  docker exec "$caddy_name" getent hosts host.containers.internal >&2 || true
+  echo "host-network Caddy could not reach the loopback-bound managed app port" >&2
   docker logs "$caddy_name" >&2 || true
   exit 1
 fi
-if docker run --rm --network "$project_network" alpine:3.20 \
-  wget -qO- http://caddy-data:2019 >/dev/null 2>&1; then
-  echo "Caddy Admin unexpectedly accepted TCP :2019 from the project network" >&2
+
+# Model cloudflared's ability to reach the host-network Caddy listener without
+# giving it host networking itself.
+docker run --rm \
+  --network "$control_network" \
+  --add-host caddy:host-gateway \
+  alpine:3.20 wget -qO- http://caddy:18081 | grep -q '^mypaas-route-ok$'
+
+if curl -fsS http://127.0.0.1:2019 >/dev/null 2>&1; then
+  echo "Caddy Admin unexpectedly accepted TCP :2019" >&2
   exit 1
 fi
 
