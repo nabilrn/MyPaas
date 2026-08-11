@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestRuntimeDialFromInspectResolvesProjectNetworkRuntimeDNS(t *testing.T) {
+func TestRuntimeTargetFromInspectResolvesProjectRuntime(t *testing.T) {
 	raw := []byte(`[
   {
     "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -22,16 +22,48 @@ func TestRuntimeDialFromInspectResolvesProjectNetworkRuntimeDNS(t *testing.T) {
   }
 ]`)
 
-	got, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	got, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
 	if err != nil {
-		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
+		t.Fatalf("runtimeTargetFromInspect returned error: %v", err)
 	}
-	if got != "0123456789ab:8080" {
-		t.Fatalf("dial = %q, want %q", got, "0123456789ab:8080")
+	if got.ContainerID != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("container ID = %q", got.ContainerID)
+	}
+	if got.ContainerPort != "8080" {
+		t.Fatalf("container port = %q, want 8080", got.ContainerPort)
+	}
+	if got.RoutingAttached {
+		t.Fatal("new runtime should not already be attached to routing network")
+	}
+	if alias := runtimeRouteAlias(3456); alias != "mypaas-port-3456" {
+		t.Fatalf("alias = %q", alias)
 	}
 }
 
-func TestRuntimeDialFromInspectSelectsReplacementByAllocatedHostPort(t *testing.T) {
+func TestRuntimeTargetFromInspectDetectsExistingRoutingAttachment(t *testing.T) {
+	raw := []byte(`[
+  {
+    "Id": "aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000",
+    "NetworkSettings": {
+      "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
+      "Networks": {
+        "mypaas-projects": {"IPAddress": "10.89.2.10"},
+        "mypaas-routing": {"IPAddress": "10.90.0.10"}
+      }
+    }
+  }
+]`)
+
+	got, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
+	if err != nil {
+		t.Fatalf("runtimeTargetFromInspect returned error: %v", err)
+	}
+	if !got.RoutingAttached {
+		t.Fatal("expected existing routing attachment")
+	}
+}
+
+func TestRuntimeTargetFromInspectSelectsReplacementByAllocatedHostPort(t *testing.T) {
 	raw := []byte(`[
   {
     "Id": "aaaaaaaaaaaa0000000000000000000000000000000000000000000000000000",
@@ -49,16 +81,16 @@ func TestRuntimeDialFromInspectSelectsReplacementByAllocatedHostPort(t *testing.
   }
 ]`)
 
-	got, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	got, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
 	if err != nil {
-		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
+		t.Fatalf("runtimeTargetFromInspect returned error: %v", err)
 	}
-	if got != "bbbbbbbbbbbb:3000" {
-		t.Fatalf("dial = %q, want replacement runtime DNS identity", got)
+	if !strings.HasPrefix(got.ContainerID, "bbbbbbbbbbbb") || got.ContainerPort != "3000" {
+		t.Fatalf("unexpected replacement target: %+v", got)
 	}
 }
 
-func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) {
+func TestRuntimeTargetFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) {
 	raw := []byte(`[
   {
     "Id": "cccccccccccc2222222222222222222222222222222222222222222222222222",
@@ -76,16 +108,16 @@ func TestRuntimeDialFromInspectSkipsSamePortOutsideProjectNetwork(t *testing.T) 
   }
 ]`)
 
-	got, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	got, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
 	if err != nil {
-		t.Fatalf("runtimeDialFromInspect returned error: %v", err)
+		t.Fatalf("runtimeTargetFromInspect returned error: %v", err)
 	}
-	if got != "dddddddddddd:8080" {
-		t.Fatalf("dial = %q, want project runtime", got)
+	if !strings.HasPrefix(got.ContainerID, "dddddddddddd") {
+		t.Fatalf("unexpected project runtime: %+v", got)
 	}
 }
 
-func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
+func TestRuntimeTargetFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
 	raw := []byte(`[
   {
     "Id": "eeeeeeeeeeee4444444444444444444444444444444444444444444444444444",
@@ -96,7 +128,7 @@ func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
   }
 ]`)
 
-	_, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	_, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
 	if err == nil {
 		t.Fatal("expected missing project network to fail")
 	}
@@ -105,27 +137,7 @@ func TestRuntimeDialFromInspectRequiresProjectNetworkAttachment(t *testing.T) {
 	}
 }
 
-func TestRuntimeDialFromInspectRejectsInvalidRuntimeID(t *testing.T) {
-	raw := []byte(`[
-  {
-    "Id": "short",
-    "NetworkSettings": {
-      "Ports": {"8080/tcp": [{"HostPort": "3456"}]},
-      "Networks": {"mypaas-projects": {"IPAddress": "10.89.2.17"}}
-    }
-  }
-]`)
-
-	_, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
-	if err == nil {
-		t.Fatal("expected invalid runtime ID to fail")
-	}
-	if !strings.Contains(err.Error(), "invalid runtime ID") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestRuntimeDialFromInspectRejectsUnknownPublishedPort(t *testing.T) {
+func TestRuntimeTargetFromInspectRejectsUnknownPublishedPort(t *testing.T) {
 	raw := []byte(`[
   {
     "Id": "ffffffffffff5555555555555555555555555555555555555555555555555555",
@@ -136,7 +148,7 @@ func TestRuntimeDialFromInspectRejectsUnknownPublishedPort(t *testing.T) {
   }
 ]`)
 
-	_, err := runtimeDialFromInspect(raw, "mypaas-projects", 3456)
+	_, err := runtimeTargetFromInspect(raw, "mypaas-projects", "mypaas-routing", 3456)
 	if err == nil {
 		t.Fatal("expected unknown host port to fail")
 	}
