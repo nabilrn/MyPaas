@@ -15,21 +15,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify Docker short-ID DNS contract
+      - name: Verify Docker explicit network-alias contract
         run: |
           set -euo pipefail
-          network=mypaas-ci-docker-dns
-          target=mypaas-ci-docker-dns-target
+          source_network=mypaas-ci-docker-source
+          routing_network=mypaas-ci-docker-routing
+          target=mypaas-ci-docker-alias-target
           cleanup() {
             docker rm -f "$target" >/dev/null 2>&1 || true
-            docker network rm "$network" >/dev/null 2>&1 || true
+            docker network rm "$routing_network" >/dev/null 2>&1 || true
+            docker network rm "$source_network" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          docker network create "$network" >/dev/null
-          id="$(docker run -d --name "$target" --network "$network" alpine:3.20 sh -c 'mkdir -p /www && printf "docker-dns-ok\n" >/www/index.html && httpd -f -p 8080 -h /www')"
-          short_id="${id:0:12}"
-          docker run --rm --network "$network" alpine:3.20 \
-            wget -qO- "http://${short_id}:8080" | grep -q '^docker-dns-ok$'
+
+          docker network create "$source_network" >/dev/null
+          docker network create "$routing_network" >/dev/null
+          docker run -d \
+            --name "$target" \
+            --network "$source_network" \
+            alpine:3.20 sh -c \
+            'mkdir -p /www && printf "docker-alias-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
+          docker network connect \
+            --alias mypaas-port-18080 \
+            "$routing_network" \
+            "$target"
+          docker run --rm --network "$routing_network" alpine:3.20 \
+            wget -qO- http://mypaas-port-18080:8080 | grep -q '^docker-alias-ok$'
 
       - name: Install rootful Podman socket
         run: |
