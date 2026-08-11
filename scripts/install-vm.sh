@@ -25,6 +25,9 @@ WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
 USE_PODMAN="${USE_PODMAN:-false}"
 MIGRATE_URL="${MIGRATE_URL:-}"
 INSTALL_STATD="${INSTALL_STATD:-true}"
+STATD_INSTALL_MODE="${STATD_INSTALL_MODE:-release}"
+STATD_VERSION="${STATD_VERSION:-v0.1.0}"
+STATD_RELEASE_BASE_URL="${STATD_RELEASE_BASE_URL:-https://github.com/nabilrn/mypaas-statd/releases/download}"
 STATD_REPO_URL="${STATD_REPO_URL:-https://github.com/nabilrn/mypaas-statd.git}"
 STATD_REF="${STATD_REF:-main}"
 STATD_DIR="${STATD_DIR:-/opt/mypaas-statd}"
@@ -204,7 +207,8 @@ install_docker_debian() {
 
   local arch
   arch="$(dpkg --print-architecture)"
-  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/%s %s stable\n' "$arch" "$distro" "$codename" \
+  printf 'deb [arch=%s signed-by=%s] %s %s %s stable\n' "$arch" "/etc/apt/keyrings/docker.gpg" "https://download.docker.com/linux/$distro" "$codename" "" \
+    | sed 's/  / /g' \
     | sudo_cmd tee /etc/apt/sources.list.d/docker.list >/dev/null
 
   sudo_cmd apt-get update
@@ -246,6 +250,71 @@ ensure_dependencies() {
   fi
 }
 
+install_statd_release() {
+  local machine arch artifact release_url checksum_url
+  machine="$(uname -m)"
+  case "$machine" in
+    x86_64|amd64)
+      arch="amd64"
+      ;;
+    *)
+      die "mypaas-statd $STATD_VERSION release artifacts currently support linux-amd64 only; set STATD_INSTALL_MODE=source for an explicit source build"
+      ;;
+  esac
+
+  if command_exists apt-get; then
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y ca-certificates curl tar coreutils
+  else
+    command_exists curl || die "curl is required to install the mypaas-statd release"
+    command_exists tar || die "tar is required to install the mypaas-statd release"
+    command_exists sha256sum || die "sha256sum is required to verify the mypaas-statd release"
+  fi
+
+  artifact="mypaas-statd-linux-${arch}.tar.gz"
+  release_url="${STATD_RELEASE_BASE_URL%/}/${STATD_VERSION}/${artifact}"
+  checksum_url="${STATD_RELEASE_BASE_URL%/}/${STATD_VERSION}/SHA256SUMS"
+  log "Installing verified mypaas-statd release $STATD_VERSION"
+
+  (
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' EXIT
+    curl -fL "$release_url" -o "$tmpdir/$artifact"
+    curl -fL "$checksum_url" -o "$tmpdir/SHA256SUMS"
+    grep -E "^[0-9a-fA-F]{64}  ${artifact}$" "$tmpdir/SHA256SUMS" > "$tmpdir/SHA256SUMS.selected" \
+      || die "SHA256SUMS does not contain a checksum for $artifact"
+    (cd "$tmpdir" && sha256sum -c SHA256SUMS.selected >/dev/null)
+    tar -C "$tmpdir" -xzf "$tmpdir/$artifact"
+    [[ "$(cat "$tmpdir/VERSION")" == "$STATD_VERSION" ]] || die "mypaas-statd release VERSION does not match $STATD_VERSION"
+    sudo_cmd install -Dm0755 "$tmpdir/mypaas-statd" /usr/local/bin/mypaas-statd
+    sudo_cmd install -Dm0644 "$tmpdir/mypaas-statd.service" /etc/systemd/system/mypaas-statd.service
+  )
+}
+
+install_statd_source() {
+  if command_exists apt-get; then
+    sudo_cmd apt-get update
+    sudo_cmd apt-get install -y git make gcc libc6-dev
+  else
+    command_exists git || die "git is required to install mypaas-statd from source"
+    command_exists make || die "make is required to install mypaas-statd from source"
+    command_exists cc || command_exists gcc || die "a C compiler is required to install mypaas-statd from source"
+  fi
+
+  log "Installing mypaas-statd from $STATD_REPO_URL ($STATD_REF)"
+  if [[ -d "$STATD_DIR/.git" ]]; then
+    sudo_cmd git -C "$STATD_DIR" fetch --prune --tags origin
+  elif [[ -e "$STATD_DIR" ]]; then
+    die "$STATD_DIR exists but is not a git checkout"
+  else
+    sudo_cmd git clone "$STATD_REPO_URL" "$STATD_DIR"
+  fi
+
+  sudo_cmd git -C "$STATD_DIR" checkout "$STATD_REF"
+  sudo_cmd git -C "$STATD_DIR" pull --ff-only origin "$STATD_REF"
+  sudo_cmd make -C "$STATD_DIR" install PREFIX=/usr/local SYSTEMD_UNIT_DIR=/etc/systemd/system
+}
+
 install_statd() {
   if [[ "$INSTALL_STATD" != "true" ]]; then
     log "Skipping mypaas-statd install because INSTALL_STATD=false"
@@ -255,29 +324,25 @@ install_statd() {
   command_exists systemctl || die "mypaas-statd install requires systemd. Set INSTALL_STATD=false to skip."
   [[ -f /sys/fs/cgroup/cgroup.controllers ]] || die "mypaas-statd requires cgroup v2. Set INSTALL_STATD=false to skip."
 
-  if command_exists apt-get; then
-    sudo_cmd apt-get update
-    sudo_cmd apt-get install -y git make gcc libc6-dev
-  else
-    command_exists git || die "git is required to install mypaas-statd"
-    command_exists make || die "make is required to install mypaas-statd"
-    command_exists cc || command_exists gcc || die "a C compiler is required to install mypaas-statd"
-  fi
+  case "$STATD_INSTALL_MODE" in
+    release)
+      install_statd_release
+      ;;
+    source)
+      install_statd_source
+      ;;
+    *)
+      die "STATD_INSTALL_MODE must be release or source"
+      ;;
+  esac
 
-  log "Installing mypaas-statd from $STATD_REPO_URL ($STATD_REF)"
-  if [[ -d "$STATD_DIR/.git" ]]; then
-    sudo_cmd git -C "$STATD_DIR" fetch --prune origin
-  elif [[ -e "$STATD_DIR" ]]; then
-    die "$STATD_DIR exists but is not a git checkout"
-  else
-    sudo_cmd git clone "$STATD_REPO_URL" "$STATD_DIR"
-  fi
-
-  sudo_cmd git -C "$STATD_DIR" checkout "$STATD_REF"
-  sudo_cmd git -C "$STATD_DIR" pull --ff-only origin "$STATD_REF" || true
-  sudo_cmd make -C "$STATD_DIR" install PREFIX=/usr/local SYSTEMD_UNIT_DIR=/etc/systemd/system
   sudo_cmd systemctl daemon-reload
   sudo_cmd systemctl enable --now mypaas-statd
+  for _ in {1..20}; do
+    [[ -S /run/mypaas/statd.sock ]] && break
+    sleep 0.1
+  done
+  [[ -S /run/mypaas/statd.sock ]] || die "mypaas-statd started but /run/mypaas/statd.sock was not created"
 }
 
 docker_prefix() {
@@ -296,7 +361,7 @@ run_install_wizard() {
   ensure_python3
 
   local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
-  local postgres_user postgres_db postgres_password jwt_secret encryption_key project_network docker_bind_host metrics_password
+  local postgres_user postgres_db postgres_password jwt_secret encryption_key control_network project_network docker_bind_host metrics_password
   local wizard_token
 
   public_domain="${PUBLIC_DOMAIN:-}"
@@ -312,9 +377,11 @@ run_install_wizard() {
   jwt_secret="${JWT_SECRET:-$(random_base64 32)}"
   encryption_key="${ENCRYPTION_KEY:-$(random_base64 32)}"
   metrics_password="${METRICS_PASSWORD:-$(random_hex 18)}"
-  project_network="${PROJECT_NETWORK:-mypaas-prod}"
+  control_network="${CONTROL_NETWORK:-mypaas-control}"
+  project_network="${PROJECT_NETWORK:-mypaas-projects}"
+  ensure_docker_network "$control_network"
   ensure_docker_network "$project_network"
-  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$control_network")}"
   wizard_token="${WIZARD_TOKEN:-$(random_hex 16)}"
 
   log "Starting install wizard"
@@ -335,6 +402,7 @@ run_install_wizard() {
   WIZARD_DEFAULT_JWT_SECRET="$jwt_secret" \
   WIZARD_DEFAULT_ENCRYPTION_KEY="$encryption_key" \
   WIZARD_DEFAULT_METRICS_PASSWORD="$metrics_password" \
+  WIZARD_DEFAULT_CONTROL_NETWORK="$control_network" \
   WIZARD_DEFAULT_PROJECT_NETWORK="$project_network" \
   WIZARD_DEFAULT_DOCKER_BIND_HOST="$docker_bind_host" \
   WIZARD_SCRIPT="$ROOT_DIR/scripts/install-wizard.py" \
@@ -356,7 +424,7 @@ write_env_file() {
   log "Generating production .env"
 
   local public_domain owner_email github_client_id github_client_secret callback_url cloudflare_tunnel_token
-  local postgres_user postgres_db postgres_password jwt_secret encryption_key project_network
+  local postgres_user postgres_db postgres_password jwt_secret encryption_key control_network project_network
   local docker_bind_host
 
   public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
@@ -372,9 +440,11 @@ write_env_file() {
   validate_url_safe_password "$postgres_password"
   jwt_secret="${JWT_SECRET:-$(random_base64 32)}"
   encryption_key="${ENCRYPTION_KEY:-$(random_base64 32)}"
-  project_network="${PROJECT_NETWORK:-mypaas-prod}"
+  control_network="${CONTROL_NETWORK:-mypaas-control}"
+  project_network="${PROJECT_NETWORK:-mypaas-projects}"
+  ensure_docker_network "$control_network"
   ensure_docker_network "$project_network"
-  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$control_network")}"
 
   umask 077
   cat > "$ENV_FILE" <<EOF
@@ -402,6 +472,7 @@ ENCRYPTION_KEY=$encryption_key
 DOCKER_SOCKET=/var/run/docker.sock
 DOCKER_HOST=
 DOCKER_BIND_HOST=$docker_bind_host
+CONTROL_NETWORK=$control_network
 PROJECT_NETWORK=$project_network
 
 USER_RAM_QUOTA_GB=${USER_RAM_QUOTA_GB:-6}
@@ -467,7 +538,8 @@ prepare_host() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
-  ensure_docker_network "${PROJECT_NETWORK:-mypaas-prod}"
+  ensure_docker_network "${CONTROL_NETWORK:-mypaas-control}"
+  ensure_docker_network "${PROJECT_NETWORK:-mypaas-projects}"
   install_statd
 }
 
