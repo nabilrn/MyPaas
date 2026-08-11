@@ -386,7 +386,7 @@ run_install_wizard() {
   project_network="${PROJECT_NETWORK:-mypaas-projects}"
   ensure_docker_network "$control_network"
   ensure_docker_network "$project_network"
-  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$control_network")}"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
   wizard_token="${WIZARD_TOKEN:-$(random_hex 16)}"
 
   log "Starting install wizard"
@@ -415,6 +415,11 @@ run_install_wizard() {
 
   if ! grep -q '^CONTROL_NETWORK=' "$ENV_FILE"; then
     printf '\nCONTROL_NETWORK=%s\n' "$control_network" >> "$ENV_FILE"
+  fi
+  if grep -q '^CADDY_ADMIN=' "$ENV_FILE"; then
+    sed -i 's#^CADDY_ADMIN=.*#CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock#' "$ENV_FILE"
+  else
+    printf 'CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock\n' >> "$ENV_FILE"
   fi
 }
 
@@ -452,7 +457,7 @@ write_env_file() {
   project_network="${PROJECT_NETWORK:-mypaas-projects}"
   ensure_docker_network "$control_network"
   ensure_docker_network "$project_network"
-  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$control_network")}"
+  docker_bind_host="${DOCKER_BIND_HOST:-$(docker_network_gateway "$project_network")}"
 
   umask 077
   cat > "$ENV_FILE" <<EOF
@@ -521,7 +526,7 @@ IMAGE_CLEANUP_WEEKDAY=${IMAGE_CLEANUP_WEEKDAY:-sunday}
 LOG_LEVEL=info
 LOG_FORMAT=json
 
-CADDY_ADMIN=127.0.0.1:2019
+CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock
 CADDY_UPSTREAM_HOST=$docker_bind_host
 STATIC_ROOT=/var/lib/mypaas/static
 CADDY_STATIC_ROOT=/var/lib/mypaas/static
