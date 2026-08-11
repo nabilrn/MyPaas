@@ -17,7 +17,6 @@ cleanup() {
 trap cleanup EXIT
 
 docker version >/dev/null
-docker info | grep -qi podman
 
 docker network create "$project_network" >/dev/null
 docker network create "$control_network" >/dev/null
