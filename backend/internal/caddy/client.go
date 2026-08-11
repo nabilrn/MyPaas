@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -18,16 +19,34 @@ type Client struct {
 }
 
 func NewClient(adminAddress, upstreamHost string) *Client {
-	adminAddress = strings.TrimPrefix(adminAddress, "http://")
+	adminAddress = strings.TrimSpace(adminAddress)
 	if upstreamHost == "" {
 		upstreamHost = "127.0.0.1"
 	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	baseURL := ""
+	if strings.HasPrefix(adminAddress, "unix/") {
+		socketPath := strings.TrimPrefix(adminAddress, "unix/")
+		transport := &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				dialer := net.Dialer{}
+				return dialer.DialContext(ctx, "unix", socketPath)
+			},
+		}
+		httpClient.Transport = transport
+		// HTTP still frames requests over the Unix stream; this host is only a
+		// local request URL placeholder and is never resolved on the network.
+		baseURL = "http://caddy-admin"
+	} else {
+		adminAddress = strings.TrimPrefix(adminAddress, "http://")
+		baseURL = "http://" + adminAddress
+	}
+
 	return &Client{
-		baseURL:      "http://" + adminAddress,
+		baseURL:      baseURL,
 		upstreamHost: upstreamHost,
-		http: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		http:         httpClient,
 	}
 }
 
@@ -93,7 +112,7 @@ func (c *Client) AddHybridRoute(ctx context.Context, host, root string, port int
 								"root":    root,
 							},
 							{
-								"handler": "file_server",
+								"handler":     "file_server",
 								"index_names": []string{"index.html"},
 							},
 						},
@@ -234,7 +253,6 @@ func routeMatchesHost(raw json.RawMessage, host string) bool {
 			if item == host {
 				return true
 			}
-		}
 	}
 	return false
 }
