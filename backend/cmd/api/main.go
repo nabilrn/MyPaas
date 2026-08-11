@@ -330,8 +330,7 @@ func registerRoutes(
 				r.Get("/columns", dbStudioHandler.Columns)
 				r.Get("/rows", dbStudioHandler.Rows)
 				r.Post("/rows", dbStudioHandler.Insert)
-				rPatch := dbStudioHandler.Update
-				r.Patch("/rows", rPatch)
+				r.Patch("/rows", dbStudioHandler.Update)
 				r.Delete("/rows", dbStudioHandler.Delete)
 			})
 			r.Get("/{id}/stream", deploymentHandler.Stream)
