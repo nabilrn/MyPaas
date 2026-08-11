@@ -65,6 +65,7 @@ func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (
 	}
 
 	wantedHostPort := strconv.Itoa(int(hostPort))
+	var candidateErr error
 	for _, row := range rows {
 		containerPort := ""
 		for portSpec, bindings := range row.NetworkSettings.Ports {
@@ -75,7 +76,8 @@ func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (
 				portText := strings.SplitN(strings.TrimSpace(portSpec), "/", 2)[0]
 				parsed, err := strconv.Atoi(portText)
 				if err != nil || parsed <= 0 || parsed > 65535 {
-					return "", fmt.Errorf("resolve Caddy upstream for host port %d: invalid container port %q", hostPort, portSpec)
+					candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: invalid container port %q", hostPort, portSpec)
+					continue
 				}
 				containerPort = strconv.Itoa(parsed)
 				break
@@ -90,14 +92,23 @@ func runtimeDialFromInspect(raw []byte, projectNetwork string, hostPort int32) (
 
 		network, ok := row.NetworkSettings.Networks[projectNetwork]
 		if !ok {
-			return "", fmt.Errorf("resolve Caddy upstream for host port %d: container %s is not attached to project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
+			if candidateErr == nil {
+				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container %s is not attached to project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
+			}
+			continue
 		}
 		ip := strings.TrimSpace(network.IPAddress)
 		if net.ParseIP(ip) == nil {
-			return "", fmt.Errorf("resolve Caddy upstream for host port %d: container %s has no valid IP on project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
+			if candidateErr == nil {
+				candidateErr = fmt.Errorf("resolve Caddy upstream for host port %d: container %s has no valid IP on project network %q", hostPort, strings.TrimSpace(row.ID), projectNetwork)
+			}
+			continue
 		}
 		return net.JoinHostPort(ip, containerPort), nil
 	}
 
+	if candidateErr != nil {
+		return "", candidateErr
+	}
 	return "", fmt.Errorf("resolve Caddy upstream for host port %d: no running container owns that published port", hostPort)
 }
