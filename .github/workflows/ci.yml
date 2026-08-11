@@ -28,6 +28,8 @@ jobs:
           cache-dependency-path: backend/go.sum
       - name: Test
         run: go test ./...
+      - name: Race detector
+        run: go test -race ./...
 
   frontend:
     name: Frontend checks
@@ -65,5 +67,7 @@ jobs:
         run: bash -n scripts/*.sh
       - name: Script regression tests
         run: python3 -m unittest discover -s scripts -p '*_test.py'
+      - name: Benchmark harness unit tests
+        run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
