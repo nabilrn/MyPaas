@@ -107,11 +107,12 @@ if [[ "${caddy_ready:-false}" != "true" ]]; then
   exit 1
 fi
 
-# Model cloudflared's ability to reach the host-network Caddy listener without
-# giving it host networking itself.
+# Model cloudflared as the second trusted host-network edge component. The
+# existing tunnel origin hostname `caddy` is preserved through /etc/hosts while
+# resolving to host loopback.
 docker run --rm \
-  --network "$control_network" \
-  --add-host caddy:host-gateway \
+  --network host \
+  --add-host caddy:127.0.0.1 \
   alpine:3.20 wget -qO- http://caddy:18081 | grep -q '^mypaas-route-ok$'
 
 if curl -fsS http://127.0.0.1:2019 >/dev/null 2>&1; then
