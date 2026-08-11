@@ -4,7 +4,7 @@ MyPaaS is a single-host deployment platform. Its security model separates the co
 
 ## Container-engine socket
 
-The API mounts the configured Docker-compatible engine socket because deployment orchestration, runtime lifecycle, inspection, logs, metrics fallback, image management, and Compose operations require engine authority.
+The API mounts the configured Docker-compatible engine socket because deployment orchestration, runtime lifecycle, inspection, logs, metrics fallback, image management, Compose operations, and runtime route resolution require engine authority.
 
 Access to that socket is effectively host-level container-engine authority. Compromise of the API process must therefore be treated as compromise of the MyPaaS host boundary, even though the API container drops Linux capabilities and enables `no-new-privileges`.
 
@@ -31,7 +31,21 @@ Caddy intentionally joins both networks because it is the reverse-proxy data-pla
 
 PostgreSQL also intentionally joins both networks while shared PostgreSQL provisioning is enabled. That dual-homing is a product feature, not a general bridge between the networks. Project database credentials remain scoped per provisioned project database/user.
 
-Managed application ports remain bound to the private project-network gateway. Caddy reaches those ports from its project-network attachment while its API/dashboard upstreams remain available through the control network.
+## Runtime route resolution
+
+Production uses `CADDY_UPSTREAM_HOST=runtime`. MyPaaS keeps its allocated host port as a stable runtime identity key, but Caddy does not send application traffic through that published host port.
+
+When a dynamic route is created or reconciled, the API:
+
+1. lists the currently running containers through the Docker-compatible engine;
+2. inspects them in one batched engine call;
+3. finds the container whose published binding owns the project's allocated host port;
+4. reads that container's IP address on `PROJECT_NETWORK` and the corresponding internal container port;
+5. writes the resulting `IP:port` directly into the Caddy reverse-proxy route.
+
+This avoids Docker/Podman host-port hairpin behavior entirely. It also preserves rolling deployment behavior: the replacement container owns a newly allocated host port, so the route resolver selects the replacement container before the old runtime is removed. Renaming the replacement container does not change its project-network IP.
+
+The published host binding remains useful for deterministic runtime identification and existing lifecycle/accounting semantics, but it is no longer the Caddy data path. A route resolution failure is fail-closed: MyPaaS does not silently fall back to exposing or dialing an arbitrary host address.
 
 ## Caddy administration
 
