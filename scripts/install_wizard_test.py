@@ -87,14 +87,12 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("checkout --detach", installer)
         self.assertIn("STATD_REF does not resolve", installer)
 
-    def test_production_compose_avoids_nested_env_expansion(self) -> None:
+    def test_production_compose_pins_direct_runtime_upstream_mode(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
 
-        self.assertIn(
-            "CADDY_UPSTREAM_HOST: ${CADDY_UPSTREAM_HOST:-host.docker.internal}",
-            compose,
-        )
+        self.assertIn("CADDY_UPSTREAM_HOST: runtime", compose)
         self.assertNotIn("${CADDY_UPSTREAM_HOST:-${", compose)
+        self.assertNotIn("host.docker.internal:host-gateway", compose)
 
     def test_production_compose_separates_control_services_from_project_data_plane(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
