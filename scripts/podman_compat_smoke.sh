@@ -65,40 +65,40 @@ if docker run --rm --network "$project_network" alpine:3.20 \
 fi
 
 # Final routing model:
-# - allocated host ports remain present as stable runtime lookup keys;
+# - allocated host ports remain stable runtime lookup keys;
 # - Caddy does not hairpin through those published ports;
-# - the API resolves the owner container by inspect and Caddy dials its IP and
-#   internal port directly on PROJECT_NETWORK;
+# - the API resolves the owner container by inspect and uses its stable short
+#   container ID as the PROJECT_NETWORK DNS identity;
+# - short IDs survive Dockerfile/image container rename during rolling deploys;
 # - Caddy Admin remains Unix-only.
 mkdir -p "$tmpdir/caddy-run"
-docker run -d \
+route_id="$(docker run -d \
   --name "$route_name" \
   --network "$project_network" \
   -p "127.0.0.1:18080:8080" \
   alpine:3.20 sh -c \
-  'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www' >/dev/null
-
-route_ip="$(docker inspect --format "{{(index .NetworkSettings.Networks \"$project_network\").IPAddress}}" "$route_name")"
-test -n "$route_ip"
+  'mkdir -p /www && printf "mypaas-route-ok\n" >/www/index.html && httpd -f -p 8080 -h /www')"
+route_short_id="${route_id:0:12}"
+test "${#route_short_id}" -eq 12
 docker inspect "$route_name" | grep -q '"HostPort": "18080"'
 
-# Prove the project network itself can reach the resolved runtime IP before
-# involving Caddy. This separates engine-network failures from proxy failures.
+# Podman/netavark guarantees the short ID as a DNS alias on DNS-enabled custom
+# networks. Verify that contract directly instead of trusting compatibility
+# inspect IP fields, which can be misleading under the Docker API shim.
 docker run --rm --network "$project_network" alpine:3.20 \
-  wget -qO- "http://${route_ip}:8080" | grep -q '^mypaas-route-ok$'
+  wget -qO- "http://${route_short_id}:8080" | grep -q '^mypaas-route-ok$'
 
 cat > "$tmpdir/Caddyfile" <<EOF
 {
   admin unix//run/mypaas/caddy-admin.sock
 }
 :18081 {
-  reverse_proxy ${route_ip}:8080
+  reverse_proxy ${route_short_id}:8080
 }
 EOF
 
 # Production Compose attaches Caddy to both external networks before the Caddy
-# process starts. Model that lifecycle exactly instead of hot-attaching a live
-# proxy process.
+# process starts. Model that lifecycle exactly.
 docker create \
   --name "$caddy_name" \
   --network "$control_network" \
@@ -109,17 +109,15 @@ docker create \
 docker network connect --alias caddy-edge "$project_network" "$caddy_name"
 docker start "$caddy_name" >/dev/null
 
-# Verify Caddy's own network namespace can reach the exact direct-runtime dial
-# target. A failure here is a Podman multi-network issue, not a Caddy route issue.
 for _ in $(seq 1 20); do
-  if docker exec "$caddy_name" wget -qO- "http://${route_ip}:8080" 2>/dev/null | grep -q '^mypaas-route-ok$'; then
+  if docker exec "$caddy_name" wget -qO- "http://${route_short_id}:8080" 2>/dev/null | grep -q '^mypaas-route-ok$'; then
     caddy_project_reachability=true
     break
   fi
   sleep 0.25
 done
 if [[ "${caddy_project_reachability:-false}" != "true" ]]; then
-  echo "dual-homed Caddy network namespace cannot reach the project runtime IP" >&2
+  echo "dual-homed Caddy cannot resolve/reach the project runtime short ID" >&2
   docker inspect "$caddy_name" >&2 || true
   exit 1
 fi
@@ -134,7 +132,7 @@ for _ in $(seq 1 30); do
   sleep 0.25
 done
 if [[ "${caddy_ready:-false}" != "true" ]]; then
-  echo "dual-homed Caddy could not route directly to the project container IP" >&2
+  echo "dual-homed Caddy could not route to the project runtime DNS identity" >&2
   docker logs "$caddy_name" >&2 || true
   exit 1
 fi
@@ -146,8 +144,8 @@ if docker run --rm --network "$project_network" alpine:3.20 \
 fi
 
 # Compose contract: the main service keeps a MyPaaS-managed published port and
-# joins the external project network. Its direct network IP must be discoverable
-# from the same Docker-compatible inspect API used by the resolver.
+# joins the external project network. The resolver can select it by HostPort and
+# use the short container ID as a stable network DNS identity.
 cat > "$tmpdir/compose.yml" <<EOF
 services:
   app:
@@ -170,11 +168,11 @@ test -n "$compose_ids"
 # shellcheck disable=SC2086
 docker inspect $compose_ids >/dev/null
 compose_id="$(printf '%s\n' "$compose_ids" | head -n1)"
-compose_ip="$(docker inspect --format "{{(index .NetworkSettings.Networks \"$project_network\").IPAddress}}" "$compose_id")"
-test -n "$compose_ip"
+compose_short_id="${compose_id:0:12}"
+test "${#compose_short_id}" -eq 12
 docker inspect "$compose_id" | grep -q '"HostPort": "18082"'
 docker run --rm --network "$project_network" alpine:3.20 \
-  wget -qO- "http://${compose_ip}:8080" | grep -q '^compose-route-ok$'
+  wget -qO- "http://${compose_short_id}:8080" | grep -q '^compose-route-ok$'
 
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" stop >/dev/null
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" start >/dev/null
