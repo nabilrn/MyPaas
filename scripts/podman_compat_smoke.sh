@@ -4,11 +4,13 @@ set -euo pipefail
 project_network="${PROJECT_NETWORK:-mypaas-ci-projects}"
 control_network="${CONTROL_NETWORK:-mypaas-ci-control}"
 container_name="mypaas-ci-runtime-smoke"
+shared_name="mypaas-ci-shared-smoke"
+admin_name="mypaas-ci-admin-smoke"
 compose_project="mypaas-ci-compose-smoke"
 tmpdir="$(mktemp -d)"
 
 cleanup() {
-  docker rm -f "$container_name" >/dev/null 2>&1 || true
+  docker rm -f "$container_name" "$shared_name" "$admin_name" >/dev/null 2>&1 || true
   docker compose -p "$compose_project" -f "$tmpdir/compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
   docker network rm "$project_network" >/dev/null 2>&1 || true
   docker network rm "$control_network" >/dev/null 2>&1 || true
@@ -21,12 +23,14 @@ docker version >/dev/null
 docker network create "$project_network" >/dev/null
 docker network create "$control_network" >/dev/null
 
+# Runtime command contract used by MyPaaS and the bounded static builder.
 docker run -d \
   --name "$container_name" \
   --network "$project_network" \
   --label mypaas.smoke=true \
   --memory 128m \
   --cpus 0.50 \
+  --pids-limit 64 \
   --restart unless-stopped \
   alpine:3.20 sleep 300 >/dev/null
 
@@ -35,6 +39,29 @@ docker inspect "$container_name" >/dev/null
 docker stop --time 5 "$container_name" >/dev/null
 docker start "$container_name" >/dev/null
 docker restart "$container_name" >/dev/null
+
+# Model the production topology: a shared service (PostgreSQL in production)
+# is intentionally dual-homed while a control-only service must not be directly
+# reachable or resolvable from the project network.
+docker run -d \
+  --name "$shared_name" \
+  --network "$control_network" \
+  alpine:3.20 sleep 300 >/dev/null
+docker network connect --alias shared-db "$project_network" "$shared_name"
+
+docker run -d \
+  --name "$admin_name" \
+  --network "$control_network" \
+  --network-alias control-admin \
+  alpine:3.20 sleep 300 >/dev/null
+
+docker run --rm --network "$project_network" alpine:3.20 \
+  ping -c 1 -W 1 shared-db >/dev/null
+if docker run --rm --network "$project_network" alpine:3.20 \
+  ping -c 1 -W 1 control-admin >/dev/null 2>&1; then
+  echo "project network unexpectedly reached a control-only service" >&2
+  exit 1
+fi
 
 cat > "$tmpdir/compose.yml" <<'EOF'
 services:
