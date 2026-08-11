@@ -112,6 +112,13 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("cap_drop:\n      - ALL", api)
         self.assertIn("${DOCKER_SOCKET}:${DOCKER_SOCKET}", api)
 
+    def test_caddy_access_logs_are_persistent(self) -> None:
+        compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
+        caddy = compose.split("  caddy:\n", 1)[1].split("\n  cloudflared:\n", 1)[0]
+
+        self.assertIn("caddy_logs:/var/log/caddy", caddy)
+        self.assertIn("  caddy_logs:\n", compose)
+
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
 
