@@ -89,7 +89,11 @@ func (c *Client) Register(ctx context.Context, id string, pid int) error {
 		return fmt.Errorf("%w: pid must be positive", ErrInvalidInput)
 	}
 	request := fmt.Sprintf("{\"op\":\"register\",\"id\":\"%s\",\"pid\":%d}\n", id, pid)
-	return c.exchange(ctx, request, nil)
+	if err := c.exchange(ctx, request, nil); err != nil {
+		recordRegistrationError()
+		return err
+	}
+	return nil
 }
 
 func (c *Client) Unregister(ctx context.Context, id string) error {
@@ -107,6 +111,7 @@ func (c *Client) Snapshot(ctx context.Context, id string) (Snapshot, error) {
 	}
 	request := fmt.Sprintf("{\"op\":\"snapshot\",\"id\":\"%s\"}\n", id)
 	if err := c.exchange(ctx, request, &snapshot); err != nil {
+		recordSnapshotError()
 		return Snapshot{}, err
 	}
 	return snapshot, nil
