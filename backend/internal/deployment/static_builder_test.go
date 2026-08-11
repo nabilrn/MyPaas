@@ -3,6 +3,7 @@ package deployment
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -105,6 +106,25 @@ func TestNeedsStaticBuildRequiresBuildScript(t *testing.T) {
 	writeStaticTestFile(t, workspace, "package.json", `{"scripts":{"build":"astro build"}}`)
 	if !needsStaticBuild(workspace) {
 		t.Fatal("needsStaticBuild() = false with build script")
+	}
+}
+
+func TestStaticBuilderRunArgsApplyResourceCeilings(t *testing.T) {
+	workspace := "/tmp/example-static"
+	plan := staticBuildPlan{
+		Image:          staticBuilderNodeImage,
+		PackageManager: "npm",
+		Command:        "npm ci && npm run build",
+	}
+
+	args := staticBuilderRunArgs(workspace, plan)
+	for _, want := range []string{"--memory", "2048m", "--cpus", "2.00", "--pids-limit", "512"} {
+		if !slices.Contains(args, want) {
+			t.Fatalf("staticBuilderRunArgs() = %#v, missing %q", args, want)
+		}
+	}
+	if !slices.Contains(args, workspace+":/app") {
+		t.Fatalf("staticBuilderRunArgs() = %#v, missing workspace mount", args)
 	}
 }
 
