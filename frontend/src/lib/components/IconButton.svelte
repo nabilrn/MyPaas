@@ -22,11 +22,11 @@
 			: variant;
 	$: variantClass = {
 		primary:
-			'border-brand-700 bg-brand-700 text-white hover:border-brand-900 hover:bg-brand-900 dark:border-brand-500 dark:bg-brand-500 dark:text-gray-950 dark:hover:border-brand-100 dark:hover:bg-brand-100',
+			'border-gray-950 bg-gray-950 text-white hover:border-black hover:bg-black dark:border-white dark:bg-white dark:text-gray-950 dark:hover:border-gray-200 dark:hover:bg-gray-200',
 		secondary:
-			'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-950 dark:border-gray-700 dark:bg-gray-950/80 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-900 dark:hover:text-white',
+			'border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-950 dark:border-gray-700 dark:bg-neutral-950 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-neutral-900 dark:hover:text-white',
 		ghost:
-			'border-transparent bg-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-gray-800 dark:hover:bg-gray-900 dark:hover:text-white',
+			'border-transparent bg-transparent text-gray-500 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-gray-800 dark:hover:bg-neutral-900 dark:hover:text-white',
 		ghostDanger:
 			'border-transparent bg-transparent text-red-600 hover:border-red-100 hover:bg-red-50 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-300 dark:hover:border-red-950/50 dark:hover:bg-red-950/30 dark:hover:text-red-200'
 	}[normalizedVariant];
@@ -34,7 +34,7 @@
 	$: isUnavailable = disabled || loading;
 	$: effectiveHref = isUnavailable ? undefined : href;
 	$: disabledClass = isUnavailable ? 'cursor-not-allowed opacity-50' : '';
-	$: controlClass = `inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-px disabled:translate-y-0 dark:focus-visible:ring-brand-500 dark:focus-visible:ring-offset-gray-950 ${variantClass} ${disabledClass} ${className}`;
+	$: controlClass = `inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-px disabled:translate-y-0 dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${variantClass} ${disabledClass} ${className}`;
 
 	function handleClick(event: MouseEvent) {
 		if (isUnavailable) {
