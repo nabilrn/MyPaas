@@ -3,15 +3,12 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
-	import IconButton from '$components/IconButton.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { LogLine } from '$types';
 
-	type LogEntry = LogLine & {
-		id: number;
-	};
+	type LogEntry = LogLine & { id: number };
 
 	const maxLines = 5000;
 	const renderLimit = 1000;
@@ -42,7 +39,7 @@
 	$: renderedLogs = filteredLogs.length > renderLimit ? filteredLogs.slice(-renderLimit) : filteredLogs;
 	$: clippedRenderCount = filteredLogs.length - renderedLogs.length;
 	$: streamDescription = streaming
-		? 'Streaming container output with local filter and copy/export controls.'
+		? 'Streaming container output with local filtering and export controls.'
 		: streamError
 			? 'Live stream is reconnecting. Historical logs remain available.'
 			: 'Connecting to the project log stream.';
@@ -50,29 +47,21 @@
 	onMount(() => {
 		void loadHistory();
 		connectStream();
-
 		return () => {
 			source?.close();
 			source = null;
-			if (copyResetTimer) {
-				clearTimeout(copyResetTimer);
-			}
+			if (copyResetTimer) clearTimeout(copyResetTimer);
 		};
 	});
 
 	async function loadHistory(background = false) {
-		if (background) {
-			reloadingHistory = true;
-		} else {
-			loading = true;
-		}
+		if (background) reloadingHistory = true;
+		else loading = true;
 		error = '';
 		try {
 			const history = await api.logs.list($page.params.id ?? '', 500);
 			const now = new Date().toISOString();
-			const entries = history.items?.length
-				? history.items
-				: history.lines.map((line) => ({ service: historyService, line }));
+			const entries = history.items?.length ? history.items : history.lines.map((line) => ({ service: historyService, line }));
 			logs = entries.map((item) => ({
 				id: nextID++,
 				service: item.service || historyService,
@@ -83,11 +72,8 @@
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load logs';
 		} finally {
-			if (background) {
-				reloadingHistory = false;
-			} else {
-				loading = false;
-			}
+			if (background) reloadingHistory = false;
+			else loading = false;
 		}
 	}
 
@@ -96,15 +82,12 @@
 		streaming = false;
 		streamError = '';
 		source = new EventSource(`/api/projects/${$page.params.id}/stream`, { withCredentials: true });
-
 		source.addEventListener('open', () => {
 			streaming = true;
 			streamError = '';
 		});
-
 		source.addEventListener('log', appendStreamLog);
 		source.addEventListener('deployment-log', appendStreamLog);
-
 		source.addEventListener('error', () => {
 			streaming = false;
 			streamError = 'Live stream disconnected. Browser retry is active.';
@@ -122,21 +105,14 @@
 				timestamp: parsed.timestamp || new Date().toISOString()
 			});
 		} catch {
-			appendLog({
-				id: nextID++,
-				service: historyService,
-				line: event.data,
-				timestamp: new Date().toISOString()
-			});
+			appendLog({ id: nextID++, service: historyService, line: event.data, timestamp: new Date().toISOString() });
 		}
 	}
 
 	function appendLog(entry: LogEntry) {
 		const shouldFollow = !paused && isNearBottom();
 		logs = [...logs, entry].slice(-maxLines);
-		if (shouldFollow) {
-			void scrollToBottom();
-		}
+		if (shouldFollow) void scrollToBottom();
 	}
 
 	function handleScroll() {
@@ -170,9 +146,7 @@
 		void navigator.clipboard.writeText(text)
 			.then(() => {
 				logsCopied = true;
-				if (copyResetTimer) {
-					clearTimeout(copyResetTimer);
-				}
+				if (copyResetTimer) clearTimeout(copyResetTimer);
 				copyResetTimer = setTimeout(() => {
 					logsCopied = false;
 					copyResetTimer = undefined;
@@ -204,138 +178,93 @@
 </svelte:head>
 
 <div class="flex h-[calc(100vh-16rem)] min-h-[32rem] flex-col">
-	<SectionPanel
-		title="Log stream"
-		description={streamDescription}
-		className="flex min-h-0 flex-1 flex-col"
-		contentClass="flex min-h-0 flex-1 flex-col gap-3 p-4"
-	>
+	<SectionPanel title="Log stream" description={streamDescription} className="flex min-h-0 flex-1 flex-col" contentClass="flex min-h-0 flex-1 flex-col gap-3 p-4">
 		<svelte:fragment slot="actions">
-			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-				<span class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 text-xs font-medium text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-					<span class="h-1.5 w-1.5 rounded-full {streaming ? 'bg-green-500' : 'bg-amber-500'}"></span>
+			<div class="flex flex-wrap items-center gap-2">
+				<span class="inline-flex h-9 items-center gap-2 px-1 text-sm text-gray-500 dark:text-gray-400">
+					<span class="status-dot {streaming ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
 					{filteredLogs.length} visible
 				</span>
-			<input
-				type="search"
-				bind:value={filter}
-				placeholder="Filter logs"
-				class="field h-9 w-full sm:w-56"
-			/>
-			<select
-				bind:value={selectedService}
-				class="field h-9"
-			>
-				{#each services as service}
-					<option value={service}>{service === 'all' ? 'All services' : service}</option>
-				{/each}
-			</select>
-			<IconButton
-				label={logsCopied ? 'Logs copied' : 'Copy visible logs'}
-				variant={logsCopied ? 'brand' : 'default'}
-				on:click={copyVisibleLogs}
-				disabled={filteredLogs.length === 0}
-			>
-				{#if logsCopied}
-					<Check class="h-4 w-4" aria-hidden="true" />
-				{:else}
-					<Copy class="h-4 w-4" aria-hidden="true" />
-				{/if}
-			</IconButton>
-			<IconButton
-				label="Download visible logs"
-				variant="default"
-				on:click={downloadLogs}
-				disabled={filteredLogs.length === 0}
-			>
-				<Download class="h-4 w-4" aria-hidden="true" />
-			</IconButton>
+				<input type="search" bind:value={filter} placeholder="Filter logs" class="field h-9 w-full sm:w-56" />
+				<select bind:value={selectedService} class="field h-9 min-w-36">
+					{#each services as service}<option value={service}>{service === 'all' ? 'All services' : service}</option>{/each}
+				</select>
+				<ActionButton variant="secondary" size="sm" on:click={copyVisibleLogs} disabled={filteredLogs.length === 0}>
+					{#if logsCopied}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}
+					{logsCopied ? 'Copied' : 'Copy'}
+				</ActionButton>
+				<ActionButton variant="secondary" size="sm" on:click={downloadLogs} disabled={filteredLogs.length === 0}>
+					<Download slot="icon" class="h-4 w-4" />
+					Download
+				</ActionButton>
 			</div>
 		</svelte:fragment>
 
-	{#if error}
-		<div class="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
-			<span>{error}</span>
-			<ActionButton
-				variant="ghost"
-				size="xs"
-				type="button"
-				on:click={() => loadHistory(true)}
-				loading={reloadingHistory}
-				loadingLabel="Retrying..."
-				className="text-amber-800 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40"
-			>
-				Retry history
-			</ActionButton>
-		</div>
-	{/if}
+		{#if error}
+			<div class="alert-warning flex-wrap items-center justify-between">
+				<span class="min-w-0 flex-1">{error}</span>
+				<ActionButton variant="ghost" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Retrying">
+					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+					Retry history
+				</ActionButton>
+			</div>
+		{/if}
 
-	{#if streamError}
-		<div class="flex flex-col gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
-			<span>{streamError}</span>
-			<ActionButton variant="secondary" size="xs" type="button" on:click={reconnectStream}>
-				Reconnect
-			</ActionButton>
-		</div>
-	{/if}
+		{#if streamError}
+			<div class="alert-neutral flex-wrap items-center justify-between">
+				<span class="min-w-0 flex-1">{streamError}</span>
+				<ActionButton variant="secondary" size="xs" type="button" on:click={reconnectStream}>
+					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+					Reconnect
+				</ActionButton>
+			</div>
+		{/if}
 
-	<div
-		bind:this={logViewport}
-		on:scroll={handleScroll}
-		class="scrollbar-thin relative flex-1 overflow-auto rounded-md border border-gray-800 bg-gray-950 p-4 font-mono text-xs leading-5 text-gray-100 shadow-sm"
-		aria-live="polite"
-	>
-		{#if loading}
-			<div class="space-y-2">
-				{#each [1, 2, 3, 4, 5, 6] as _}
-					<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
-						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
-						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
-						<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+		<div bind:this={logViewport} on:scroll={handleScroll} class="console-surface scrollbar-thin relative flex-1 overflow-auto p-4" aria-live="polite">
+			{#if loading}
+				<div class="space-y-2">
+					{#each [1, 2, 3, 4, 5, 6] as _}
+						<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
+							<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+							<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+							<span class="h-4 animate-pulse rounded bg-gray-800"></span>
+						</div>
+					{/each}
+				</div>
+			{:else if filteredLogs.length === 0}
+				<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
+			{:else}
+				{#if clippedRenderCount > 0}
+					<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>
+				{/if}
+				{#each renderedLogs as log (log.id)}
+					<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
+						<span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span>
+						<span class="truncate text-sky-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span>
+						<span>{log.line}</span>
 					</div>
 				{/each}
-			</div>
-		{:else if filteredLogs.length === 0}
-			<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
-		{:else}
-			{#if clippedRenderCount > 0}
-				<p class="mb-2 text-gray-500">
-					Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.
-				</p>
 			{/if}
-			{#each renderedLogs as log (log.id)}
-				<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]">
-					<span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span>
-					<span class="truncate text-sky-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span>
-					<span>{log.line}</span>
-				</div>
-			{/each}
-		{/if}
-	</div>
+		</div>
 
-	<div class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
-		<div>
-			Showing {filteredLogs.length} of {logs.length} lines. Keeping latest {maxLines} lines in memory.
+		<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
+			<p>Showing {filteredLogs.length} of {logs.length} lines · latest {maxLines} kept in memory.</p>
+			<div class="flex flex-wrap items-center gap-2">
+				{#if paused}
+					<ActionButton variant="secondary" size="xs" type="button" on:click={scrollToBottom}>
+						<ArrowDown slot="icon" class="h-3.5 w-3.5" />
+						Resume
+					</ActionButton>
+				{/if}
+				<ActionButton variant="ghost" size="xs" type="button" on:click={clearLogs} disabled={logs.length === 0}>
+					<Trash2 slot="icon" class="h-3.5 w-3.5" />
+					Clear
+				</ActionButton>
+				<ActionButton variant="secondary" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Reloading">
+					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+					Reload history
+				</ActionButton>
+			</div>
 		</div>
-		<div class="flex items-center gap-3">
-			{#if paused}
-				<IconButton label="Resume auto-scroll" variant="brand" type="button" on:click={scrollToBottom}>
-					<ArrowDown class="h-4 w-4" aria-hidden="true" />
-				</IconButton>
-			{/if}
-			<IconButton label="Clear local log view" variant="ghost" type="button" on:click={clearLogs} disabled={logs.length === 0}>
-				<Trash2 class="h-4 w-4" aria-hidden="true" />
-			</IconButton>
-			<IconButton
-				label="Reload log history"
-				variant="brand"
-				type="button"
-				on:click={() => loadHistory(true)}
-				loading={reloadingHistory}
-			>
-				<RefreshCw class="h-4 w-4" aria-hidden="true" />
-			</IconButton>
-		</div>
-	</div>
 	</SectionPanel>
 </div>
