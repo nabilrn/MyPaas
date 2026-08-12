@@ -3,7 +3,7 @@
 	import '../app.css';
 	import AppHeader from '$components/AppHeader.svelte';
 	import Navbar from '$components/Navbar.svelte';
-	import Toast  from '$components/Toast.svelte';
+	import Toast from '$components/Toast.svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api';
@@ -40,7 +40,7 @@
 {#if checked || isPublic}
 	{#if !isPublic && user}
 		<div class="min-h-screen transition-[padding] duration-200 {$sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}">
-			<Navbar />
+			<Navbar {user} />
 			<AppHeader {user} />
 			<main class="min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)]">
 				<slot />
