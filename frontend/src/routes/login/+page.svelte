@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Moon, Sun } from '@lucide/svelte';
 	import BrandLogo from '$components/BrandLogo.svelte';
+	import GitHubMark from '$components/GitHubMark.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import circuitBgDark from '../../assets/mypaas-circuit-background-dark.svg';
 	import { theme } from '$stores/theme';
 </script>
@@ -9,164 +11,49 @@
 	<title>Sign in · MyPaas</title>
 </svelte:head>
 
-<div class="login-page">
-	<img
-		src={circuitBgDark}
-		alt=""
-		aria-hidden="true"
-		class="circuit-bg pointer-events-none"
-	/>
+<div class="relative flex min-h-screen min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--app-bg)]">
+	<img src={circuitBgDark} alt="" aria-hidden="true" class="circuit-bg pointer-events-none absolute inset-0 h-full w-full object-cover" />
 
-	<!-- Theme toggle — top-right corner -->
-	<button
-		type="button"
-		class="theme-toggle"
-		aria-label="Toggle dark mode"
-		on:click={() => theme.toggle()}
-	>
-		{#if $theme === 'dark'}
-			<Sun class="h-4 w-4" aria-hidden="true" />
-		{:else}
-			<Moon class="h-4 w-4" aria-hidden="true" />
-		{/if}
-	</button>
+	<div class="absolute right-4 top-4 z-10">
+		<IconButton label="Toggle appearance" variant="secondary" on:click={() => theme.toggle()}>
+			{#if $theme === 'dark'}
+				<Sun class="h-4 w-4" aria-hidden="true" />
+			{:else}
+				<Moon class="h-4 w-4" aria-hidden="true" />
+			{/if}
+		</IconButton>
+	</div>
 
-	<!-- Centered login content -->
-	<main class="login-content">
-		<div class="login-inner">
-			<div class="mb-6 flex flex-col items-center text-center">
-				<div class="flex h-14 w-[200px] items-center justify-center">
-					<BrandLogo imageClass="h-14 w-[200px] object-center" />
-				</div>
-				<p class="mt-2 text-sm" style="color: var(--app-muted);">
-					Self-hosted Git-based deployments.
-				</p>
-				<h1 class="sr-only">Sign in to MyPaas</h1>
+	<main class="relative z-[1] w-full max-w-[24rem] px-5 py-10">
+		<div class="mb-7 flex flex-col items-center text-center">
+			<div class="flex h-20 w-[250px] items-center justify-center sm:w-[270px]">
+				<BrandLogo imageClass="h-20 w-full object-contain object-center" />
 			</div>
+			<p class="mt-2 text-[0.9375rem] text-gray-500 dark:text-gray-400">Self-hosted Git-based deployments.</p>
+			<h1 class="sr-only">Sign in to MyPaas</h1>
+		</div>
 
-			<div class="login-card">
-				<a
-					href="/api/auth/github/login"
-					id="login-github-btn"
-					class="github-btn"
-				>
-					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-						<path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-					</svg>
-					Continue with GitHub
-				</a>
-			</div>
+		<div class="surface p-3">
+			<a
+				href="/api/auth/github/login"
+				id="login-github-btn"
+				class="app-focus flex min-h-11 w-full items-center justify-center gap-3 rounded-md border border-gray-300 bg-gray-950 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black dark:border-white dark:bg-white dark:text-gray-950 dark:hover:bg-gray-200"
+			>
+				<GitHubMark className="h-5 w-5" />
+				Continue with GitHub
+			</a>
 		</div>
 	</main>
 </div>
 
 <style>
-	.login-page {
-		position: relative;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 100vh;
-		min-height: 100dvh;
-		overflow: hidden;
-		background: var(--app-bg);
-	}
-
 	.circuit-bg {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		opacity: 0.16;
+		opacity: 0.08;
 		filter: brightness(0);
 	}
 
 	:global(.dark) .circuit-bg {
-		opacity: 0.12;
+		opacity: 0.08;
 		filter: none;
-	}
-
-	.theme-toggle {
-		position: absolute;
-		top: 1rem;
-		right: 1rem;
-		z-index: 2;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border: 1px solid var(--app-border);
-		border-radius: 0.375rem;
-		background: var(--app-surface);
-		color: var(--app-accent);
-		cursor: pointer;
-		transition: border-color 0.15s, color 0.15s;
-	}
-
-	.theme-toggle:hover {
-		border-color: var(--app-border-strong);
-		color: var(--app-accent-strong);
-	}
-
-	.theme-toggle:focus-visible {
-		outline: none;
-		border-color: var(--app-accent);
-		box-shadow: 0 0 0 1px var(--app-accent),
-			0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 76%, transparent);
-	}
-
-	.login-content {
-		position: relative;
-		z-index: 1;
-		width: 100%;
-		max-width: 22rem;
-		padding: 1.25rem;
-	}
-
-	.login-inner {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-	}
-
-	.login-card {
-		width: 100%;
-		border: 1px solid var(--app-border);
-		border-radius: 0.5rem;
-		background: var(--app-surface);
-		padding: 0.75rem;
-		box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
-	}
-
-	.github-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.75rem;
-		width: 100%;
-		min-height: 2.75rem;
-		padding: 0.625rem 1rem;
-		border: 1px solid var(--app-border);
-		border-radius: 0.375rem;
-		background: var(--app-surface);
-		color: var(--app-ink);
-		font-size: 0.875rem;
-		font-weight: 500;
-		text-decoration: none;
-		transition: border-color 0.15s, background 0.15s;
-	}
-
-	.github-btn:hover {
-		border-color: var(--app-border-strong);
-		background: var(--app-surface-muted);
-	}
-
-	.github-btn:focus-visible {
-		outline: none;
-		border-color: var(--app-accent);
-		box-shadow: 0 0 0 1px var(--app-accent),
-			0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 76%, transparent);
 	}
 </style>
