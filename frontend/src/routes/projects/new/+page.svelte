@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Check, ChevronDown, CircleAlert, Copy, Folder, LoaderCircle, Upload, X } from '@lucide/svelte';
+	import { Check, ChevronDown, CircleAlert, Copy, Folder, LoaderCircle, Plus, RefreshCw, Rocket, Upload, X } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -11,6 +11,7 @@
 	import SegmentedChoice from '$components/SegmentedChoice.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
+	import { remainingVisualDelay } from '$lib/utils/analysis-choreography';
 	import { projectHost, projectURL } from '$lib/utils/urls';
 	import {
 		projectCreationReadiness,
@@ -49,6 +50,9 @@
 		issues?: ComposeIssue[] | null;
 	};
 
+	const REPOSITORY_MIN_VISIBLE_MS = 400;
+	const DETECTION_MIN_VISIBLE_MS = 500;
+	const RESULT_REVEAL_GAP_MS = 120;
 	const publicOriginEnvKeys = new Set([
 		'ALLOWED_ORIGINS',
 		'APP_ORIGIN',
@@ -87,6 +91,9 @@
 	let detecting = false;
 	let inspectingRepo = false;
 	let repoInspectScheduled = false;
+	let analysisDetectionCompleted = false;
+	let analysisRevealStage = 0;
+	let analysisPresentationToken = 0;
 	let error = '';
 	let detectError = '';
 	let detectMessage = '';
@@ -174,6 +181,7 @@
 	$: sourceReady = form.sourceType === 'registry'
 		? Boolean(form.imageRef.trim())
 		: Boolean(form.repoUrl.trim() && form.branch.trim() && repositoryInspectionCurrent);
+	$: analysisPresentationBusy = analysisDetectionCompleted && analysisRevealStage > 0 && analysisRevealStage < 3;
 	$: creationReadiness = projectCreationReadiness({
 		name: form.name,
 		sourceType: form.sourceType,
@@ -182,7 +190,7 @@
 		mainService: form.mainService,
 		appPort: form.appPort,
 		composeDisabledReason,
-		busy: submitting || detecting || inspectingRepo || repoInspectScheduled
+		busy: submitting || detecting || inspectingRepo || repoInspectScheduled || analysisPresentationBusy
 	});
 	$: sourceHasValue = form.sourceType === 'git' ? Boolean(form.repoUrl.trim()) : Boolean(form.imageRef.trim());
 	$: displayCreationReadiness = !sourceHasValue
@@ -205,6 +213,8 @@
 		.sort((a, b) => Number(b.required) - Number(a.required) || a.draft.key.localeCompare(b.draft.key));
 	$: gitAnalysisSettled = form.sourceType === 'git'
 		&& repositoryInspectionCurrent
+		&& analysisDetectionCompleted
+		&& analysisRevealStage >= 3
 		&& form.deployMode !== 'auto'
 		&& !detecting
 		&& !inspectingRepo
@@ -244,11 +254,13 @@
 				: `Detected automatically · ${runtimeLabel}`;
 	$: environmentScanSummary = detecting
 		? 'Scanning repository for environment variables…'
-		: form.sourceType === 'git' && form.deployMode !== 'auto' && !detectError
-			? envDrafts.length > 0
-				? `${envDrafts.length} environment variable${envDrafts.length === 1 ? '' : 's'} detected`
-				: 'Environment scan complete · no variables detected'
-			: '';
+		: analysisDetectionCompleted && analysisRevealStage === 1
+			? 'Finishing environment scan…'
+			: analysisDetectionCompleted && analysisRevealStage >= 2 && !detectError
+				? envDrafts.length > 0
+					? `${envDrafts.length} environment variable${envDrafts.length === 1 ? '' : 's'} detected`
+					: 'Environment scan complete · no variables detected'
+				: '';
 	$: backendPromptParts = error.includes('AI Prompt:\n') ? error.split('AI Prompt:\n') : [];
 	$: submissionErrorMessage = backendPromptParts.length > 1 ? backendPromptParts[0].trim() : error;
 	$: handoffEnvKeys = Array.from(new Set([
@@ -288,27 +300,30 @@
 				: repositoryInspectionCurrent
 					? 'complete'
 					: 'pending';
+		const deploymentResolved = analysisDetectionCompleted && analysisRevealStage >= 1;
+		const environmentResolved = analysisDetectionCompleted && analysisRevealStage >= 2;
+		const configurationRevealed = analysisDetectionCompleted && analysisRevealStage >= 3;
 		const deploymentState: AnalysisStepState = detectError
 			? 'error'
 			: detecting
 				? 'active'
-				: form.deployMode !== 'auto'
+				: deploymentResolved
 					? 'complete'
 					: repositoryInspectionCurrent
 						? 'active'
 						: 'pending';
 		const environmentState: AnalysisStepState = detectError
 			? 'error'
-			: detecting
+			: detecting || (analysisDetectionCompleted && analysisRevealStage < 2)
 				? 'active'
-				: form.deployMode !== 'auto'
+				: environmentResolved
 					? 'complete'
 					: 'pending';
-		const configurationState: AnalysisStepState = canSubmit
-			? 'complete'
-			: form.deployMode !== 'auto' && !detecting && !inspectingRepo && !repoInspectScheduled
-				? 'attention'
-				: 'pending';
+		const configurationState: AnalysisStepState = !configurationRevealed
+			? 'pending'
+			: canSubmit
+				? 'complete'
+				: 'attention';
 
 		return [
 			{
@@ -350,18 +365,20 @@
 				label: 'Deployment',
 				detail: detectError || (detecting
 					? 'Detecting Dockerfile, Compose, static output, and runtime defaults'
-					: form.deployMode !== 'auto'
+					: deploymentResolved
 						? `${runtimeLabel}${runtimeDetail ? ` · ${runtimeDetail}` : ''}`
-						: 'Waiting for repository validation'),
+						: repositoryInspectionCurrent
+							? 'Preparing deployment analysis'
+							: 'Waiting for repository validation'),
 				state: deploymentState
 			},
 			{
 				label: 'Environment',
 				detail: detectError
 					? 'Environment scan stopped with deployment analysis'
-					: detecting
+					: detecting || (analysisDetectionCompleted && analysisRevealStage < 2)
 						? 'Scanning source for environment variables'
-						: form.deployMode !== 'auto'
+						: environmentResolved
 							? envDrafts.length > 0
 								? `${envDrafts.length} variable${envDrafts.length === 1 ? '' : 's'} detected`
 								: 'No environment variables detected'
@@ -370,7 +387,11 @@
 			},
 			{
 				label: 'Configuration',
-				detail: canSubmit ? 'Ready to create' : form.deployMode !== 'auto' ? creationReadiness.reason || 'Checking required configuration' : 'Waiting for deployment analysis',
+				detail: configurationRevealed
+					? canSubmit
+						? 'Ready to create'
+						: creationReadiness.reason || 'Check required configuration'
+					: 'Waiting for detected results',
 				state: configurationState
 			}
 		];
@@ -385,6 +406,20 @@
 
 	function repositoryInspectionKey() {
 		return `${form.repoUrl.trim()}\n${form.branch.trim()}\n${form.baseDirectory.trim()}`;
+	}
+
+	function prefersReducedMotion() {
+		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	function presentationPause(durationMs: number) {
+		if (durationMs <= 0 || prefersReducedMotion()) return Promise.resolve();
+		return new Promise<void>((resolve) => setTimeout(resolve, durationMs));
+	}
+
+	async function waitForMinimumVisualDuration(startedAtMs: number, minimumDurationMs: number) {
+		if (prefersReducedMotion()) return;
+		await presentationPause(remainingVisualDelay(startedAtMs, minimumDurationMs));
 	}
 
 	function defaultProfileForMode(mode: DeployModeChoice): ResourceProfile {
@@ -557,6 +592,9 @@
 
 	function clearDetectedSourceState() {
 		repoInspectRequest += 1;
+		analysisPresentationToken += 1;
+		analysisDetectionCompleted = false;
+		analysisRevealStage = 0;
 		repoInspectScheduled = false;
 		error = '';
 		detectError = '';
@@ -597,7 +635,12 @@
 		deployModeManual = false;
 		if (!projectNameTouched) form.name = suggestProjectName(value);
 		resetRepositoryInspection();
-		scheduleRepositoryInspection();
+		const inputType = (event as InputEvent).inputType;
+		if (inputType === 'insertFromPaste' || inputType === 'insertReplacementText') {
+			void inspectRepository().catch(() => undefined);
+		} else {
+			scheduleRepositoryInspection();
+		}
 	}
 
 	function handleImageRefInput(event: Event) {
@@ -648,7 +691,7 @@
 	}
 
 	async function reanalyzeSource() {
-		if (form.sourceType !== 'git' || inspectingRepo || detecting) return;
+		if (form.sourceType !== 'git' || inspectingRepo || detecting || analysisPresentationBusy) return;
 		detectError = '';
 		repoInspectError = '';
 		try {
@@ -672,6 +715,7 @@
 		if (!force && requestKey === lastRepoInspectKey && !repoInspectError) return undefined;
 
 		const requestId = ++repoInspectRequest;
+		const startedAt = Date.now();
 		inspectingRepo = true;
 		repoInspectError = '';
 		detectError = '';
@@ -681,6 +725,7 @@
 				branch: requestedBranch,
 				baseDirectory: form.baseDirectory.trim() || undefined
 			});
+			await waitForMinimumVisualDuration(startedAt, REPOSITORY_MIN_VISIBLE_MS);
 			if (requestId !== repoInspectRequest) return undefined;
 			defaultBranch = inspection.defaultBranch || inspection.branch;
 			if (!form.branch.trim() && inspection.branch) form.branch = inspection.branch;
@@ -691,11 +736,12 @@
 			lastRepoInspectKey = repositoryInspectionKey();
 			if (showToast) toast.success('Repository validated');
 			setTimeout(() => {
-				if (detecting || lastRepoInspectKey !== repositoryInspectionKey()) return;
+				if (detecting || analysisPresentationBusy || lastRepoInspectKey !== repositoryInspectionKey()) return;
 				void handleDetectMode(false).catch(() => undefined);
 			}, 0);
 			return inspection;
 		} catch (err) {
+			await waitForMinimumVisualDuration(startedAt, REPOSITORY_MIN_VISIBLE_MS);
 			if (requestId !== repoInspectRequest) return undefined;
 			const message = err instanceof Error ? err.message : 'Failed to inspect repository';
 			repoInspectError = message;
@@ -907,6 +953,10 @@
 		if (!repositoryInspectionCurrent) await inspectRepository(false, true);
 		if (!form.branch.trim()) throw new Error('Select a branch before detection');
 
+		const presentationToken = ++analysisPresentationToken;
+		const startedAt = Date.now();
+		analysisDetectionCompleted = false;
+		analysisRevealStage = 0;
 		detecting = true;
 		detectError = '';
 		detectMessage = '';
@@ -916,16 +966,32 @@
 				branch: form.branch,
 				baseDirectory: form.baseDirectory.trim() || undefined
 			});
+			await waitForMinimumVisualDuration(startedAt, DETECTION_MIN_VISIBLE_MS);
+			if (presentationToken !== analysisPresentationToken) return detected;
+
 			applyDetectedMode(detected);
+			analysisDetectionCompleted = true;
+			detecting = false;
+			analysisRevealStage = 1;
+			await presentationPause(RESULT_REVEAL_GAP_MS);
+			if (presentationToken !== analysisPresentationToken) return detected;
+			analysisRevealStage = 2;
+			await presentationPause(RESULT_REVEAL_GAP_MS);
+			if (presentationToken !== analysisPresentationToken) return detected;
+			analysisRevealStage = 3;
 			if (showToast) toast.success('Project analyzed');
 			return detected;
 		} catch (err) {
+			await waitForMinimumVisualDuration(startedAt, DETECTION_MIN_VISIBLE_MS);
+			if (presentationToken !== analysisPresentationToken) throw err;
+			analysisDetectionCompleted = false;
+			analysisRevealStage = 0;
 			detectMessage = '';
 			detectError = err instanceof Error ? err.message : 'Failed to analyze deployment';
 			if (showToast) toast.error(detectError);
 			throw err;
 		} finally {
-			detecting = false;
+			if (presentationToken === analysisPresentationToken) detecting = false;
 		}
 	}
 
@@ -938,7 +1004,7 @@
 	}
 
 	async function handleSubmit() {
-		if (submitting || detecting || inspectingRepo || repoInspectScheduled) return;
+		if (submitting || detecting || inspectingRepo || repoInspectScheduled || analysisPresentationBusy) return;
 		projectNameTouched = true;
 		if (projectNameValidationMessage(form.name)) return;
 		submitting = true;
@@ -1082,6 +1148,7 @@
 	}
 
 	onDestroy(() => {
+		analysisPresentationToken += 1;
 		if (handoffCopyTimer) clearTimeout(handoffCopyTimer);
 		if (repoInspectTimer) clearTimeout(repoInspectTimer);
 		repoInspectScheduled = false;
@@ -1179,10 +1246,13 @@
 					<div class="mb-5 flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Preparing project</h2>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Repository, runtime, and environment detection update here as each real operation runs.</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Repository, runtime, and environment results move forward as real analysis completes.</p>
 						</div>
-						{#if !inspectingRepo && !detecting && !repoInspectScheduled && (repoInspectError || detectError)}
-							<ActionButton variant="secondary" size="xs" type="button" on:click={reanalyzeSource}>Try again</ActionButton>
+						{#if !inspectingRepo && !detecting && !analysisPresentationBusy && !repoInspectScheduled && (repoInspectError || detectError)}
+							<ActionButton variant="secondary" size="xs" type="button" on:click={reanalyzeSource}>
+								<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+								Try again
+							</ActionButton>
 						{/if}
 					</div>
 
@@ -1190,9 +1260,9 @@
 						{#each analysisSteps as step, index}
 							<div class="relative flex gap-3 pb-4 last:pb-0">
 								{#if index < analysisSteps.length - 1}
-									<span class={`absolute left-[0.6875rem] top-6 h-[calc(100%-1rem)] w-px ${step.state === 'complete' ? 'bg-brand-200 dark:bg-brand-800' : step.state === 'active' ? 'animate-pulse bg-brand-300 dark:bg-brand-700' : 'bg-gray-200 dark:bg-gray-800'}`} aria-hidden="true"></span>
+									<span class={`absolute left-[0.6875rem] top-6 h-[calc(100%-1rem)] w-px ${step.state === 'complete' ? 'bg-gray-900 dark:bg-gray-100' : step.state === 'active' ? 'animate-pulse bg-gray-400 dark:bg-gray-600' : 'bg-gray-200 dark:bg-gray-800'}`} aria-hidden="true"></span>
 								{/if}
-								<span class={`relative z-10 mt-0.5 inline-flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center rounded-full border ${step.state === 'complete' ? 'border-brand-600 bg-brand-600 text-white dark:border-brand-400 dark:bg-brand-400 dark:text-gray-950' : step.state === 'active' ? 'border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-700 dark:bg-brand-950/30 dark:text-brand-300' : step.state === 'error' ? 'border-red-300 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300' : step.state === 'attention' ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200' : 'border-gray-200 bg-white text-gray-400 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600'}`}>
+								<span class={`relative z-10 mt-0.5 inline-flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center rounded-full border ${step.state === 'complete' ? 'border-gray-950 bg-gray-950 text-white dark:border-white dark:bg-white dark:text-gray-950' : step.state === 'active' ? 'border-gray-300 bg-gray-100 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200' : step.state === 'error' ? 'border-red-300 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300' : step.state === 'attention' ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200' : 'border-gray-200 bg-white text-gray-400 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-600'}`}>
 									{#if step.state === 'complete'}
 										<Check class="h-3.5 w-3.5" aria-hidden="true" />
 									{:else if step.state === 'active'}
@@ -1232,12 +1302,15 @@
 							<div>
 								<div class="flex flex-wrap items-center gap-2">
 									<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Deployment setup</h2>
-									<span class={`rounded-full px-2 py-0.5 text-[11px] font-medium ${canSubmit ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-200' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'}`}>{canSubmit ? 'Ready' : 'Needs configuration'}</span>
+									<span class={`rounded-full px-2 py-0.5 text-[11px] font-medium ${canSubmit ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'}`}>{canSubmit ? 'Ready' : 'Needs configuration'}</span>
 								</div>
 								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Detected deployment and environment results are summarized here. Low-level overrides stay in Advanced settings.</p>
 							</div>
 							{#if form.sourceType === 'git'}
-								<ActionButton variant="secondary" size="xs" type="button" on:click={reanalyzeSource} disabled={inspectingRepo || detecting || repoInspectScheduled} loading={inspectingRepo || detecting || repoInspectScheduled} loadingLabel="Analyzing...">Re-analyze</ActionButton>
+								<ActionButton variant="secondary" size="xs" type="button" on:click={reanalyzeSource} disabled={inspectingRepo || detecting || repoInspectScheduled || analysisPresentationBusy} loading={inspectingRepo || detecting || repoInspectScheduled || analysisPresentationBusy} loadingLabel="Analyzing...">
+									<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+									Re-analyze
+								</ActionButton>
 							{/if}
 						</div>
 
@@ -1309,17 +1382,18 @@
 					<div>
 						<input bind:this={envFileInput} type="file" accept=".env,text/plain" class="hidden" on:change={handleEnvFileImport} />
 						<ActionButton type="button" variant="secondary" size="xs" on:click={triggerEnvFileImport}>
-							<span class="inline-flex items-center gap-1.5"><Upload class="h-3.5 w-3.5" aria-hidden="true" /> Import .env</span>
+							<Upload slot="icon" class="h-3.5 w-3.5" />
+							Import .env
 						</ActionButton>
 					</div>
 				</div>
 
 				{#if environmentScanSummary}
 					<div class="mb-4 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
-						{#if detecting}
-							<LoaderCircle class="h-4 w-4 shrink-0 animate-spin text-brand-600 motion-reduce:animate-none dark:text-brand-400" aria-hidden="true" />
+						{#if detecting || (analysisDetectionCompleted && analysisRevealStage === 1)}
+							<LoaderCircle class="h-4 w-4 shrink-0 animate-spin text-gray-600 motion-reduce:animate-none dark:text-gray-300" aria-hidden="true" />
 						{:else}
-							<Check class="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" aria-hidden="true" />
+							<Check class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-200" aria-hidden="true" />
 						{/if}
 						<span>{environmentScanSummary}</span>
 					</div>
@@ -1349,7 +1423,7 @@
 					<div class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-gray-800 dark:border-gray-800">
 						{#if managedDatabaseUrl}
 							<div class="grid gap-2 py-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(12rem,1.5fr)_auto] sm:items-center">
-								<div><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">DATABASE_URL</p><p class="mt-0.5 text-[11px] text-brand-700 dark:text-brand-300">Managed</p></div>
+								<div><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">DATABASE_URL</p><p class="mt-0.5 text-[11px] text-gray-600 dark:text-gray-300">Managed</p></div>
 								<input value="Generated on create" disabled class="field w-full opacity-70" />
 								<span class="text-xs text-gray-500 dark:text-gray-400">PostgreSQL</span>
 							</div>
@@ -1387,7 +1461,7 @@
 							</div>
 						{/each}
 					</div>
-				{:else if detecting}
+				{:else if detecting || (analysisDetectionCompleted && analysisRevealStage === 1)}
 					<div class="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-gray-400">
 						<LoaderCircle class="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 						Scanning for environment variables…
@@ -1398,7 +1472,10 @@
 
 				<div class="mt-4 flex gap-2">
 					<input value={newEnvKey} placeholder="ENV_KEY" aria-label="New environment variable key" class="field min-w-0 flex-1 font-mono uppercase" on:input={(event) => (newEnvKey = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))} on:keydown={handleNewEnvKeydown} />
-					<ActionButton type="button" variant="secondary" on:click={addEnvVar}>Add variable</ActionButton>
+					<ActionButton type="button" variant="secondary" on:click={addEnvVar}>
+						<Plus slot="icon" class="h-4 w-4" />
+						Add variable
+					</ActionButton>
 				</div>
 			</section>
 
@@ -1419,7 +1496,7 @@
 									<InfoDisclosure id="project-directory-info" label="About project directory">Choose the folder containing the application you want to deploy. Repository root works for most projects.</InfoDisclosure>
 								</div>
 								<div class="overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
-									<button type="button" on:click={() => chooseProjectDirectory('')} class={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm dark:border-gray-800 ${!form.baseDirectory ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-200' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-900'}`}>
+									<button type="button" on:click={() => chooseProjectDirectory('')} class={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm dark:border-gray-800 ${!form.baseDirectory ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-900'}`}>
 										<Folder class="h-4 w-4 shrink-0" aria-hidden="true" />
 										<span class="font-medium">Repository root</span>
 										{#if !form.baseDirectory}<Check class="ml-auto h-4 w-4" aria-hidden="true" />{/if}
@@ -1427,7 +1504,7 @@
 									{#if directoryChoices.length > 0}
 										<div class="max-h-64 overflow-auto">
 											{#each directoryChoices as directory}
-												<button type="button" on:click={() => chooseProjectDirectory(directory.path)} class={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm last:border-b-0 dark:border-gray-800 ${form.baseDirectory === directory.path ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/10 dark:text-brand-200' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-900'}`} style={`padding-left: ${0.75 + directory.depth * 1.1}rem;`}>
+												<button type="button" on:click={() => chooseProjectDirectory(directory.path)} class={`flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm last:border-b-0 dark:border-gray-800 ${form.baseDirectory === directory.path ? 'bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-900'}`} style={`padding-left: ${0.75 + directory.depth * 1.1}rem;`}>
 													<Folder class="h-4 w-4 shrink-0" aria-hidden="true" />
 													<span class="truncate font-mono text-xs">{directory.name}</span>
 													{#if form.baseDirectory === directory.path}<Check class="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />{/if}
@@ -1525,7 +1602,7 @@
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div class="min-w-0" aria-live="polite">
 						<div class="flex items-center gap-2">
-							{#if canSubmit}<Check class="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" aria-hidden="true" />{:else}<span class="h-2 w-2 shrink-0 rounded-full bg-gray-400 dark:bg-gray-600"></span>{/if}
+							{#if canSubmit}<Check class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-200" aria-hidden="true" />{:else}<span class="h-2 w-2 shrink-0 rounded-full bg-gray-400 dark:bg-gray-600"></span>{/if}
 							<p class="text-sm font-medium text-gray-950 dark:text-white">{displayCreationReadiness.state}</p>
 						</div>
 						<p class="mt-1 truncate font-mono text-[11px] text-gray-500 dark:text-gray-400">{previewHost}</p>
@@ -1535,7 +1612,10 @@
 							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{createDisabledReason}</p>
 						{/if}
 					</div>
-					<ActionButton variant="primary" size="md" type="submit" loading={submitting} loadingLabel="Creating..." disabled={!canSubmit}>Create project</ActionButton>
+					<ActionButton variant="primary" size="md" type="submit" loading={submitting} loadingLabel="Creating..." disabled={!canSubmit}>
+						<Rocket slot="icon" class="h-4 w-4" />
+						Create project
+					</ActionButton>
 				</div>
 			</div>
 		</form>
