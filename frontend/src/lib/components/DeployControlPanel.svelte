@@ -55,7 +55,7 @@
 	}
 </script>
 
-<section class="control-panel overflow-visible">
+<section class="surface overflow-visible">
 	<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
 		<div class="min-w-0">
 			<div class="flex flex-wrap items-center gap-3">
@@ -97,7 +97,7 @@
 				>
 					<MoreHorizontal class="h-4 w-4" aria-hidden="true" />
 				</summary>
-				<div class="absolute right-0 z-30 mt-2 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-800 dark:bg-gray-950">
+				<div class="overlay absolute right-0 z-30 mt-2 w-40 overflow-hidden py-1">
 					<a
 						href={`/projects/${project.id}/logs`}
 						class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-900"
