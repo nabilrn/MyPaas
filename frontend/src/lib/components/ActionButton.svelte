@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { LoaderCircle } from '@lucide/svelte';
+
 	export let type: 'button' | 'submit' | 'reset' = 'button';
 	export let variant: 'primary' | 'secondary' | 'danger' | 'ghost' | 'ghostDanger' = 'secondary';
 	export let size: 'xs' | 'sm' | 'md' = 'sm';
@@ -29,7 +31,9 @@
 
 <button {type} class={classes} data-action-button disabled={disabled || loading} aria-busy={loading} aria-label={ariaLabel} on:click>
 	{#if loading}
-		<span class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true"></span>
+		<LoaderCircle class="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+	{:else if $$slots.icon}
+		<span class="flex shrink-0 items-center" aria-hidden="true"><slot name="icon" /></span>
 	{/if}
 	<span class="min-w-0 truncate">
 		{#if loading && loadingLabel}
