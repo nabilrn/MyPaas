@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   projectCreationReadiness,
+  projectNameValidationMessage,
+  repositoryDirectoryChoices,
   resolveProjectAppPort,
   suggestProjectName,
   validateProjectCreateInput,
@@ -28,6 +30,27 @@ describe("new project UX helpers", () => {
   it("suggests a safe project name from git and registry sources", () => {
     expect(suggestProjectName("https://github.com/howlil/sop-generate-app.git")).toBe("sop-generate-app");
     expect(suggestProjectName("ghcr.io/howlil/my-api:v1.4.0")).toBe("my-api");
+  });
+
+  it("returns an inline project-name validation message", () => {
+    expect(projectNameValidationMessage("")).toBe("Project name is required");
+    expect(projectNameValidationMessage("-bad-")).toMatch(/3-30/);
+    expect(projectNameValidationMessage("demo-app")).toBe("");
+  });
+
+  it("keeps only meaningful directories for the project directory picker", () => {
+    expect(repositoryDirectoryChoices([
+      { name: "apps", path: "apps", type: "directory", depth: 0 },
+      { name: "web", path: "apps/web", type: "directory", depth: 1 },
+      { name: "package.json", path: "apps/web/package.json", type: "file", depth: 2 },
+      { name: "node_modules", path: "apps/web/node_modules", type: "directory", depth: 2 },
+      { name: "cache", path: ".cache", type: "directory", depth: 0 },
+      { name: "api", path: "services/api", type: "directory", depth: 1 },
+    ])).toEqual([
+      { name: "apps", path: "apps", depth: 0 },
+      { name: "web", path: "apps/web", depth: 1 },
+      { name: "api", path: "services/api", depth: 1 },
+    ]);
   });
 
   it("does not report a git project ready while runtime mode is still auto", () => {
