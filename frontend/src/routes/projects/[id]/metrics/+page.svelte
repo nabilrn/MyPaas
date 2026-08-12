@@ -1,17 +1,16 @@
 <script lang="ts">
-	import { RefreshCw } from '@lucide/svelte';
+	import { Activity, AlertTriangle, Globe, RefreshCw } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import ActionButton from '$components/ActionButton.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
+	import CloudflareChart from '$components/CloudflareChart.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
-	import IconButton from '$components/IconButton.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
-	import CloudflareSetup from './CloudflareSetup.svelte';
 	import { api } from '$api';
 	import type { MetricsSnapshot } from '$types';
-	import { Globe, Activity, AlertTriangle, TrendingUp } from '@lucide/svelte';
-	import CloudflareChart from '$components/CloudflareChart.svelte';
+	import CloudflareSetup from './CloudflareSetup.svelte';
 
 	let snapshot: MetricsSnapshot | null = null;
 	let cloudflareConfigured: boolean | null = null;
@@ -35,13 +34,14 @@
 				{ label: 'Collected', value: snapshot?.collectedAt ? new Date(snapshot.collectedAt).toLocaleTimeString() : '-' }
 			]
 		: [];
+	$: updatedLabel = primary && snapshot?.collectedAt
+		? `Updated ${new Date(snapshot.collectedAt).toLocaleTimeString()}`
+		: 'Waiting for container metrics';
 
 	onMount(() => {
 		let interval: ReturnType<typeof setInterval> | undefined;
-
 		void load();
 		interval = setInterval(() => void load(true), 5000);
-
 		return () => {
 			if (interval) clearInterval(interval);
 		};
@@ -50,19 +50,17 @@
 	async function load(background = false) {
 		if (metricsInFlight) return;
 		metricsInFlight = true;
-		
+
 		if (cloudflareConfigured === null) {
 			try {
 				const settings = await api.admin.getSettings();
 				cloudflareConfigured = !!settings.cloudflare_configured;
-			} catch (e) {
-				// ignore
+			} catch {
+				// Cloudflare analytics is optional; runtime metrics still load normally.
 			}
 		}
 
-		if (!background && !snapshot) {
-			loading = true;
-		}
+		if (!background && !snapshot) loading = true;
 		refreshing = true;
 		try {
 			const result = await api.metrics.snapshot($page.params.id ?? '');
@@ -92,22 +90,19 @@
 </svelte:head>
 
 <div class="space-y-4">
-	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-		<div>
-			<h1 class="text-lg font-semibold tracking-tight text-gray-950 dark:text-white">Metrics</h1>
-			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-				{primary ? `Updated ${new Date(snapshot?.collectedAt ?? '').toLocaleTimeString()}` : 'Waiting for container metrics'}
-			</p>
-		</div>
-		<IconButton label="Refresh metrics" variant="brand" loading={refreshing} on:click={() => void load()}>
-			<RefreshCw class="h-4 w-4" aria-hidden="true" />
-		</IconButton>
+	<div class="flex flex-wrap items-center justify-between gap-3">
+		<p class="text-sm text-gray-500 dark:text-gray-400" aria-live="polite">{updatedLabel}</p>
+		<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => void load()}>
+			<RefreshCw slot="icon" class="h-4 w-4" />
+			Refresh
+		</ActionButton>
 	</div>
 
 	{#if error}
 		{#if primary}
-			<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-				Latest refresh failed. Showing the last collected metrics. {error}
+			<div class="alert-warning">
+				<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+				<p>Latest refresh failed. Showing the last collected metrics. {error}</p>
 			</div>
 		{:else}
 			<div class="surface overflow-hidden">
@@ -119,46 +114,37 @@
 	{#if cloudflareConfigured === false}
 		<CloudflareSetup on:success={() => { cloudflareConfigured = true; load(); }} />
 	{:else if snapshot?.analytics}
-		<SectionPanel
-			title="Cloudflare Analytics"
-			description="Edge network metrics over the last 24 hours."
-			contentClass="p-0"
-		>
-			<div class="grid grid-cols-1 divide-y divide-gray-100 dark:divide-gray-800 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
-				<div class="col-span-1 flex flex-col p-5">
-					<div class="space-y-6">
-						<div>
-							<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
-								<Activity class="h-4 w-4" /> Total Requests
-							</div>
-							<div class="mt-1 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">
-								{snapshot.analytics.total_requests.toLocaleString()}
-							</div>
+		<SectionPanel title="Cloudflare analytics" description="Edge traffic over the last 24 hours." contentClass="p-0">
+			<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-[18rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
+				<div class="grid grid-cols-3 divide-x divide-gray-100 dark:divide-neutral-800 lg:grid-cols-1 lg:divide-x-0 lg:divide-y">
+					<div class="p-4">
+						<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+							<Activity class="h-4 w-4" aria-hidden="true" />
+							<span>Requests</span>
 						</div>
-						<div>
-							<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
-								<Globe class="h-4 w-4" /> Bandwidth
-							</div>
-							<div class="mt-1 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">
-								{(snapshot.analytics.bandwidth / (1024 * 1024)).toFixed(2)} MB
-							</div>
+						<p class="metric-value mt-1 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{snapshot.analytics.total_requests.toLocaleString()}</p>
+					</div>
+					<div class="p-4">
+						<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+							<Globe class="h-4 w-4" aria-hidden="true" />
+							<span>Bandwidth</span>
 						</div>
-						<div>
-							<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
-								<AlertTriangle class="h-4 w-4 {snapshot.analytics.errors > 0 ? 'text-amber-500' : ''}" /> Edge Errors
-							</div>
-							<div class="mt-1 text-2xl font-bold tracking-tight text-gray-950 dark:text-white">
-								{snapshot.analytics.errors.toLocaleString()}
-							</div>
+						<p class="metric-value mt-1 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{(snapshot.analytics.bandwidth / (1024 * 1024)).toFixed(2)} MB</p>
+					</div>
+					<div class="p-4">
+						<div class="flex items-center gap-2 text-sm font-medium text-gray-500 dark:text-gray-400">
+							<AlertTriangle class="h-4 w-4 {snapshot.analytics.errors > 0 ? 'text-amber-500' : ''}" aria-hidden="true" />
+							<span>Edge errors</span>
 						</div>
+						<p class="metric-value mt-1 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{snapshot.analytics.errors.toLocaleString()}</p>
 					</div>
 				</div>
-				<div class="col-span-1 p-5 lg:col-span-3">
+				<div class="min-w-0 p-4">
 					{#if snapshot.analytics.timeseries?.length > 0}
 						<CloudflareChart data={snapshot.analytics.timeseries} />
 					{:else}
-						<div class="flex h-64 items-center justify-center rounded-md border border-dashed border-gray-200 dark:border-gray-800">
-							<span class="text-sm text-gray-500">Not enough data to display timeseries</span>
+						<div class="flex h-56 items-center justify-center border border-dashed border-gray-200 text-sm text-gray-500 dark:border-neutral-800 dark:text-gray-400">
+							Not enough data to display timeseries
 						</div>
 					{/if}
 				</div>
@@ -167,60 +153,36 @@
 	{/if}
 
 	{#if loading && !primary}
-		<div class="surface grid gap-0 overflow-hidden md:grid-cols-2">
+		<div class="surface grid overflow-hidden md:grid-cols-2">
 			{#each [1, 2] as _}
-				<div class="border-b border-gray-100 p-5 dark:border-gray-800 md:border-b-0 md:border-r">
-					<div class="h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-					<div class="mt-3 h-8 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-800"></div>
-					<div class="mt-3 h-2 w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
+				<div class="border-b border-gray-100 p-4 last:border-b-0 dark:border-neutral-800 md:border-b-0 md:border-r">
+					<div class="h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-neutral-800"></div>
+					<div class="mt-3 h-8 w-28 animate-pulse rounded bg-gray-200 dark:bg-neutral-800"></div>
+					<div class="mt-3 h-20 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>
 				</div>
 			{/each}
 		</div>
 	{:else if primary}
-		<SectionPanel
-			title="Runtime usage"
-			description="Current CPU and memory sample for the selected service."
-			contentClass="p-0"
-		>
+		<SectionPanel title="Runtime usage" description="Current CPU and memory sample for the selected service." contentClass="p-0">
 			<svelte:fragment slot="actions">
 				{#if services.length > 1}
-					<label class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+					<label class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
 						<span>Service</span>
-						<select
-							class="field h-8 min-w-36 !py-1 text-xs"
-							value={selectedService}
-							on:change={(event) => selectService((event.currentTarget as HTMLSelectElement).value)}
-						>
-							{#each services as service}
-								<option value={service}>{service}</option>
-							{/each}
+						<select class="field h-9 min-w-40 !py-1.5 text-sm" value={selectedService} on:change={(event) => selectService((event.currentTarget as HTMLSelectElement).value)}>
+							{#each services as service}<option value={service}>{service}</option>{/each}
 						</select>
 					</label>
 				{/if}
 			</svelte:fragment>
 
-			<div class="grid gap-px bg-gray-100 dark:bg-gray-800 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
-				<CapacityMetricChart
-					label="CPU"
-					value={`${primary.cpu.toFixed(2)}%`}
-					detail="runtime sample"
-					percent={cpuPercent}
-					tone={cpuPercent >= 90 ? 'danger' : cpuPercent >= 75 ? 'warning' : 'info'}
-					className="bg-white dark:bg-gray-900"
-				/>
-				<CapacityMetricChart
-					label="Memory"
-					value={`${primary.memoryMb.toFixed(1)} MB`}
-					detail={`${primary.memoryLimitMb.toFixed(0)} MB limit`}
-					percent={Math.min(memoryPercent, 100)}
-					tone={memoryPercent >= 90 ? 'danger' : memoryPercent >= 75 ? 'warning' : 'success'}
-					className="bg-white dark:bg-gray-900"
-				/>
-				<div class="bg-white p-4 dark:bg-gray-900">
+			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]">
+				<CapacityMetricChart label="CPU" value={`${primary.cpu.toFixed(2)}%`} detail="current runtime sample" percent={cpuPercent} resource="cpu" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="Memory" value={`${primary.memoryMb.toFixed(1)} MB`} detail={`${primary.memoryLimitMb.toFixed(0)} MB limit`} percent={Math.min(memoryPercent, 100)} resource="memory" className="bg-white dark:bg-neutral-900" />
+				<div class="bg-white p-4 dark:bg-neutral-900">
 					<p class="metric-label">Runtime context</p>
-					<div class="mt-3 divide-y divide-gray-100 dark:divide-gray-800">
+					<div class="mt-2 divide-y divide-gray-100 dark:divide-neutral-800">
 						{#each runtimeSummary as item}
-							<div class="flex items-center justify-between gap-3 py-2 text-xs">
+							<div class="flex items-center justify-between gap-3 py-2.5 text-sm">
 								<span class="text-gray-500 dark:text-gray-400">{item.label}</span>
 								<span class="max-w-40 truncate text-right font-medium text-gray-950 dark:text-white">{item.value}</span>
 							</div>
@@ -231,22 +193,18 @@
 		</SectionPanel>
 
 		{#if metricItems.length > 1}
-			<SectionPanel
-				title="Services"
-				description="Container-level metrics reported for this project."
-				contentClass="p-0"
-			>
-				<div class="grid divide-y divide-gray-100 dark:divide-gray-800">
+			<SectionPanel title="Services" description="Container-level metrics reported for this project." contentClass="p-0">
+				<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 					{#each metricItems as item}
 						<button
 							type="button"
 							on:click={() => selectService(item.service)}
-							class="grid gap-3 px-5 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-900 sm:grid-cols-[minmax(0,1fr)_7rem_9rem_7rem]"
+							class="app-focus grid w-full gap-2 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-neutral-900 sm:grid-cols-[minmax(0,1fr)_8rem_11rem_7rem] sm:items-center"
 						>
 							<span class="truncate text-sm font-medium text-gray-950 dark:text-white">{item.service}</span>
-							<span class="text-sm text-gray-600 dark:text-gray-300">{item.cpu.toFixed(2)}% CPU</span>
-							<span class="text-sm text-gray-600 dark:text-gray-300">{item.memoryMb.toFixed(1)} / {item.memoryLimitMb.toFixed(0)} MB</span>
-							<span class="text-sm text-gray-500 dark:text-gray-400">{item.uptime}</span>
+							<span class="metric-value text-sm text-gray-600 dark:text-gray-300">{item.cpu.toFixed(2)}% CPU</span>
+							<span class="metric-value text-sm text-gray-600 dark:text-gray-300">{item.memoryMb.toFixed(1)} / {item.memoryLimitMb.toFixed(0)} MB</span>
+							<span class="metric-value text-sm text-gray-500 dark:text-gray-400">{item.uptime}</span>
 						</button>
 					{/each}
 				</div>
@@ -254,11 +212,7 @@
 		{/if}
 	{:else if !error}
 		<div class="surface overflow-hidden">
-			<EmptyState
-				title="No metrics yet."
-				description="Metrics appear after the project has a running container or service."
-				compact
-			/>
+			<EmptyState title="No metrics yet." description="Metrics appear after the project has a running container or service." compact />
 		</div>
 	{/if}
 </div>
