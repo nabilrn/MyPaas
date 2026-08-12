@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus } from '@lucide/svelte';
+	import { Plus, RefreshCw, Save, Upload, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -29,9 +29,9 @@
 	let loading = true;
 	let error = '';
 
-	let newKey   = '';
+	let newKey = '';
 	let newValue = '';
-	let adding   = false;
+	let adding = false;
 	let savingChanges = false;
 	let savingNewVar = false;
 	let deletingKeys = new Set<string>();
@@ -125,9 +125,9 @@
 		savingNewVar = true;
 		try {
 			await api.env.bulkUpdate($page.params.id ?? '', { vars: [{ key: normalizeEnvKey(newKey), value: newValue }] });
-			newKey   = '';
+			newKey = '';
 			newValue = '';
-			adding   = false;
+			adding = false;
 			toast.success('Variable added');
 			await load(true);
 		} catch (err) {
@@ -146,9 +146,7 @@
 		importText = '';
 		importFileName = '';
 		confirmOverwrite = false;
-		if (importFileInput) {
-			importFileInput.value = '';
-		}
+		if (importFileInput) importFileInput.value = '';
 	}
 
 	function closeImport() {
@@ -203,22 +201,16 @@
 	onMount(load);
 
 	async function load(background = false) {
-		if (!background) {
-			loading = true;
-		}
+		if (!background) loading = true;
 		error = '';
 		try {
 			const rows = await api.env.list($page.params.id ?? '');
 			vars = rows.map((v) => ({ ...v, value: '', revealed: false, dirty: false, revealing: false }));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load environment variables';
-			if (background) {
-				toast.error(error);
-			}
+			if (background) toast.error(error);
 		} finally {
-			if (!background) {
-				loading = false;
-			}
+			if (!background) loading = false;
 		}
 	}
 
@@ -268,13 +260,19 @@
 		return 'New';
 	}
 
-	function importStatusClass(status: ImportStatus) {
+	function importStatusDotClass(status: ImportStatus) {
 		return {
-			new: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200',
-			overwrite: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200',
-			duplicate: 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300',
-			invalid: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200'
+			new: 'bg-emerald-500',
+			overwrite: 'bg-amber-500',
+			duplicate: 'bg-gray-400 dark:bg-gray-500',
+			invalid: 'bg-red-500'
 		}[status];
+	}
+
+	function importStatusTextClass(status: ImportStatus) {
+		if (status === 'invalid') return 'text-red-700 dark:text-red-300';
+		if (status === 'overwrite') return 'text-amber-700 dark:text-amber-200';
+		return 'text-gray-600 dark:text-gray-300';
 	}
 
 	function importedValueLabel(row: ImportRow) {
@@ -287,28 +285,22 @@
 	<title>Environment · MyPaas</title>
 </svelte:head>
 
-<SectionPanel
-	title="Environment variables"
-	description="Encrypted at rest. Reveal only when you need to inspect a stored value."
-	contentClass="p-0"
->
+<SectionPanel title="Environment variables" description="Encrypted at rest. Reveal only when you need to inspect a stored value." contentClass="p-0">
 	<svelte:fragment slot="actions">
 		<div class="flex flex-wrap items-center gap-2">
 			{#if hasDirty}
-				<span class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+				<span class="inline-flex items-center gap-2 text-sm text-amber-700 dark:text-amber-200">
+					<span class="status-dot bg-amber-500"></span>
 					{dirtyCount} unsaved
 				</span>
-				<ActionButton
-					variant="primary"
-					on:click={handleSave}
-					loading={savingChanges}
-					loadingLabel="Saving..."
-				>
-					Save
+				<ActionButton variant="primary" on:click={handleSave} loading={savingChanges} loadingLabel="Saving">
+					<Save slot="icon" class="h-4 w-4" />
+					Save changes
 				</ActionButton>
 			{/if}
 			{#if !importing}
 				<ActionButton variant="secondary" on:click={openImport} disabled={loading || Boolean(error)}>
+					<Upload slot="icon" class="h-4 w-4" />
 					Import .env
 				</ActionButton>
 			{/if}
@@ -322,31 +314,27 @@
 	</svelte:fragment>
 
 	{#if importing && !loading && !error}
-		<div class="border-b border-gray-100 bg-gray-50/70 p-5 dark:border-gray-800 dark:bg-gray-900/60">
-			<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-				<div class="min-w-0 space-y-3">
-					<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+		<div class="border-b border-gray-100 bg-gray-50/50 dark:border-neutral-800 dark:bg-neutral-900/40">
+			<div class="grid xl:grid-cols-[minmax(0,1fr)_18rem]">
+				<div class="min-w-0 p-4">
+					<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
 						<div class="min-w-0">
-							<h3 class="text-sm font-semibold text-gray-950 dark:text-white">Import .env</h3>
-							{#if importFileName}
-								<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{importFileName}</p>
-							{/if}
+							<h3 class="text-[0.9375rem] font-semibold text-gray-950 dark:text-white">Import .env</h3>
+							<p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Paste environment content or load a local file for review before saving.</p>
+							{#if importFileName}<p class="mt-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{importFileName}</p>{/if}
 						</div>
 						<div class="flex flex-wrap gap-2">
-							<input
-								bind:this={importFileInput}
-								type="file"
-								accept=".env,.env.example,.env.sample,.env.template,.txt,text/plain"
-								class="sr-only"
-								on:change={handleImportFile}
-							/>
-							<ActionButton variant="secondary" on:click={() => importFileInput?.click()} disabled={savingImport}>
+							<input bind:this={importFileInput} type="file" accept=".env,.env.example,.env.sample,.env.template,.txt,text/plain" class="sr-only" on:change={handleImportFile} />
+							<ActionButton variant="secondary" size="sm" on:click={() => importFileInput?.click()} disabled={savingImport}>
+								<Upload slot="icon" class="h-4 w-4" />
 								Upload file
 							</ActionButton>
-							<ActionButton variant="ghost" on:click={clearImport} disabled={savingImport || !importText}>
+							<ActionButton variant="ghost" size="sm" on:click={clearImport} disabled={savingImport || !importText}>
+								<RefreshCw slot="icon" class="h-4 w-4" />
 								Clear
 							</ActionButton>
-							<ActionButton variant="ghost" on:click={closeImport} disabled={savingImport}>
+							<ActionButton variant="ghost" size="sm" on:click={closeImport} disabled={savingImport}>
+								<X slot="icon" class="h-4 w-4" />
 								Close
 							</ActionButton>
 						</div>
@@ -356,112 +344,94 @@
 						bind:value={importText}
 						rows="8"
 						placeholder={'KEY=value\nSECRET="quoted value"\nEMPTY='}
-						class="field min-h-44 w-full resize-y font-mono text-xs leading-5"
+						class="field min-h-44 w-full resize-y font-mono text-sm leading-5"
 						disabled={savingImport}
 					></textarea>
 				</div>
 
-				<div class="soft-panel flex min-w-0 flex-col gap-4 p-4">
-					<div class="grid grid-cols-2 gap-3 text-xs">
-						<div class="p-2">
-							<div class="metric-label">New</div>
-							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.newCount}</div>
+				<div class="border-t border-gray-100 p-4 dark:border-neutral-800 xl:border-l xl:border-t-0">
+					<div class="grid grid-cols-2 divide-x divide-y divide-gray-100 dark:divide-neutral-800">
+						<div class="p-3">
+							<p class="metric-label">New</p>
+							<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{importCounts.newCount}</p>
 						</div>
-						<div class="p-2">
-							<div class="metric-label">Overwrite</div>
-							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.overwrite}</div>
+						<div class="p-3">
+							<p class="metric-label">Overwrite</p>
+							<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{importCounts.overwrite}</p>
 						</div>
-						<div class="p-2">
-							<div class="metric-label">Duplicate</div>
-							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.duplicate}</div>
+						<div class="p-3">
+							<p class="metric-label">Duplicate</p>
+							<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{importCounts.duplicate}</p>
 						</div>
-						<div class="p-2">
-							<div class="metric-label">Invalid</div>
-							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.invalid}</div>
+						<div class="p-3">
+							<p class="metric-label">Invalid</p>
+							<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{importCounts.invalid}</p>
 						</div>
 					</div>
 
 					{#if importCounts.overwrite > 0}
-						<label class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-							<input
-								type="checkbox"
-								bind:checked={confirmOverwrite}
-								class="mt-0.5 h-4 w-4 rounded border-amber-300 text-gray-950 focus:ring-gray-950 dark:text-white dark:focus:ring-white"
-								disabled={savingImport}
-							/>
+						<label class="mt-4 flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
+							<input type="checkbox" bind:checked={confirmOverwrite} class="mt-0.5 h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-neutral-700 dark:text-white dark:focus:ring-white" disabled={savingImport} />
 							<span>Allow {importCounts.overwrite} existing variable{importCounts.overwrite === 1 ? '' : 's'} to be overwritten</span>
 						</label>
 					{/if}
 
 					{#if hasDirty}
-						<p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-							Save or discard existing drafts before importing.
-						</p>
+						<div class="alert-warning mt-4 py-2.5 text-sm">Save or discard existing drafts before importing.</div>
 					{/if}
 
-					<ActionButton
-						variant="primary"
-						on:click={handleImportSave}
-						loading={savingImport}
-						loadingLabel="Saving..."
-						disabled={!canSaveImport}
-						full
-					>
+					<ActionButton variant="primary" className="mt-4" on:click={handleImportSave} loading={savingImport} loadingLabel="Saving" disabled={!canSaveImport} full>
+						<Save slot="icon" class="h-4 w-4" />
 						Save {importReadyRows.length} variable{importReadyRows.length === 1 ? '' : 's'}
 					</ActionButton>
 				</div>
 			</div>
 
 			{#if importRows.length > 0}
-				<div class="mt-4 overflow-x-auto rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950/70">
-					<div class="min-w-[34rem]">
-						<div class="grid grid-cols-[4rem_minmax(0,1fr)_8rem_9rem] gap-3 border-b border-gray-100 px-4 py-2 text-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
-							<span>Line</span>
-							<span>Key</span>
-							<span>Value</span>
-							<span>Status</span>
-						</div>
-						<div class="max-h-72 overflow-y-auto">
+				<div class="overflow-x-auto border-t border-gray-100 bg-white dark:border-neutral-800 dark:bg-neutral-950/50">
+					<table class="data-table min-w-[38rem]">
+						<thead>
+							<tr>
+								<th class="w-16">Line</th>
+								<th>Key</th>
+								<th class="w-32">Value</th>
+								<th class="w-40">Status</th>
+							</tr>
+						</thead>
+						<tbody>
 							{#each importRows as row}
-								<div class="grid grid-cols-[4rem_minmax(0,1fr)_8rem_9rem] gap-3 border-b border-gray-100 px-4 py-3 text-xs last:border-b-0 dark:border-gray-800">
-									<span class="font-mono text-gray-500 dark:text-gray-400">{row.line}</span>
-									<div class="min-w-0">
-										<div class="truncate font-mono text-gray-900 dark:text-gray-100">
-											{row.importStatus === 'invalid' ? 'Invalid line' : row.key}
-										</div>
-										{#if row.importStatus === 'invalid'}
-											<p class="mt-0.5 truncate text-red-600 dark:text-red-300">{row.error}</p>
-										{/if}
-									</div>
-									<span class="truncate text-gray-500 dark:text-gray-400">{importedValueLabel(row)}</span>
-									<span class={`inline-flex min-w-0 items-center justify-center rounded-md border px-2 py-1 font-medium ${importStatusClass(row.importStatus)}`}>
-										<span class="truncate">{importStatusLabel(row)}</span>
-									</span>
-								</div>
+								<tr>
+									<td class="font-mono text-xs">{row.line}</td>
+									<td>
+										<p class="truncate font-mono text-sm text-gray-900 dark:text-gray-100">{row.importStatus === 'invalid' ? 'Invalid line' : row.key}</p>
+										{#if row.importStatus === 'invalid'}<p class="mt-0.5 truncate text-xs text-red-600 dark:text-red-300">{row.error}</p>{/if}
+									</td>
+									<td class="text-sm">{importedValueLabel(row)}</td>
+									<td>
+										<span class={`inline-flex items-center gap-2 text-sm ${importStatusTextClass(row.importStatus)}`}>
+											<span class={`status-dot ${importStatusDotClass(row.importStatus)}`}></span>
+											<span class="truncate">{importStatusLabel(row)}</span>
+										</span>
+									</td>
+								</tr>
 							{/each}
-						</div>
-					</div>
+						</tbody>
+					</table>
 				</div>
 			{/if}
 		</div>
 	{/if}
 
 	{#if loading}
-		<div class="space-y-3 p-5">
-			{#each [1, 2, 3] as _}
-				<div class="h-11 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
-			{/each}
+		<div class="space-y-2 p-4">
+			{#each [1, 2, 3] as _}<div class="h-12 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>{/each}
 		</div>
 	{:else if error}
 		<ErrorState title="Could not load environment variables" message={error} on:retry={() => void load()} />
 	{:else if vars.length === 0}
-		<EmptyState
-			title="No environment variables yet."
-			description="Add variables when the app needs runtime configuration or secrets."
-			compact
-		/>
+		<EmptyState title="No environment variables yet." description="Add variables when the app needs runtime configuration or secrets." compact />
 	{:else}
-		<div class="divide-y divide-gray-100 dark:divide-gray-800">
+		<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 			{#each vars as v}
 				<SecretField
 					keyName={v.key}
@@ -482,26 +452,22 @@
 	{/if}
 
 	{#if adding}
-		<div class="grid gap-3 border-t border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-800 dark:bg-gray-900/60 lg:grid-cols-[14rem_minmax(0,1fr)_auto]">
-			<input
-				type="text"
-				value={newKey}
-				on:input={(event) => (newKey = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))}
-				placeholder="KEY"
-				class="field w-full font-mono uppercase"
-			/>
-			<input type="text" bind:value={newValue} placeholder="value" class="field w-full font-mono" />
+		<div class="grid gap-3 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-neutral-800 dark:bg-neutral-900/40 lg:grid-cols-[14rem_minmax(0,1fr)_auto] lg:items-end">
+			<div>
+				<label class="field-label" for="new-env-key">Key</label>
+				<input id="new-env-key" type="text" value={newKey} on:input={(event) => (newKey = normalizeEnvKey((event.currentTarget as HTMLInputElement).value))} placeholder="KEY" class="field w-full font-mono uppercase" />
+			</div>
+			<div>
+				<label class="field-label" for="new-env-value">Value</label>
+				<input id="new-env-value" type="text" bind:value={newValue} placeholder="value" class="field w-full font-mono" />
+			</div>
 			<div class="flex gap-2">
-				<ActionButton
-					variant="primary"
-					on:click={handleAdd}
-					loading={savingNewVar}
-					loadingLabel="Adding..."
-					disabled={!canAdd}
-				>
+				<ActionButton variant="primary" on:click={handleAdd} loading={savingNewVar} loadingLabel="Adding" disabled={!canAdd}>
+					<Plus slot="icon" class="h-4 w-4" />
 					Add
 				</ActionButton>
 				<ActionButton variant="ghost" on:click={() => (adding = false)} disabled={savingNewVar}>
+					<X slot="icon" class="h-4 w-4" />
 					Cancel
 				</ActionButton>
 			</div>
