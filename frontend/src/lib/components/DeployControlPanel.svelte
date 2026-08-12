@@ -98,6 +98,14 @@
 					<MoreHorizontal class="h-4 w-4" aria-hidden="true" />
 				</summary>
 				<div class="absolute right-0 z-30 mt-2 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-800 dark:bg-gray-950">
+					<a
+						href={`/projects/${project.id}/logs`}
+						class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-900"
+						on:click={closeActionsMenu}
+					>
+						View logs
+					</a>
+					<div class="my-1 border-t border-gray-100 dark:border-gray-800"></div>
 					<button
 						type="button"
 						class="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-900"
