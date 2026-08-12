@@ -42,9 +42,9 @@ export function describeRepoUrl(repoUrl: string): RepositoryDisplay {
 	if (!url) return { host: 'git', label: trimmed, href: null };
 
 	const hostname = url.hostname.toLowerCase();
-	const path = url.pathname.replace(/^\/+/, '').replace(/\.git$/, '').replace(/\/+$/, '');
+	const path = url.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '');
 	const label = path || hostname;
-	const httpsHref = `https://${hostname}/${path}`;
+	const httpsHref = path ? `https://${hostname}/${path}` : `https://${hostname}`;
 
 	if (hostname === 'github.com') return { host: 'github', label, href: httpsHref };
 	if (hostname === 'gitlab.com') return { host: 'gitlab', label, href: httpsHref };
