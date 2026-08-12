@@ -5,6 +5,7 @@
 	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
 	import { api } from '$api';
+	import { dismissable } from '$lib/actions/dismissable';
 	import { shellContext } from '$stores/shell-context';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
@@ -69,6 +70,10 @@
 		return `${base} ${isActive(href) ? active : idle}`;
 	}
 
+	function closeNotifications() {
+		notificationsOpen = false;
+	}
+
 	async function handleLogout() {
 		if (signingOut) return;
 		signingOut = true;
@@ -108,7 +113,7 @@
 			</nav>
 		</div>
 
-		<div class="relative">
+		<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
 			<IconButton label="Notifications" variant="ghost" on:click={() => (notificationsOpen = !notificationsOpen)}>
 				<Bell class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
