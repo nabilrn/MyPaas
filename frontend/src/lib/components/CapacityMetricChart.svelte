@@ -21,28 +21,28 @@
 	const resourceClasses = {
 		neutral: {
 			dot: 'bg-gray-400 dark:bg-gray-500',
-			stroke: 'stroke-gray-500 dark:stroke-gray-400',
-			fill: 'fill-gray-400/10 dark:fill-gray-300/10'
+			stroke: 'stroke-gray-500/80 dark:stroke-gray-300/70',
+			fill: 'fill-gray-400/5 dark:fill-gray-300/5'
 		},
 		memory: {
-			dot: 'bg-emerald-500',
-			stroke: 'stroke-emerald-500 dark:stroke-emerald-400',
-			fill: 'fill-emerald-500/10 dark:fill-emerald-400/15'
+			dot: 'bg-emerald-400 dark:bg-emerald-400',
+			stroke: 'stroke-emerald-400/80 dark:stroke-emerald-300/70',
+			fill: 'fill-emerald-400/5 dark:fill-emerald-300/5'
 		},
 		cpu: {
-			dot: 'bg-sky-500',
-			stroke: 'stroke-sky-500 dark:stroke-sky-400',
-			fill: 'fill-sky-500/10 dark:fill-sky-400/15'
+			dot: 'bg-sky-400 dark:bg-sky-400',
+			stroke: 'stroke-sky-400/80 dark:stroke-sky-300/70',
+			fill: 'fill-sky-400/5 dark:fill-sky-300/5'
 		},
 		storage: {
-			dot: 'bg-amber-500',
-			stroke: 'stroke-amber-500 dark:stroke-amber-400',
-			fill: 'fill-amber-500/10 dark:fill-amber-400/15'
+			dot: 'bg-amber-400 dark:bg-amber-400',
+			stroke: 'stroke-amber-400/80 dark:stroke-amber-300/70',
+			fill: 'fill-amber-400/5 dark:fill-amber-300/5'
 		},
 		network: {
-			dot: 'bg-violet-500',
-			stroke: 'stroke-violet-500 dark:stroke-violet-400',
-			fill: 'fill-violet-500/10 dark:fill-violet-400/15'
+			dot: 'bg-violet-400 dark:bg-violet-400',
+			stroke: 'stroke-violet-400/80 dark:stroke-violet-300/70',
+			fill: 'fill-violet-400/5 dark:fill-violet-300/5'
 		}
 	} as const;
 
@@ -56,12 +56,24 @@
 	$: compatibilitySeries = percent !== null && Number.isFinite(percent) ? [Math.max(0, percent)] : [];
 	$: cleanSeries = (series.length > 0 ? series : compatibilitySeries).filter((sample) => Number.isFinite(sample) && sample >= 0);
 	$: effectiveIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
-	$: effectiveMax = maxValue && maxValue > 0
-		? maxValue
-		: Math.max(1, ...cleanSeries) * 1.15;
+	$: rollingHistory = series.length >= 2 && cleanSeries.length >= 2;
+	$: rawMin = cleanSeries.length > 0 ? Math.min(...cleanSeries) : 0;
+	$: rawMax = cleanSeries.length > 0 ? Math.max(...cleanSeries) : 0;
+	$: fallbackMax = maxValue && maxValue > 0 ? maxValue : Math.max(1, rawMax) * 1.15;
+	$: minimumSpan = maxValue && maxValue > 0 ? Math.max(6, maxValue * 0.08) : Math.max(1, rawMax * 0.3);
+	$: observedSpan = Math.max(0, rawMax - rawMin);
+	$: desiredSpan = Math.max(minimumSpan, observedSpan * 1.4);
+	$: domainCenter = (rawMin + rawMax) / 2;
+	$: proposedMin = Math.max(0, domainCenter - desiredSpan / 2);
+	$: proposedMax = domainCenter + desiredSpan / 2;
+	$: boundedMax = maxValue && maxValue > 0 ? Math.min(maxValue, proposedMax) : proposedMax;
+	$: maxOverflow = rollingHistory && maxValue && maxValue > 0 ? Math.max(0, proposedMax - maxValue) : 0;
+	$: domainMin = rollingHistory ? Math.max(0, proposedMin - maxOverflow) : 0;
+	$: domainMax = rollingHistory ? Math.max(domainMin + 1, boundedMax) : Math.max(1, fallbackMax);
+	$: domainSpan = Math.max(1, domainMax - domainMin);
 	$: points = cleanSeries.map((sample, index) => {
 		const x = cleanSeries.length === 1 ? chartWidth - 4 : (index / Math.max(1, cleanSeries.length - 1)) * chartWidth;
-		const level = Math.max(0, Math.min(1, sample / effectiveMax));
+		const level = Math.max(0, Math.min(1, (sample - domainMin) / domainSpan));
 		const y = chartHeight - level * chartHeight;
 		return { x, y, encoded: `${x.toFixed(2)},${y.toFixed(2)}` };
 	});
@@ -70,6 +82,15 @@
 	$: resourceClass = resourceClasses[inferredResource] ?? resourceClasses.neutral;
 	$: currentPoint = points.length === 1 ? points[0] : null;
 	$: currentOnly = series.length === 0 && compatibilitySeries.length === 1;
+	$: effectiveRangeLabel = currentOnly
+		? 'current'
+		: rollingHistory && maxValue && maxValue > 0
+			? `${Math.floor(domainMin)}–${Math.ceil(domainMax)}%`
+			: rollingHistory
+				? 'rolling scale'
+				: cleanSeries.length >= 2
+					? rangeLabel
+					: 'collecting';
 	$: compatibilityTone = tone;
 </script>
 
@@ -89,7 +110,7 @@
 
 	<div class="mt-3 h-20 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-neutral-950">
 		<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
-			<g class="stroke-gray-100 dark:stroke-neutral-800" stroke-width="1">
+			<g class="stroke-gray-100/80 dark:stroke-neutral-800/70" stroke-width="1">
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
@@ -98,13 +119,13 @@
 				<line x1={chartWidth * 0.75} x2={chartWidth * 0.75} y1="0" y2={chartHeight} />
 			</g>
 			{#if areaPath}<path d={areaPath} class={resourceClass.fill} />{/if}
-			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="2" vector-effect="non-scaling-stroke" />{/if}
-			{#if currentPoint}<circle cx={currentPoint.x} cy={currentPoint.y} r="3" class={`${resourceClass.stroke} ${resourceClass.fill}`} stroke-width="1.5" />{/if}
+			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="1.5" vector-effect="non-scaling-stroke" />{/if}
+			{#if currentPoint}<circle cx={currentPoint.x} cy={currentPoint.y} r="2.5" class={`${resourceClass.stroke} ${resourceClass.fill}`} stroke-width="1.25" />{/if}
 		</svg>
 	</div>
 
 	<div class="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
 		<p class="truncate">{detail}</p>
-		<span class="shrink-0 font-mono">{currentOnly ? 'current' : cleanSeries.length >= 2 ? rangeLabel : 'collecting'}</span>
+		<span class="shrink-0 font-mono">{effectiveRangeLabel}</span>
 	</div>
 </article>
