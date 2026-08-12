@@ -1,9 +1,13 @@
 <script lang="ts">
 	export let className = '';
+	let classProp = '';
+	export { classProp as class };
+
+	$: classes = [className, classProp].filter(Boolean).join(' ');
 </script>
 
 <svg
-	class={className}
+	class={classes}
 	viewBox="0 0 24 24"
 	fill="currentColor"
 	aria-hidden="true"
