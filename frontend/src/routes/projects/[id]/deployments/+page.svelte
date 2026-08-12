@@ -1,17 +1,17 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, RotateCcw } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, RotateCcw, X } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
-	import StatusBadge from '$components/StatusBadge.svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
+	import StatusBadge from '$components/StatusBadge.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import type { Deployment, Project } from '$types';
 	import { expandFocusedDeployment, normalizeDeploymentFocus, pinFocusedDeployment } from '$lib/utils/deploymentFocus';
 	import { canRollbackDeployment, deploymentHistoryLabel, isPipelineActive } from '$lib/utils/deploymentHistory';
+	import type { Deployment, Project } from '$types';
 
 	const pageSize = 20;
 	let deployments: Deployment[] = [];
@@ -44,9 +44,7 @@
 			expanded = expandFocusedDeployment(expanded, focusId);
 		}
 	}
-	$: if (mounted && currentPage !== loadedPage && !loadInFlight) {
-		void load();
-	}
+	$: if (mounted && currentPage !== loadedPage && !loadInFlight) void load();
 
 	function requestRollback(id: string) {
 		confirmRollbackId = id;
@@ -171,101 +169,86 @@
 >
 	<svelte:fragment slot="notice">
 		{#if error}
-			<div class="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-				{error}
-				<ActionButton variant="ghost" size="xs" on:click={load} className="ml-2 min-h-0 px-1 py-0 text-amber-800 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40">Retry</ActionButton>
+			<div class="alert-warning mx-4 mt-3 flex-wrap items-center justify-between">
+				<span class="min-w-0 flex-1">{error}</span>
+				<ActionButton variant="ghost" size="xs" on:click={load}>
+					<RotateCcw slot="icon" class="h-3.5 w-3.5" />
+					Retry
+				</ActionButton>
 			</div>
 		{/if}
 	</svelte:fragment>
 
-	<div class="grid border-b border-gray-100 bg-gray-50/60 dark:border-gray-800 dark:bg-gray-900/50 sm:grid-cols-3">
-		<div class="border-b border-gray-100 px-5 py-3 dark:border-gray-800 sm:border-b-0 sm:border-r">
+	<div class="grid border-b border-gray-100 bg-gray-50/50 dark:border-neutral-800 dark:bg-neutral-900/40 sm:grid-cols-3">
+		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
 			<p class="metric-label">Active pipeline</p>
-			<p class="mt-1 font-mono text-lg font-semibold text-gray-950 dark:text-white">{activeCount}</p>
+			<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{activeCount}</p>
 		</div>
-		<div class="border-b border-gray-100 px-5 py-3 dark:border-gray-800 sm:border-b-0 sm:border-r">
+		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
 			<p class="metric-label">Recoverable targets</p>
-			<p class="mt-1 font-mono text-lg font-semibold text-gray-950 dark:text-white">{recoverableCount}</p>
+			<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{recoverableCount}</p>
 		</div>
-		<div class="px-5 py-3">
+		<div class="p-4">
 			<p class="metric-label">Failed attempts</p>
-			<p class="mt-1 font-mono text-lg font-semibold {failedCount > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-950 dark:text-white'}">{failedCount}</p>
+			<p class="metric-value mt-1 text-xl font-semibold {failedCount > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-950 dark:text-white'}">{failedCount}</p>
 		</div>
 	</div>
 
-	<div class="divide-y divide-gray-100 dark:divide-gray-800">
+	<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 		{#each visibleDeployments as d}
-			<div
-				id={`deployment-${d.id}`}
-				class={`scroll-mt-6 px-5 py-4 transition-colors ${focusId === d.id ? 'bg-gray-100/80 dark:bg-neutral-900' : ''}`}
-				aria-current={focusId === d.id ? 'true' : undefined}
-			>
-				<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_8rem_auto] lg:items-center">
+			<div id={`deployment-${d.id}`} class={`scroll-mt-6 px-4 py-3 transition-colors ${focusId === d.id ? 'bg-gray-50 dark:bg-neutral-900/70' : ''}`} aria-current={focusId === d.id ? 'true' : undefined}>
+				<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_6rem_auto] lg:items-center">
 					<div class="min-w-0">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="max-w-full truncate font-mono text-sm font-semibold text-gray-950 dark:text-white" title={deploymentSource(d)}>
-								{deploymentSource(d)}
-							</span>
-							<StatusBadge
-								status={d.status}
-								label={deploymentHistoryLabel(d.status, d.id, project?.activeDeploymentId, project?.status)}
-							/>
-							<span class="rounded border border-gray-200 px-1.5 py-0.5 text-[11px] font-medium capitalize text-gray-500 dark:border-gray-800 dark:text-gray-400">
-								{d.triggeredBy}
-							</span>
+						<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+							<span class="max-w-full truncate font-mono text-sm font-semibold text-gray-950 dark:text-white" title={deploymentSource(d)}>{deploymentSource(d)}</span>
+							<StatusBadge status={d.status} label={deploymentHistoryLabel(d.status, d.id, project?.activeDeploymentId, project?.status)} />
+							<span class="text-xs capitalize text-gray-500 dark:text-gray-400">{d.triggeredBy}</span>
 						</div>
-						<p class="mt-1 truncate text-sm text-gray-600 dark:text-gray-400">{deploymentSummary(d)}</p>
-						{#if d.errorMsg}
-							<p class="mt-1 text-xs text-red-600 dark:text-red-300">{d.errorMsg}</p>
-						{/if}
+						<p class="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">{deploymentSummary(d)}</p>
+						{#if d.errorMsg}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{d.errorMsg}</p>{/if}
 					</div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(d.startedAt)}</p>
-					<p class="font-mono text-xs text-gray-500 dark:text-gray-400">{formatDuration(d.startedAt, d.finishedAt)}</p>
-					<div class="flex shrink-0 gap-2 lg:justify-end">
-						<IconButton label={`${expanded.has(d.id) ? 'Hide' : 'Show'} deployment log for ${deploymentSource(d)}`} on:click={() => toggle(d.id)}>
-							{#if expanded.has(d.id)}
-								<ChevronUp class="h-4 w-4" aria-hidden="true" />
-							{:else}
-								<ChevronDown class="h-4 w-4" aria-hidden="true" />
-							{/if}
+					<p class="text-sm text-gray-500 dark:text-gray-400">{formatDate(d.startedAt)}</p>
+					<p class="metric-value font-mono text-sm text-gray-500 dark:text-gray-400">{formatDuration(d.startedAt, d.finishedAt)}</p>
+					<div class="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+						<IconButton label={`${expanded.has(d.id) ? 'Hide' : 'Show'} deployment log for ${deploymentSource(d)}`} variant="ghost" on:click={() => toggle(d.id)}>
+							{#if expanded.has(d.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
 						</IconButton>
 						{#if canRollbackDeployment(d.status, d.id, project?.activeDeploymentId)}
 							{#if confirmRollbackId === d.id}
-								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRollbackId = '')}>Cancel</ActionButton>
-								<ActionButton
-									variant="danger"
-									size="xs"
-									on:click={() => handleRollback(d.id)}
-									disabled={rollingBackId !== '' && rollingBackId !== d.id}
-									loading={rollingBackId === d.id}
-									loadingLabel="Rolling back..."
-								>
+								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRollbackId = '')} disabled={rollingBackId === d.id}>
+									<X slot="icon" class="h-3.5 w-3.5" />
+									Cancel
+								</ActionButton>
+								<ActionButton variant="danger" size="xs" on:click={() => handleRollback(d.id)} disabled={rollingBackId !== '' && rollingBackId !== d.id} loading={rollingBackId === d.id} loadingLabel="Rolling back">
+									<RotateCcw slot="icon" class="h-3.5 w-3.5" />
 									Confirm rollback
 								</ActionButton>
 							{:else}
-								<IconButton label={`Rollback deployment ${deploymentSource(d)}`} variant="danger" on:click={() => requestRollback(d.id)} disabled={rollingBackId !== ''}>
-									<RotateCcw class="h-4 w-4" aria-hidden="true" />
-								</IconButton>
+								<ActionButton variant="ghostDanger" size="xs" on:click={() => requestRollback(d.id)} disabled={rollingBackId !== ''}>
+									<RotateCcw slot="icon" class="h-3.5 w-3.5" />
+									Rollback
+								</ActionButton>
 							{/if}
 						{/if}
 					</div>
 				</div>
+
 				{#if expanded.has(d.id)}
-					<div class="mt-4 overflow-hidden rounded-md border border-gray-800 bg-gray-950">
+					<div class="console-surface mt-3 overflow-hidden">
 						<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 px-3 py-2">
-							<p class="font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-300">Deployment output</p>
-							<p class="text-[11px] text-gray-500">
+							<p class="font-mono text-xs font-semibold uppercase tracking-wide text-gray-300">Deployment output</p>
+							<p class="text-xs text-gray-500">
 								{#if isPipelineActive(d.status)}
-									{d.buildLog ? 'Live, refreshes every 3 seconds' : 'Waiting for output'}
+									{d.buildLog ? 'Live · refreshes every 3 seconds' : 'Waiting for output'}
 								{:else}
 									{d.buildLog ? 'Final output' : 'No output captured'}
 								{/if}
 							</p>
 						</div>
 						{#if d.buildLog}
-							<pre class="max-h-80 overflow-auto p-3 text-xs leading-5 text-gray-100">{d.buildLog}</pre>
+							<pre class="max-h-80 overflow-auto p-3">{d.buildLog}</pre>
 						{:else}
-							<div class="px-3 py-6 text-center text-xs leading-5 text-gray-400" role={isPipelineActive(d.status) ? 'status' : undefined}>
+							<div class="px-3 py-6 text-center text-sm text-gray-400" role={isPipelineActive(d.status) ? 'status' : undefined}>
 								{isPipelineActive(d.status) ? `Pipeline is ${d.status}. Deployment output will appear here automatically.` : 'This deployment did not produce build output.'}
 							</div>
 						{/if}
