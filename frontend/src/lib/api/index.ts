@@ -77,6 +77,27 @@ async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized 
 	return (body as { data: T }).data;
 }
 
+function keepDetectedTreeRootRelative(data: unknown, result: DeployModeDetection): DeployModeDetection {
+	if (!data || typeof data !== 'object' || Array.isArray(data)) return result;
+	const baseDirectory = typeof (data as { baseDirectory?: unknown }).baseDirectory === 'string'
+		? ((data as { baseDirectory: string }).baseDirectory.trim().replace(/^\.\//, '').replace(/^\/+|\/+$/g, ''))
+		: '';
+	if (!baseDirectory || baseDirectory === '.' || result.tree.length === 0) return result;
+
+	const baseDepth = baseDirectory.split('/').filter(Boolean).length;
+	return {
+		...result,
+		tree: result.tree.map((entry) => {
+			if (entry.path === baseDirectory || entry.path.startsWith(`${baseDirectory}/`)) return entry;
+			return {
+				...entry,
+				path: `${baseDirectory}/${entry.path}`,
+				depth: entry.depth + baseDepth
+			};
+		})
+	};
+}
+
 export const api = {
 	auth: {
 		me:      (): Promise<User>    => request('/auth/me'),
@@ -95,7 +116,10 @@ export const api = {
 			validateProjectCreateInput(data);
 			return request('/projects', { method: 'POST', body: JSON.stringify(data) });
 		},
-		detectMode: (data: unknown):   Promise<DeployModeDetection> => request('/projects/detect-mode', { method: 'POST', body: JSON.stringify(data) }),
+		detectMode: async (data: unknown): Promise<DeployModeDetection> => {
+			const result = await request<DeployModeDetection>('/projects/detect-mode', { method: 'POST', body: JSON.stringify(data) });
+			return keepDetectedTreeRootRelative(data, result);
+		},
 		detectCompose: (data: unknown): Promise<ComposeFileDetection> =>
 			request('/projects/detect-compose', { method: 'POST', body: JSON.stringify(data) }),
 		inspectRepository: (data: unknown): Promise<RepoInspection> =>
