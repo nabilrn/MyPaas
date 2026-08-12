@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { ExternalLink, Pause, Play, Plus, RefreshCw, Search, X } from '@lucide/svelte';
+	import { ExternalLink, Play, Plus, RefreshCw, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
-	import Breadcrumbs from '$components/Breadcrumbs.svelte';
+	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import FleetStatusChart from '$components/FleetStatusChart.svelte';
@@ -15,6 +15,7 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
+	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Project, QuotaUsage } from '$types';
 
@@ -32,7 +33,6 @@
 	};
 
 	const pageSize = 20;
-	const breadcrumbs = [{ label: 'Projects' }];
 	let projects: Project[] = [];
 	let quota: QuotaUsage | null = null;
 	let hostStats: HostStats | null = null;
@@ -163,9 +163,9 @@
 		return 'Deploy project';
 	}
 
-	function projectPrimaryVariant(project: Project): 'default' | 'primary' | 'danger' | 'ghost' {
+	function projectPrimaryVariant(project: Project): 'secondary' | 'primary' | 'ghostDanger' | 'ghost' {
 		const action = projectPrimaryAction(project);
-		if (action === 'stop') return 'danger';
+		if (action === 'stop') return 'ghostDanger';
 		if (action === 'busy') return 'ghost';
 		return 'primary';
 	}
@@ -229,7 +229,7 @@
 				try {
 					const snapshot = await api.metrics.snapshot(project.id);
 					if (refreshToken !== uptimeRefreshToken) return;
-					const metrics = snapshot.items[0];
+					const metrics = selectPrimaryProjectMetric(snapshot, project.mainService);
 					projectUptimes = { ...projectUptimes, [project.id]: metrics?.uptime ?? '-' };
 					if (metrics) {
 						projectCpu = { ...projectCpu, [project.id]: metrics.cpu };
@@ -255,20 +255,14 @@
 
 <div class="page-shell py-6">
 	<div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<div class="min-w-0">
-			<Breadcrumbs items={breadcrumbs} />
-
-			<PageHeader
-				title="Deployment control plane"
-				description={`${projects.length} project${projects.length !== 1 ? 's' : ''} connected. Watch health, capacity, and deploy actions from one operational surface.`}
-				className="!mb-0"
-			/>
-		</div>
+		<PageHeader
+			title="Deployment control plane"
+			description={`${projects.length} project${projects.length !== 1 ? 's' : ''} connected. Watch health, capacity, and deploy actions from one operational surface.`}
+			className="!mb-0"
+		/>
 
 		<div class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-			<div
-				class="flex min-h-10 w-full items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-left shadow-sm shadow-gray-950/[0.03] dark:border-gray-800 dark:bg-gray-950 sm:min-w-[15rem]"
-			>
+			<div class="surface-muted flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left sm:min-w-[15rem]">
 				<span class={`h-2 w-2 shrink-0 rounded-full ${syncDotClass}`}></span>
 				<div class="min-w-0">
 					<p class="truncate text-xs font-medium text-gray-900 dark:text-white">{syncLabel}</p>
@@ -276,22 +270,28 @@
 				</div>
 			</div>
 			<div class="flex justify-end gap-2">
-				<IconButton label="Refresh dashboard data" variant="brand" {loading} on:click={() => refreshDashboardData()}>
+				<IconButton label="Refresh dashboard data" variant="secondary" {loading} on:click={() => refreshDashboardData()}>
 					<RefreshCw class="h-4 w-4" aria-hidden="true" />
 				</IconButton>
-				<IconButton label="New project" href="/projects/new" variant="primary">
-					<Plus class="h-4 w-4" aria-hidden="true" />
-				</IconButton>
+				<ActionLink href="/projects/new" variant="primary">
+					<Plus slot="icon" class="h-4 w-4" />
+					New project
+				</ActionLink>
 			</div>
 		</div>
 	</div>
 
 	{#if hostRamWarning}
 		<div class="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="alert">
-			<p class="font-semibold">⚠️ VM Capacity Reached</p>
-			<p class="mt-1">
-				Your VM ({hostRamMb}MB RAM) is almost fully allocated to projects ({hostStats?.allocated_ram_mb}MB used). Deploying more projects may cause Out-Of-Memory (OOM) crashes. Consider upgrading your VM or reducing project limits in Settings.
-			</p>
+			<div class="flex gap-3">
+				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+				<div>
+					<p class="font-semibold">VM capacity reached</p>
+					<p class="mt-1">
+						Your VM ({hostRamMb}MB RAM) is almost fully allocated to projects ({hostStats?.allocated_ram_mb}MB used). Deploying more projects may cause Out-Of-Memory (OOM) crashes. Consider upgrading your VM or reducing project limits in Settings.
+					</p>
+				</div>
+			</div>
 		</div>
 	{/if}
 
@@ -426,17 +426,17 @@
 						value={searchQuery}
 						on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
 						placeholder="Search projects"
-						class="field h-9 w-full !pl-10 !pr-9"
+						class="field h-9 w-full !pl-10 !pr-11"
 					/>
 					{#if searchQuery}
 						<button
 							type="button"
 							on:click={() => handleSearch('')}
-							class="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+							class="app-focus absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
 							aria-label="Clear search"
 							title="Clear search"
 						>
-							<X class="h-3.5 w-3.5" aria-hidden="true" />
+							<X class="h-4 w-4" aria-hidden="true" />
 						</button>
 					{/if}
 				</label>
@@ -512,7 +512,7 @@
 						{formatDate(project.updatedAt)}
 					</div>
 					<div class="flex items-center justify-start gap-1.5 lg:justify-end">
-						<IconButton label="Open project" href="/projects/{project.id}" variant="default">
+						<IconButton label="Open project" href="/projects/{project.id}" variant="secondary">
 							<ExternalLink class="h-4 w-4" aria-hidden="true" />
 						</IconButton>
 						<IconButton
@@ -523,7 +523,7 @@
 							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
 						>
 							{#if projectPrimaryAction(project) === 'stop'}
-								<Pause class="h-4 w-4" aria-hidden="true" />
+								<Square class="h-4 w-4" aria-hidden="true" />
 							{:else}
 								<Play class="h-4 w-4" aria-hidden="true" />
 							{/if}
