@@ -175,7 +175,7 @@
 	<SectionPanel title="Resource Configuration" description="Configure default platform limits and resource quotas." className="mb-8">
 		{#if loadingSettings}
 			<div class="flex h-32 items-center justify-center">
-				<Loader2 class="h-6 w-6 animate-spin text-brand-600" />
+				<Loader2 class="h-6 w-6 animate-spin text-gray-950 dark:text-white" />
 			</div>
 		{:else}
 			<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -188,7 +188,7 @@
 							type="number"
 							id={key}
 							bind:value={settings[key]}
-							class="field block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500"
+							class="field block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-950 focus:outline-none focus:ring-1 focus:ring-gray-950 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:focus:border-white dark:focus:ring-white"
 						/>
 					</div>
 				{/each}
@@ -218,7 +218,7 @@
 						id="mcp_token"
 						readonly
 						value={mcpToken || 'Not configured in .env'}
-						class="field block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400"
+						class="field block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:border-gray-950 focus:outline-none focus:ring-1 focus:ring-gray-950 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:focus:border-white dark:focus:ring-white"
 					/>
 					{#if mcpToken}
 						<ActionButton variant="secondary" on:click={() => copyToClipboard(mcpToken, 'mcp_token')}>
@@ -261,7 +261,7 @@
 					<div class="border-t border-gray-200 p-4 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-400">
 						<p class="mb-3">Since MyPaas runs remotely, you must run the MCP server on your local machine to securely bridge your AI agent with this server.</p>
 						<ol class="mb-4 list-decimal pl-5 space-y-1">
-							<li>Ensure you have <a href="https://go.dev/dl/" target="_blank" class="text-brand-600 hover:underline">Go</a> installed locally.</li>
+							<li>Ensure you have <a href="https://go.dev/dl/" target="_blank" class="font-medium text-gray-950 hover:underline dark:text-white">Go</a> installed locally.</li>
 							<li>Clone the MyPaas repository to your machine if you haven't already.</li>
 							<li>Add the configuration below to your agent's MCP settings (e.g. <code>cline_mcp.json</code> or Cursor settings). Ensure you adjust the absolute path to your local clone!</li>
 						</ol>
@@ -311,9 +311,9 @@
 			</div>
 		{:else if migration.status === 'preparing' || preparingMigration}
 			<div class="flex flex-col items-center justify-center space-y-4 rounded-lg border border-gray-200 py-12 dark:border-gray-800">
-				<div class="relative flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/30">
-					<div class="absolute inset-0 animate-ping rounded-full bg-brand-400 opacity-20"></div>
-					<Loader2 class="h-8 w-8 animate-spin text-brand-600 dark:text-brand-500" />
+				<div class="relative flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-900">
+					<div class="absolute inset-0 animate-ping rounded-full bg-gray-400 opacity-20 dark:bg-gray-600"></div>
+					<Loader2 class="h-8 w-8 animate-spin text-gray-950 dark:text-white" />
 				</div>
 				<p class="text-center text-sm font-medium text-gray-900 dark:text-gray-100">
 					Creating migration package...
@@ -334,7 +334,7 @@
 						</div>
 						<a
 							href={downloadUrl}
-							class="inline-flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:ring-offset-gray-900"
+							class="inline-flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-950 focus:ring-offset-2 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus:ring-white dark:focus:ring-offset-gray-900"
 						>
 							<Download class="h-4 w-4" />
 							Download Package (Manual Backup)

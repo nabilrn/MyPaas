@@ -197,7 +197,7 @@
 		{#each visibleDeployments as d}
 			<div
 				id={`deployment-${d.id}`}
-				class={`scroll-mt-6 px-5 py-4 transition-colors ${focusId === d.id ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''}`}
+				class={`scroll-mt-6 px-5 py-4 transition-colors ${focusId === d.id ? 'bg-gray-100/80 dark:bg-neutral-900' : ''}`}
 				aria-current={focusId === d.id ? 'true' : undefined}
 			>
 				<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_8rem_auto] lg:items-center">

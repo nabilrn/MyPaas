@@ -10,8 +10,8 @@
 	import { sidebarCollapsed } from '$stores/sidebar';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
-	import faviconGreen from '../assets/mypaas-icon-transparent-green.png';
-	import faviconWhite from '../assets/mypaas-icon-transparent-white.png';
+	import faviconBlack from '../assets/new-assets/logoonly_black.png';
+	import faviconWhite from '../assets/new-assets/logoonly_white.png';
 
 	let user: User | null = null;
 	let checked = false;
@@ -34,7 +34,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" type="image/png" href={$theme === 'dark' ? faviconWhite : faviconGreen} />
+	<link rel="icon" type="image/png" href={$theme === 'dark' ? faviconWhite : faviconBlack} />
 </svelte:head>
 
 {#if checked || isPublic}

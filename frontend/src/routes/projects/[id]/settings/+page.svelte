@@ -440,7 +440,7 @@
 									{#each repoDirectorySuggestions as entry}
 										<button
 											type="button"
-											class="rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-[11px] text-gray-600 hover:border-brand-300 hover:text-brand-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-brand-700 dark:hover:text-brand-200"
+											class="rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-[11px] text-gray-600 hover:border-gray-400 hover:text-gray-950 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:text-white"
 											on:click={() => {
 												baseDirectory = entry.path;
 												clearRepositoryValidation();

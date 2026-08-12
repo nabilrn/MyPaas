@@ -169,7 +169,7 @@
 							<span
 								class="inline-flex rounded-md border px-2 py-1 text-xs font-medium capitalize
 									{user.role === 'owner'
-									? 'border-brand-500/30 bg-brand-50 text-brand-900 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-100'
+									? 'border-gray-300 bg-gray-100 text-gray-950 dark:border-gray-700 dark:bg-neutral-900 dark:text-white'
 									: 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}"
 							>
 								{user.role}

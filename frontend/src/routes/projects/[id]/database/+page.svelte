@@ -309,7 +309,7 @@
 			<div class="grid gap-3 text-sm md:grid-cols-4">
 				<div>
 					<p class="text-xs text-gray-500 dark:text-gray-400">Status</p>
-					<p class="mt-1 font-medium {status.connected ? 'text-brand-700 dark:text-brand-300' : 'text-red-600 dark:text-red-300'}">
+					<p class="mt-1 font-medium {status.connected ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}">
 						{status.connected ? 'Connected' : 'Unavailable'}
 					</p>
 				</div>
@@ -363,7 +363,7 @@
 								<button
 									type="button"
 									class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors {selectedSchema === table.schema && selectedTable === table.name
-										? 'bg-brand-50 text-brand-900 dark:bg-brand-500/10 dark:text-brand-100'
+										? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white'
 										: 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-white'}"
 									on:click={() => void chooseTable(table)}
 								>
@@ -466,7 +466,7 @@
 													<span class="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-800 dark:bg-yellow-500/10 dark:text-yellow-200">PK</span>
 												{/if}
 												{#if (column.enumValues?.length ?? 0) > 0}
-													<span class="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] text-brand-700 dark:bg-brand-500/10 dark:text-brand-200">ENUM</span>
+													<span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 dark:bg-neutral-900 dark:text-gray-200">ENUM</span>
 												{/if}
 											</span>
 										</th>

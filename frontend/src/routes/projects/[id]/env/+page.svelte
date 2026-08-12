@@ -386,7 +386,7 @@
 							<input
 								type="checkbox"
 								bind:checked={confirmOverwrite}
-								class="mt-0.5 h-4 w-4 rounded border-amber-300 text-brand-700 focus:ring-brand-600"
+								class="mt-0.5 h-4 w-4 rounded border-amber-300 text-gray-950 focus:ring-gray-950 dark:text-white dark:focus:ring-white"
 								disabled={savingImport}
 							/>
 							<span>Allow {importCounts.overwrite} existing variable{importCounts.overwrite === 1 ? '' : 's'} to be overwritten</span>

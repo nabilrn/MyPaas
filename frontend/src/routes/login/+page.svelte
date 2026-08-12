@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { Moon, Sun } from '@lucide/svelte';
-	import logoGreen from '../../assets/mypaas-horizontal-transparent-green.png';
-	import logoWhite from '../../assets/mypaas-horizontal-transparent-white.png';
-	import circuitBgLight from '../../assets/mypaas-circuit-background.svg';
+	import BrandLogo from '$components/BrandLogo.svelte';
 	import circuitBgDark from '../../assets/mypaas-circuit-background-dark.svg';
 	import { theme } from '$stores/theme';
 </script>
@@ -12,18 +10,11 @@
 </svelte:head>
 
 <div class="login-page">
-	<!-- Circuit background: light (green) / dark (white) -->
-	<img
-		src={circuitBgLight}
-		alt=""
-		aria-hidden="true"
-		class="circuit-bg pointer-events-none dark:hidden"
-	/>
 	<img
 		src={circuitBgDark}
 		alt=""
 		aria-hidden="true"
-		class="circuit-bg pointer-events-none hidden dark:block"
+		class="circuit-bg pointer-events-none"
 	/>
 
 	<!-- Theme toggle — top-right corner -->
@@ -45,8 +36,7 @@
 		<div class="login-inner">
 			<div class="mb-6 flex flex-col items-center text-center">
 				<div class="flex h-14 w-[200px] items-center justify-center">
-					<img src={logoGreen} alt="MyPaas" class="h-14 w-[200px] object-contain dark:hidden" />
-					<img src={logoWhite} alt="MyPaas" class="hidden h-14 w-[200px] object-contain dark:block" />
+					<BrandLogo imageClass="h-14 w-[200px] object-center" />
 				</div>
 				<p class="mt-2 text-sm" style="color: var(--app-muted);">
 					Self-hosted Git-based deployments.
@@ -82,17 +72,21 @@
 		background: var(--app-bg);
 	}
 
-	/* Circuit background — covers viewport */
 	.circuit-bg {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		opacity: 0.5;
+		opacity: 0.16;
+		filter: brightness(0);
 	}
 
-	/* Theme toggle button */
+	:global(.dark) .circuit-bg {
+		opacity: 0.12;
+		filter: none;
+	}
+
 	.theme-toggle {
 		position: absolute;
 		top: 1rem;
@@ -123,7 +117,6 @@
 			0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 76%, transparent);
 	}
 
-	/* Login content — always on top */
 	.login-content {
 		position: relative;
 		z-index: 1;

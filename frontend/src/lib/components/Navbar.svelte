@@ -3,12 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import BrandLogo from '$components/BrandLogo.svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import { api } from '$api';
 	import { sidebarCollapsed } from '$stores/sidebar';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
-	import logo from '../../assets/mypaas-horizontal-transparent-green.png';
 
 	export let user: User | null = null;
 
@@ -53,11 +53,14 @@
 </script>
 
 <aside class="fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-200 bg-white transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 lg:flex {$sidebarCollapsed ? 'w-16' : 'w-64'}">
-	<div class="flex h-16 items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-4'}">
-		{#if !$sidebarCollapsed}
+	<div class="flex items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'h-20 flex-col justify-center gap-1 px-2' : 'h-16 justify-between gap-2.5 px-4'}">
+		{#if $sidebarCollapsed}
+			<a href="/projects" class="flex items-center justify-center rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
+				<BrandLogo compact imageClass="h-7 w-7" />
+			</a>
+		{:else}
 			<a href="/projects" class="flex min-w-0 items-center">
-				<span class="sr-only">MyPaas</span>
-				<img src={logo} alt="" aria-hidden="true" class="h-9 w-[138px] object-contain object-left brightness-0 dark:invert" />
+				<BrandLogo />
 			</a>
 		{/if}
 		<IconButton
