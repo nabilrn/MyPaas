@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Pencil, Trash2 } from '@lucide/svelte';
+	import { Filter, Lock, Pencil, Plus, RefreshCw, RotateCcw, Save, Trash2, Unlock, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -11,7 +11,7 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import type { DBStudioColumn, DBStudioRowPage, DBStudioSchema, DBStudioStatus, DBStudioTable } from '$types';
+	import type { DBStudioRowPage, DBStudioSchema, DBStudioStatus, DBStudioTable } from '$types';
 
 	type MutationMode = 'insert' | 'edit' | 'delete';
 
@@ -79,9 +79,7 @@
 			if (!status.connected) return;
 			schemas = await api.dbStudio.schemas(projectId);
 			selectedSchema = selectedSchema || schemas[0]?.name || '';
-			if (selectedSchema) {
-				await loadTables();
-			}
+			if (selectedSchema) await loadTables();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load database studio';
 		} finally {
@@ -97,15 +95,10 @@
 			tables = await api.dbStudio.tables(projectId, selectedSchema);
 			const previousTable = selectedTable;
 			selectedTable = tables.some((table) => table.name === selectedTable) ? selectedTable : tables[0]?.name || '';
-			if (selectedTable !== previousTable) {
-				resetRowFilters();
-			}
+			if (selectedTable !== previousTable) resetRowFilters();
 			pageIndex = 0;
-			if (selectedTable) {
-				await loadRows();
-			} else {
-				rows = null;
-			}
+			if (selectedTable) await loadRows();
+			else rows = null;
 		} catch (err) {
 			tableError = err instanceof Error ? err.message : 'Failed to load tables';
 		} finally {
@@ -148,9 +141,7 @@
 		appliedRowSearch = rowSearch.trim();
 		appliedEnumFilters = cleanEnumFilters(enumFilters);
 		pageIndex = 0;
-		if (lastPageIndex === 0) {
-			await loadRows();
-		}
+		if (lastPageIndex === 0) await loadRows();
 	}
 
 	async function clearRowFilters() {
@@ -159,9 +150,7 @@
 		appliedRowSearch = '';
 		appliedEnumFilters = {};
 		pageIndex = 0;
-		if (lastPageIndex === 0) {
-			await loadRows();
-		}
+		if (lastPageIndex === 0) await loadRows();
 	}
 
 	function resetRowFilters() {
@@ -281,9 +270,9 @@
 
 {#if loading}
 	<SectionPanel title="Database Studio" description="Loading database connection and schema metadata.">
-		<div class="space-y-3">
-			<div class="h-16 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
-			<div class="h-48 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
+		<div class="space-y-2">
+			<div class="h-14 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>
+			<div class="h-44 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>
 		</div>
 	</SectionPanel>
 {:else if error}
@@ -295,65 +284,69 @@
 		<EmptyState title="No database connection found." description="Add DATABASE_URL or DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD in Environment, then redeploy or refresh this page." />
 	</SectionPanel>
 {:else}
-	<div class="space-y-5">
-		<SectionPanel title="Database Studio" description="Browse and lightly edit project database rows without opening a full SQL client.">
+	<div class="space-y-4">
+		<SectionPanel title="Database Studio" description="Browse and lightly edit project database rows without opening a full SQL client." contentClass="p-0">
 			<svelte:fragment slot="actions">
-				<ActionButton variant="secondary" on:click={() => void load()} disabled={loadingRows || loadingTables}>Refresh</ActionButton>
+				<ActionButton variant="secondary" size="sm" on:click={() => void load()} disabled={loadingRows || loadingTables}>
+					<RefreshCw slot="icon" class="h-4 w-4" />
+					Refresh
+				</ActionButton>
 				{#if writeActive}
-					<ActionButton variant="ghostDanger" on:click={revokeWriteMode} loading={revokingWrite} loadingLabel="Revoking...">Disable write</ActionButton>
+					<ActionButton variant="ghostDanger" size="sm" on:click={revokeWriteMode} loading={revokingWrite} loadingLabel="Revoking">
+						<Lock slot="icon" class="h-4 w-4" />
+						Disable write
+					</ActionButton>
 				{:else}
-					<ActionButton variant="primary" on:click={startWriteMode} loading={startingWrite} loadingLabel="Enabling...">Enable write</ActionButton>
+					<ActionButton variant="primary" size="sm" on:click={startWriteMode} loading={startingWrite} loadingLabel="Enabling">
+						<Unlock slot="icon" class="h-4 w-4" />
+						Enable write
+					</ActionButton>
 				{/if}
 			</svelte:fragment>
 
-			<div class="grid gap-3 text-sm md:grid-cols-4">
-				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Status</p>
-					<p class="mt-1 font-medium {status.connected ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}">
+			<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+				<div class="p-4">
+					<p class="metric-label">Status</p>
+					<p class="mt-1 inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+						<span class="status-dot {status.connected ? 'bg-emerald-500' : 'bg-red-500'}"></span>
 						{status.connected ? 'Connected' : 'Unavailable'}
 					</p>
 				</div>
-				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Driver</p>
-					<p class="mt-1 font-mono text-gray-950 dark:text-white">{connection ? driverLabel(connection.driver) : '-'}</p>
+				<div class="p-4">
+					<p class="metric-label">Driver</p>
+					<p class="mt-1 font-mono text-sm text-gray-950 dark:text-white">{connection ? driverLabel(connection.driver) : '—'}</p>
 				</div>
-				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Database</p>
-					<p class="mt-1 truncate font-mono text-gray-950 dark:text-white">{connection?.database ?? '-'}</p>
+				<div class="p-4">
+					<p class="metric-label">Database</p>
+					<p class="mt-1 truncate font-mono text-sm text-gray-950 dark:text-white">{connection?.database ?? '—'}</p>
 				</div>
-				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Write mode</p>
-					<p class="mt-1 font-medium {writeActive ? 'text-yellow-700 dark:text-yellow-200' : 'text-gray-600 dark:text-gray-300'}">
-						{writeActive ? `Active ${writeRemaining}` : 'Read-only'}
+				<div class="p-4">
+					<p class="metric-label">Write mode</p>
+					<p class="mt-1 inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+						<span class="status-dot {writeActive ? 'bg-amber-500' : 'bg-gray-400 dark:bg-gray-500'}"></span>
+						{writeActive ? `Active · ${writeRemaining}` : 'Read-only'}
 					</p>
 				</div>
 			</div>
-			{#if !status.connected}
-				<p class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-					{status.message}
-				</p>
-			{/if}
+			{#if !status.connected}<div class="alert-danger m-4">{status.message}</div>{/if}
 		</SectionPanel>
 
 		{#if status.connected}
-			<div class="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+			<div class="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
 				<SectionPanel title="Tables" description="Choose one table at a time." contentClass="p-0">
-					<div class="border-b border-gray-100 p-3 dark:border-gray-800">
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="schema">Schema</label>
+					<div class="border-b border-gray-100 p-3 dark:border-neutral-800">
+						<label class="field-label" for="schema">Schema</label>
 						<select id="schema" value={selectedSchema} on:change={handleSchemaChange} class="field w-full">
-							{#each schemas as schema}
-								<option value={schema.name}>{schema.name}</option>
-							{/each}
+							{#each schemas as schema}<option value={schema.name}>{schema.name}</option>{/each}
 						</select>
-						<input value={tableSearch} placeholder="Search tables" class="field mt-3 w-full" on:input={(event) => (tableSearch = (event.currentTarget as HTMLInputElement).value)} />
+						<label class="field-label mt-3" for="table-search">Search tables</label>
+						<input id="table-search" value={tableSearch} placeholder="Table name" class="field w-full" on:input={(event) => (tableSearch = (event.currentTarget as HTMLInputElement).value)} />
 					</div>
 					{#if tableError}
 						<ErrorState message={tableError} on:retry={() => void loadTables()} />
 					{:else if loadingTables}
-						<div class="space-y-2 p-3">
-							{#each [1, 2, 3, 4] as _}
-								<div class="h-9 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
-							{/each}
+						<div class="space-y-1 p-2">
+							{#each [1, 2, 3, 4] as _}<div class="h-9 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>{/each}
 						</div>
 					{:else if filteredTables.length === 0}
 						<EmptyState title="No tables found." compact />
@@ -362,12 +355,12 @@
 							{#each filteredTables as table}
 								<button
 									type="button"
-									class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors {selectedSchema === table.schema && selectedTable === table.name
-										? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white'
-										: 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-gray-900 dark:hover:text-white'}"
+									class="app-focus flex w-full items-center rounded-md px-3 py-2 text-left font-mono text-sm transition-colors {selectedSchema === table.schema && selectedTable === table.name
+										? 'bg-gray-100 font-medium text-gray-950 dark:bg-neutral-800 dark:text-white'
+										: 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white'}"
 									on:click={() => void chooseTable(table)}
 								>
-									<span class="truncate font-mono">{table.name}</span>
+									<span class="truncate">{table.name}</span>
 								</button>
 							{/each}
 						</div>
@@ -388,17 +381,26 @@
 					on:retry={() => void loadRows()}
 				>
 					<svelte:fragment slot="actions">
-						<ActionButton variant="secondary" size="xs" on:click={() => void loadRows()} disabled={!selectedTable || loadingRows}>Refresh rows</ActionButton>
+						<ActionButton variant="secondary" size="xs" on:click={() => void loadRows()} disabled={!selectedTable || loadingRows}>
+							<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+							Refresh rows
+						</ActionButton>
 						{#if activeFilterCount > 0}
-							<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows}>Clear filters</ActionButton>
+							<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows}>
+								<RotateCcw slot="icon" class="h-3.5 w-3.5" />
+								Clear filters
+							</ActionButton>
 						{/if}
-						<ActionButton variant="primary" size="xs" on:click={openInsert} disabled={!writeActive || columns.length === 0}>Insert row</ActionButton>
+						<ActionButton variant="primary" size="xs" on:click={openInsert} disabled={!writeActive || columns.length === 0}>
+							<Plus slot="icon" class="h-3.5 w-3.5" />
+							Insert row
+						</ActionButton>
 					</svelte:fragment>
 
-					<div class="border-b border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-950/60">
+					<div class="border-b border-gray-100 bg-gray-50/50 p-3 dark:border-neutral-800 dark:bg-neutral-900/40">
 						<div class="grid gap-3 lg:grid-cols-[minmax(14rem,1fr)_auto] lg:items-end">
 							<label class="block">
-								<span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">Search rows</span>
+								<span class="field-label">Search rows</span>
 								<input
 									value={rowSearch}
 									class="field w-full"
@@ -413,13 +415,12 @@
 								/>
 							</label>
 							<div class="flex flex-wrap gap-2">
-								<ActionButton variant={filterDirty ? 'primary' : 'secondary'} size="xs" on:click={() => void applyRowFilters()} disabled={loadingRows || !filterDirty}>Apply filters</ActionButton>
-								<ActionButton
-									variant="ghost"
-									size="xs"
-									on:click={() => void clearRowFilters()}
-									disabled={loadingRows || (!rowSearch && activeFilterCount === 0 && Object.values(enumFilters).filter(Boolean).length === 0)}
-								>
+								<ActionButton variant={filterDirty ? 'primary' : 'secondary'} size="xs" on:click={() => void applyRowFilters()} disabled={loadingRows || !filterDirty}>
+									<Filter slot="icon" class="h-3.5 w-3.5" />
+									Apply filters
+								</ActionButton>
+								<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows || (!rowSearch && activeFilterCount === 0 && Object.values(enumFilters).filter(Boolean).length === 0)}>
+									<RotateCcw slot="icon" class="h-3.5 w-3.5" />
 									Reset
 								</ActionButton>
 							</div>
@@ -428,84 +429,58 @@
 							<div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 								{#each enumColumns as column}
 									<label class="block">
-										<span class="mb-1 block truncate text-xs font-medium text-gray-600 dark:text-gray-300" title={column.name}>
-											{column.name}
-										</span>
-										<select
-											class="field w-full"
-											value={enumFilters[column.name] ?? ''}
-											on:change={(event) => (enumFilters = { ...enumFilters, [column.name]: (event.currentTarget as HTMLSelectElement).value })}
-										>
+										<span class="field-label truncate" title={column.name}>{column.name}</span>
+										<select class="field w-full" value={enumFilters[column.name] ?? ''} on:change={(event) => (enumFilters = { ...enumFilters, [column.name]: (event.currentTarget as HTMLSelectElement).value })}>
 											<option value="">Any value</option>
-											{#each column.enumValues ?? [] as value}
-												<option {value}>{value}</option>
-											{/each}
+											{#each column.enumValues ?? [] as value}<option {value}>{value}</option>{/each}
 										</select>
 									</label>
 								{/each}
 							</div>
 						{/if}
-						<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Search and enum filters are applied in SQL with pagination; MyPaas does not load the whole table into memory.</p>
+						<p class="field-hint">Search and enum filters are applied in SQL with pagination; MyPaaS does not load the whole table into memory.</p>
 					</div>
 
 					{#if !rows || rows.rows.length === 0}
-						<EmptyState
-							title={activeFilterCount > 0 ? 'No rows match these filters.' : 'No rows in this table.'}
-							description={activeFilterCount > 0 ? 'Adjust the search or enum filters, then apply again.' : ''}
-							compact
-						/>
+						<EmptyState title={activeFilterCount > 0 ? 'No rows match these filters.' : 'No rows in this table.'} description={activeFilterCount > 0 ? 'Adjust the search or enum filters, then apply again.' : ''} compact />
 					{:else}
-						<table class="min-w-full divide-y divide-gray-100 text-sm dark:divide-gray-800">
-							<thead class="bg-gray-50 text-left text-xs font-medium text-gray-500 dark:bg-gray-950 dark:text-gray-400">
-								<tr>
-									{#each columns as column}
-										<th class="px-3 py-2 font-medium">
-											<span class="inline-flex items-center gap-1">
-												{column.name}
-												{#if column.primaryKey}
-													<span class="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] text-yellow-800 dark:bg-yellow-500/10 dark:text-yellow-200">PK</span>
-												{/if}
-												{#if (column.enumValues?.length ?? 0) > 0}
-													<span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 dark:bg-neutral-900 dark:text-gray-200">ENUM</span>
-												{/if}
-											</span>
-										</th>
-									{/each}
-									<th class="w-32 px-3 py-2 text-right font-medium">Actions</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-								{#each rows?.rows ?? [] as row, rowIndex}
-									<tr class="hover:bg-gray-50/70 dark:hover:bg-gray-900/60">
+						<div class="overflow-x-auto">
+							<table class="data-table">
+								<thead>
+									<tr>
 										{#each columns as column}
-											<td class="max-w-72 truncate px-3 py-2 font-mono text-xs text-gray-700 dark:text-gray-200" title={formatCell(row[column.name])}>
-												{formatCell(row[column.name])}
-											</td>
+											<th>
+												<span class="inline-flex items-center gap-1.5">
+													{column.name}
+													{#if column.primaryKey}<span class="font-mono text-[0.6875rem] font-semibold text-amber-700 dark:text-amber-300">PK</span>{/if}
+													{#if (column.enumValues?.length ?? 0) > 0}<span class="font-mono text-[0.6875rem] text-gray-400 dark:text-gray-500">ENUM</span>{/if}
+												</span>
+											</th>
 										{/each}
-										<td class="px-3 py-2">
-											<div class="flex justify-end gap-1">
-												<IconButton
-													label={`Edit database row ${pageIndex * pageSize + rowIndex + 1}`}
-													variant="ghost"
-													on:click={() => openEdit(row)}
-													disabled={!writeActive || primaryColumns.length === 0}
-												>
-													<Pencil class="h-4 w-4" aria-hidden="true" />
-												</IconButton>
-												<IconButton
-													label={`Delete database row ${pageIndex * pageSize + rowIndex + 1}`}
-													variant="danger"
-													on:click={() => openDelete(row)}
-													disabled={!writeActive || primaryColumns.length === 0}
-												>
-													<Trash2 class="h-4 w-4" aria-hidden="true" />
-												</IconButton>
-											</div>
-										</td>
+										<th class="w-24 text-right">Actions</th>
 									</tr>
-								{/each}
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{#each rows?.rows ?? [] as row, rowIndex}
+										<tr>
+											{#each columns as column}
+												<td class="max-w-72 truncate font-mono text-xs text-gray-700 dark:text-gray-200" title={formatCell(row[column.name])}>{formatCell(row[column.name])}</td>
+											{/each}
+											<td class="text-right">
+												<div class="flex justify-end gap-1">
+													<IconButton label={`Edit database row ${pageIndex * pageSize + rowIndex + 1}`} variant="ghost" on:click={() => openEdit(row)} disabled={!writeActive || primaryColumns.length === 0}>
+														<Pencil class="h-4 w-4" aria-hidden="true" />
+													</IconButton>
+													<IconButton label={`Delete database row ${pageIndex * pageSize + rowIndex + 1}`} variant="danger" on:click={() => openDelete(row)} disabled={!writeActive || primaryColumns.length === 0}>
+														<Trash2 class="h-4 w-4" aria-hidden="true" />
+													</IconButton>
+												</div>
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
 					{/if}
 
 					<svelte:fragment slot="footer">
@@ -519,43 +494,40 @@
 
 {#if mutationMode}
 	<div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-4">
-		<div class="w-full max-w-2xl overflow-hidden rounded-md border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-950">
-			<div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-				<h2 class="text-sm font-semibold text-gray-950 dark:text-white">
-					{mutationMode === 'insert' ? 'Insert row' : mutationMode === 'edit' ? 'Edit row' : 'Delete row'}
-				</h2>
-				<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{selectedTableLabel}</p>
+		<div class="overlay w-full max-w-2xl overflow-hidden">
+			<div class="panel-header flex items-start justify-between gap-3">
+				<div>
+					<h2 class="panel-title">{mutationMode === 'insert' ? 'Insert row' : mutationMode === 'edit' ? 'Edit row' : 'Delete row'}</h2>
+					<p class="panel-description font-mono">{selectedTableLabel}</p>
+				</div>
+				<IconButton label="Close database row dialog" variant="ghost" on:click={closeMutation} disabled={mutating}>
+					<X class="h-4 w-4" aria-hidden="true" />
+				</IconButton>
 			</div>
-			<div class="max-h-[70vh] overflow-auto p-5">
+			<div class="max-h-[70vh] overflow-auto p-4">
 				{#if mutationMode === 'delete'}
-					<p class="text-sm leading-6 text-gray-600 dark:text-gray-300">Delete this row by primary key. This action runs immediately and cannot be undone by MyPaas.</p>
-					<div class="mt-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-gray-800 dark:bg-gray-900">
-						{#each primaryColumns as column}
-							<p><span class="font-mono font-medium">{column.name}</span>: {formatCell(selectedRow?.[column.name])}</p>
-						{/each}
+					<p class="text-sm leading-6 text-gray-600 dark:text-gray-300">Delete this row by primary key. This action runs immediately and cannot be undone by MyPaaS.</p>
+					<div class="code-surface mt-4 space-y-1">
+						{#each primaryColumns as column}<p><span class="font-medium">{column.name}</span>: {formatCell(selectedRow?.[column.name])}</p>{/each}
 					</div>
 				{:else}
 					<div class="grid gap-4 sm:grid-cols-2">
 						{#each mutationMode === 'insert' ? insertColumns : writableColumns as column}
 							<label class="block">
-								<span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
-									{column.name}
-									<span class="font-normal text-gray-400">({column.dataType})</span>
-								</span>
-								<input
-									value={draftValues[column.name] ?? ''}
-									class="field w-full font-mono"
-									placeholder={column.nullable ? 'nullable' : ''}
-									on:input={(event) => (draftValues = { ...draftValues, [column.name]: (event.currentTarget as HTMLInputElement).value })}
-								/>
+								<span class="field-label">{column.name} <span class="font-normal text-gray-400">({column.dataType})</span></span>
+								<input value={draftValues[column.name] ?? ''} class="field w-full font-mono" placeholder={column.nullable ? 'nullable' : ''} on:input={(event) => (draftValues = { ...draftValues, [column.name]: (event.currentTarget as HTMLInputElement).value })} />
 							</label>
 						{/each}
 					</div>
 				{/if}
 			</div>
-			<div class="flex justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-800">
-				<ActionButton variant="ghost" on:click={closeMutation} disabled={mutating}>Cancel</ActionButton>
-				<ActionButton variant={mutationMode === 'delete' ? 'danger' : 'primary'} on:click={() => void submitMutation()} loading={mutating} loadingLabel="Saving...">
+			<div class="flex justify-end gap-2 border-t border-gray-100 p-4 dark:border-neutral-800">
+				<ActionButton variant="ghost" on:click={closeMutation} disabled={mutating}>
+					<X slot="icon" class="h-4 w-4" />
+					Cancel
+				</ActionButton>
+				<ActionButton variant={mutationMode === 'delete' ? 'danger' : 'primary'} on:click={() => void submitMutation()} loading={mutating} loadingLabel="Saving">
+					{#if mutationMode === 'delete'}<Trash2 slot="icon" class="h-4 w-4" />{:else}<Save slot="icon" class="h-4 w-4" />{/if}
 					{mutationMode === 'delete' ? 'Delete row' : 'Save row'}
 				</ActionButton>
 			</div>
