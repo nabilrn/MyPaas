@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { ExternalLink, FolderGit2, GitBranch, Github, Gitlab, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FolderGit2, GitBranch, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
+	import GitHubMark from '$components/GitHubMark.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
@@ -185,8 +186,7 @@
 	}
 
 	function sourceIcon(host: RepositoryHost) {
-		if (host === 'github') return Github;
-		if (host === 'gitlab') return Gitlab;
+		if (host === 'github') return GitHubMark;
 		if (host === 'registry') return Package;
 		return FolderGit2;
 	}
