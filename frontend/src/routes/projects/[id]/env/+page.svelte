@@ -5,7 +5,6 @@
 	import ActionButton from '$components/ActionButton.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
-	import IconButton from '$components/IconButton.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import SecretField from '$components/SecretField.svelte';
 	import { api } from '$api';
@@ -314,9 +313,10 @@
 				</ActionButton>
 			{/if}
 			{#if !adding}
-				<IconButton label="Add variable" variant="primary" on:click={() => (adding = true)}>
-					<Plus class="h-4 w-4" aria-hidden="true" />
-				</IconButton>
+				<ActionButton variant="primary" on:click={() => (adding = true)}>
+					<Plus slot="icon" class="h-4 w-4" />
+					Add variable
+				</ActionButton>
 			{/if}
 		</div>
 	</svelte:fragment>
@@ -362,20 +362,20 @@
 				</div>
 
 				<div class="soft-panel flex min-w-0 flex-col gap-4 p-4">
-					<div class="grid grid-cols-2 gap-2 text-xs">
-						<div class="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950/70">
+					<div class="grid grid-cols-2 gap-3 text-xs">
+						<div class="p-2">
 							<div class="metric-label">New</div>
 							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.newCount}</div>
 						</div>
-						<div class="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950/70">
+						<div class="p-2">
 							<div class="metric-label">Overwrite</div>
 							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.overwrite}</div>
 						</div>
-						<div class="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950/70">
+						<div class="p-2">
 							<div class="metric-label">Duplicate</div>
 							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.duplicate}</div>
 						</div>
-						<div class="rounded-md border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950/70">
+						<div class="p-2">
 							<div class="metric-label">Invalid</div>
 							<div class="mt-1 text-lg font-semibold text-gray-950 dark:text-white">{importCounts.invalid}</div>
 						</div>
