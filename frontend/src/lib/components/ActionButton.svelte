@@ -35,7 +35,7 @@
 	{:else if $$slots.icon}
 		<span class="flex shrink-0 items-center" aria-hidden="true"><slot name="icon" /></span>
 	{/if}
-	<span class="min-w-0 truncate">
+	<span class="inline-flex min-w-0 items-center gap-2 truncate">
 		{#if loading && loadingLabel}
 			{loadingLabel}
 		{:else}
