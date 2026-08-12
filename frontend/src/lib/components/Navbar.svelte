@@ -6,6 +6,7 @@
 	import BrandLogo from '$components/BrandLogo.svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import { api } from '$api';
+	import { dismissable } from '$lib/actions/dismissable';
 	import { sidebarCollapsed } from '$stores/sidebar';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
@@ -41,6 +42,10 @@
 		return (user?.githubUsername || user?.email || '?').slice(0, 1).toUpperCase();
 	}
 
+	function closeAccountMenu() {
+		accountMenuOpen = false;
+	}
+
 	async function handleLogout() {
 		if (signingOut) return;
 		signingOut = true;
@@ -63,11 +68,7 @@
 				<BrandLogo />
 			</a>
 		{/if}
-		<IconButton
-			label={$sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-			variant="ghost"
-			on:click={() => sidebarCollapsed.toggle()}
-		>
+		<IconButton label={$sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} variant="ghost" on:click={() => sidebarCollapsed.toggle()}>
 			{#if $sidebarCollapsed}
 				<ChevronRight class="h-4 w-4" aria-hidden="true" />
 			{:else}
@@ -77,97 +78,40 @@
 	</div>
 
 	<nav class="flex-1 overflow-y-auto py-4 {$sidebarCollapsed ? 'px-2' : 'px-3'}" aria-label="Primary navigation">
-		{#if !$sidebarCollapsed}
-			<p class="px-3 pb-2 text-xs font-medium text-gray-400 dark:text-gray-500">Workspace</p>
-		{/if}
+		{#if !$sidebarCollapsed}<p class="px-3 pb-2 text-xs font-medium text-gray-400 dark:text-gray-500">Workspace</p>{/if}
 		<div class="space-y-1">
 			{#each navItems as item}
-				<a
-					href={item.href}
-					aria-current={isActive(item.href, pathname) ? 'page' : undefined}
-					class={navItemClass(item.href, pathname, $sidebarCollapsed)}
-					title={$sidebarCollapsed ? item.label : undefined}
-				>
+				<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, pathname, $sidebarCollapsed)} title={$sidebarCollapsed ? item.label : undefined}>
 					<svelte:component this={item.icon} class="h-4 w-4 shrink-0" aria-hidden="true" />
-					{#if $sidebarCollapsed}
-						<span class="sr-only">{item.label}</span>
-					{:else}
-						{item.label}
-					{/if}
+					{#if $sidebarCollapsed}<span class="sr-only">{item.label}</span>{:else}{item.label}{/if}
 				</a>
 			{/each}
 		</div>
 	</nav>
 
 	<div class="border-t border-gray-200 p-2 dark:border-neutral-800">
-		<div class="relative">
+		<div class="relative" use:dismissable={{ enabled: accountMenuOpen, onDismiss: closeAccountMenu }}>
 			{#if $sidebarCollapsed}
-				<button
-					type="button"
-					class="app-focus mx-auto flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-transparent text-xs font-semibold text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-100 dark:text-gray-200 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
-					aria-label="Open account menu"
-					aria-expanded={accountMenuOpen}
-					title={userLabel}
-					on:click={() => (accountMenuOpen = !accountMenuOpen)}
-				>
-					{#if user?.avatarUrl}
-						<img src={user.avatarUrl} alt="" class="h-7 w-7 rounded-full object-cover" />
-					{:else}
-						<span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800">{initial()}</span>
-					{/if}
+				<button type="button" class="app-focus mx-auto flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-transparent text-xs font-semibold text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-100 dark:text-gray-200 dark:hover:border-neutral-800 dark:hover:bg-neutral-900" aria-label="Open account menu" aria-expanded={accountMenuOpen} title={userLabel} on:click={() => (accountMenuOpen = !accountMenuOpen)}>
+					{#if user?.avatarUrl}<img src={user.avatarUrl} alt="" class="h-7 w-7 rounded-full object-cover" />{:else}<span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800">{initial()}</span>{/if}
 				</button>
 			{:else}
-				<button
-					type="button"
-					class="app-focus flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
-					aria-label="Open account menu"
-					aria-expanded={accountMenuOpen}
-					on:click={() => (accountMenuOpen = !accountMenuOpen)}
-				>
-					{#if user?.avatarUrl}
-						<img src={user.avatarUrl} alt="" class="h-8 w-8 shrink-0 rounded-full object-cover" />
-					{:else}
-						<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 dark:bg-neutral-800 dark:text-gray-200">{initial()}</span>
-					{/if}
-					<span class="min-w-0 flex-1">
-						<span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{userLabel}</span>
-						{#if user?.email}
-							<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</span>
-						{/if}
-					</span>
+				<button type="button" class="app-focus flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900" aria-label="Open account menu" aria-expanded={accountMenuOpen} on:click={() => (accountMenuOpen = !accountMenuOpen)}>
+					{#if user?.avatarUrl}<img src={user.avatarUrl} alt="" class="h-8 w-8 shrink-0 rounded-full object-cover" />{:else}<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 dark:bg-neutral-800 dark:text-gray-200">{initial()}</span>{/if}
+					<span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{userLabel}</span>{#if user?.email}<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</span>{/if}</span>
 				</button>
 			{/if}
-
 			{#if accountMenuOpen}
 				<div class="overlay absolute z-50 mb-2 w-56 p-1 {$sidebarCollapsed ? 'bottom-0 left-full ml-2' : 'bottom-full left-0 right-0 w-auto'}">
-					<ActionButton variant="ghostDanger" size="xs" full className="justify-start" loading={signingOut} loadingLabel="Signing out..." on:click={handleLogout}>
-						<LogOut slot="icon" class="h-4 w-4" />
-						Sign out
-					</ActionButton>
+					<ActionButton variant="ghostDanger" size="xs" full className="justify-start" loading={signingOut} loadingLabel="Signing out..." on:click={handleLogout}><LogOut slot="icon" class="h-4 w-4" />Sign out</ActionButton>
 				</div>
 			{/if}
 		</div>
 
 		{#if $sidebarCollapsed}
-			<div class="mt-1 flex justify-center">
-				<IconButton label={$theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'} variant="ghost" on:click={() => theme.toggle()}>
-					{#if $theme === 'dark'}
-						<Sun class="h-4 w-4" aria-hidden="true" />
-					{:else}
-						<Moon class="h-4 w-4" aria-hidden="true" />
-					{/if}
-				</IconButton>
-			</div>
+			<div class="mt-1 flex justify-center"><IconButton label={$theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'} variant="ghost" on:click={() => theme.toggle()}>{#if $theme === 'dark'}<Sun class="h-4 w-4" aria-hidden="true" />{:else}<Moon class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></div>
 		{:else}
-			<ActionButton variant="ghost" size="xs" full className="mt-1 justify-start" on:click={() => theme.toggle()}>
-				{#if $theme === 'dark'}
-					<Sun slot="icon" class="h-4 w-4" />
-					Light appearance
-				{:else}
-					<Moon slot="icon" class="h-4 w-4" />
-					Dark appearance
-				{/if}
-			</ActionButton>
+			<ActionButton variant="ghost" size="xs" full className="mt-1 justify-start" on:click={() => theme.toggle()}>{#if $theme === 'dark'}<Sun slot="icon" class="h-4 w-4" />Light appearance{:else}<Moon slot="icon" class="h-4 w-4" />Dark appearance{/if}</ActionButton>
 		{/if}
 	</div>
 </aside>
