@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { Plus } from '@lucide/svelte';
+	import ActionLink from './ActionLink.svelte';
+
 	export let title: string;
 	export let description = '';
 	export let actionLabel = '';
@@ -15,16 +17,9 @@
 	{/if}
 
 	{#if actionLabel && actionHref}
-		<a
-			href={actionHref}
-			class="mt-4 inline-flex min-h-9 items-center gap-2 rounded-md bg-brand-700 px-3 py-1.5 text-sm font-medium
-				   text-white transition-colors hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-2
-				   focus-visible:ring-brand-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white
-				   dark:bg-brand-500 dark:text-gray-950 dark:hover:bg-brand-100 dark:focus-visible:ring-brand-500
-				   dark:focus-visible:ring-offset-gray-950"
-		>
-			<Plus class="h-4 w-4" aria-hidden="true" />
+		<ActionLink href={actionHref} variant="primary" className="mt-4">
+			<Plus slot="icon" class="h-4 w-4" />
 			{actionLabel}
-		</a>
+		</ActionLink>
 	{/if}
 </div>
