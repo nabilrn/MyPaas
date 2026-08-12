@@ -1,40 +1,26 @@
 <script lang="ts">
-	import { ExternalLink, Play, Plus, RefreshCw, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
-	import StatusBadge from '$components/StatusBadge.svelte';
-	import FleetStatusChart from '$components/FleetStatusChart.svelte';
-	import IconButton from '$components/IconButton.svelte';
 	import PageHeader from '$components/PageHeader.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
-	import StatTile from '$components/StatTile.svelte';
+	import StatusBadge from '$components/StatusBadge.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
+	import { appendRollingSample, boundedPercent, deriveNetworkRate, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { projectURL } from '$lib/utils/urls';
-	import type { Project, QuotaUsage } from '$types';
-
-	type FleetSegment = {
-		label: string;
-		value: number;
-		tone: 'success' | 'info' | 'warning' | 'danger' | 'neutral';
-	};
-
-	type DeployModeSegment = {
-		label: string;
-		value: number;
-		barClass: string;
-		textClass: string;
-	};
+	import type { Project } from '$types';
 
 	const pageSize = 20;
+	const telemetrySamples = 24;
+
 	let projects: Project[] = [];
-	let quota: QuotaUsage | null = null;
 	let hostStats: HostStats | null = null;
 	let loading = true;
 	let error = '';
@@ -49,6 +35,12 @@
 	let uptimeRefreshToken = 0;
 	let lastRefreshedAt: Date | null = null;
 	let projectsInFlight = false;
+	let ramSeries: number[] = [];
+	let cpuSeries: number[] = [];
+	let storageSeries: number[] = [];
+	let networkSeries: number[] = [];
+	let networkBaseline: NetworkCounterSample | null = null;
+	let currentNetworkRate: NetworkRate | null = null;
 
 	$: normalizedSearch = searchQuery.trim().toLowerCase();
 	$: filteredProjects = normalizedSearch
@@ -56,12 +48,13 @@
 				[project.name, project.subdomain, project.repoUrl, project.imageRef ?? '', project.sourceType, project.branch, project.deployMode, project.mainService ?? '', project.status].join(' ').toLowerCase().includes(normalizedSearch)
 			)
 		: projects;
-	$: hostRamMb = hostStats ? Math.round(hostStats.host_ram_bytes / (1024 * 1024)) : 0;
-	$: hostRamWarning = hostStats && hostRamMb > 0 && hostStats.allocated_ram_mb > (hostRamMb * 0.85);
-	$: memoryConfiguredPercent = quota && quota.memoryLimitMb > 0 ? Math.min(100, (quota.memoryUsedMb / quota.memoryLimitMb) * 100) : 0;
-	$: memoryRuntimePercent = quota && quota.memoryUsedMb > 0 ? Math.min(100, (quota.memoryRuntimeMb / quota.memoryUsedMb) * 100) : 0;
-	$: cpuConfiguredPercent = quota && quota.cpuLimit > 0 ? Math.min(100, (quota.cpuUsed / quota.cpuLimit) * 100) : 0;
-	$: projectPercent = quota && quota.projectLimit > 0 ? Math.min(100, (quota.projectCount / quota.projectLimit) * 100) : 0;
+	$: hostRamMb = hostStats ? hostStats.host_ram_bytes / (1024 * 1024) : 0;
+	$: ramAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_ram_mb, hostRamMb) : 0;
+	$: cpuAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_cpu, hostStats.host_cpu_cores) : 0;
+	$: storageUsedBytes = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
+	$: storagePercent = hostStats?.storage ? boundedPercent(storageUsedBytes, hostStats.storage.total_bytes) : 0;
+	$: hostRamWarning = ramAllocationPercent >= 85;
+	$: storageWarning = Boolean(hostStats?.storage && storagePercent >= 85);
 	$: getDerivedStatus = (project: Project) => {
 		if (project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
 		return project.status;
@@ -75,36 +68,14 @@
 	$: composeCount = projects.filter((project) => project.deployMode === 'compose').length;
 	$: staticCount = projects.filter((project) => project.deployMode === 'static').length;
 	$: imageCount = projects.filter((project) => project.deployMode === 'image').length;
-	$: latestProject = [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-	$: healthyCopy = issueCount > 0 ? `${issueCount} project${issueCount !== 1 ? 's' : ''} need attention` : `${runningCount} running, no crashed projects`;
-	$: syncLabel = error ? 'Sync needs attention' : loading ? 'Syncing workspace' : 'Workspace synced';
-	$: syncDetail = lastRefreshedAt ? `Updated ${formatRefreshTime(lastRefreshedAt)}` : 'Waiting for first refresh';
-	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-sky-500 animate-pulse' : 'bg-brand-500';
-	$: healthSegments = [
-		{ label: 'Running', value: runningCount, tone: 'success' },
-		{ label: 'Building', value: buildingCount, tone: 'warning' },
-		{ label: 'Stopped', value: stoppedCount, tone: 'neutral' },
-		{ label: 'Pending', value: pendingCount, tone: 'info' },
-		{ label: 'Crashed', value: issueCount, tone: 'danger' }
-	] satisfies FleetSegment[];
-	$: deployModeSegments = [
-		{ label: 'Dockerfile', value: dockerfileCount, barClass: 'bg-sky-500', textClass: 'text-sky-700 dark:text-sky-300' },
-		{ label: 'Compose', value: composeCount, barClass: 'bg-brand-500', textClass: 'text-brand-700 dark:text-brand-100' },
-		{ label: 'Static', value: staticCount, barClass: 'bg-gray-400 dark:bg-gray-500', textClass: 'text-gray-600 dark:text-gray-300' },
-		{ label: 'Image', value: imageCount, barClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-300' }
-	] satisfies DeployModeSegment[];
-	$: deployModeTotal = deployModeSegments.reduce((sum, segment) => sum + segment.value, 0);
-	$: dominantDeployMode = deployModeSegments.reduce((top, segment) => (segment.value > top.value ? segment : top), deployModeSegments[0]);
+	$: syncLabel = error ? 'Refresh needs attention' : loading ? 'Refreshing' : 'Up to date';
+	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
-	$: if (currentPage > maxPage) {
-		currentPage = maxPage;
-	}
+	$: if (currentPage > maxPage) currentPage = maxPage;
 	$: pageStart = currentPage * pageSize;
 	$: visibleProjects = filteredProjects.slice(pageStart, pageStart + pageSize);
 	$: hasNext = pageStart + pageSize < filteredProjects.length;
-	$: if (!loading && visibleProjects.length > 0) {
-		void loadUptimesFor(visibleProjects);
-	}
+	$: if (!loading && visibleProjects.length > 0) void loadUptimesFor(visibleProjects);
 
 	onMount(() => {
 		void refreshDashboardData();
@@ -125,20 +96,50 @@
 	async function loadProjects(background = false) {
 		if (projectsInFlight) return;
 		projectsInFlight = true;
-		if (!background) {
-			loading = true;
-		}
+		if (!background) loading = true;
 		error = '';
 		try {
-			[projects, quota, hostStats] = await Promise.all([api.projects.list(), api.me.quota(), api.admin.getHostStats()]);
+			const [projectRows, nextHostStats] = await Promise.all([api.projects.list(), api.admin.getHostStats()]);
+			projects = projectRows;
+			hostStats = nextHostStats;
+			recordHostTelemetry(nextHostStats, Date.now());
 			lastRefreshedAt = new Date();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load projects';
 		} finally {
-			if (!background) {
-				loading = false;
-			}
+			if (!background) loading = false;
 			projectsInFlight = false;
+		}
+	}
+
+	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {
+		const totalRamMb = stats.host_ram_bytes / (1024 * 1024);
+		ramSeries = appendRollingSample(ramSeries, boundedPercent(stats.allocated_ram_mb, totalRamMb), telemetrySamples);
+		cpuSeries = appendRollingSample(cpuSeries, boundedPercent(stats.allocated_cpu, stats.host_cpu_cores), telemetrySamples);
+
+		if (stats.storage && stats.storage.total_bytes > 0) {
+			const used = Math.max(0, stats.storage.total_bytes - stats.storage.available_bytes);
+			storageSeries = appendRollingSample(storageSeries, boundedPercent(used, stats.storage.total_bytes), telemetrySamples);
+		} else {
+			storageSeries = [];
+		}
+
+		if (stats.network) {
+			const current: NetworkCounterSample = {
+				interface: stats.network.interface,
+				rxBytes: stats.network.rx_bytes,
+				txBytes: stats.network.tx_bytes,
+				sampledAtMs
+			};
+			currentNetworkRate = deriveNetworkRate(networkBaseline, current);
+			networkBaseline = current;
+			if (currentNetworkRate) {
+				networkSeries = appendRollingSample(networkSeries, currentNetworkRate.totalBytesPerSecond, telemetrySamples);
+			}
+		} else {
+			networkBaseline = null;
+			currentNetworkRate = null;
+			networkSeries = [];
 		}
 	}
 
@@ -153,14 +154,14 @@
 	function projectPrimaryLabel(project: Project) {
 		const action = projectPrimaryAction(project);
 		if (projectActionId === project.id) {
-			if (projectActionType === 'stop') return 'Stopping project';
-			if (projectActionType === 'start') return 'Starting project';
-			return 'Deployment in progress';
+			if (projectActionType === 'stop') return 'Stopping';
+			if (projectActionType === 'start') return 'Starting';
+			return 'Deploying';
 		}
-		if (action === 'busy') return 'Deployment in progress';
-		if (action === 'stop') return 'Stop project';
-		if (action === 'start') return 'Start project';
-		return 'Deploy project';
+		if (action === 'busy') return 'Deploying';
+		if (action === 'stop') return 'Stop';
+		if (action === 'start') return 'Start';
+		return 'Deploy';
 	}
 
 	function projectPrimaryVariant(project: Project): 'secondary' | 'primary' | 'ghostDanger' | 'ghost' {
@@ -201,12 +202,25 @@
 		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
-	function formatDateTime(value: string) {
-		return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-	}
-
 	function formatRefreshTime(value: Date) {
 		return value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+	}
+
+	function formatBytes(value: number) {
+		if (!Number.isFinite(value) || value < 0) return '-';
+		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		let amount = value;
+		let index = 0;
+		while (amount >= 1024 && index < units.length - 1) {
+			amount /= 1024;
+			index += 1;
+		}
+		const digits = amount >= 100 || index === 0 ? 0 : amount >= 10 ? 1 : 2;
+		return `${amount.toFixed(digits)} ${units[index]}`;
+	}
+
+	function formatRate(value: number | null | undefined) {
+		return value === null || value === undefined ? '-' : `${formatBytes(value)}/s`;
 	}
 
 	function appUrl(project: Project) {
@@ -254,280 +268,192 @@
 </svelte:head>
 
 <div class="page-shell py-6">
-	<div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-		<PageHeader
-			title="Deployment control plane"
-			description={`${projects.length} project${projects.length !== 1 ? 's' : ''} connected. Watch health, capacity, and deploy actions from one operational surface.`}
-			className="!mb-0"
-		/>
+	<PageHeader title="Projects" description={`${projects.length} application${projects.length === 1 ? '' : 's'} on this MyPaaS instance. Monitor host capacity, runtime state, and deployment actions.`}>
+		<svelte:fragment slot="meta">
+			<span class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+				<span class={`h-1.5 w-1.5 rounded-full ${syncDotClass}`}></span>
+				{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}
+			</span>
+		</svelte:fragment>
+		<svelte:fragment slot="actions">
+			<ActionButton variant="secondary" loading={loading} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>
+				<RefreshCw slot="icon" class="h-4 w-4" />
+				Refresh
+			</ActionButton>
+			<ActionLink href="/projects/new" variant="primary">
+				<Plus slot="icon" class="h-4 w-4" />
+				New project
+			</ActionLink>
+		</svelte:fragment>
+	</PageHeader>
 
-		<div class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-			<div class="surface-muted flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left sm:min-w-[15rem]">
-				<span class={`h-2 w-2 shrink-0 rounded-full ${syncDotClass}`}></span>
-				<div class="min-w-0">
-					<p class="truncate text-xs font-medium text-gray-900 dark:text-white">{syncLabel}</p>
-					<p class="truncate text-[11px] text-gray-500 dark:text-gray-400">{syncDetail}</p>
-				</div>
-			</div>
-			<div class="flex justify-end gap-2">
-				<IconButton label="Refresh dashboard data" variant="secondary" {loading} on:click={() => refreshDashboardData()}>
-					<RefreshCw class="h-4 w-4" aria-hidden="true" />
-				</IconButton>
-				<ActionLink href="/projects/new" variant="primary">
-					<Plus slot="icon" class="h-4 w-4" />
-					New project
-				</ActionLink>
-			</div>
-		</div>
-	</div>
-
-	{#if hostRamWarning}
-		<div class="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200" role="alert">
+	{#if hostRamWarning || storageWarning}
+		<div class="mb-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
 			<div class="flex gap-3">
 				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
 				<div>
-					<p class="font-semibold">VM capacity reached</p>
+					<p class="font-semibold">Host capacity needs attention</p>
 					<p class="mt-1">
-						Your VM ({hostRamMb}MB RAM) is almost fully allocated to projects ({hostStats?.allocated_ram_mb}MB used). Deploying more projects may cause Out-Of-Memory (OOM) crashes. Consider upgrading your VM or reducing project limits in Settings.
+						{#if hostRamWarning}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
+						{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if}
+						 Keep enough headroom for builds, runtime spikes, and platform services.
 					</p>
 				</div>
 			</div>
 		</div>
 	{/if}
 
-	<div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-		<StatTile label="Fleet health" value={issueCount > 0 ? 'Attention' : 'Healthy'} detail={healthyCopy} tone={issueCount > 0 ? 'danger' : 'success'} />
-		<StatTile label="Running now" value={String(runningCount)} detail={`${buildingCount} building, ${pendingCount} pending`} tone={buildingCount > 0 ? 'warning' : 'success'} />
-		<StatTile
-			label="Latest activity"
-			value={latestProject?.name ?? 'No activity'}
-			detail={latestProject ? formatDateTime(latestProject.updatedAt) : 'Create a project to start deploying'}
-			tone="neutral"
-		>
-			{#if latestProject}
-				<a href="/projects/{latestProject.id}" class="text-xs font-medium text-brand-700 hover:underline dark:text-brand-100"> Open project </a>
-			{/if}
-		</StatTile>
-		<StatTile
-			label="Project slots"
-			value={quota ? `${quota.projectCount}/${quota.projectLimit}` : `${projects.length}`}
-			detail={quota ? `${projectPercent.toFixed(0)}% of whitelist quota` : 'Waiting for quota data'}
-			tone={projectPercent >= 80 ? 'warning' : 'info'}
-		/>
-	</div>
-
-	<div class="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-		<SectionPanel title="Capacity and deploy modes" description="Configured quota, live resource shape, and runtime composition across connected projects." contentClass="p-0">
-			{#if quota}
-				<div class="grid gap-px bg-gray-100 dark:bg-gray-800 sm:grid-cols-2 xl:grid-cols-5">
-					{#if hostStats}
-						<CapacityMetricChart
-							label="Host RAM"
-							value={`${hostStats.allocated_ram_mb}/${hostRamMb} MB`}
-							detail={`${hostRamMb > 0 ? ((hostStats.allocated_ram_mb / hostRamMb) * 100).toFixed(0) : 0}% allocated`}
-							percent={hostRamMb > 0 ? Math.min(100, (hostStats.allocated_ram_mb / hostRamMb) * 100) : 0}
-							tone={hostRamWarning ? 'danger' : 'neutral'}
-							className="bg-white dark:bg-gray-900"
-						/>
-					{/if}
-					<CapacityMetricChart
-						label="Memory"
-						value={`${quota.memoryUsedMb}/${quota.memoryLimitMb} MB`}
-						detail={`${(quota.memoryLimitMb > 0 ? (quota.memoryUsedMb / quota.memoryLimitMb) * 100 : 0).toFixed(0)}% allocated`}
-						percent={memoryConfiguredPercent}
-						tone={memoryConfiguredPercent >= 80 ? 'warning' : 'neutral'}
-						className="bg-white dark:bg-gray-900"
-					/>
-					<CapacityMetricChart
-						label="CPU"
-						value={`${quota.cpuUsed.toFixed(2)}/${quota.cpuLimit.toFixed(2)} cores`}
-						detail={`${(quota.cpuLimit > 0 ? (quota.cpuUsed / quota.cpuLimit) * 100 : 0).toFixed(0)}% allocated`}
-						percent={cpuConfiguredPercent}
-						tone={cpuConfiguredPercent >= 80 ? 'warning' : 'info'}
-						className="bg-white dark:bg-gray-900"
-					/>
-					<CapacityMetricChart
-						label="Project slots"
-						value={`${quota.projectCount}/${quota.projectLimit}`}
-						detail="whitelist quota"
-						percent={projectPercent}
-						tone={projectPercent >= 80 ? 'warning' : 'success'}
-						className="bg-white dark:bg-gray-900"
-					/>
-					<article class="min-w-0 bg-white p-4 dark:bg-gray-900" aria-label="Deploy mode composition">
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0">
-								<p class="metric-label">Deploy modes</p>
-								<p class="mt-1 truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
-									{deployModeTotal > 0 ? dominantDeployMode.label : 'No modes'}
-								</p>
-							</div>
-							<p class="shrink-0 font-mono text-xs font-semibold text-gray-600 dark:text-gray-300">{deployModeTotal} total</p>
-						</div>
-
-						<div class="mt-3 h-20 overflow-hidden rounded-md border border-gray-200 bg-white px-2 pb-2 pt-3 dark:border-gray-800 dark:bg-gray-950">
-							<div class="flex h-full items-end gap-1.5">
-								{#each deployModeSegments as segment}
-									<div class="flex h-full min-w-0 flex-1 flex-col justify-end">
-										<div
-											class={`mx-auto w-full max-w-10 rounded-sm ${segment.barClass}`}
-											style={`height: ${deployModeTotal > 0 && segment.value > 0 ? Math.max(12, (segment.value / deployModeTotal) * 100) : 0}%`}
-											title={`${segment.label}: ${segment.value}`}
-										></div>
-									</div>
-								{/each}
-							</div>
-						</div>
-
-						<div class="mt-2 grid grid-cols-4 gap-2 text-[11px]">
-							{#each deployModeSegments as segment}
-								<div class="min-w-0">
-									<p class={`truncate font-mono font-semibold ${segment.textClass}`}>{segment.value}</p>
-									<p class="truncate text-gray-500 dark:text-gray-400">{segment.label}</p>
-								</div>
-							{/each}
-						</div>
-					</article>
-				</div>
-			{:else}
-				<div class="grid gap-0 sm:grid-cols-2 xl:grid-cols-5" aria-busy="true">
-					<div class="h-36 animate-pulse border-b border-gray-100 bg-gray-100/70 dark:border-gray-800 dark:bg-gray-800/60 sm:border-r xl:border-b-0"></div>
-					<div class="h-36 animate-pulse border-b border-gray-100 bg-gray-100/70 dark:border-gray-800 dark:bg-gray-800/60 sm:border-r xl:border-b-0"></div>
-					<div class="h-36 animate-pulse border-b border-gray-100 bg-gray-100/70 dark:border-gray-800 dark:bg-gray-800/60 sm:border-r xl:border-b-0"></div>
-					<div class="h-36 animate-pulse border-b border-gray-100 bg-gray-100/70 dark:border-gray-800 dark:bg-gray-800/60 sm:border-r xl:border-b-0"></div>
-					<div class="h-36 animate-pulse bg-gray-100/70 dark:bg-gray-800/60"></div>
-				</div>
-			{/if}
-		</SectionPanel>
-
-		<FleetStatusChart segments={healthSegments} title="Fleet health" subtitle="Status composition across connected projects." />
-	</div>
+	<SectionPanel title="Host resources" description="Real rolling samples from MyPaaS capacity data and host telemetry. RAM and CPU values represent allocation, not live host utilization." contentClass="p-0" className="mb-5">
+		{#if hostStats}
+			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
+				<CapacityMetricChart
+					label="RAM allocation"
+					value={`${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`}
+					indicator={`${ramAllocationPercent.toFixed(0)}%`}
+					detail={`${ramAllocationPercent.toFixed(0)}% allocated`}
+					series={ramSeries}
+					resource="memory"
+					className="bg-white dark:bg-neutral-900"
+				/>
+				<CapacityMetricChart
+					label="CPU allocation"
+					value={`${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`}
+					indicator={`${cpuAllocationPercent.toFixed(0)}%`}
+					detail={`${cpuAllocationPercent.toFixed(0)}% allocated`}
+					series={cpuSeries}
+					resource="cpu"
+					className="bg-white dark:bg-neutral-900"
+				/>
+				<CapacityMetricChart
+					label="Storage"
+					value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'}
+					indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''}
+					detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Requires Phase 6 host telemetry'}
+					series={storageSeries}
+					resource="storage"
+					className="bg-white dark:bg-neutral-900"
+				/>
+				<CapacityMetricChart
+					label="Network"
+					value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'}
+					indicator={hostStats.network?.interface ?? ''}
+					detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Requires Phase 6 host telemetry'}
+					series={networkSeries}
+					resource="network"
+					maxValue={null}
+					rangeLabel="auto scale"
+					className="bg-white dark:bg-neutral-900"
+				/>
+			</div>
+		{:else}
+			<div class="grid sm:grid-cols-2 xl:grid-cols-4" aria-busy="true">
+				{#each Array(4) as _}
+					<div class="h-40 animate-pulse border-b border-gray-100 bg-gray-100/70 last:border-b-0 dark:border-neutral-800 dark:bg-neutral-800/60 sm:border-r xl:border-b-0"></div>
+				{/each}
+			</div>
+		{/if}
+	</SectionPanel>
 
 	<TableShell
-		title="Project inventory"
-		description="Runtime state, deployment mode, capacity, and quick actions."
+		title="Projects"
+		description="Application state, runtime shape, current service sample, and the next relevant action."
 		{loading}
 		loadingRows={3}
 		error={error && projects.length === 0 ? error : ''}
 		empty={filteredProjects.length === 0}
 		emptyTitle={normalizedSearch ? 'No projects match this search' : 'No projects yet'}
-		emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaas will prepare the runtime.'}
+		emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaaS will prepare the runtime.'}
 		contentClass="overflow-hidden"
 		on:retry={() => refreshDashboardData()}
 	>
 		<svelte:fragment slot="actions">
-			<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-				<label class="relative block w-full sm:w-72">
-					<span class="sr-only">Search projects</span>
-					<Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<input
-						type="text"
-						inputmode="search"
-						value={searchQuery}
-						on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
-						placeholder="Search projects"
-						class="field h-9 w-full !pl-10 !pr-11"
-					/>
-					{#if searchQuery}
-						<button
-							type="button"
-							on:click={() => handleSearch('')}
-							class="app-focus absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-							aria-label="Clear search"
-							title="Clear search"
-						>
-							<X class="h-4 w-4" aria-hidden="true" />
-						</button>
-					{/if}
-				</label>
-				<IconButton label="Refresh dashboard data" variant="ghost" {loading} on:click={() => refreshDashboardData()}>
-					<RefreshCw class="h-4 w-4" aria-hidden="true" />
-				</IconButton>
-			</div>
+			<label class="relative block w-full sm:w-72">
+				<span class="sr-only">Search projects</span>
+				<Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+				<input
+					type="text"
+					inputmode="search"
+					value={searchQuery}
+					on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
+					placeholder="Search projects"
+					class="field h-9 w-full !pl-10 !pr-11"
+				/>
+				{#if searchQuery}
+					<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
+						<X class="h-4 w-4" aria-hidden="true" />
+					</button>
+				{/if}
+			</label>
 		</svelte:fragment>
 
 		<svelte:fragment slot="notice">
 			{#if error}
-				<div
-					role="alert"
-					class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"
-				>
-					<span class="min-w-0 flex-1">
-						{error}
-					</span>
-					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying...">Retry</ActionButton>
+				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+					<span class="min-w-0 flex-1">{error}</span>
+					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying">
+						<RefreshCw slot="icon" class="h-3.5 w-3.5" />
+						Retry
+					</ActionButton>
 				</div>
 			{/if}
 		</svelte:fragment>
 
-		<div
-			class="hidden w-full grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] items-center gap-x-4 border-b border-gray-100 bg-gray-50/70 px-4 py-2 text-xs font-medium text-gray-500 dark:border-gray-800 dark:bg-gray-900/70 dark:text-gray-400 lg:grid"
-		>
+		<div class="hidden w-full grid-cols-[minmax(0,1.5fr)_minmax(0,.75fr)_minmax(0,1fr)_minmax(0,.85fr)_minmax(0,.65fr)_minmax(0,.6fr)_7rem] items-center gap-x-4 border-b border-gray-100 bg-gray-50/70 px-4 py-2 text-xs font-medium text-gray-500 dark:border-neutral-800 dark:bg-neutral-900/70 dark:text-gray-400 lg:grid">
 			<span>Project</span>
 			<span>Status</span>
-			<span>App URL</span>
 			<span>Runtime</span>
-			<span>Live Usage</span>
+			<span>Usage</span>
 			<span>Uptime</span>
 			<span>Updated</span>
-			<span class="text-right">Actions</span>
+			<span class="text-right">Action</span>
 		</div>
-		<div class="divide-y divide-gray-100 dark:divide-gray-800">
+		<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 			{#each visibleProjects as project}
-				<div
-					class="grid gap-y-3 px-4 py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-900/70 lg:w-full lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1.35fr)_minmax(0,1.05fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,0.55fr)_4.75rem] lg:items-center lg:gap-x-4"
-				>
+				<div class="grid gap-y-3 px-4 py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-neutral-900/70 lg:w-full lg:grid-cols-[minmax(0,1.5fr)_minmax(0,.75fr)_minmax(0,1fr)_minmax(0,.85fr)_minmax(0,.65fr)_minmax(0,.6fr)_7rem] lg:items-center lg:gap-x-4">
 					<div class="min-w-0">
-						<a href="/projects/{project.id}" class="block truncate text-sm font-semibold text-gray-950 hover:underline dark:text-white">
-							{project.name}
+						<a href="/projects/{project.id}" class="block truncate text-sm font-semibold text-gray-950 hover:underline dark:text-white">{project.name}</a>
+						<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
+							<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
+							<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
 						</a>
-						<p class="mt-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400">
-							{project.subdomain}
-						</p>
 					</div>
 					<div><StatusBadge status={getDerivedStatus(project)} pulse /></div>
-					<a href={appUrl(project)} target="_blank" rel="noopener" class="truncate font-mono text-xs text-gray-600 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
-						{appUrl(project).replace(/^https?:\/\//, '')}
-					</a>
-					<div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-						<span class="rounded border border-gray-200 px-1.5 py-0.5 font-mono dark:border-gray-800">{project.deployMode}</span>
-						{#if project.mainService}
-							<span class="truncate">{project.mainService}</span>
-						{/if}
-						<span>{project.memoryLimitMb}MB</span>
+					<div class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+						<p class="truncate font-mono text-gray-700 dark:text-gray-300">{project.deployMode}</p>
+						<p class="mt-1 truncate">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
 					</div>
-					<div class="font-mono text-xs text-gray-500 dark:text-gray-400">
+					<div class="metric-value text-xs text-gray-500 dark:text-gray-400">
 						{#if project.id in projectMemory}
-							{projectMemory[project.id].toFixed(0)}MB / {projectCpu[project.id].toFixed(1)}%
+							{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
 						{:else if uptimeLoadingIds.has(project.id)}
-							Loading
+							Loading…
 						{:else}
 							-
 						{/if}
 					</div>
-					<div class="font-mono text-xs text-gray-500 dark:text-gray-400">
-						{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? 'Loading' : '-')}
-					</div>
-					<div class="text-xs text-gray-500 dark:text-gray-400">
-						{formatDate(project.updatedAt)}
-					</div>
-					<div class="flex items-center justify-start gap-1.5 lg:justify-end">
-						<IconButton label="Open project" href="/projects/{project.id}" variant="secondary">
-							<ExternalLink class="h-4 w-4" aria-hidden="true" />
-						</IconButton>
-						<IconButton
-							label={projectPrimaryLabel(project)}
+					<div class="metric-value text-xs text-gray-500 dark:text-gray-400">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? 'Loading…' : '-')}</div>
+					<div class="text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</div>
+					<div class="flex items-center justify-start lg:justify-end">
+						<ActionButton
 							variant={projectPrimaryVariant(project)}
+							size="xs"
+							className="min-w-[6.25rem]"
 							on:click={() => handlePrimaryProjectAction(project)}
 							loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
+							loadingLabel={projectPrimaryLabel(project)}
 							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
 						>
-							{#if projectPrimaryAction(project) === 'stop'}
-								<Square class="h-4 w-4" aria-hidden="true" />
-							{:else}
-								<Play class="h-4 w-4" aria-hidden="true" />
-							{/if}
-						</IconButton>
+							<svelte:fragment slot="icon">
+								{#if projectPrimaryAction(project) === 'stop'}
+									<Square class="h-3.5 w-3.5" />
+								{:else if projectPrimaryAction(project) === 'deploy' || projectPrimaryAction(project) === 'busy'}
+									<Rocket class="h-3.5 w-3.5" />
+								{:else}
+									<Play class="h-3.5 w-3.5" />
+								{/if}
+							</svelte:fragment>
+							{projectPrimaryLabel(project)}
+						</ActionButton>
 					</div>
 				</div>
 			{/each}
@@ -536,4 +462,32 @@
 			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleProjects.length} {hasNext} {loading} label="Projects" />
 		</svelte:fragment>
 	</TableShell>
+
+	<section class="surface mt-5 overflow-hidden">
+		<div class="panel-header">
+			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Workspace composition</h2>
+			<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Secondary fleet state and runtime mix across connected projects.</p>
+		</div>
+		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 md:grid-cols-2 md:divide-x md:divide-y-0">
+			<div class="p-5">
+				<p class="metric-label">Fleet health</p>
+				<div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>{runningCount} running</span>
+					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-500"></span>{buildingCount} building</span>
+					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-red-500"></span>{issueCount} crashed</span>
+					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-gray-400"></span>{stoppedCount} stopped</span>
+					{#if pendingCount > 0}<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-sky-500"></span>{pendingCount} pending</span>{/if}
+				</div>
+			</div>
+			<div class="p-5">
+				<p class="metric-label">Runtime mix</p>
+				<div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{composeCount}</strong> Compose</span>
+					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{dockerfileCount}</strong> Dockerfile</span>
+					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{staticCount}</strong> Static</span>
+					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{imageCount}</strong> Image</span>
+				</div>
+			</div>
+		</div>
+	</section>
 </div>
