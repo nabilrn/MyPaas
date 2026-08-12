@@ -1,5 +1,21 @@
 const PROJECT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 
+const IGNORED_PROJECT_DIRECTORY_SEGMENTS = new Set([
+  ".git",
+  ".github",
+  ".cache",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+  ".turbo",
+  ".vercel",
+  "coverage",
+  "dist",
+  "build",
+  "node_modules",
+  "vendor",
+]);
+
 export interface ProjectCreationReadinessInput {
   name: string;
   sourceType: "git" | "registry";
@@ -15,6 +31,19 @@ export interface ProjectCreationReadiness {
   ready: boolean;
   state: "Waiting for source" | "Analyzing deployment" | "Needs configuration" | "Ready to create";
   reason: string;
+}
+
+export interface RepositoryDirectoryEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  depth: number;
+}
+
+export interface RepositoryDirectoryChoice {
+  name: string;
+  path: string;
+  depth: number;
 }
 
 export function suggestProjectName(source: string): string {
@@ -43,6 +72,49 @@ export function suggestProjectName(source: string): string {
     .replace(/^-|-$/g, "")
     .slice(0, 30)
     .replace(/-$/g, "");
+}
+
+export function projectNameValidationMessage(name: string): string {
+  const normalizedName = name.trim().toLowerCase();
+  if (!normalizedName) return "Project name is required";
+  if (!PROJECT_NAME_PATTERN.test(normalizedName)) {
+    return "Use 3-30 letters, numbers, or dashes, starting and ending with a letter or number";
+  }
+  return "";
+}
+
+export function repositoryDirectoryChoices(
+  entries: RepositoryDirectoryEntry[],
+): RepositoryDirectoryChoice[] {
+  const seen = new Set<string>();
+  const choices: RepositoryDirectoryChoice[] = [];
+
+  for (const entry of entries) {
+    if (entry.type !== "directory") continue;
+    const path = entry.path.trim().replace(/^\.\//, "").replace(/\/$/, "");
+    if (!path || seen.has(path)) continue;
+
+    const segments = path.split("/").filter(Boolean);
+    if (
+      segments.length === 0 ||
+      segments.some(
+        (segment) =>
+          segment.startsWith(".") ||
+          IGNORED_PROJECT_DIRECTORY_SEGMENTS.has(segment.toLowerCase()),
+      )
+    ) {
+      continue;
+    }
+
+    seen.add(path);
+    choices.push({
+      name: entry.name || segments[segments.length - 1] || path,
+      path,
+      depth: Math.max(0, segments.length - 1),
+    });
+  }
+
+  return choices;
 }
 
 export function projectCreationReadiness(
