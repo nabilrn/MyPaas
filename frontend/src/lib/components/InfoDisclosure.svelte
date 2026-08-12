@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Info } from '@lucide/svelte';
+	import { dismissable } from '$lib/actions/dismissable';
 	import { infoDisclosureState } from './InfoDisclosure';
 
 	export let label = 'More information';
@@ -9,29 +10,30 @@
 	let expanded = disclosure.expanded;
 	$: panelId = id || `info-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
-	function toggle() {
-		disclosure.toggle();
+	function syncExpanded() {
 		expanded = disclosure.expanded;
 	}
 
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || !expanded) return;
-		event.preventDefault();
+	function toggle() {
+		disclosure.toggle();
+		syncExpanded();
+	}
+
+	function close() {
 		disclosure.close();
-		expanded = disclosure.expanded;
+		syncExpanded();
 	}
 </script>
 
-<span class="relative inline-block align-middle">
+<span class="relative inline-block align-middle" use:dismissable={{ enabled: expanded, onDismiss: close }}>
 	<button
 		type="button"
-		class="app-focus inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-900 dark:hover:text-gray-200"
+		class="app-focus inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-200"
 		aria-label={label}
 		aria-expanded={expanded}
 		aria-controls={panelId}
 		title={label}
 		on:click={toggle}
-		on:keydown={handleKeydown}
 	>
 		<Info class="h-4 w-4" aria-hidden="true" />
 	</button>
