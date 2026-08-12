@@ -52,7 +52,7 @@ func hello(reader *bufio.Reader, conn net.Conn) error {
 	if err := expectLine(reader, "{\"op\":\"hello\",\"protocol\":1}\n"); err != nil {
 		return err
 	}
-	_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"agent\":\"mypaas-statd\",\"version\":\"0.1.0-dev\"}\n"))
+	_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"agent\":\"mypaas-statd\",\"version\":\"0.2.0-dev\"}\n"))
 	return err
 }
 
@@ -95,6 +95,73 @@ func TestSnapshot(t *testing.T) {
 	}
 	if snapshot.Memory.CurrentBytes != 4096 || snapshot.PIDs.Current != 7 {
 		t.Fatalf("unexpected snapshot: %+v", snapshot)
+	}
+	waitServer(t, server.done)
+}
+
+func TestHostSnapshot(t *testing.T) {
+	server := startFakeServer(t, func(reader *bufio.Reader, conn net.Conn) error {
+		if err := hello(reader, conn); err != nil {
+			return err
+		}
+		if err := expectLine(reader, "{\"op\":\"host_snapshot\"}\n"); err != nil {
+			return err
+		}
+		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"storage\":{\"total_bytes\":1000,\"available_bytes\":400},\"network\":{\"interface\":\"eth0\",\"rx_bytes\":123,\"tx_bytes\":456}}\n"))
+		return err
+	})
+
+	snapshot, err := NewClient(server.path).HostSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("host snapshot: %v", err)
+	}
+	if snapshot.Storage == nil || snapshot.Storage.TotalBytes != 1000 || snapshot.Storage.AvailableBytes != 400 {
+		t.Fatalf("unexpected storage snapshot: %+v", snapshot.Storage)
+	}
+	if snapshot.Network == nil || snapshot.Network.Interface != "eth0" || snapshot.Network.RXBytes != 123 || snapshot.Network.TXBytes != 456 {
+		t.Fatalf("unexpected network snapshot: %+v", snapshot.Network)
+	}
+	waitServer(t, server.done)
+}
+
+func TestHostSnapshotAllowsPartialSections(t *testing.T) {
+	server := startFakeServer(t, func(reader *bufio.Reader, conn net.Conn) error {
+		if err := hello(reader, conn); err != nil {
+			return err
+		}
+		if err := expectLine(reader, "{\"op\":\"host_snapshot\"}\n"); err != nil {
+			return err
+		}
+		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"storage\":{\"total_bytes\":4096,\"available_bytes\":1024},\"network\":null}\n"))
+		return err
+	})
+
+	snapshot, err := NewClient(server.path).HostSnapshot(context.Background())
+	if err != nil {
+		t.Fatalf("host snapshot: %v", err)
+	}
+	if snapshot.Storage == nil || snapshot.Network != nil {
+		t.Fatalf("unexpected partial snapshot: %+v", snapshot)
+	}
+	waitServer(t, server.done)
+}
+
+func TestHostSnapshotOldDaemonIsProtocolError(t *testing.T) {
+	server := startFakeServer(t, func(reader *bufio.Reader, conn net.Conn) error {
+		if err := hello(reader, conn); err != nil {
+			return err
+		}
+		if err := expectLine(reader, "{\"op\":\"host_snapshot\"}\n"); err != nil {
+			return err
+		}
+		_, err := conn.Write([]byte("{\"ok\":false,\"error\":{\"code\":\"INVALID_REQUEST\"}}\n"))
+		return err
+	})
+
+	_, err := NewClient(server.path).HostSnapshot(context.Background())
+	var protocolErr *ProtocolError
+	if !errors.As(err, &protocolErr) || protocolErr.Code != "INVALID_REQUEST" {
+		t.Fatalf("expected old-daemon protocol error, got %v", err)
 	}
 	waitServer(t, server.done)
 }
