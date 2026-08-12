@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bell, ClipboardList, FolderKanban, Menu, Settings, Users } from '@lucide/svelte';
+	import { Bell, ChevronRight, ClipboardList, FolderKanban, Menu, Settings, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -17,20 +17,42 @@
 		{ href: '/admin/settings', label: 'Settings', icon: Settings }
 	];
 
+	const projectSectionLabels: Record<string, string> = {
+		deployments: 'Deployments',
+		logs: 'Logs',
+		metrics: 'Metrics',
+		env: 'Environment',
+		database: 'Database',
+		settings: 'Settings'
+	};
+
 	let mobileMenuOpen = false;
 	let notificationsOpen = false;
 	let userMenuOpen = false;
 	let signingOut = false;
 
 	$: pathname = $page.url.pathname;
-	$: sectionLabel = pathname.startsWith('/admin/users')
-		? 'Users'
-		: pathname.startsWith('/admin/audit-logs')
-			? 'Audit'
-			: pathname.startsWith('/admin/settings')
-				? 'Settings'
-				: 'Projects';
+	$: headerContext = resolveHeaderContext(pathname);
 	$: userLabel = user?.githubUsername ?? user?.email ?? 'Account';
+
+	function resolveHeaderContext(currentPath: string) {
+		if (currentPath === '/projects/new') {
+			return { root: 'Projects', rootHref: '/projects', current: 'New project' };
+		}
+		const projectMatch = currentPath.match(/^\/projects\/[^/]+(?:\/([^/]+))?/);
+		if (projectMatch) {
+			const section = projectMatch[1];
+			return {
+				root: 'Projects',
+				rootHref: '/projects',
+				current: section ? (projectSectionLabels[section] ?? 'Project') : 'Project'
+			};
+		}
+		if (currentPath.startsWith('/admin/users')) return { root: 'Users', rootHref: '/admin/users', current: '' };
+		if (currentPath.startsWith('/admin/audit-logs')) return { root: 'Audit', rootHref: '/admin/audit-logs', current: '' };
+		if (currentPath.startsWith('/admin/settings')) return { root: 'Settings', rootHref: '/admin/settings', current: '' };
+		return { root: 'Projects', rootHref: '/projects', current: '' };
+	}
 
 	function isActive(href: string) {
 		if (href === '/projects') return pathname === '/projects' || pathname.startsWith('/projects/');
@@ -70,10 +92,15 @@
 			>
 				<Menu class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
-			<div class="min-w-0">
-				<p class="truncate text-sm font-semibold text-gray-950 dark:text-white">{sectionLabel}</p>
-				<p class="hidden text-[11px] text-gray-400 dark:text-gray-500 sm:block">MyPaaS workspace</p>
-			</div>
+			<nav class="flex min-w-0 items-center gap-1.5 text-sm" aria-label="Breadcrumb">
+				{#if headerContext.current}
+					<a href={headerContext.rootHref} class="truncate font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{headerContext.root}</a>
+					<ChevronRight class="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-gray-700" aria-hidden="true" />
+					<span class="truncate font-semibold text-gray-950 dark:text-white" aria-current="page">{headerContext.current}</span>
+				{:else}
+					<span class="truncate font-semibold text-gray-950 dark:text-white" aria-current="page">{headerContext.root}</span>
+				{/if}
+			</nav>
 		</div>
 
 		<div class="flex items-center gap-2">
