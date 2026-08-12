@@ -21,11 +21,24 @@ import type {
 	LogsResponse
 } from '$types';
 
+export interface HostStorageStats {
+	total_bytes: number;
+	available_bytes: number;
+}
+
+export interface HostNetworkStats {
+	interface: string;
+	rx_bytes: number;
+	tx_bytes: number;
+}
+
 export interface HostStats {
 	host_ram_bytes: number;
 	host_cpu_cores: number;
 	allocated_ram_mb: number;
 	allocated_cpu: number;
+	storage: HostStorageStats | null;
+	network: HostNetworkStats | null;
 }
 
 export interface MigrationStatus {
@@ -143,7 +156,7 @@ export const api = {
 		list:     (projectId: string, page = 0, pageSize = 20, lookahead = false): Promise<Deployment[]> =>
 			request(`/projects/${projectId}/deployments?limit=${pageSize + (lookahead ? 1 : 0)}&offset=${page * pageSize}`),
 		get:      (id: string):                   Promise<Deployment>   => request(`/deployments/${id}`),
-		rollback: (id: string):                   Promise<Deployment>   => request(`/deployments/${id}/rollback`, { method: 'POST' })
+		rollback: (id: string):                  Promise<Deployment>   => request(`/deployments/${id}/rollback`, { method: 'POST' })
 	},
 
 	env: {
