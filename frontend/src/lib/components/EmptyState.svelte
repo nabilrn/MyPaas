@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PackageOpen, Plus } from '@lucide/svelte';
+	import { Plus } from '@lucide/svelte';
 	export let title: string;
 	export let description = '';
 	export let actionLabel = '';
@@ -7,11 +7,7 @@
 	export let compact = false;
 </script>
 
-<div class="flex flex-col items-center justify-center px-6 text-center {compact ? 'py-10' : 'py-16'}">
-	<div class="mb-4 flex {compact ? 'h-10 w-10' : 'h-12 w-12'} items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500">
-		<PackageOpen class="{compact ? 'h-5 w-5' : 'h-6 w-6'}" aria-hidden="true" />
-	</div>
-
+<div class="flex flex-col items-center justify-center px-6 text-center {compact ? 'py-8' : 'py-12'}">
 	<h3 class="{compact ? 'text-sm' : 'text-base'} font-semibold text-gray-900 dark:text-white">{title}</h3>
 
 	{#if description}
