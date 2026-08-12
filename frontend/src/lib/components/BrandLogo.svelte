@@ -8,10 +8,10 @@
 	export let className = '';
 	export let imageClass = '';
 
-	// Assets are tightly cropped, so sizing is driven optically: the wordmark is
-	// width-led (~160px default) and the cube mark is height-led (32px default).
+	// Keep the product mark present without letting it dominate the navigation.
+	// The wordmark is width-led and the compact cube is height-led.
 	$: sources = compact ? { light: markBlack, dark: markWhite } : { light: wordmarkBlack, dark: wordmarkWhite };
-	$: sizing = compact ? 'h-8 w-auto' : 'w-40 h-auto';
+	$: sizing = compact ? 'h-7 w-auto' : 'w-36 h-auto';
 </script>
 
 <span class={`inline-flex min-w-0 items-center ${className}`.trim()}>
