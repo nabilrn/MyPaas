@@ -4,12 +4,21 @@ These rules apply to everything under `frontend/`. Keep the implementation small
 
 ## Product visual direction
 
-MyPaaS is a flat, neutral operational UI. Prefer consistency and information hierarchy over decorative variety.
+MyPaaS is a flat monochrome operational UI. Prefer consistency, information hierarchy, and real data over decorative variety.
 
-- Keep normal surfaces neutral in light and dark mode.
-- Use emerald as a restrained accent for primary actions, selected state, and success semantics; do not use it as decoration for generic utility actions.
-- Use warning, danger, info, and success colors only when they communicate actual state.
-- Do not imitate Vercel/Railway styling mechanically; preserve MyPaaS's own clean visual language.
+- Normal product chrome is white, black, and neutral gray in light/dark mode.
+- Do not use green/emerald as generic brand decoration, generic selection color, or generic primary-action color.
+- Primary workflow actions use monochrome inversion: dark control on light surfaces, light control on dark surfaces.
+- Color is reserved for actual state and data semantics. Current resource mapping is RAM=green, CPU=blue, storage=amber, network=violet.
+- Warning, danger, info, and success colors are allowed only when they communicate real state.
+- Keep normal cards flat and neutral. Do not imitate another PaaS mechanically; preserve MyPaaS's own compact operational language.
+
+## Shell ownership
+
+- Desktop sidebar owns primary navigation, user identity/account access, and appearance/theme control.
+- Global topbar owns only page context/breadcrumbs and the notification bell.
+- Mobile navigation must still expose account and appearance controls because the desktop sidebar is hidden.
+- The notification center is generic infrastructure for real platform/release/deployment/resource events. Never fabricate unread state or release availability.
 
 ## Layout
 
@@ -31,7 +40,8 @@ Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, hea
 ## Controls
 
 - Reuse `ActionButton` for text buttons, `ActionLink` for text navigation actions, and `IconButton` for icon-only utility/repeated actions before writing a generic raw control.
-- Primary page actions must normally keep a visible text label. Icon-only controls are for compact utility actions such as refresh, copy, reveal, expand, or repetitive row actions.
+- Visible workflow actions should normally combine a Lucide icon with a readable text label: New project, Refresh, Deploy, Start, Stop, Save, Retry, Import, Download, and similar actions.
+- Icon-only controls are reserved for compact chrome/utility actions such as notifications, overflow menus, clear input, reveal/hide, or sidebar collapse.
 - Canonical action variants are `primary`, `secondary`, `ghost`, `danger`, and `ghostDanger`. Legacy IconButton aliases may exist for compatibility but new code should not use them.
 - Standard controls should align to the 36px visual height. Keep the existing 44px coarse-pointer/touch target behavior.
 - Use `LoaderCircle` from Lucide for loading indicators. Do not add custom border spinners.
@@ -44,11 +54,25 @@ Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, hea
 - Icon semantics must match the operation: Stop is not Pause; Download is not Upload; Restart is not Refresh unless the action really means refresh.
 - Decorative icons must use `aria-hidden="true"`; icon-only controls require a meaningful accessible label.
 
+## Typography
+
+- Product UI uses Inter Variable once bundled through the frontend dependency graph; use the system sans stack only as fallback.
+- Technical identifiers such as commit SHAs, domains, env keys, ports, and filenames use IBM Plex Mono once bundled; keep a system monospace fallback.
+- Live metric numbers use tabular numerals so polling does not visually shift digits.
+- Prefer weights 400, 500, and 600. Avoid making every hierarchy level bold.
+
+## Metrics and charts
+
+- Chart color communicates the resource being measured, not generic brand emphasis.
+- Never manufacture fake history from a current percentage. Overview trend charts must use real bounded rolling samples or clearly render a current-value meter instead.
+- Network counters are cumulative unless an API explicitly returns a rate. Derive transfer rate only from successive valid samples and elapsed time; reset the baseline if a counter decreases.
+- Do not present policy quotas such as maximum project count as equivalent to physical RAM/CPU/storage/network capacity.
+
 ## Empty, status, and notification states
 
 - Empty states should be quiet and neutral. Do not force one generic illustration/icon onto unrelated contexts.
 - Status colors must represent real backend/runtime state; do not invent fake progress, unread state, release availability, or success.
-- The global notification center is generic infrastructure for future release updates, deployment alerts, and resource notifications. Only render unread/update content when real data exists.
+- The global notification center only renders unread/update content when real data exists.
 
 ## Adding UI primitives
 
