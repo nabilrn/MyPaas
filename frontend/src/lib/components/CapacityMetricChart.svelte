@@ -2,6 +2,7 @@
 	export let label = '';
 	export let value = '';
 	export let detail = '';
+	export let indicator = '';
 	export let series: number[] = [];
 	export let resource: 'memory' | 'cpu' | 'storage' | 'network' | 'neutral' = 'neutral';
 	export let maxValue: number | null = 100;
@@ -61,8 +62,8 @@
 			</div>
 			<p class="metric-value mt-1 truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">{value}</p>
 		</div>
-		{#if cleanSeries.length > 0}
-			<p class="metric-value shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400">{cleanSeries[cleanSeries.length - 1].toFixed(maxValue === null ? 1 : 0)}{maxValue === 100 ? '%' : ''}</p>
+		{#if indicator}
+			<p class="metric-value shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400">{indicator}</p>
 		{/if}
 	</div>
 
@@ -79,9 +80,6 @@
 			{#if areaPath}<path d={areaPath} class={resourceClass.fill} />{/if}
 			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="2" vector-effect="non-scaling-stroke" />{/if}
 		</svg>
-		{#if cleanSeries.length < 2}
-			<div class="pointer-events-none absolute"></div>
-		{/if}
 	</div>
 
 	<div class="mt-2 flex items-center justify-between gap-3 text-[11px] text-gray-500 dark:text-gray-400">
