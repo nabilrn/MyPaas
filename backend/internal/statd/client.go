@@ -71,6 +71,22 @@ type PIDSnapshot struct {
 	Max     *uint64 `json:"max"`
 }
 
+type HostSnapshot struct {
+	Storage *HostStorageSnapshot `json:"storage"`
+	Network *HostNetworkSnapshot `json:"network"`
+}
+
+type HostStorageSnapshot struct {
+	TotalBytes     uint64 `json:"total_bytes"`
+	AvailableBytes uint64 `json:"available_bytes"`
+}
+
+type HostNetworkSnapshot struct {
+	Interface string `json:"interface"`
+	RXBytes   uint64 `json:"rx_bytes"`
+	TXBytes   uint64 `json:"tx_bytes"`
+}
+
 type wireResponse struct {
 	OK       bool `json:"ok"`
 	Protocol int  `json:"protocol"`
@@ -108,6 +124,14 @@ func (c *Client) Snapshot(ctx context.Context, id string) (Snapshot, error) {
 	request := fmt.Sprintf("{\"op\":\"snapshot\",\"id\":\"%s\"}\n", id)
 	if err := c.exchange(ctx, request, &snapshot); err != nil {
 		return Snapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func (c *Client) HostSnapshot(ctx context.Context) (HostSnapshot, error) {
+	var snapshot HostSnapshot
+	if err := c.exchange(ctx, "{\"op\":\"host_snapshot\"}\n", &snapshot); err != nil {
+		return HostSnapshot{}, err
 	}
 	return snapshot, nil
 }
