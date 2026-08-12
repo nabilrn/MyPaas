@@ -171,6 +171,13 @@
 		return 'primary';
 	}
 
+	function projectPrimaryIcon(project: Project) {
+		const action = projectPrimaryAction(project);
+		if (action === 'stop') return Square;
+		if (action === 'deploy' || action === 'busy') return Rocket;
+		return Play;
+	}
+
 	async function handlePrimaryProjectAction(project: Project) {
 		if (projectActionId) return;
 		const action = projectPrimaryAction(project);
@@ -443,15 +450,7 @@
 							loadingLabel={projectPrimaryLabel(project)}
 							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
 						>
-							<svelte:fragment slot="icon">
-								{#if projectPrimaryAction(project) === 'stop'}
-									<Square class="h-3.5 w-3.5" />
-								{:else if projectPrimaryAction(project) === 'deploy' || projectPrimaryAction(project) === 'busy'}
-									<Rocket class="h-3.5 w-3.5" />
-								{:else}
-									<Play class="h-3.5 w-3.5" />
-								{/if}
-							</svelte:fragment>
+							<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5" />
 							{projectPrimaryLabel(project)}
 						</ActionButton>
 					</div>
