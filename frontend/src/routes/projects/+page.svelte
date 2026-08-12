@@ -1,19 +1,18 @@
 <script lang="ts">
-	import { ExternalLink, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FolderGit2, GitBranch, Github, Gitlab, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
-	import PageHeader from '$components/PageHeader.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
-	import StatusBadge from '$components/StatusBadge.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
 	import { appendRollingSample, boundedPercent, deriveNetworkRate, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
+	import { describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Project } from '$types';
 
@@ -178,6 +177,20 @@
 		return Play;
 	}
 
+	function runtimeLabel(project: Project) {
+		if (project.deployMode === 'compose') return 'Docker Compose';
+		if (project.deployMode === 'dockerfile') return 'Dockerfile';
+		if (project.deployMode === 'static') return 'Static';
+		return 'Container Image';
+	}
+
+	function sourceIcon(host: RepositoryHost) {
+		if (host === 'github') return Github;
+		if (host === 'gitlab') return Gitlab;
+		if (host === 'registry') return Package;
+		return FolderGit2;
+	}
+
 	async function handlePrimaryProjectAction(project: Project) {
 		if (projectActionId) return;
 		const action = projectPrimaryAction(project);
@@ -275,14 +288,13 @@
 </svelte:head>
 
 <div class="page-shell py-6">
-	<PageHeader title="Projects" description={`${projects.length} application${projects.length === 1 ? '' : 's'} on this MyPaaS instance. Monitor host capacity, runtime state, and deployment actions.`}>
-		<svelte:fragment slot="meta">
-			<span class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-				<span class={`h-1.5 w-1.5 rounded-full ${syncDotClass}`}></span>
-				{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}
-			</span>
-		</svelte:fragment>
-		<svelte:fragment slot="actions">
+	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+		<p class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+			<span class={`status-dot ${syncDotClass}`}></span>
+			{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}
+			<span class="text-gray-400 dark:text-gray-500">· {projects.length} project{projects.length === 1 ? '' : 's'}</span>
+		</p>
+		<div class="flex items-center gap-2">
 			<ActionButton variant="secondary" loading={loading} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>
 				<RefreshCw slot="icon" class="h-4 w-4" />
 				Refresh
@@ -291,21 +303,19 @@
 				<Plus slot="icon" class="h-4 w-4" />
 				New project
 			</ActionLink>
-		</svelte:fragment>
-	</PageHeader>
+		</div>
+	</div>
 
 	{#if hostRamWarning || storageWarning}
-		<div class="mb-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
-			<div class="flex gap-3">
-				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-				<div>
-					<p class="font-semibold">Host capacity needs attention</p>
-					<p class="mt-1">
-						{#if hostRamWarning}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
-						{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if}
-						 Keep enough headroom for builds, runtime spikes, and platform services.
-					</p>
-				</div>
+		<div class="alert-warning mb-5" role="alert">
+			<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+			<div>
+				<p class="font-semibold">Host capacity needs attention</p>
+				<p class="mt-1">
+					{#if hostRamWarning}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
+					{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if}
+					 Keep enough headroom for builds, runtime spikes, and platform services.
+				</p>
 			</div>
 		</div>
 	{/if}
@@ -362,8 +372,8 @@
 	</SectionPanel>
 
 	<TableShell
-		title="Projects"
-		description="Application state, runtime shape, current service sample, and the next relevant action."
+		title="Inventory"
+		description="Runtime shape, current service sample, and the next relevant action for each project."
 		{loading}
 		loadingRows={3}
 		error={error && projects.length === 0 ? error : ''}
@@ -376,17 +386,17 @@
 		<svelte:fragment slot="actions">
 			<label class="relative block w-full sm:w-72">
 				<span class="sr-only">Search projects</span>
-				<Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+				<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<input
 					type="text"
 					inputmode="search"
 					value={searchQuery}
 					on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
 					placeholder="Search projects"
-					class="field h-9 w-full !pl-10 !pr-11"
+					class="field h-9 w-full !pl-9"
 				/>
 				{#if searchQuery}
-					<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
+					<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
 						<X class="h-4 w-4" aria-hidden="true" />
 					</button>
 				{/if}
@@ -395,7 +405,7 @@
 
 		<svelte:fragment slot="notice">
 			{#if error}
-				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
 					<span class="min-w-0 flex-1">{error}</span>
 					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying">
 						<RefreshCw slot="icon" class="h-3.5 w-3.5" />
@@ -405,46 +415,118 @@
 			{/if}
 		</svelte:fragment>
 
-		<div class="hidden w-full grid-cols-[minmax(0,1.5fr)_minmax(0,.75fr)_minmax(0,1fr)_minmax(0,.85fr)_minmax(0,.65fr)_minmax(0,.6fr)_7rem] items-center gap-x-4 border-b border-gray-100 bg-gray-50/70 px-4 py-2 text-xs font-medium text-gray-500 dark:border-neutral-800 dark:bg-neutral-900/70 dark:text-gray-400 lg:grid">
-			<span>Project</span>
-			<span>Status</span>
-			<span>Runtime</span>
-			<span>Usage</span>
-			<span>Uptime</span>
-			<span>Updated</span>
-			<span class="text-right">Action</span>
-		</div>
-		<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+		<table class="data-table hidden table-fixed lg:table">
+			<colgroup>
+				<col class="w-[20%]" />
+				<col class="w-[16%]" />
+				<col class="w-[11%]" />
+				<col class="w-[13%]" />
+				<col class="w-[11%]" />
+				<col class="w-[8%]" />
+				<col class="w-[8%]" />
+				<col class="w-[13%]" />
+			</colgroup>
+			<thead>
+				<tr>
+					<th>Project</th>
+					<th>Repository</th>
+					<th>Branch</th>
+					<th>Runtime</th>
+					<th>Usage</th>
+					<th>Uptime</th>
+					<th>Updated</th>
+					<th class="text-right">Action</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each visibleProjects as project}
+					{@const source = describeProjectSource(project)}
+					{@const crashed = getDerivedStatus(project) === 'crashed'}
+					<tr>
+						<td>
+							<div class="min-w-0">
+								<a href="/projects/{project.id}" class="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
+									{#if crashed}<span class="status-dot bg-red-500" title="Crashed"></span>{/if}
+									<span class="truncate">{project.name}</span>
+								</a>
+								<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
+									<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
+									<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+								</a>
+							</div>
+						</td>
+						<td>
+							{#if source.href}
+								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
+									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+									<span class="truncate">{source.label}</span>
+								</a>
+							{:else}
+								<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-gray-700 dark:text-gray-300">
+									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+									<span class="truncate">{source.label}</span>
+								</span>
+							{/if}
+						</td>
+						<td>
+							{#if project.sourceType === 'git' && project.branch}
+								<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}>
+									<GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+									<span class="truncate">{project.branch}</span>
+								</span>
+							{:else}
+								<span class="text-sm text-gray-400 dark:text-gray-500">—</span>
+							{/if}
+						</td>
+						<td>
+							<div class="min-w-0">
+								<p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>
+								<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
+							</div>
+						</td>
+						<td class="metric-value">
+							{#if project.id in projectMemory}
+								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
+							{:else if uptimeLoadingIds.has(project.id)}
+								<span class="text-xs text-gray-400 dark:text-gray-500">Loading…</span>
+							{:else}
+								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
+							{/if}
+						</td>
+						<td class="metric-value text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
+						<td class="text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
+						<td class="text-right">
+							<ActionButton
+								variant={projectPrimaryVariant(project)}
+								size="xs"
+								className="min-w-[6.25rem]"
+								on:click={() => handlePrimaryProjectAction(project)}
+								loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
+								loadingLabel={projectPrimaryLabel(project)}
+								disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
+							>
+								<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+								{projectPrimaryLabel(project)}
+							</ActionButton>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+
+		<div class="divide-y divide-gray-100 dark:divide-neutral-800 lg:hidden">
 			{#each visibleProjects as project}
-				<div class="grid gap-y-3 px-4 py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-neutral-900/70 lg:w-full lg:grid-cols-[minmax(0,1.5fr)_minmax(0,.75fr)_minmax(0,1fr)_minmax(0,.85fr)_minmax(0,.65fr)_minmax(0,.6fr)_7rem] lg:items-center lg:gap-x-4">
-					<div class="min-w-0">
-						<a href="/projects/{project.id}" class="block truncate text-sm font-semibold text-gray-950 hover:underline dark:text-white">{project.name}</a>
-						<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
-							<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
-							<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+				{@const source = describeProjectSource(project)}
+				{@const crashed = getDerivedStatus(project) === 'crashed'}
+				<div class="px-4 py-3">
+					<div class="flex items-center justify-between gap-3">
+						<a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
+							{#if crashed}<span class="status-dot bg-red-500" title="Crashed"></span>{/if}
+							<span class="truncate">{project.name}</span>
 						</a>
-					</div>
-					<div><StatusBadge status={getDerivedStatus(project)} pulse /></div>
-					<div class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
-						<p class="truncate font-mono text-gray-700 dark:text-gray-300">{project.deployMode}</p>
-						<p class="mt-1 truncate">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
-					</div>
-					<div class="metric-value text-xs text-gray-500 dark:text-gray-400">
-						{#if project.id in projectMemory}
-							{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
-						{:else if uptimeLoadingIds.has(project.id)}
-							Loading…
-						{:else}
-							-
-						{/if}
-					</div>
-					<div class="metric-value text-xs text-gray-500 dark:text-gray-400">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? 'Loading…' : '-')}</div>
-					<div class="text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</div>
-					<div class="flex items-center justify-start lg:justify-end">
 						<ActionButton
 							variant={projectPrimaryVariant(project)}
 							size="xs"
-							className="min-w-[6.25rem]"
 							on:click={() => handlePrimaryProjectAction(project)}
 							loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
 							loadingLabel={projectPrimaryLabel(project)}
@@ -453,6 +535,37 @@
 							<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 							{projectPrimaryLabel(project)}
 						</ActionButton>
+					</div>
+					<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
+						<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
+						<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+					</a>
+					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+						{#if source.href}
+							<a href={source.href} target="_blank" rel="noopener" class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white">
+								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+								<span class="truncate">{source.label}</span>
+							</a>
+						{:else}
+							<span class="inline-flex min-w-0 items-center gap-1 truncate">
+								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+								<span class="truncate">{source.label}</span>
+							</span>
+						{/if}
+						{#if project.sourceType === 'git' && project.branch}
+							<span class="inline-flex items-center gap-1 font-mono">
+								<GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+								{project.branch}
+							</span>
+						{/if}
+						<span>{runtimeLabel(project)}</span>
+						<span class="metric-value">
+							{#if project.id in projectMemory}
+								{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
+							{:else}
+								—
+							{/if}
+						</span>
 					</div>
 				</div>
 			{/each}
@@ -464,23 +577,23 @@
 
 	<section class="surface mt-5 overflow-hidden">
 		<div class="panel-header">
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Workspace composition</h2>
-			<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Secondary fleet state and runtime mix across connected projects.</p>
+			<h2 class="panel-title">Fleet</h2>
+			<p class="panel-description">Secondary fleet state and runtime mix across connected projects.</p>
 		</div>
 		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 md:grid-cols-2 md:divide-x md:divide-y-0">
-			<div class="p-5">
-				<p class="metric-label">Fleet health</p>
-				<div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
-					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>{runningCount} running</span>
-					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-500"></span>{buildingCount} building</span>
-					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-red-500"></span>{issueCount} crashed</span>
-					<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-gray-400"></span>{stoppedCount} stopped</span>
-					{#if pendingCount > 0}<span class="inline-flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-sky-500"></span>{pendingCount} pending</span>{/if}
+			<div class="p-4">
+				<p class="metric-label">State</p>
+				<div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+					<span class="inline-flex items-center gap-2"><span class="status-dot bg-emerald-500"></span>{runningCount} running</span>
+					<span class="inline-flex items-center gap-2"><span class="status-dot bg-amber-500"></span>{buildingCount} building</span>
+					<span class="inline-flex items-center gap-2"><span class="status-dot bg-red-500"></span>{issueCount} crashed</span>
+					<span class="inline-flex items-center gap-2"><span class="status-dot bg-gray-400 dark:bg-gray-500"></span>{stoppedCount} stopped</span>
+					{#if pendingCount > 0}<span class="inline-flex items-center gap-2"><span class="status-dot bg-sky-500"></span>{pendingCount} pending</span>{/if}
 				</div>
 			</div>
-			<div class="p-5">
+			<div class="p-4">
 				<p class="metric-label">Runtime mix</p>
-				<div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
+				<div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
 					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{composeCount}</strong> Compose</span>
 					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{dockerfileCount}</strong> Dockerfile</span>
 					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{staticCount}</strong> Static</span>
