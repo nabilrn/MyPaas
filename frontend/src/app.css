@@ -87,22 +87,28 @@
 	.scrollbar-thin {
 		scrollbar-width: thin;
 	}
-	.surface {
-		border: 1px solid var(--app-border);
-		border-radius: 0.5rem;
-		background: var(--app-surface);
-		box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
-	}
-	.surface-raised {
-		border: 1px solid var(--app-border);
-		border-radius: 0.5rem;
-		background: var(--app-surface-raised);
-	}
+	.surface,
 	.control-panel {
 		border: 1px solid var(--app-border);
 		border-radius: 0.5rem;
 		background: var(--app-surface);
-		box-shadow: 0 8px 8px rgb(15 23 42 / 0.035);
+	}
+	.surface-raised {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: var(--app-surface);
+	}
+	.surface-muted,
+	.soft-panel {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: color-mix(in oklch, var(--app-surface-muted) 72%, var(--app-surface));
+	}
+	.overlay {
+		border: 1px solid var(--app-border);
+		border-radius: 0.5rem;
+		background: var(--app-surface);
+		box-shadow: 0 12px 28px rgb(15 23 42 / 0.14);
 	}
 	.field {
 		border: 1px solid var(--app-border);
@@ -124,13 +130,8 @@
 	}
 	.panel-header {
 		border-bottom: 1px solid var(--app-border);
-		background: color-mix(in oklch, var(--app-surface-muted) 52%, transparent);
+		background: var(--app-surface);
 		@apply px-5 py-4;
-	}
-	.soft-panel {
-		border: 1px solid var(--app-border);
-		border-radius: 0.5rem;
-		background: color-mix(in oklch, var(--app-surface-muted) 72%, var(--app-surface));
 	}
 	.metric-label {
 		color: var(--app-subtle);
