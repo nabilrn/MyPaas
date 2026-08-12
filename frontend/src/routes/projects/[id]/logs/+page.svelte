@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowDown, Check, Copy, RefreshCw, Trash2, Upload } from '@lucide/svelte';
+	import { ArrowDown, Check, Copy, Download, RefreshCw, Trash2 } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -248,7 +248,7 @@
 				on:click={downloadLogs}
 				disabled={filteredLogs.length === 0}
 			>
-				<Upload class="h-4 w-4" aria-hidden="true" />
+				<Download class="h-4 w-4" aria-hidden="true" />
 			</IconButton>
 			</div>
 		</svelte:fragment>
