@@ -1,10 +1,12 @@
 <script lang="ts">
+	type Resource = 'memory' | 'cpu' | 'storage' | 'network' | 'neutral';
+
 	export let label = '';
 	export let value = '';
 	export let detail = '';
 	export let indicator = '';
 	export let series: number[] = [];
-	export let resource: 'memory' | 'cpu' | 'storage' | 'network' | 'neutral' = 'neutral';
+	export let resource: Resource = 'neutral';
 	export let maxValue: number | null = 100;
 	export let rangeLabel = '0–100%';
 	export let className = '';
@@ -15,29 +17,8 @@
 
 	const chartWidth = 180;
 	const chartHeight = 76;
-
-	$: inferredResource = resource !== 'neutral'
-		? resource
-		: label.toLowerCase().includes('cpu')
-			? 'cpu'
-			: label.toLowerCase().includes('memory') || label.toLowerCase().includes('ram')
-				? 'memory'
-				: 'neutral';
-	$: compatibilitySeries = percent !== null && Number.isFinite(percent) ? [Math.max(0, percent)] : [];
-	$: cleanSeries = (series.length > 0 ? series : compatibilitySeries).filter((sample) => Number.isFinite(sample) && sample >= 0);
-	$: effectiveIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
-	$: effectiveMax = maxValue && maxValue > 0
-		? maxValue
-		: Math.max(1, ...cleanSeries) * 1.15;
-	$: points = cleanSeries.map((sample, index) => {
-		const x = cleanSeries.length === 1 ? chartWidth - 4 : (index / Math.max(1, cleanSeries.length - 1)) * chartWidth;
-		const level = Math.max(0, Math.min(1, sample / effectiveMax));
-		const y = chartHeight - level * chartHeight;
-		return { x, y, encoded: `${x.toFixed(2)},${y.toFixed(2)}` };
-	});
-	$: linePath = points.length >= 2 ? `M ${points.map((point) => point.encoded).join(' L ')}` : '';
-	$: areaPath = points.length >= 2 ? `M 0 ${chartHeight} L ${points.map((point) => point.encoded).join(' L ')} L ${chartWidth} ${chartHeight} Z` : '';
-	$: resourceClass = {
+	let inferredResource: Resource = 'neutral';
+	const resourceClasses = {
 		neutral: {
 			dot: 'bg-gray-400 dark:bg-gray-500',
 			stroke: 'stroke-gray-500 dark:stroke-gray-400',
@@ -63,7 +44,30 @@
 			stroke: 'stroke-violet-500 dark:stroke-violet-400',
 			fill: 'fill-violet-500/10 dark:fill-violet-400/15'
 		}
-	}[inferredResource];
+	} as const;
+
+	$: inferredResource = resource !== 'neutral'
+		? resource
+		: label.toLowerCase().includes('cpu')
+			? 'cpu'
+			: label.toLowerCase().includes('memory') || label.toLowerCase().includes('ram')
+				? 'memory'
+				: 'neutral';
+	$: compatibilitySeries = percent !== null && Number.isFinite(percent) ? [Math.max(0, percent)] : [];
+	$: cleanSeries = (series.length > 0 ? series : compatibilitySeries).filter((sample) => Number.isFinite(sample) && sample >= 0);
+	$: effectiveIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
+	$: effectiveMax = maxValue && maxValue > 0
+		? maxValue
+		: Math.max(1, ...cleanSeries) * 1.15;
+	$: points = cleanSeries.map((sample, index) => {
+		const x = cleanSeries.length === 1 ? chartWidth - 4 : (index / Math.max(1, cleanSeries.length - 1)) * chartWidth;
+		const level = Math.max(0, Math.min(1, sample / effectiveMax));
+		const y = chartHeight - level * chartHeight;
+		return { x, y, encoded: `${x.toFixed(2)},${y.toFixed(2)}` };
+	});
+	$: linePath = points.length >= 2 ? `M ${points.map((point) => point.encoded).join(' L ')}` : '';
+	$: areaPath = points.length >= 2 ? `M 0 ${chartHeight} L ${points.map((point) => point.encoded).join(' L ')} L ${chartWidth} ${chartHeight} Z` : '';
+	$: resourceClass = resourceClasses[inferredResource] ?? resourceClasses.neutral;
 	$: currentPoint = points.length === 1 ? points[0] : null;
 	$: currentOnly = series.length === 0 && compatibilitySeries.length === 1;
 	$: compatibilityTone = tone;
