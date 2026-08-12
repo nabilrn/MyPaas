@@ -53,10 +53,13 @@ The compatibility boundary is intentionally small:
 | MyPaaS integration | statd release | Protocol | Host requirement |
 | --- | --- | --- | --- |
 | current production hardening | `v0.1.0` | v1 | Linux, cgroup v2; prebuilt artifact: amd64 |
+| Phase 6 host telemetry | future `v0.2.x` | v1 + additive `host_snapshot` | Linux host-native statd |
 
-Protocol v1 is negotiated on every new Unix connection through `hello`. A protocol mismatch is an integration failure and MyPaaS falls back to the Docker-compatible metrics path rather than fabricating telemetry.
+Protocol v1 is negotiated on every new Unix connection through `hello`. A protocol mismatch is an integration failure and MyPaaS falls back to the Docker-compatible runtime metrics path rather than fabricating telemetry.
 
-Future statd releases may remain compatible with protocol v1, but MyPaaS production installation must continue to pin a known release until that compatibility has been validated. Do not point production installation at mutable `main`.
+Phase 6 keeps protocol 1 and adds `host_snapshot`. MyPaaS treats this operation as optional: a v0.1 daemon may reject it with `INVALID_REQUEST`, an unavailable daemon may fail the socket exchange, and a v0.2 daemon may report `HOST_METRICS_UNAVAILABLE`. None of those conditions may make `/admin/host-stats` fail or remove the existing RAM/CPU capacity data.
+
+Production installation remains pinned to `v0.1.0` until a verified v0.2 release is published and rollout validation is complete. Do not point production installation at mutable `main`.
 
 ## Runtime flow
 
@@ -105,9 +108,33 @@ Example:
 784283cd-0b53-42eb-bd9a-e1c729e86f41:app
 ```
 
+## Host telemetry
+
+When `STATD_SOCKET` points to a Phase 6-capable daemon, `GET /admin/host-stats` additionally exposes optional host telemetry:
+
+```json
+{
+  "storage": {
+    "total_bytes": 85899345920,
+    "available_bytes": 61847529062
+  },
+  "network": {
+    "interface": "eth0",
+    "rx_bytes": 18374829374,
+    "tx_bytes": 7391847291
+  }
+}
+```
+
+Both sections are nullable. The endpoint continues returning `host_ram_bytes`, `host_cpu_cores`, `allocated_ram_mb`, and `allocated_cpu` regardless of host-telemetry support.
+
+Storage is root-filesystem capacity as defined by statd Phase 6. Network values are cumulative counters for the selected host default-route interface. MyPaaS does not claim those counters are bytes-per-second; the frontend may derive transfer rates from successive successful snapshots and elapsed time.
+
+No host storage/network fallback is attempted from inside the API container. Reading the API container's own mount/network namespace would not represent the host contract validated for statd.
+
 ## Operational visibility
 
-Fallback is intentionally non-fatal, but it must not be silent.
+Fallback is intentionally non-fatal, but it must not be silent for the runtime metrics path.
 
 MyPaaS exposes these low-cardinality Prometheus metrics:
 
@@ -118,9 +145,11 @@ mypaas_statd_snapshot_errors_total
 mypaas_statd_registration_errors_total
 ```
 
-`mypaas_statd_available` reflects the last exercised statd integration state in the API process. Cold `NOT_FOUND` snapshots used to discover/register a runtime are expected protocol flow and are not counted as operational snapshot failures.
+`mypaas_statd_available` reflects the last exercised runtime-statd integration state in the API process. Cold `NOT_FOUND` snapshots used to discover/register a runtime are expected protocol flow and are not counted as operational snapshot failures.
 
-Logging is transition-aware:
+Host storage/network telemetry is optional during the v0.1 -> v0.2 staged upgrade and therefore does not mutate the runtime availability metric or increment runtime fallback counters when unsupported.
+
+Logging for the runtime metrics path is transition-aware:
 
 - the first unavailable state or healthy -> unavailable transition is logged at warning level;
 - repeated fallback while already unavailable is debug-only to avoid SSE log spam;
@@ -186,7 +215,7 @@ Additional observations from the same evidence:
 
 Correctness checks in the evidence compared statd snapshots against raw cgroup v2 files for memory, PID, and CPU counter semantics. Runtime disappearance was also tested: statd returned `NOT_FOUND` after the container stopped and the daemon remained active.
 
-Protocol v1 does not expose a sampler timestamp, so MyPaas documentation must not claim metric freshness or metric age from these benchmark files.
+Protocol v1 runtime snapshots do not expose a sampler timestamp, so MyPaas documentation must not claim runtime metric freshness or metric age from these benchmark files.
 
 ## Publish model
 
