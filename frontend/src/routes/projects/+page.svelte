@@ -450,7 +450,7 @@
 							loadingLabel={projectPrimaryLabel(project)}
 							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
 						>
-							<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5" />
+							<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 							{projectPrimaryLabel(project)}
 						</ActionButton>
 					</div>
