@@ -30,7 +30,7 @@ Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, hea
 
 ## Controls
 
-- Reuse `ActionButton` for normal text actions and `IconButton` for icon-only utility/repeated actions before writing a generic raw `<button>`.
+- Reuse `ActionButton` for text buttons, `ActionLink` for text navigation actions, and `IconButton` for icon-only utility/repeated actions before writing a generic raw control.
 - Primary page actions must normally keep a visible text label. Icon-only controls are for compact utility actions such as refresh, copy, reveal, expand, or repetitive row actions.
 - Canonical action variants are `primary`, `secondary`, `ghost`, `danger`, and `ghostDanger`. Legacy IconButton aliases may exist for compatibility but new code should not use them.
 - Standard controls should align to the 36px visual height. Keep the existing 44px coarse-pointer/touch target behavior.
@@ -52,7 +52,7 @@ Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, hea
 
 ## Adding UI primitives
 
-Before creating a new component, check whether `ActionButton`, `IconButton`, `SectionPanel`, `TableShell`, `PageHeader`, `EmptyState`, `StatusBadge`, or the shared surface utilities already solve the problem. Prefer a small extension to an existing primitive over a parallel component with slightly different styling.
+Before creating a new component, check whether `ActionButton`, `ActionLink`, `IconButton`, `SectionPanel`, `TableShell`, `PageHeader`, `EmptyState`, `StatusBadge`, or the shared surface utilities already solve the problem. Prefer a small extension to an existing primitive over a parallel component with slightly different styling.
 
 Do not add a new UI framework or icon library merely to solve consistency. Svelte, Tailwind, and Lucide are sufficient for the current product scope.
 
