@@ -5,11 +5,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
+	"strings"
 
 	"mypaas/internal/config"
 	"mypaas/internal/db"
 	"mypaas/internal/host"
 	"mypaas/internal/httpx"
+	"mypaas/internal/statd"
 )
 
 // settingKeys lists the keys that can be overridden via the API.
@@ -106,7 +109,7 @@ func (h *Handler) UpdateCloudflareConfig(w http.ResponseWriter, r *http.Request)
 		httpx.Error(w, http.StatusInternalServerError, "DB_WRITE_FAILED", "Failed to save cloudflare token", nil)
 		return
 	}
-	
+
 	rawZone, _ := json.Marshal(req.ZoneID)
 	if err := h.queries.UpsertSetting(r.Context(), db.UpsertSettingParams{
 		Key:   "cloudflare_zone_id",
@@ -161,35 +164,54 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	h.Get(w, r)
 }
 
-// HostStats returns the physical capacity of the VM and how much is allocated.
+type hostStatsResponse struct {
+	HostRAMBytes   int64                      `json:"host_ram_bytes"`
+	HostCPUCores   int                        `json:"host_cpu_cores"`
+	AllocatedRAMMB int32                      `json:"allocated_ram_mb"`
+	AllocatedCPU   float64                    `json:"allocated_cpu"`
+	Storage        *statd.HostStorageSnapshot `json:"storage"`
+	Network        *statd.HostNetworkSnapshot `json:"network"`
+}
+
+// HostStats returns host capacity plus optional host telemetry from mypaas-statd.
+// Storage/network remain nil when statd is disabled, unavailable, still on v0.1,
+// or has not produced a valid host sample. Existing capacity data remains usable.
 func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 	cap := host.GetCapacity()
 
-	// Calculate total allocated RAM across ALL projects
 	usage, err := h.queries.GetGlobalResourceUsage(r.Context())
 	var allocatedRAM int32
 	var allocatedCPU float64
 	if err == nil {
 		allocatedRAM = usage.TotalMemoryMb
 		if usage.TotalCpu.Valid && usage.TotalCpu.Int != nil {
-			// quick numeric conversion
 			cpuVal, _ := usage.TotalCpu.Float64Value()
 			allocatedCPU = cpuVal.Float64
 		}
 	}
 
-	res := map[string]interface{}{
-		"host_ram_bytes": cap.TotalRAMBytes,
-		"host_cpu_cores": cap.TotalCPUCores,
-		"allocated_ram_mb": allocatedRAM,
-		"allocated_cpu": allocatedCPU,
+	var storage *statd.HostStorageSnapshot
+	var network *statd.HostNetworkSnapshot
+	if socketPath := strings.TrimSpace(os.Getenv("STATD_SOCKET")); socketPath != "" {
+		if snapshot, snapshotErr := statd.NewClient(socketPath).HostSnapshot(r.Context()); snapshotErr == nil {
+			storage = snapshot.Storage
+			network = snapshot.Network
+		}
 	}
-	httpx.JSON(w, http.StatusOK, res)
+
+	httpx.JSON(w, http.StatusOK, hostStatsResponse{
+		HostRAMBytes:   cap.TotalRAMBytes,
+		HostCPUCores:   cap.TotalCPUCores,
+		AllocatedRAMMB: allocatedRAM,
+		AllocatedCPU:   allocatedCPU,
+		Storage:        storage,
+		Network:        network,
+	})
 }
 
 func (h *Handler) defaults() map[string]float64 {
 	cap := host.GetCapacity()
-	
+
 	// Smart defaults based on physical capacity
 	defaultUserRAM := float64(h.cfg.UserRAMQuotaMB) / 1024
 	defaultProjectRAM := float64(512)
