@@ -72,8 +72,20 @@ type PIDSnapshot struct {
 }
 
 type HostSnapshot struct {
+	Memory  *HostMemorySnapshot  `json:"memory"`
+	CPU     *HostCPUSnapshot     `json:"cpu"`
 	Storage *HostStorageSnapshot `json:"storage"`
 	Network *HostNetworkSnapshot `json:"network"`
+}
+
+type HostMemorySnapshot struct {
+	TotalBytes     uint64 `json:"total_bytes"`
+	AvailableBytes uint64 `json:"available_bytes"`
+}
+
+type HostCPUSnapshot struct {
+	TotalTicks uint64 `json:"total_ticks"`
+	IdleTicks  uint64 `json:"idle_ticks"`
 }
 
 type HostStorageSnapshot struct {
