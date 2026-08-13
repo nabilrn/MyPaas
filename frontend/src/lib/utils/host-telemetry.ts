@@ -1,3 +1,8 @@
+export type CPUCounterSample = {
+	totalTicks: number;
+	idleTicks: number;
+};
+
 export type NetworkCounterSample = {
 	interface: string;
 	rxBytes: number;
@@ -19,6 +24,18 @@ export function boundedPercent(used: number, total: number) {
 export function appendRollingSample(series: number[], value: number, maxSamples = 24) {
 	if (!Number.isFinite(value) || maxSamples <= 0) return series.slice(-Math.max(0, maxSamples));
 	return [...series, value].slice(-maxSamples);
+}
+
+export function deriveCPUUsage(previous: CPUCounterSample | null, current: CPUCounterSample): number | null {
+	if (!previous) return null;
+	if (!Number.isFinite(current.totalTicks) || !Number.isFinite(current.idleTicks)) return null;
+	if (current.totalTicks < previous.totalTicks || current.idleTicks < previous.idleTicks) return null;
+
+	const deltaTotal = current.totalTicks - previous.totalTicks;
+	const deltaIdle = current.idleTicks - previous.idleTicks;
+	if (deltaTotal <= 0 || deltaIdle < 0 || deltaIdle > deltaTotal) return null;
+
+	return Math.max(0, Math.min(100, ((deltaTotal - deltaIdle) / deltaTotal) * 100));
 }
 
 export function deriveNetworkRate(previous: NetworkCounterSample | null, current: NetworkCounterSample): NetworkRate | null {
