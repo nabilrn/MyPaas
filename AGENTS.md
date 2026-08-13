@@ -84,6 +84,26 @@ flowchart TB
 
 ---
 
+## Branching discipline
+
+Gunakan domain branch naming di `docs/engineering/branching.md`.
+
+**Wajib:**
+- Branch durable harus pakai domain prefix: `core/`, `infra/`, `ux/`, `test/`, `docs/`, `chore/`, atau narrow `fix/`.
+- Jangan bikin branch `agent/*` untuk normal repo work.
+- Satu branch = satu domain + satu outcome.
+- Delete branch setelah PR merged.
+
+**Contoh:**
+- `core/update-release-safety`
+- `core/backup-restore-drill`
+- `test/perf-many-projects`
+- `test/resilience-concurrent-deploys`
+- `infra/docker-cache-retention`
+- `docs/beta-readiness-gates`
+
+---
+
 ## Coding standards
 
 ### Naming conventions
