@@ -1,6 +1,7 @@
 package deployment
 
 import (
+	"strings"
 	"time"
 
 	"mypaas/internal/container"
@@ -41,6 +42,9 @@ func MetricsSnapshotFromContainers(metrics []container.Metrics) MetricsSnapshotR
 	items := make([]ContainerMetricsResponse, 0, len(metrics))
 	var collectedAt time.Time
 	for _, item := range metrics {
+		if strings.EqualFold(strings.TrimSpace(item.Uptime), "n/a") {
+			continue
+		}
 		if collectedAt.IsZero() || item.CollectedAt.After(collectedAt) {
 			collectedAt = item.CollectedAt
 		}

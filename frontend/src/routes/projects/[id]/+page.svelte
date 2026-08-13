@@ -5,7 +5,6 @@
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
-	import ResourceMeter from '$components/ResourceMeter.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api } from '$api';
 	import { runtimeServiceSummary, selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
@@ -26,10 +25,6 @@
 	$: lastDeploy = deployments.find((deployment) => deployment.id === project?.activeDeploymentId) ?? deployments[0];
 	$: primaryMetric = selectPrimaryProjectMetric(metrics, project?.mainService);
 	$: runtimeSummary = runtimeServiceSummary(metrics, primaryMetric);
-	$: memoryPercent = primaryMetric && primaryMetric.memoryLimitMb > 0
-		? Math.min((primaryMetric.memoryMb / primaryMetric.memoryLimitMb) * 100, 100)
-		: 0;
-	$: cpuPercent = primaryMetric ? Math.min(primaryMetric.cpu, 100) : 0;
 	$: metricsUpdatedLabel = metrics?.collectedAt
 		? `Updated ${new Date(metrics.collectedAt).toLocaleTimeString()}`
 		: 'Waiting for runtime sample';
@@ -182,7 +177,7 @@
 			</div>
 		{/if}
 
-		{#if project.status !== 'running'}
+		{#if project.status === 'building' || project.status === 'crashed' || project.status === 'pending'}
 			<section class="surface overflow-hidden">
 				<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
 					<div class="min-w-0">
@@ -202,64 +197,43 @@
 			</section>
 		{/if}
 
-		<section class="surface overflow-hidden">
-			<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
-				<div>
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime resources</h2>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-						{runtimeSummary.label}{runtimeSummary.otherServices > 0 ? ` · ${runtimeSummary.otherServices} other service${runtimeSummary.otherServices === 1 ? '' : 's'}` : ''} · {metricsUpdatedLabel}
-					</p>
-					<p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">mypaas-statd preferred · container-engine fallback when unavailable</p>
+		{#if project.deployMode !== 'static'}
+			<section class="surface overflow-hidden">
+				<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
+					<div>
+						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime summary</h2>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{runtimeSummary.label} · {metricsUpdatedLabel}</p>
+					</div>
+					<ActionLink href={`${base}/metrics`} variant="ghost" size="xs">
+						<Activity slot="icon" class="h-3.5 w-3.5" />
+						Diagnostics
+					</ActionLink>
 				</div>
-				<ActionLink href={`${base}/metrics`} variant="ghost" size="xs">
-					<Activity slot="icon" class="h-3.5 w-3.5" />
-					Diagnostics
-				</ActionLink>
-			</div>
-
-			{#if primaryMetric}
-				<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-					<div class="p-5">
-						<p class="metric-label">CPU</p>
-						<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.cpu.toFixed(2)}%</p>
-						<div class="mt-3">
-							<ResourceMeter label="CPU usage" value={`${primaryMetric.cpu.toFixed(2)}%`} detail="Current runtime sample" percent={cpuPercent} tone={cpuPercent >= 90 ? 'danger' : cpuPercent >= 75 ? 'warning' : 'info'} />
+				{#if primaryMetric}
+					<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+						<div class="p-5">
+							<p class="metric-label">CPU</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.cpu.toFixed(2)}%</p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current runtime sample</p>
+						</div>
+						<div class="p-5">
+							<p class="metric-label">Memory</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.memoryMb.toFixed(1)} <span class="text-sm font-medium text-gray-500 dark:text-gray-400">MB</span></p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.memoryLimitMb.toFixed(0)} MB limit</p>
+						</div>
+						<div class="p-5">
+							<p class="metric-label">Uptime</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.uptime}</p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.service}</p>
 						</div>
 					</div>
-					<div class="p-5">
-						<p class="metric-label">Memory</p>
-						<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.memoryMb.toFixed(1)} <span class="text-sm font-medium text-gray-500 dark:text-gray-400">MB</span></p>
-						<div class="mt-3">
-							<ResourceMeter label="Memory usage" value={`${primaryMetric.memoryMb.toFixed(1)} MB`} detail={`${primaryMetric.memoryLimitMb.toFixed(0)} MB limit`} percent={memoryPercent} tone={memoryPercent >= 90 ? 'danger' : memoryPercent >= 75 ? 'warning' : 'success'} />
-						</div>
+				{:else}
+					<div class="px-5 py-8">
+						<EmptyState title="No active runtime metrics." description="CPU and memory samples are reported only while a container runtime is active." compact />
 					</div>
-					<div class="p-5">
-						<p class="metric-label">Persistent storage</p>
-						<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">Not measured</p>
-						<p class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">Project-owned persistent data is not part of the current runtime telemetry contract. Host disk usage is kept separate.</p>
-					</div>
-				</div>
-				<div class="grid gap-px border-t border-gray-100 bg-gray-100 dark:border-neutral-800 dark:bg-neutral-800 sm:grid-cols-3">
-					<div class="bg-white px-5 py-3 dark:bg-neutral-900">
-						<p class="metric-label">Service</p>
-						<p class="mt-1 truncate font-mono text-sm text-gray-950 dark:text-white">{primaryMetric.service}</p>
-					</div>
-					<div class="bg-white px-5 py-3 dark:bg-neutral-900">
-						<p class="metric-label">Uptime</p>
-						<p class="metric-value mt-1 text-sm font-medium text-gray-950 dark:text-white">{primaryMetric.uptime}</p>
-					</div>
-					<div class="bg-white px-5 py-3 dark:bg-neutral-900">
-						<p class="metric-label">Telemetry policy</p>
-						<p class="mt-1 text-sm text-gray-950 dark:text-white">statd preferred</p>
-						<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">Container engine fallback</p>
-					</div>
-				</div>
-			{:else}
-				<div class="px-5 py-8">
-					<EmptyState title="No runtime metrics yet." description="CPU and memory appear when a runtime is available. Project-scoped persistent storage is not measured by the current telemetry contract." compact />
-				</div>
-			{/if}
-		</section>
+				{/if}
+			</section>
+		{/if}
 
 		<div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
 			<section class="surface overflow-hidden">

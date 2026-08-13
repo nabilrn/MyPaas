@@ -9,6 +9,7 @@
 	import ErrorState from '$components/ErrorState.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
+	import { appendProjectMetricHistory, type ProjectMetricHistory } from '$lib/utils/project-metric-history';
 	import type { MetricsSnapshot } from '$types';
 	import CloudflareSetup from './CloudflareSetup.svelte';
 
@@ -19,10 +20,12 @@
 	let refreshing = false;
 	let metricsInFlight = false;
 	let error = '';
+	let metricHistory: ProjectMetricHistory = {};
 
 	$: metricItems = snapshot?.items ?? [];
 	$: services = metricItems.map((item) => item.service);
 	$: primary = metricItems.find((item) => item.service === selectedService) ?? metricItems[0] ?? null;
+	$: primaryHistory = primary ? (metricHistory[primary.service] ?? { cpu: [], memoryPercent: [] }) : { cpu: [], memoryPercent: [] };
 	$: memoryPercent = primary && primary.memoryLimitMb > 0
 		? Math.min((primary.memoryMb / primary.memoryLimitMb) * 100, 999)
 		: 0;
@@ -32,8 +35,7 @@
 				{ label: 'Service', value: primary.service },
 				{ label: 'Uptime', value: primary.uptime },
 				{ label: 'Collected', value: snapshot?.collectedAt ? new Date(snapshot.collectedAt).toLocaleTimeString() : '-' },
-				{ label: 'Telemetry', value: 'statd preferred' },
-				{ label: 'Persistent storage', value: 'Not measured' }
+				{ label: 'Telemetry', value: 'statd preferred' }
 			]
 		: [];
 	$: updatedLabel = primary && snapshot?.collectedAt
@@ -66,6 +68,7 @@
 		refreshing = true;
 		try {
 			const result = await api.metrics.snapshot($page.params.id ?? '');
+			metricHistory = appendProjectMetricHistory(metricHistory, result.items);
 			const nextServices = result.items.map((item) => item.service);
 			if (!selectedService || !nextServices.includes(selectedService)) {
 				selectedService = nextServices[0] ?? '';
@@ -181,8 +184,8 @@
 			</svelte:fragment>
 
 			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
-				<CapacityMetricChart label="CPU" value={`${primary.cpu.toFixed(2)}%`} detail="current runtime sample" percent={cpuPercent} resource="cpu" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label="Memory" value={`${primary.memoryMb.toFixed(1)} MB`} detail={`${primary.memoryLimitMb.toFixed(0)} MB limit`} percent={Math.min(memoryPercent, 100)} resource="memory" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="CPU" value={`${primary.cpu.toFixed(2)}%`} detail="rolling samples · current runtime" percent={cpuPercent} series={primaryHistory.cpu} resource="cpu" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="Memory" value={`${primary.memoryMb.toFixed(1)} MB`} detail={`${primary.memoryLimitMb.toFixed(0)} MB limit · rolling usage`} percent={Math.min(memoryPercent, 100)} series={primaryHistory.memoryPercent} resource="memory" className="bg-white dark:bg-neutral-900" />
 				<div class="bg-white p-4 dark:bg-neutral-900">
 					<p class="metric-label">Runtime context</p>
 					<div class="mt-2 divide-y divide-gray-100 dark:divide-neutral-800">
@@ -193,7 +196,6 @@
 							</div>
 						{/each}
 					</div>
-					<p class="mt-3 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Persistent storage means project-owned managed data. Host root-disk usage is intentionally not substituted here.</p>
 				</div>
 			</div>
 		</SectionPanel>
@@ -218,7 +220,7 @@
 		{/if}
 	{:else if !error}
 		<div class="surface overflow-hidden">
-			<EmptyState title="No metrics yet." description="Metrics appear after the project has a running container or service." compact />
+			<EmptyState title="No active runtime metrics." description="Static projects and stopped runtimes do not expose container CPU or memory samples. Edge analytics remains available when Cloudflare is configured." compact />
 		</div>
 	{/if}
 </div>

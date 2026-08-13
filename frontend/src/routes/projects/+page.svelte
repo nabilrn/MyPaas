@@ -64,7 +64,7 @@
 	$: cpuAllocationWarning = Boolean(hostStats && hostStats.host_cpu_cores > 0 && hostStats.allocated_cpu > hostStats.host_cpu_cores);
 	$: storageWarning = Boolean(hostStats?.storage && storagePercent >= 85);
 	$: getDerivedStatus = (project: Project) => {
-		if (project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
+		if (project.deployMode !== 'static' && project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
 		return project.status;
 	};
 	$: runningCount = projects.filter((project) => getDerivedStatus(project) === 'running').length;
@@ -288,7 +288,9 @@
 	}
 
 	async function loadUptimesFor(rows: Project[]) {
-		const pending = rows.filter((project) => !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));
+		const staticUptimes = Object.fromEntries(rows.filter((project) => project.deployMode === 'static').map((project) => [project.id, 'n/a']));
+		if (Object.keys(staticUptimes).length > 0) projectUptimes = { ...projectUptimes, ...staticUptimes };
+		const pending = rows.filter((project) => project.deployMode !== 'static' && !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));
 		if (pending.length === 0) return;
 
 		const refreshToken = uptimeRefreshToken;
