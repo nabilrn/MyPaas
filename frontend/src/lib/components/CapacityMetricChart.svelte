@@ -91,7 +91,8 @@
 				: 'neutral';
 	$: compatibilitySeries = percent !== null && Number.isFinite(percent) ? [Math.max(0, percent)] : [];
 	$: cleanSeries = (series.length > 0 ? series : compatibilitySeries).filter((sample) => Number.isFinite(sample) && sample >= 0);
-	$: effectiveIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
+	$: requestedIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
+	$: effectiveIndicator = /%$/.test(value.trim()) ? value.trim() : requestedIndicator;
 	$: rollingHistory = series.length >= 2 && cleanSeries.length >= 2;
 	$: domain = deriveAdaptiveMetricDomain(cleanSeries, maxValue);
 	$: domainMin = domain.min;
