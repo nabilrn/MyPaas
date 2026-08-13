@@ -15,6 +15,7 @@ describe('createProjectEnvironmentCopy', () => {
 
 	it('does not imply registry images are scanned for environment variables', () => {
 		const copy = createProjectEnvironmentCopy('registry');
+		expect(copy.setupSummary).not.toMatch(/detected/i);
 		expect(copy.sectionDescription).toMatch(/not scanned/i);
 		expect(copy.sectionDescription).not.toMatch(/detected from the repository/i);
 		expect(copy.emptyState).toMatch(/have been added/i);
