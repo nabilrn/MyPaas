@@ -27,6 +27,21 @@ func resolveConnection(ctx context.Context, project db.Project, envs map[string]
 	if conn, ok := resolveParts(project, envs); ok {
 		return prepareComposeConnection(ctx, project, conn)
 	}
+	if project.DeployMode == "compose" {
+		composeEnvs, ok, err := composeDatabaseServiceEnv(ctx, project.Name)
+		if err != nil {
+			return Connection{}, err
+		}
+		if ok {
+			merged := mergeMissingEnv(envs, composeEnvs)
+			if conn, ok := resolveURL(merged); ok {
+				return prepareComposeConnection(ctx, project, conn)
+			}
+			if conn, ok := resolveParts(project, merged); ok {
+				return prepareComposeConnection(ctx, project, conn)
+			}
+		}
+	}
 	return Connection{}, fmt.Errorf("%w: no supported database environment was found", errs.ErrValidation)
 }
 
@@ -76,9 +91,9 @@ func resolveParts(project db.Project, envs map[string]string) (Connection, bool)
 		host = "db"
 	}
 	port := intFromEnv(envs, defaultPort(driver), "DB_PORT", "DATABASE_PORT", "POSTGRES_PORT", "MYSQL_PORT", "MARIADB_PORT")
-	name := firstEnv(envs, "DB_NAME", "DATABASE_NAME", "POSTGRES_DB", "MYSQL_DATABASE", "MARIADB_DATABASE")
-	user := firstEnv(envs, "DB_USER", "DATABASE_USER", "POSTGRES_USER", "MYSQL_USER", "MARIADB_USER")
-	pass := firstEnv(envs, "DB_PASSWORD", "DATABASE_PASSWORD", "POSTGRES_PASSWORD", "MYSQL_PASSWORD", "MARIADB_PASSWORD")
+	name := databaseNameFromEnv(envs, driver)
+	user := databaseUserFromEnv(envs, driver)
+	pass := databasePasswordFromEnv(envs, driver)
 	if host == "" || name == "" || user == "" {
 		return Connection{}, false
 	}
@@ -103,6 +118,45 @@ func inferDriver(envs map[string]string) DriverID {
 		return DriverMySQL
 	default:
 		return ""
+	}
+}
+
+func databaseNameFromEnv(envs map[string]string, driver DriverID) string {
+	switch driver {
+	case DriverPostgres:
+		return firstEnv(envs, "POSTGRES_DB", "DB_NAME", "DATABASE_NAME")
+	case DriverMariaDB:
+		return firstEnv(envs, "MARIADB_DATABASE", "MYSQL_DATABASE", "DB_NAME", "DATABASE_NAME")
+	case DriverMySQL:
+		return firstEnv(envs, "MYSQL_DATABASE", "MARIADB_DATABASE", "DB_NAME", "DATABASE_NAME")
+	default:
+		return firstEnv(envs, "DB_NAME", "DATABASE_NAME", "POSTGRES_DB", "MYSQL_DATABASE", "MARIADB_DATABASE")
+	}
+}
+
+func databaseUserFromEnv(envs map[string]string, driver DriverID) string {
+	switch driver {
+	case DriverPostgres:
+		return firstEnv(envs, "POSTGRES_USER", "DB_USER", "DATABASE_USER")
+	case DriverMariaDB:
+		return firstEnv(envs, "MARIADB_USER", "MYSQL_USER", "DB_USER", "DATABASE_USER")
+	case DriverMySQL:
+		return firstEnv(envs, "MYSQL_USER", "MARIADB_USER", "DB_USER", "DATABASE_USER")
+	default:
+		return firstEnv(envs, "DB_USER", "DATABASE_USER", "POSTGRES_USER", "MYSQL_USER", "MARIADB_USER")
+	}
+}
+
+func databasePasswordFromEnv(envs map[string]string, driver DriverID) string {
+	switch driver {
+	case DriverPostgres:
+		return firstEnv(envs, "POSTGRES_PASSWORD", "DB_PASSWORD", "DATABASE_PASSWORD")
+	case DriverMariaDB:
+		return firstEnv(envs, "MARIADB_PASSWORD", "MYSQL_PASSWORD", "DB_PASSWORD", "DATABASE_PASSWORD")
+	case DriverMySQL:
+		return firstEnv(envs, "MYSQL_PASSWORD", "MARIADB_PASSWORD", "DB_PASSWORD", "DATABASE_PASSWORD")
+	default:
+		return firstEnv(envs, "DB_PASSWORD", "DATABASE_PASSWORD", "POSTGRES_PASSWORD", "MYSQL_PASSWORD", "MARIADB_PASSWORD")
 	}
 }
 
@@ -269,6 +323,80 @@ func composeServiceContainerIDs(ctx context.Context, projectName, service string
 		return nil, fmt.Errorf("%w: find compose service container: %s", errs.ErrValidation, firstLine(msg))
 	}
 	return fieldsByLine(string(out)), nil
+}
+
+func composeDatabaseServiceEnv(ctx context.Context, projectName string) (map[string]string, bool, error) {
+	for _, project := range composeProjectCandidates(projectName) {
+		for _, service := range composeDatabaseServiceCandidates() {
+			ids, err := composeServiceContainerIDs(ctx, project, service)
+			if err != nil {
+				return nil, false, err
+			}
+			for _, id := range ids {
+				envs, err := inspectContainerEnv(ctx, id)
+				if err != nil {
+					return nil, false, err
+				}
+				if hasDatabaseIdentityEnv(envs) {
+					return envs, true, nil
+				}
+			}
+		}
+	}
+	return nil, false, nil
+}
+
+func composeDatabaseServiceCandidates() []string {
+	return []string{"db", "database", "postgres", "postgresql", "mysql", "mariadb"}
+}
+
+func inspectContainerEnv(ctx context.Context, containerID string) (map[string]string, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{json .Config.Env}}", containerID).CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if isDockerUnavailable(msg) || isNoSuchContainer(msg) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%w: inspect compose service environment: %s", errs.ErrValidation, firstLine(msg))
+	}
+	return parseContainerEnvInspect(string(out))
+}
+
+func parseContainerEnvInspect(value string) (map[string]string, error) {
+	var raw []string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(value)), &raw); err != nil {
+		return nil, fmt.Errorf("%w: parse compose service environment: %v", errs.ErrValidation, err)
+	}
+	return envListMap(raw), nil
+}
+
+func envListMap(values []string) map[string]string {
+	envs := make(map[string]string, len(values))
+	for _, entry := range values {
+		key, value, ok := strings.Cut(entry, "=")
+		key = strings.TrimSpace(key)
+		if !ok || key == "" {
+			continue
+		}
+		envs[key] = value
+	}
+	return envs
+}
+
+func mergeMissingEnv(primary, fallback map[string]string) map[string]string {
+	merged := make(map[string]string, len(primary)+len(fallback))
+	for key, value := range fallback {
+		merged[key] = value
+	}
+	for key, value := range primary {
+		merged[key] = value
+	}
+	return merged
+}
+
+func hasDatabaseIdentityEnv(envs map[string]string) bool {
+	driver := inferDriver(envs)
+	return driver != "" && databaseNameFromEnv(envs, driver) != "" && databaseUserFromEnv(envs, driver) != ""
 }
 
 func inspectContainerNetworks(ctx context.Context, containerID string) ([]composeServiceEndpoint, error) {

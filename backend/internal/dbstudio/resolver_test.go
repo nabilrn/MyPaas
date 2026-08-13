@@ -32,6 +32,29 @@ func TestResolvePartsInfersMariaDBComposeDatabase(t *testing.T) {
 	}
 }
 
+func TestResolvePartsUsesMergedComposeDatabaseServiceEnv(t *testing.T) {
+	project := db.Project{ID: uuid.New(), Name: "sop-generate-app", DeployMode: "compose"}
+	projectEnv := map[string]string{
+		"DB_PASSWORD": "project-secret",
+	}
+	dbServiceEnv := envListMap([]string{
+		"MARIADB_DATABASE=sop_biro_organisasi",
+		"MARIADB_USER=sop_app",
+		"MARIADB_PASSWORD=compose-secret",
+	})
+
+	conn, ok := resolveParts(project, mergeMissingEnv(projectEnv, dbServiceEnv))
+	if !ok {
+		t.Fatal("resolveParts() did not detect merged compose DB service env")
+	}
+	if conn.Driver != DriverMariaDB || conn.Host != "db" || conn.Database != "sop_biro_organisasi" || conn.User != "sop_app" {
+		t.Fatalf("unexpected connection: %#v", conn)
+	}
+	if conn.password != "compose-secret" {
+		t.Fatal("expected MariaDB service password to be used for MARIADB_USER")
+	}
+}
+
 func TestConnectionFromPostgresURL(t *testing.T) {
 	conn, err := connectionFromURL("postgres://app:secret@postgres:5432/appdb?sslmode=disable", "DATABASE_URL")
 	if err != nil {
@@ -78,6 +101,29 @@ func TestParseComposeNetworkInspect(t *testing.T) {
 	}
 	if len(endpoints) != 2 {
 		t.Fatalf("endpoints length = %d, want 2: %#v", len(endpoints), endpoints)
+	}
+}
+
+func TestParseContainerEnvInspect(t *testing.T) {
+	envs, err := parseContainerEnvInspect(`["MARIADB_DATABASE=sop_biro_organisasi","MARIADB_USER=sop_app","MARIADB_PASSWORD=secret","MALFORMED"]`)
+	if err != nil {
+		t.Fatalf("parseContainerEnvInspect() error = %v", err)
+	}
+	if envs["MARIADB_DATABASE"] != "sop_biro_organisasi" || envs["MARIADB_USER"] != "sop_app" || envs["MARIADB_PASSWORD"] != "secret" {
+		t.Fatalf("unexpected env map: %#v", envs)
+	}
+	if _, ok := envs["MALFORMED"]; ok {
+		t.Fatalf("malformed env entry should be skipped: %#v", envs)
+	}
+}
+
+func TestMergeMissingEnvKeepsProjectValues(t *testing.T) {
+	merged := mergeMissingEnv(
+		map[string]string{"DATABASE_HOST": "custom-db", "DB_PASSWORD": "project-secret"},
+		map[string]string{"DATABASE_HOST": "db", "MARIADB_DATABASE": "app"},
+	)
+	if merged["DATABASE_HOST"] != "custom-db" || merged["DB_PASSWORD"] != "project-secret" || merged["MARIADB_DATABASE"] != "app" {
+		t.Fatalf("unexpected merged env: %#v", merged)
 	}
 }
 
