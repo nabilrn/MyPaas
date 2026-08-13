@@ -7,7 +7,16 @@
 	import { api } from '$api';
 	import { clearShellContext, setShellContext } from '$stores/shell-context';
 	import { toast } from '$stores/toast';
-	import type { Project, ProjectStatus } from '$types';
+	import {
+		appendProjectStreamLog,
+		projectStreamConnection,
+		projectStreamLogs,
+		projectStreamMetrics,
+		resetProjectStreamState,
+		setProjectStreamReconnect
+	} from '$stores/project-stream';
+	import { projectStreamTopics } from '$lib/utils/project-stream-topics';
+	import type { MetricsSnapshot, Project, ProjectStatus } from '$types';
 	import { projectHost, projectURL } from '$lib/utils/urls';
 
 	const terminalProjectStatuses = new Set<ProjectStatus>(['running', 'stopped', 'crashed', 'pending']);
@@ -19,26 +28,77 @@
 	let projectRefreshInFlight = false;
 	let stream: EventSource | null = null;
 	let lastStreamStatus: ProjectStatus | null = null;
+	let mounted = false;
+	let activeStreamKey = '';
 
 	$: publicProjectHost = project ? projectHost(project.subdomain, $page.url.hostname) : '';
 	$: publicProjectURL = project ? projectURL(project.subdomain, $page.url.protocol, $page.url.hostname) : '';
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
+	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
+	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
+	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
+		mounted = true;
+		resetProjectStreamState();
+		setProjectStreamReconnect(() => connectProjectStream(true));
 		void loadProject();
-		connectProjectStream();
 
 		return () => {
+			mounted = false;
 			stream?.close();
 			stream = null;
+			activeStreamKey = '';
+			setProjectStreamReconnect(null);
+			resetProjectStreamState();
 			clearShellContext();
 		};
 	});
 
-	function connectProjectStream() {
+	function connectProjectStream(force = false) {
+		if (!mounted || !project) return;
+		const topics = projectStreamTopics($page.url.pathname, project.id, project.deployMode);
+		const key = `${project.id}:${topics}`;
+		if (!force && stream && key === activeStreamKey) return;
+
 		stream?.close();
-		stream = new EventSource(`/api/projects/${$page.params.id}/stream`, { withCredentials: true });
+		stream = null;
+		activeStreamKey = key;
+		projectStreamConnection.set('connecting');
+		if (!topics.split(',').includes('metrics')) projectStreamMetrics.set(null);
+		if (!topics.split(',').includes('logs')) projectStreamLogs.set([]);
+
+		stream = new EventSource(`/api/projects/${project.id}/stream?topics=${encodeURIComponent(topics)}`, { withCredentials: true });
+		stream.addEventListener('open', () => projectStreamConnection.set('open'));
+		stream.addEventListener('error', () => projectStreamConnection.set('reconnecting'));
 		stream.addEventListener('status', handleStatusEvent);
+		stream.addEventListener('metrics', handleMetricsEvent);
+		stream.addEventListener('log', handleLogEvent);
+		stream.addEventListener('deployment-log', handleLogEvent);
+	}
+
+	function handleMetricsEvent(event: MessageEvent) {
+		try {
+			const parsed = JSON.parse(event.data) as MetricsSnapshot;
+			if (!Array.isArray(parsed.items)) return;
+			projectStreamMetrics.set(parsed);
+		} catch {
+			// EventSource reconnects independently; malformed samples are ignored.
+		}
+	}
+
+	function handleLogEvent(event: MessageEvent) {
+		try {
+			const parsed = JSON.parse(event.data) as { service?: string; line?: string; timestamp?: string };
+			if (!parsed.line) return;
+			appendProjectStreamLog({
+				service: parsed.service || 'app',
+				line: parsed.line,
+				timestamp: parsed.timestamp || new Date().toISOString()
+			});
+		} catch {
+			// Ignore malformed stream events.
+		}
 	}
 
 	function handleStatusEvent(event: MessageEvent) {

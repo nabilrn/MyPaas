@@ -18,7 +18,8 @@ import type {
 	DBStudioTable,
 	DBStudioRowFilters,
 	DBStudioWriteSession,
-	LogsResponse
+	LogsResponse,
+	CloudflareAnalytics
 } from '$types';
 
 export interface HostMemoryStats {
@@ -217,7 +218,8 @@ export const api = {
 	},
 
 	metrics: {
-		snapshot: (projectId: string): Promise<MetricsSnapshot> => request(`/projects/${projectId}/metrics`)
+		snapshot: (projectId: string): Promise<MetricsSnapshot> => request(`/projects/${projectId}/metrics`),
+		analytics: (projectId: string): Promise<CloudflareAnalytics> => request(`/projects/${projectId}/analytics`)
 	},
 
 	admin: {

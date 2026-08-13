@@ -1,33 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, ArrowRight, Database, History, KeyRound, Settings2 } from '@lucide/svelte';
+	import { ArrowRight, Database, History, KeyRound, Settings2 } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
+	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api } from '$api';
-	import { runtimeServiceSummary, selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
-	import type { DBStudioStatus, Deployment, MetricsSnapshot, Project } from '$types';
+	import type { DBStudioStatus, Deployment, Project } from '$types';
 
 	let project: Project | null = null;
 	let deployments: Deployment[] = [];
-	let metrics: MetricsSnapshot | null = null;
 	let envCount: number | null = null;
 	let dbStatus: DBStudioStatus | null = null;
 	let supportingSummaryLoaded = false;
 	let loading = true;
 	let overviewInFlight = false;
-	let metricsInFlight = false;
 	let error = '';
 
 	$: base = `/projects/${$page.params.id}`;
 	$: lastDeploy = deployments.find((deployment) => deployment.id === project?.activeDeploymentId) ?? deployments[0];
-	$: primaryMetric = selectPrimaryProjectMetric(metrics, project?.mainService);
-	$: runtimeSummary = runtimeServiceSummary(metrics, primaryMetric);
-	$: metricsUpdatedLabel = metrics?.collectedAt
-		? `Updated ${new Date(metrics.collectedAt).toLocaleTimeString()}`
-		: 'Waiting for runtime sample';
 	$: applicationState = applicationStateFor(project, lastDeploy);
 	$: runtimeLabel = project
 		? project.deployMode === 'compose'
@@ -49,14 +42,11 @@
 
 	onMount(() => {
 		void loadOverview();
-		void loadMetricsSnapshot();
 		void loadSupportingSummary();
 
 		const overviewInterval = setInterval(() => void loadOverview(true), 5000);
-		const metricsInterval = setInterval(() => void loadMetricsSnapshot(), 5000);
 		return () => {
 			clearInterval(overviewInterval);
-			clearInterval(metricsInterval);
 		};
 	});
 
@@ -80,17 +70,6 @@
 		}
 	}
 
-	async function loadMetricsSnapshot() {
-		if (metricsInFlight) return;
-		metricsInFlight = true;
-		try {
-			metrics = await api.metrics.snapshot($page.params.id ?? '');
-		} catch {
-			metrics = null;
-		} finally {
-			metricsInFlight = false;
-		}
-	}
 
 	async function loadSupportingSummary() {
 		const projectId = $page.params.id ?? '';
@@ -197,43 +176,8 @@
 			</section>
 		{/if}
 
-		{#if project.deployMode !== 'static'}
-			<section class="surface overflow-hidden">
-				<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
-					<div>
-						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime summary</h2>
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{runtimeSummary.label} · {metricsUpdatedLabel}</p>
-					</div>
-					<ActionLink href={`${base}/metrics`} variant="ghost" size="xs">
-						<Activity slot="icon" class="h-3.5 w-3.5" />
-						Diagnostics
-					</ActionLink>
-				</div>
-				{#if primaryMetric}
-					<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-						<div class="p-5">
-							<p class="metric-label">CPU</p>
-							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.cpu.toFixed(2)}%</p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current runtime sample</p>
-						</div>
-						<div class="p-5">
-							<p class="metric-label">Memory</p>
-							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.memoryMb.toFixed(1)} <span class="text-sm font-medium text-gray-500 dark:text-gray-400">MB</span></p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.memoryLimitMb.toFixed(0)} MB limit</p>
-						</div>
-						<div class="p-5">
-							<p class="metric-label">Uptime</p>
-							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.uptime}</p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.service}</p>
-						</div>
-					</div>
-				{:else}
-					<div class="px-5 py-8">
-						<EmptyState title="No active runtime metrics." description="CPU and memory samples are reported only while a container runtime is active." compact />
-					</div>
-				{/if}
-			</section>
-		{/if}
+		<ProjectObservability {project} />
+
 
 		<div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
 			<section class="surface overflow-hidden">
