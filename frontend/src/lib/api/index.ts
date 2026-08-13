@@ -21,6 +21,16 @@ import type {
 	LogsResponse
 } from '$types';
 
+export interface HostMemoryStats {
+	total_bytes: number;
+	available_bytes: number;
+}
+
+export interface HostCPUStats {
+	total_ticks: number;
+	idle_ticks: number;
+}
+
 export interface HostStorageStats {
 	total_bytes: number;
 	available_bytes: number;
@@ -37,6 +47,8 @@ export interface HostStats {
 	host_cpu_cores: number;
 	allocated_ram_mb: number;
 	allocated_cpu: number;
+	memory: HostMemoryStats | null;
+	cpu: HostCPUStats | null;
 	storage: HostStorageStats | null;
 	network: HostNetworkStats | null;
 }
