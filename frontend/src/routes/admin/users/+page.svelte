@@ -92,7 +92,7 @@
 </svelte:head>
 
 <div class="page-shell py-6">
-	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
 		<p class="text-sm text-gray-500 dark:text-gray-400">Only whitelisted users can sign in with GitHub OAuth.</p>
 		<div class="flex flex-wrap items-center gap-2">
 			<ActionButton variant="secondary" size="sm" loading={loading} loadingLabel="Refreshing" on:click={load}>
