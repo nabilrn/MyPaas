@@ -28,10 +28,19 @@ const (
 type Handler struct {
 	service    *Service
 	statdCache statdRuntimeCache
+	metricsHub *projectMetricsHub
 }
 
 func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+	h := &Handler{service: service}
+	h.metricsHub = newProjectMetricsHub(streamPollInterval, func(ctx context.Context, projectID uuid.UUID) (MetricsSnapshotResponse, error) {
+		metrics, err := h.service.PreferredContainerMetricsList(ctx, projectID, &h.statdCache)
+		if err != nil {
+			return MetricsSnapshotResponse{}, err
+		}
+		return MetricsSnapshotFromContainers(metrics), nil
+	})
+	return h
 }
 
 func (h *Handler) Trigger(w http.ResponseWriter, r *http.Request) {
@@ -137,28 +146,37 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
+	httpx.JSON(w, http.StatusOK, MetricsSnapshotFromContainers(metrics))
+}
 
-	resp := MetricsSnapshotFromContainers(metrics)
-	cfData, _ := h.service.CloudflareAnalytics(r.Context(), id)
-	if cfData != nil {
-		ts := make([]TimeseriesDataPoint, len(cfData.Timeseries))
-		for i, t := range cfData.Timeseries {
-			ts[i] = TimeseriesDataPoint{
-				Timestamp: t.Timestamp,
-				Requests:  t.Requests,
-				Bandwidth: t.Bandwidth,
-			}
-		}
-
-		resp.Analytics = &CloudflareAnalytics{
-			TotalRequests: cfData.TotalRequests,
-			Bandwidth:     cfData.Bandwidth,
-			Errors:        cfData.Errors,
-			Timeseries:    ts,
+func (h *Handler) Analytics(w http.ResponseWriter, r *http.Request) {
+	id, ok := projectID(w, r)
+	if !ok {
+		return
+	}
+	cfData, err := h.service.CloudflareAnalytics(r.Context(), id)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	if cfData == nil {
+		httpx.JSON(w, http.StatusOK, CloudflareAnalytics{Timeseries: []TimeseriesDataPoint{}})
+		return
+	}
+	ts := make([]TimeseriesDataPoint, len(cfData.Timeseries))
+	for i, point := range cfData.Timeseries {
+		ts[i] = TimeseriesDataPoint{
+			Timestamp: point.Timestamp,
+			Requests:  point.Requests,
+			Bandwidth: point.Bandwidth,
 		}
 	}
-
-	httpx.JSON(w, http.StatusOK, resp)
+	httpx.JSON(w, http.StatusOK, CloudflareAnalytics{
+		TotalRequests: cfData.TotalRequests,
+		Bandwidth:     cfData.Bandwidth,
+		Errors:        cfData.Errors,
+		Timeseries:    ts,
+	})
 }
 
 func (h *Handler) ComposeResources(w http.ResponseWriter, r *http.Request) {
@@ -204,14 +222,23 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	topics := parseProjectStreamTopics(r.URL.Query().Get("topics"))
 	stream := &projectStream{
 		handler:   h,
 		projectID: id,
 		writer:    w,
 		flusher:   flusher,
+		topics:    topics,
 	}
 	if !stream.emitSnapshot(r.Context()) {
 		return
+	}
+
+	var metrics <-chan MetricsSnapshotResponse
+	var unsubscribe func()
+	if topics.has(streamTopicMetrics) {
+		metrics, unsubscribe = h.metricsHub.subscribe(id)
+		defer unsubscribe()
 	}
 
 	poll := time.NewTicker(streamPollInterval)
@@ -223,6 +250,10 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case snapshot, open := <-metrics:
+			if !open || !stream.send("metrics", snapshot) {
+				return
+			}
 		case <-heartbeat.C:
 			if !stream.heartbeat() {
 				return
@@ -294,39 +325,33 @@ type projectStream struct {
 	projectID            uuid.UUID
 	writer               http.ResponseWriter
 	flusher              http.Flusher
+	topics               projectStreamTopics
 	logOffset            map[string]int
 	buildLogDeploymentID string
 	buildLogOffset       int
 }
 
 func (s *projectStream) emitSnapshot(ctx context.Context) bool {
-	project, err := s.handler.service.project(ctx, s.projectID)
-	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			_ = s.send("status", map[string]string{"status": "deleted"})
+	if s.topics.has(streamTopicStatus) {
+		project, err := s.handler.service.project(ctx, s.projectID)
+		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) {
+				_ = s.send("status", map[string]string{"status": "deleted"})
+				return false
+			}
+			return s.send("error", map[string]string{"message": err.Error()})
+		}
+		if !s.send("status", map[string]string{"status": project.Status}) {
 			return false
 		}
-		return s.send("error", map[string]string{"message": err.Error()})
 	}
-
-	if !s.send("status", map[string]string{"status": project.Status}) {
-		return false
+	if s.topics.has(streamTopicLogs) {
+		s.emitLogs(ctx)
 	}
-	s.emitMetrics(ctx)
-	s.emitLogs(ctx)
-	s.emitDeployment(ctx)
+	if s.topics.has(streamTopicDeployment) {
+		s.emitDeployment(ctx)
+	}
 	return true
-}
-
-func (s *projectStream) emitMetrics(ctx context.Context) {
-	metrics, err := s.handler.service.PreferredContainerMetricsList(ctx, s.projectID, &s.handler.statdCache)
-	if err != nil {
-		return
-	}
-	snapshot := MetricsSnapshotFromContainers(metrics)
-	for _, item := range snapshot.Items {
-		_ = s.send("metrics", item)
-	}
 }
 
 func (s *projectStream) emitLogs(ctx context.Context) {

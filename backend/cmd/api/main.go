@@ -86,7 +86,7 @@ func run() error {
 		return fmt.Errorf("crypto: %w", err)
 	}
 	queries := db.New(pool)
-	
+
 	// Load dynamic API tokens from database
 	if settingsRows, err := queries.GetAllSettings(context.Background()); err == nil {
 		for _, row := range settingsRows {
@@ -336,6 +336,7 @@ func registerRoutes(
 			r.Get("/{id}/stream", deploymentHandler.Stream)
 			r.Get("/{id}/logs", deploymentHandler.Logs)
 			r.Get("/{id}/metrics", deploymentHandler.Metrics)
+			r.Get("/{id}/analytics", deploymentHandler.Analytics)
 			r.Get("/{id}/compose-resources", deploymentHandler.ComposeResources)
 			r.Post("/{id}/compose-resources/reset", deploymentHandler.ResetComposeResources)
 		})
