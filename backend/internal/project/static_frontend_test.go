@@ -39,6 +39,22 @@ func TestIsStaticFrontendRejectsBackendFrameworks(t *testing.T) {
 	}
 }
 
+func TestIsStaticFrontendRejectsRuntimeSvelteKit(t *testing.T) {
+	dir := t.TempDir()
+	writeStaticFixture(t, dir, "package.json", `{"scripts":{"build":"vite build"},"devDependencies":{"vite":"^6.0.0","@sveltejs/kit":"^2.0.0","@sveltejs/adapter-node":"^5.0.0"}}`)
+	if isStaticFrontend(dir) {
+		t.Fatal("expected SvelteKit without adapter-static to remain runtime-backed")
+	}
+}
+
+func TestIsStaticFrontendRecognizesStaticSvelteKit(t *testing.T) {
+	dir := t.TempDir()
+	writeStaticFixture(t, dir, "package.json", `{"scripts":{"build":"vite build"},"devDependencies":{"vite":"^6.0.0","@sveltejs/kit":"^2.0.0","@sveltejs/adapter-static":"^3.0.0"}}`)
+	if !isStaticFrontend(dir) {
+		t.Fatal("expected SvelteKit with adapter-static to be classified as static")
+	}
+}
+
 func TestIsStaticFrontendRecognizesViteBuild(t *testing.T) {
 	dir := t.TempDir()
 	writeStaticFixture(t, dir, "package.json", `{"scripts":{"build":"vite build"},"devDependencies":{"vite":"^6.0.0"}}`)
