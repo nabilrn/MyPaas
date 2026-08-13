@@ -1,0 +1,35 @@
+name: Agent shell polish
+
+on:
+  push:
+    branches: ["agent/dashboard-shell-telemetry-polish"]
+
+permissions:
+  contents: write
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python .github/agent-shell-polish.py
+      - name: Frontend setup
+        working-directory: frontend
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+      - name: Frontend validation
+        working-directory: frontend
+        run: |
+          pnpm test -- --run
+          pnpm check
+          pnpm build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend
+          git diff --cached --check
+          git commit -m "refactor: polish dashboard shell and telemetry states"
+          git push
