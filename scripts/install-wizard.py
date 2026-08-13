@@ -13,6 +13,8 @@ HOST = os.environ.get("WIZARD_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WIZARD_PORT", "8787"))
 TOKEN = os.environ.get("WIZARD_TOKEN", secrets.token_hex(16))
 ENV_FILE = os.environ.get("WIZARD_ENV_FILE", ".env")
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BRAND_LOGO_PATH = os.path.join(ROOT_DIR, "frontend", "src", "assets", "new-assets", "logowithtext_black.png")
 
 
 def default(name: str, fallback: str = "") -> str:
@@ -203,9 +205,16 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyPaas Install Wizard</title>
   <style>
+    @font-face {{
+      font-family: "Inter Variable";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 900;
+      src: url("https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@5.3.0/latin-wght-normal.woff2") format("woff2-variations");
+    }}
     :root {{
     color-scheme: light dark;
-    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --app-bg: #fafafa;
     --app-surface: #ffffff;
     --app-surface-muted: #f7f7f7;
@@ -239,8 +248,11 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   a {{ color: var(--app-ink); text-underline-offset: 2px; text-decoration-color: var(--app-border-strong); }}
   a:hover {{ text-decoration-color: currentColor; }}
   .topline {{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; }}
-  .product-mark {{ display: inline-flex; align-items: center; gap: 9px; color: var(--app-ink); font-size: 13px; font-weight: 700; letter-spacing: -.01em; }}
-  .mark-dot {{ width: 8px; height: 8px; border-radius: 2px; background: var(--app-ink); box-shadow: 4px 4px 0 color-mix(in srgb, var(--app-ink) 18%, transparent); }}
+  .product-brand {{ display: inline-flex; min-height: 34px; align-items: center; gap: 10px; }}
+  .brand-logo {{ display: block; width: 116px; height: auto; object-fit: contain; object-position: left center; }}
+  .installer-badge {{ display: inline-flex; min-height: 26px; align-items: center; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface-muted); padding: 4px 7px; color: var(--app-subtle); font-size: 11px; font-weight: 650; letter-spacing: .01em; }}
+  :root.dark .brand-logo {{ filter: invert(1); }}
+  @media (prefers-color-scheme: dark) {{ :root:not(.light) .brand-logo {{ filter: invert(1); }} }}
   .header-copy {{ display: grid; gap: 6px; max-width: 780px; }}
   .install-meta {{ display: flex; flex-wrap: wrap; gap: 8px; }}
   .meta-chip {{ display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface); padding: 5px 8px; color: var(--app-muted); font-size: 12px; }}
@@ -376,7 +388,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <main>
     <header>
       <div class="topline">
-        <div class="product-mark"><span class="mark-dot" aria-hidden="true"></span>MyPaas installer</div>
+        <div class="product-brand"><img class="brand-logo" src="/brand/logo.png" alt="MyPaas"><span class="installer-badge">Installer</span></div>
         <div class="install-meta" aria-label="Install context">
           <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
             <svg id="theme-icon-sun" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -387,27 +399,27 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
         </div>
       </div>
       <div class="header-copy">
-        <h1>Configure production credentials</h1>
-        <p>Fill the required values once. The wizard writes the production config, shuts down, and lets the terminal installer continue.</p>
+        <h1>Set up MyPaas</h1>
+        <p>Complete four short steps. Nothing is saved until the final review, and the terminal installer continues automatically when you finish.</p>
       </div>
     </header>
     <div class="layout">
       <aside class="panel stepper" aria-label="Install steps" role="list">
         <div class="step-tab active" data-progress="0" role="listitem" aria-current="step">
           <span class="step-number">1</span>
-          <span><span class="step-title">Domain</span><span class="step-body">Base URL and owner</span></span>
+          <span><span class="step-title">Domain</span><span class="step-body">Where MyPaas lives</span></span>
         </div>
         <div class="step-tab" data-progress="1" role="listitem">
           <span class="step-number">2</span>
-          <span><span class="step-title">GitHub</span><span class="step-body">OAuth login</span></span>
+          <span><span class="step-title">GitHub login</span><span class="step-body">Owner sign-in</span></span>
         </div>
         <div class="step-tab" data-progress="2" role="listitem">
           <span class="step-number">3</span>
-          <span><span class="step-title">Cloudflare</span><span class="step-body">Tunnel routing</span></span>
+          <span><span class="step-title">Routing</span><span class="step-body">Cloudflare tunnel</span></span>
         </div>
         <div class="step-tab" data-progress="3" role="listitem">
           <span class="step-number">4</span>
-          <span><span class="step-title">Review</span><span class="step-body">Save and deploy</span></span>
+          <span><span class="step-title">Review</span><span class="step-body">Confirm settings</span></span>
         </div>
       </aside>
 
@@ -416,7 +428,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
         <div class="panel-header">
           <div class="panel-title">
             <h2 id="step-heading">Domain and owner</h2>
-            <p id="step-description">Start with the public domain MyPaas will control.</p>
+            <p id="step-description">Choose the hostname for the dashboard and the GitHub account that owns this installation.</p>
           </div>
           <span class="step-count" id="step-position">Step 1 of 4</span>
         </div>
@@ -426,23 +438,22 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
           <section class="wizard-step" data-step="0">
             <div class="guide">
               <div class="guide-card">
-                <strong>You need a domain you control.</strong>
-                <p>MyPaas uses this domain as its base address. The dashboard runs at <code>https://your-domain</code>, and deployed projects get subdomains under it.</p>
+                <strong>Use a domain that is already active in Cloudflare.</strong>
+                <p>Enter only the hostname. MyPaas uses it for the dashboard and automatically places projects below it.</p>
                 <div class="example-grid">
                   <div class="example-row"><span>Dashboard</span><code id="example-dashboard">https://example.com</code></div>
-                  <div class="example-row"><span>Projects</span><code id="example-project">https://todo.example.com</code></div>
+                  <div class="example-row"><span>Project example</span><code id="example-project">https://todo.example.com</code></div>
                 </div>
               </div>
               <div class="guide-card">
-                <strong>The domain must be active in Cloudflare DNS.</strong>
+                <strong>Before continuing</strong>
                 <ol>
-                  <li>If you bought the domain at Cloudflare Registrar, it already uses Cloudflare DNS.</li>
-                  <li>If you bought it elsewhere, add the domain in Cloudflare, copy the two Cloudflare nameservers, then change the nameservers at your registrar.</li>
-                  <li>You do not have to transfer registrar ownership to Cloudflare. Nameserver change is enough for MyPaas.</li>
-                  <li>Wait until Cloudflare shows the domain as active before testing MyPaas routes.</li>
+                  <li>Cloudflare shows the zone as <strong>Active</strong>.</li>
+                  <li>You can edit DNS records for that zone.</li>
+                  <li>You know the primary email of the GitHub account that will own MyPaas.</li>
                 </ol>
               </div>
-              <div class="notice">Note: If you use a dedicated subdomain like <code>panel.example.com</code>, projects will route to <code>todo.panel.example.com</code>.</div>
+              <div class="notice">Using <code>panel.example.com</code>? Project URLs become <code>project.panel.example.com</code>.</div>
             </div>
             <div class="grid">
               <div class="field">
@@ -461,13 +472,13 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
           <section class="wizard-step" data-step="1" hidden>
             <div class="guide">
               <div class="guide-card">
-                <strong>Create a GitHub OAuth app.</strong>
+                <strong>Create one GitHub OAuth App.</strong>
                 <ol>
-                  <li>Open <a href="https://github.com/settings/developers" target="_blank" rel="noopener">GitHub Developer settings</a>.</li>
-                  <li>Choose <strong>OAuth Apps</strong>, then <strong>New OAuth App</strong>.</li>
-                  <li>Set Homepage URL to <code id="github-homepage-example">https://your-domain</code>.</li>
-                  <li>Set Authorization callback URL to <code id="github-callback-example">https://your-domain/api/auth/github/callback</code>.</li>
-                  <li>Create the app, copy the Client ID, then generate and copy a Client Secret.</li>
+                  <li>Open <a href="https://github.com/settings/developers" target="_blank" rel="noopener">GitHub Developer settings</a> → <strong>OAuth Apps</strong> → <strong>New OAuth App</strong>.</li>
+                  <li>Use <strong>MyPaas</strong> as the application name.</li>
+                  <li>Homepage URL: <code id="github-homepage-example">https://your-domain</code></li>
+                  <li>Callback URL: <code id="github-callback-example">https://your-domain/api/auth/github/callback</code></li>
+                  <li>Copy the Client ID and generate one Client Secret, then paste both below.</li>
                 </ol>
               </div>
             </div>
@@ -491,33 +502,28 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
           <section class="wizard-step" data-step="2" hidden>
             <div class="guide">
               <div class="guide-card">
-                <strong>Create or reuse a Cloudflare Tunnel token.</strong>
+                <strong>1. Get the tunnel token</strong>
                 <ol>
-                  <li>Open Cloudflare Zero Trust, then go to <strong>Networks</strong> -> <strong>Tunnels</strong>.</li>
-                  <li>Create a tunnel or open an existing tunnel.</li>
-                  <li>Choose the <strong>Docker</strong> connector.</li>
-                  <li>Copy the token from the generated <code>cloudflared tunnel run --token ...</code> command.</li>
+                  <li>In Cloudflare Zero Trust open <strong>Networks → Tunnels</strong>.</li>
+                  <li>Create a tunnel, or open the tunnel you want MyPaas to use.</li>
+                  <li>Select the <strong>Docker</strong> connector and copy only the value after <code>--token</code>.</li>
                 </ol>
               </div>
-              <div class="warning">Use the Tunnel token from the Docker connector command. This is not the same thing as a Cloudflare API token.</div>
+              <div class="warning">Use a <strong>Tunnel token</strong>, not a Cloudflare API token.</div>
               <div class="guide-card">
-                <strong>Add Public Hostname routes in the tunnel.</strong>
-                <ol>
-                  <li>In the tunnel, open <strong>Public Hostnames</strong> or <strong>Published application routes</strong>.</li>
-                  <li>Add hostname <code id="cf-root-example">your-domain</code>, service type <code>HTTP</code>, service URL <code>caddy:80</code>.</li>
-                  <li>Add hostname <code id="cf-wildcard-example">*.your-domain</code>, service type <code>HTTP</code>, service URL <code>caddy:80</code>.</li>
-                  <li>The wildcard route is what lets every deployed project use <code>project.your-domain</code>.</li>
-                  <li>Do not point these routes to the VM public IP. The tunnel container reaches Caddy inside Docker by the <code>caddy:80</code> service name.</li>
-                </ol>
+                <strong>2. Add two public hostname routes</strong>
+                <p>Both routes use service type <code>HTTP</code> and service URL <code>caddy:80</code>.</p>
+                <div class="example-grid">
+                  <div class="example-row"><span>Dashboard route</span><code id="cf-root-example">your-domain</code></div>
+                  <div class="example-row"><span>Project wildcard</span><code id="cf-wildcard-example">*.your-domain</code></div>
+                </div>
               </div>
               <div class="guide-card">
-                <strong>Check DNS records after adding routes.</strong>
+                <strong>3. Confirm DNS</strong>
                 <ol>
-                  <li>Open <strong>Cloudflare DNS</strong> -> <strong>Records</strong>.</li>
-                  <li>If your Cloudflare zone is exactly this MyPaas domain, create CNAME records for <code>@</code> and <code>*</code>.</li>
-                  <li>If your zone is a parent domain, create records for this subdomain and wildcard subdomain, for example <code>mypaas</code> and <code>*.mypaas</code>.</li>
-                  <li>Point both records to your tunnel target: <code>&lt;tunnel-id&gt;.cfargotunnel.com</code>, with proxy enabled.</li>
-                  <li>If Cloudflare says a wildcard route will not create a DNS record, create the wildcard CNAME manually.</li>
+                  <li>Make sure the root/subdomain and wildcard records exist.</li>
+                  <li>Both records should resolve through the tunnel target <code>&lt;tunnel-id&gt;.cfargotunnel.com</code> with proxy enabled.</li>
+                  <li>If Cloudflare does not create the wildcard automatically, add that CNAME manually.</li>
                 </ol>
               </div>
             </div>
@@ -533,8 +539,8 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
           <section class="wizard-step" data-step="3" hidden>
             <div class="guide">
               <div class="guide-card">
-                <strong>Review before saving.</strong>
-                <p>The installer will write <code>{esc(ENV_FILE)}</code>, prepare host directories, run migrations, then start MyPaas.</p>
+                <strong>Confirm the values below.</strong>
+                <p>Saving writes <code>{esc(ENV_FILE)}</code>. The browser wizard then closes and the terminal continues with directories, migrations, and startup.</p>
                 <div class="review">
                   <div class="review-row"><span>Dashboard</span><span id="review-dashboard">-</span></div>
                   <div class="review-row"><span>Project URL pattern</span><span id="review-project">-</span></div>
@@ -566,10 +572,10 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
         </div>
         <div class="actions">
           <button class="secondary" type="button" id="back-button">Back</button>
-          <span class="action-hint" id="action-hint">Required fields are checked before continuing.</span>
+          <span class="action-hint" id="action-hint">Nothing is saved until the final step.</span>
           <div class="actions-right">
             <button type="button" id="next-button">Continue</button>
-            <button type="submit" id="submit-button" data-default-label="Save .env and continue install" hidden>Save .env and continue install</button>
+            <button type="submit" id="submit-button" data-default-label="Save configuration" hidden>Save configuration</button>
           </div>
         </div>
       </form>
@@ -590,10 +596,10 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     const owner = document.getElementById('OWNER_EMAIL');
     const callback = document.getElementById('GITHUB_CALLBACK_URL');
     const titles = [
-      ['Domain and owner', 'Start with the public domain MyPaas will control.'],
-      ['GitHub login', 'Create the OAuth app MyPaas uses for dashboard login.'],
-      ['Cloudflare tunnel', 'Connect the public domain and wildcard project subdomains to this VM.'],
-      ['Review and save', 'Check the generated production config before the installer continues.']
+      ['Domain and owner', 'Choose where MyPaas lives and who owns the first account.'],
+      ['GitHub login', 'Connect one OAuth App for owner sign-in.'],
+      ['Cloudflare routing', 'Send the dashboard and project wildcard through the tunnel to Caddy.'],
+      ['Review and save', 'Confirm the public URLs and owner before writing configuration.']
     ];
     let currentStep = 0;
     let callbackTouched = callback.dataset.generated !== 'true' && Boolean(callback.value);
@@ -641,8 +647,8 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       nextButton.hidden = currentStep === steps.length - 1;
       submitButton.hidden = currentStep !== steps.length - 1;
       actionHint.textContent = currentStep === steps.length - 1
-        ? 'Saving writes the production .env and closes this wizard.'
-        : 'Required fields are checked before continuing.';
+        ? 'Save writes the production configuration, then the terminal installer resumes.'
+        : 'You can go back without losing the values you entered.';
       updateDerivedText();
     }}
 
@@ -740,8 +746,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_asset(self, path: str, content_type: str) -> None:
+        try:
+            with open(path, "rb") as handle:
+                body = handle.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/brand/logo.png":
+            self.send_asset(BRAND_LOGO_PATH, "image/png")
+            return
         if parsed.path == "/health":
             self.send_html(b"ok")
             return
@@ -780,9 +803,16 @@ def success_html() -> bytes:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MyPaas Install Wizard Complete</title>
   <style>
+    @font-face {{
+      font-family: "Inter Variable";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 900;
+      src: url("https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@5.3.0/latin-wght-normal.woff2") format("woff2-variations");
+    }}
     :root {{
     color-scheme: light dark;
-    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --app-bg: #fafafa;
     --app-surface: #ffffff;
     --app-surface-muted: #f7f7f7;
@@ -796,6 +826,10 @@ def success_html() -> bytes:
   body {{ margin: 0; min-height: 100vh; background: var(--app-bg); color: var(--app-ink); -webkit-font-smoothing: antialiased; }}
   main {{ width: min(100%, 680px); margin: 0 auto; padding: 48px 20px; }}
   section {{ display: grid; gap: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); padding: 24px; }}
+  .success-brand {{ display: flex; align-items: center; margin-bottom: 6px; }}
+  .success-brand img {{ width: 116px; height: auto; }}
+  :root.dark .success-brand img {{ filter: invert(1); }}
+  @media (prefers-color-scheme: dark) {{ :root:not(.light) .success-brand img {{ filter: invert(1); }} }}
   .status-mark {{ display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--app-success) 30%, var(--app-border)); border-radius: 8px; background: var(--app-success-soft); color: var(--app-success); font-weight: 800; }}
   h1 {{ margin: 0; font-size: 24px; line-height: 1.2; font-weight: 680; letter-spacing: -.02em; }}
   p {{ margin: 0; color: var(--app-muted); line-height: 1.55; }}
@@ -835,6 +869,7 @@ def success_html() -> bytes:
   </script>
   <main>
     <section>
+      <div class="success-brand"><img src="/brand/logo.png" alt="MyPaas"></div>
       <span class="status-mark" aria-hidden="true">✓</span>
       <h1>Production config saved</h1>
       <p>Production config was written to <code>{esc(ENV_FILE)}</code>. You can close this tab. The terminal installer will continue automatically.</p>

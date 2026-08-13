@@ -160,6 +160,19 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("caddy_logs:/var/log/caddy", caddy)
         self.assertIn("  caddy_logs:\n", compose)
 
+    def test_wizard_uses_real_brand_asset_inter_and_short_setup_copy(self) -> None:
+        html = WIZARD.form_html().decode("utf-8")
+
+        self.assertTrue(Path(WIZARD.BRAND_LOGO_PATH).is_file())
+        self.assertIn('/brand/logo.png', html)
+        self.assertIn('Inter Variable', html)
+        self.assertIn('Set up MyPaas', html)
+        self.assertIn('Nothing is saved until the final step.', html)
+        self.assertIn('1. Get the tunnel token', html)
+        self.assertIn('2. Add two public hostname routes', html)
+        self.assertIn('3. Confirm DNS', html)
+        self.assertNotIn('mark-dot', html)
+
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
 
