@@ -282,7 +282,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-3 p-4">
 					<div>
 						<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-emerald-500"></span>Migration package ready</p>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Expires in {formatHoursLeft(migration.expiresAt)} hours.</p>
+					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Expires in {formatHoursLeft(migration.expiresAt)} hours.</p>
 					</div>
 					<ActionLink href={downloadUrl} variant="secondary" size="sm">
 						<Download slot="icon" class="h-4 w-4" />
