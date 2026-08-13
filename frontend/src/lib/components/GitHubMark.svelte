@@ -1,4 +1,10 @@
 <script lang="ts">
+	interface $$Props {
+		className?: string;
+		class?: string;
+		'aria-hidden'?: boolean | 'true' | 'false';
+	}
+
 	export let className = '';
 	let classProp = '';
 	export { classProp as class };
