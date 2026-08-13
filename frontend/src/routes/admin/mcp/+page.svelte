@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, Bot, Check, Copy, GitBranch, KeyRound, LoaderCircle, RefreshCw, Rocket, ShieldCheck, TerminalSquare, X } from '@lucide/svelte';
+	import { Activity, Bot, Check, Copy, GitBranch, KeyRound, LoaderCircle, RefreshCw, Rocket, ShieldCheck, SquareTerminal, X } from '@lucide/svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -191,7 +191,7 @@
 			<div class="min-w-0 p-4">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white">
-						<TerminalSquare class="h-4 w-4" aria-hidden="true" />
+						<SquareTerminal class="h-4 w-4" aria-hidden="true" />
 						MCP client configuration
 					</div>
 					<ActionButton variant="secondary" size="xs" on:click={() => copyToClipboard(mcpConfig, 'config')}>
