@@ -9,8 +9,8 @@ Artifact root: `frontend/artifacts/create-project-audit/`
 ## Run Summary
 
 - Mode: production
-- Runs: 4
-- Checkpoints: 36
+- Runs: 7
+- Checkpoints: 60
 - Console errors: 0
 - Console warnings: 0
 - Failed requests: 2
@@ -25,6 +25,7 @@ Viewports:
 Scenarios:
 
 - `non-destructive-main`
+- `registry-ghcr-ready`
 - `invalid-repository-error`
 
 Production audit remained non-destructive. It did not submit Create Project, create a real project, deploy an application, delete resources, or mutate production resources.
@@ -92,10 +93,33 @@ Production audit remained non-destructive. It did not submit Create Project, cre
   - Translate this into user-facing copy such as repository not found, private repository inaccessible, or GitHub credentials required, while preserving technical detail in diagnostics.
 - Confidence: high
 
+### P4 - Registry Flow Reuses Repository-Specific Environment Copy
+
+- Category: CONSISTENCY
+- Scenario: `registry-ghcr-ready`
+- Checkpoints: `01-registry-source-selected`, `02-image-entered`, `07-readiness`
+- Evidence:
+  - `production-firefox-desktop-registry-ghcr-ready/audit.json`
+  - The selected source is `Container Registry` with image `ghcr.io/fluxcd/flux-cli:v2.4.0`.
+  - The Environment section still says `Detected from the repository automatically. Required values are shown first.`
+  - The flow otherwise reaches `Ready to create` after entering container port `8080`.
+- Expected behavior:
+  - Registry mode should not describe environment handling as repository detection.
+- Observed behavior:
+  - Git/repository-specific copy remains visible in Container Registry mode.
+- UX impact:
+  - The user may think registry images are scanned like Git repositories, even though this flow only has image reference and manual port configuration.
+- Likely source area:
+  - Shared Environment section copy in `frontend/src/routes/projects/new/+page.svelte`.
+- Recommended correction:
+  - Use source-aware copy, for example registry mode can say no image env values were detected and manual env values may be added if the container requires them.
+- Confidence: high
+
 ## Non-Issues Observed
 
 - No console errors or warnings were captured.
 - No simple DOM geometry issues were captured after the corrected rerun. Earlier mobile overlap artifacts were superseded by the re-analysis wait fix and are not treated as a product finding.
+- Registry/GHCR production flow reached `Ready to create` at desktop, large desktop, and mobile after entering `ghcr.io/fluxcd/flux-cli:v2.4.0` and container port `8080`; the audit did not click Create.
 - Invalid repository handling is non-destructive and keeps Create disabled.
 - Production audit did not perform project creation.
 - Auth bootstrap storage state is ignored by Git and must not be committed.

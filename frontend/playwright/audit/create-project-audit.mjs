@@ -9,6 +9,8 @@ const authFile = path.join(frontendRoot, 'playwright/.auth/user.json');
 const artifactsRoot = path.join(frontendRoot, 'artifacts/create-project-audit');
 const defaultBaseURL = 'https://nabilrn.space';
 const defaultRepositoryURL = 'https://github.com/nabilrn/MyPaas';
+const defaultImageRef = 'ghcr.io/fluxcd/flux-cli:v2.4.0';
+const defaultRegistryPort = '8080';
 
 const productionViewports = [
 	{ name: 'desktop', width: 1366, height: 768 },
@@ -25,9 +27,11 @@ const geometryTargets = [
 	{ name: 'Create Project form', selector: 'form' },
 	{ name: 'source selector', text: 'Source' },
 	{ name: 'repository input', label: 'Repository URL' },
+	{ name: 'container image input', label: 'Container image' },
 	{ name: 'project name', label: 'Project name' },
 	{ name: 'analysis timeline', text: 'Preparing project' },
 	{ name: 'deployment type', text: 'Deployment type' },
+	{ name: 'container port', label: 'Container port' },
 	{ name: 'environment section', text: 'Environment' },
 	{ name: 'Advanced trigger', text: 'Advanced settings' },
 	{ name: 'Advanced content', selector: 'details[open]' },
@@ -110,11 +114,21 @@ function buildScenarios(mode) {
 			{
 				name: 'non-destructive-main',
 				primary: true,
+				sourceType: 'git',
 				repositoryURL: process.env.MYPAAS_AUDIT_REPO_URL || defaultRepositoryURL,
 				description: 'Real production Create Project flow through repository inspection and detection. Does not submit.'
 			},
 			{
+				name: 'registry-ghcr-ready',
+				primary: true,
+				sourceType: 'registry',
+				imageRef: process.env.MYPAAS_AUDIT_IMAGE_REF || defaultImageRef,
+				appPort: process.env.MYPAAS_AUDIT_REGISTRY_PORT || defaultRegistryPort,
+				description: 'Real production Container Registry/GHCR flow through image entry, required port, and readiness. Does not submit.'
+			},
+			{
 				name: 'invalid-repository-error',
+				sourceType: 'git',
 				repositoryURL: 'https://github.com/nabilrn/definitely-missing-create-project-audit-fixture',
 				description: 'Safely reproducible production repository error. Does not submit.'
 			}
@@ -130,6 +144,7 @@ function buildScenarios(mode) {
 		{ name: 'slow-repository-inspection', mock: 'slow', repositoryURL: 'https://github.com/example/slow-repo' },
 		{ name: 'backend-500', mock: 'backend-500', repositoryURL: 'https://github.com/example/backend-500' },
 		{ name: 'timeout', mock: 'timeout', repositoryURL: 'https://github.com/example/timeout' },
+		{ name: 'registry-ghcr-ready', sourceType: 'registry', imageRef: defaultImageRef, appPort: defaultRegistryPort },
 		{ name: 'project-creation-failure', mock: 'create-failure', repositoryURL: 'https://github.com/example/create-failure', allowSubmit: true }
 	];
 }
@@ -206,29 +221,10 @@ async function runScenario(browser, options) {
 		await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined);
 		await checkpoint(page, audit, runDir, '00-initial', consoleEvents, networkEvents);
 
-		await fillRepository(page, scenario.repositoryURL);
-		await checkpoint(page, audit, runDir, '01-source-entered', consoleEvents, networkEvents);
-
-		await page.waitForTimeout(scenario.mock === 'slow' ? 250 : 120);
-		await checkpoint(page, audit, runDir, '02-analyzing', consoleEvents, networkEvents);
-
-		await waitForAnalysisSettled(page, scenario);
-		await checkpoint(page, audit, runDir, '03-runtime-detected', consoleEvents, networkEvents);
-		await checkpoint(page, audit, runDir, '04-configuration-required', consoleEvents, networkEvents);
-
-		await toggleAdvanced(page, true);
-		await checkpoint(page, audit, runDir, '05-advanced-open', consoleEvents, networkEvents);
-		await toggleAdvanced(page, false);
-		await checkpoint(page, audit, runDir, '06-advanced-closed', consoleEvents, networkEvents);
-
-		const reanalysisResponse = await clickReanalyzeIfAvailable(page);
-		await checkpoint(page, audit, runDir, '07-reanalyze-triggered', consoleEvents, networkEvents);
-		await waitForAnalysisSettled(page, scenario, reanalysisResponse);
-		await checkpoint(page, audit, runDir, '08-readiness', consoleEvents, networkEvents);
-
-		if (scenario.allowSubmit) {
-			await clickCreateIfEnabled(page);
-			await checkpoint(page, audit, runDir, '09-submitting-or-error', consoleEvents, networkEvents);
+		if (scenario.sourceType === 'registry') {
+			await runRegistryFlow(page, audit, runDir, scenario, consoleEvents, networkEvents);
+		} else {
+			await runGitFlow(page, audit, runDir, scenario, consoleEvents, networkEvents);
 		}
 	} finally {
 		await context.tracing.stop({ path: path.join(runDir, 'trace.zip') });
@@ -255,6 +251,51 @@ async function runScenario(browser, options) {
 		failedRequests: networkEvents.filter((item) => item.type === 'failed' || item.status >= 400).length,
 		geometryFindings: audit.checkpoints.reduce((count, item) => count + item.geometry.findings.length, 0)
 	};
+}
+
+async function runGitFlow(page, audit, runDir, scenario, consoleEvents, networkEvents) {
+	await fillRepository(page, scenario.repositoryURL);
+	await checkpoint(page, audit, runDir, '01-source-entered', consoleEvents, networkEvents);
+
+	await page.waitForTimeout(scenario.mock === 'slow' ? 250 : 120);
+	await checkpoint(page, audit, runDir, '02-analyzing', consoleEvents, networkEvents);
+
+	await waitForAnalysisSettled(page, scenario);
+	await checkpoint(page, audit, runDir, '03-runtime-detected', consoleEvents, networkEvents);
+	await checkpoint(page, audit, runDir, '04-configuration-required', consoleEvents, networkEvents);
+
+	await toggleAdvanced(page, true);
+	await checkpoint(page, audit, runDir, '05-advanced-open', consoleEvents, networkEvents);
+	await toggleAdvanced(page, false);
+	await checkpoint(page, audit, runDir, '06-advanced-closed', consoleEvents, networkEvents);
+
+	const reanalysisResponse = await clickReanalyzeIfAvailable(page);
+	await checkpoint(page, audit, runDir, '07-reanalyze-triggered', consoleEvents, networkEvents);
+	await waitForAnalysisSettled(page, scenario, reanalysisResponse);
+	await checkpoint(page, audit, runDir, '08-readiness', consoleEvents, networkEvents);
+
+	if (scenario.allowSubmit) {
+		await clickCreateIfEnabled(page);
+		await checkpoint(page, audit, runDir, '09-submitting-or-error', consoleEvents, networkEvents);
+	}
+}
+
+async function runRegistryFlow(page, audit, runDir, scenario, consoleEvents, networkEvents) {
+	await chooseRegistrySource(page);
+	await checkpoint(page, audit, runDir, '01-registry-source-selected', consoleEvents, networkEvents);
+
+	await fillImageRef(page, scenario.imageRef || defaultImageRef);
+	await checkpoint(page, audit, runDir, '02-image-entered', consoleEvents, networkEvents);
+	await checkpoint(page, audit, runDir, '03-port-required', consoleEvents, networkEvents);
+
+	await toggleAdvanced(page, true);
+	await checkpoint(page, audit, runDir, '04-advanced-open', consoleEvents, networkEvents);
+	await toggleAdvanced(page, false);
+	await checkpoint(page, audit, runDir, '05-advanced-closed', consoleEvents, networkEvents);
+
+	await fillContainerPort(page, scenario.appPort || defaultRegistryPort);
+	await checkpoint(page, audit, runDir, '06-port-entered', consoleEvents, networkEvents);
+	await checkpoint(page, audit, runDir, '07-readiness', consoleEvents, networkEvents);
 }
 
 async function checkpoint(page, audit, runDir, name, consoleEvents, networkEvents) {
@@ -502,6 +543,28 @@ async function fillRepository(page, repositoryURL) {
 	await input.fill(repositoryURL);
 	await input.dispatchEvent('input', { inputType: 'insertFromPaste', data: repositoryURL });
 	await input.blur();
+}
+
+async function chooseRegistrySource(page) {
+	const button = page.getByRole('button', { name: /container registry/i }).first();
+	await button.waitFor({ state: 'visible', timeout: 20_000 });
+	await button.click();
+	await page.getByRole('textbox', { name: 'Container image' }).waitFor({ state: 'visible', timeout: 10_000 });
+}
+
+async function fillImageRef(page, imageRef) {
+	const input = page.getByRole('textbox', { name: 'Container image' }).first();
+	await input.waitFor({ state: 'visible', timeout: 20_000 });
+	await input.fill(imageRef);
+	await input.dispatchEvent('input', { inputType: 'insertFromPaste', data: imageRef });
+	await input.blur();
+}
+
+async function fillContainerPort(page, port) {
+	const input = page.getByRole('spinbutton', { name: 'Container port' }).first();
+	await input.waitFor({ state: 'visible', timeout: 20_000 });
+	await input.fill(port);
+	await page.waitForTimeout(150);
 }
 
 async function toggleAdvanced(page, open) {
