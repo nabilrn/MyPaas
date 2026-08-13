@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, ChevronLeft, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bot, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import BrandLogo from '$components/BrandLogo.svelte';
 	import IconButton from '$components/IconButton.svelte';
+	import SidebarPanelIcon from '$components/SidebarPanelIcon.svelte';
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
 	import { sidebarCollapsed } from '$stores/sidebar';
@@ -60,7 +61,7 @@
 </script>
 
 <aside class="fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-200 bg-white transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 lg:flex {$sidebarCollapsed ? 'w-16' : 'w-64'}">
-	<div class="flex h-16 items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-5'}">
+	<div class="flex h-16 items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-4'}">
 		{#if $sidebarCollapsed}
 			<button
 				type="button"
@@ -69,14 +70,14 @@
 				title="Expand sidebar"
 				on:click={() => sidebarCollapsed.toggle()}
 			>
-				<BrandLogo compact />
+				<SidebarPanelIcon collapsed className="h-[18px] w-[18px]" />
 			</button>
 		{:else}
 			<a href="/projects" class="flex min-w-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
 				<BrandLogo />
 			</a>
 			<IconButton label="Collapse sidebar" variant="ghost" on:click={() => sidebarCollapsed.toggle()}>
-				<ChevronLeft class="h-4 w-4" aria-hidden="true" />
+				<SidebarPanelIcon className="h-[18px] w-[18px]" />
 			</IconButton>
 		{/if}
 	</div>

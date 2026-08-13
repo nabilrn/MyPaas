@@ -4,6 +4,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
+	import AgentBadgeStack from '$components/AgentBadgeStack.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 
 	let mcpToken = '';
@@ -83,6 +84,7 @@
 	<p class="px-5 text-sm text-gray-500 dark:text-gray-400">Connect an MCP-compatible AI agent to this MyPaaS instance through the authenticated local bridge included in the repository.</p>
 
 	<SectionPanel title="What MCP enables" description="The MyPaaS MCP server translates agent tool calls into authenticated MyPaaS API operations." contentClass="p-0">
+		<svelte:fragment slot="actions"><AgentBadgeStack /></svelte:fragment>
 		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
 			<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 				<div class="flex gap-3 p-4">

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ExternalLink, FolderGit2, GitBranch, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FolderGit2, GitBranch, LoaderCircle, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -76,8 +76,9 @@
 	$: composeCount = projects.filter((project) => project.deployMode === 'compose').length;
 	$: staticCount = projects.filter((project) => project.deployMode === 'static').length;
 	$: imageCount = projects.filter((project) => project.deployMode === 'image').length;
-	$: syncLabel = error ? 'Refresh needs attention' : loading ? 'Refreshing' : 'Up to date';
-	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';
+	$: dashboardRefreshing = loading || projectsInFlight || hostStatsInFlight;
+	$: syncLabel = error ? 'Refresh needs attention' : dashboardRefreshing ? 'Refreshing' : 'Up to date';
+	$: syncDotClass = error ? 'bg-amber-500' : dashboardRefreshing ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) currentPage = maxPage;
 	$: pageStart = currentPage * pageSize;
@@ -332,7 +333,7 @@
 			<span class="text-gray-400 dark:text-gray-500">· {projects.length} project{projects.length === 1 ? '' : 's'}</span>
 		</p>
 		<div class="flex items-center gap-2">
-			<ActionButton variant="secondary" loading={loading} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>
+			<ActionButton variant="secondary" loading={dashboardRefreshing} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>
 				<RefreshCw slot="icon" class="h-4 w-4" />
 				Refresh
 			</ActionButton>
@@ -360,7 +361,9 @@
 
 	<SectionPanel title="Host resources" description="Live host utilization when the telemetry service is available. Allocation remains visible as capacity context." contentClass="p-0" className="mb-5">
 		<svelte:fragment slot="actions">
-			<a
+			<div class="flex items-center gap-3">
+				{#if hostStatsInFlight}<LoaderCircle class="h-3.5 w-3.5 animate-spin text-gray-400 motion-reduce:animate-none dark:text-gray-500" aria-hidden="true" />{/if}
+				<a
 				href="https://github.com/nabilrn/mypaas-statd"
 				target="_blank"
 				rel="noopener"
@@ -370,7 +373,8 @@
 				<GitHubMark class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 				<span>Telemetry by <span class="font-medium">mypaas-statd</span></span>
 				<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
-			</a>
+				</a>
+			</div>
 		</svelte:fragment>
 
 		{#if hostStats}
@@ -415,10 +419,9 @@
 				/>
 			</div>
 		{:else}
-			<div class="grid sm:grid-cols-2 xl:grid-cols-4" aria-busy="true">
-				{#each Array(4) as _}
-					<div class="h-40 animate-pulse border-b border-gray-100 bg-gray-100/70 last:border-b-0 dark:border-neutral-800 dark:bg-neutral-800/60 sm:border-r xl:border-b-0"></div>
-				{/each}
+			<div class="flex h-40 items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400" aria-busy="true" aria-live="polite">
+				<LoaderCircle class="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+				<span>Loading host telemetry…</span>
 			</div>
 		{/if}
 	</SectionPanel>
@@ -542,7 +545,7 @@
 							{#if project.id in projectMemory}
 								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
 							{:else if uptimeLoadingIds.has(project.id)}
-								<span class="text-xs text-gray-400 dark:text-gray-500">Loading…</span>
+								<span class="inline-flex items-center text-gray-400 dark:text-gray-500"><LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /><span class="sr-only">Loading metrics</span></span>
 							{:else}
 								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
 							{/if}
