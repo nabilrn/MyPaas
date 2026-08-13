@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { deriveAdaptiveMetricDomain } from '$lib/utils/host-telemetry';
+
 	type Resource = 'memory' | 'cpu' | 'storage' | 'network' | 'neutral';
 
 	export let label = '';
@@ -44,6 +46,10 @@
 		}
 	} as const;
 
+	function formatDomainValue(value: number, span: number) {
+		return span < 10 ? value.toFixed(1) : Math.round(value).toString();
+	}
+
 	$: inferredResource = resource !== 'neutral'
 		? resource
 		: label.toLowerCase().includes('cpu')
@@ -55,20 +61,10 @@
 	$: cleanSeries = (series.length > 0 ? series : compatibilitySeries).filter((sample) => Number.isFinite(sample) && sample >= 0);
 	$: effectiveIndicator = indicator || (percent !== null && Number.isFinite(percent) ? `${Math.max(0, percent).toFixed(0)}%` : '');
 	$: rollingHistory = series.length >= 2 && cleanSeries.length >= 2;
-	$: rawMin = cleanSeries.length > 0 ? Math.min(...cleanSeries) : 0;
-	$: rawMax = cleanSeries.length > 0 ? Math.max(...cleanSeries) : 0;
-	$: fallbackMax = maxValue && maxValue > 0 ? maxValue : Math.max(1, rawMax) * 1.15;
-	$: minimumSpan = maxValue && maxValue > 0 ? Math.max(12, maxValue * 0.12) : Math.max(1, rawMax * 0.3);
-	$: observedSpan = Math.max(0, rawMax - rawMin);
-	$: desiredSpan = Math.max(minimumSpan, observedSpan * 1.35);
-	$: domainCenter = (rawMin + rawMax) / 2;
-	$: proposedMin = Math.max(0, domainCenter - desiredSpan / 2);
-	$: proposedMax = domainCenter + desiredSpan / 2;
-	$: boundedMax = maxValue && maxValue > 0 ? Math.min(maxValue, proposedMax) : proposedMax;
-	$: maxOverflow = rollingHistory && maxValue && maxValue > 0 ? Math.max(0, proposedMax - maxValue) : 0;
-	$: domainMin = rollingHistory ? Math.max(0, proposedMin - maxOverflow) : 0;
-	$: domainMax = rollingHistory ? Math.max(domainMin + 1, boundedMax) : Math.max(1, fallbackMax);
-	$: domainSpan = Math.max(1, domainMax - domainMin);
+	$: domain = deriveAdaptiveMetricDomain(cleanSeries, maxValue);
+	$: domainMin = domain.min;
+	$: domainMax = domain.max;
+	$: domainSpan = Math.max(0.0001, domainMax - domainMin);
 	$: points = cleanSeries.map((sample, index) => {
 		const x = cleanSeries.length === 1 ? chartWidth - 4 : (index / Math.max(1, cleanSeries.length - 1)) * chartWidth;
 		const level = Math.max(0, Math.min(1, (sample - domainMin) / domainSpan));
@@ -80,15 +76,19 @@
 	$: resourceClass = resourceClasses[inferredResource] ?? resourceClasses.neutral;
 	$: currentPoint = points.length === 1 ? points[0] : null;
 	$: currentOnly = series.length === 0 && compatibilitySeries.length === 1;
+	$: telemetryUnavailable = cleanSeries.length === 0 && /unavailable/i.test(`${value} ${detail}`);
+	$: chartMessage = cleanSeries.length === 0 ? (telemetryUnavailable ? 'Telemetry unavailable' : 'Waiting for sample') : '';
 	$: effectiveRangeLabel = currentOnly
 		? 'current'
 		: rollingHistory && maxValue && maxValue > 0
-			? `${Math.floor(domainMin)}–${Math.ceil(domainMax)}%`
+			? `${formatDomainValue(domainMin, domainSpan)}–${formatDomainValue(domainMax, domainSpan)}%`
 			: rollingHistory
-				? 'rolling scale'
-				: cleanSeries.length >= 2
-					? rangeLabel
-					: 'collecting';
+				? rangeLabel
+				: telemetryUnavailable
+					? 'unavailable'
+					: cleanSeries.length === 1
+						? '1 sample'
+						: 'sampling';
 	$: compatibilityTone = tone;
 </script>
 
@@ -106,7 +106,7 @@
 		{/if}
 	</div>
 
-	<div class="mt-3 h-20 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-neutral-950">
+	<div class="relative mt-3 h-20 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-neutral-950">
 		<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
 			<g class="stroke-gray-100/55 dark:stroke-neutral-800/45" stroke-width="0.8">
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
@@ -120,6 +120,9 @@
 			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="1.25" vector-effect="non-scaling-stroke" />{/if}
 			{#if currentPoint}<circle cx={currentPoint.x} cy={currentPoint.y} r="2" class={`${resourceClass.stroke} ${resourceClass.fill}`} stroke-width="1" />{/if}
 		</svg>
+		{#if chartMessage}
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-gray-400 dark:text-gray-600">{chartMessage}</div>
+		{/if}
 	</div>
 
 	<div class="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
