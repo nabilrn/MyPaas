@@ -3,6 +3,7 @@
 	import BrandLogo from '$components/BrandLogo.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import IconButton from '$components/IconButton.svelte';
+	import loginBackground from '../../assets/mypaas-login-pixel-background.webp';
 	import { theme } from '$stores/theme';
 </script>
 
@@ -11,8 +12,8 @@
 </svelte:head>
 
 <div class="login-shell relative flex min-h-screen min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--app-bg)]">
-	<div class="pixel-gradient pointer-events-none absolute inset-0" aria-hidden="true"></div>
-	<div class="pixel-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+	<img src={loginBackground} alt="" aria-hidden="true" class="login-background pointer-events-none absolute inset-0 h-full w-full object-cover" />
+	<div class="login-vignette pointer-events-none absolute inset-0" aria-hidden="true"></div>
 
 	<div class="absolute right-4 top-4 z-10">
 		<IconButton label="Toggle appearance" variant="secondary" on:click={() => theme.toggle()}>
@@ -51,39 +52,26 @@
 		isolation: isolate;
 	}
 
-	.pixel-gradient {
-		inset: -8%;
-		background-image:
-			linear-gradient(90deg, color-mix(in srgb, var(--app-ink) 7%, transparent) 50%, transparent 50%),
-			linear-gradient(color-mix(in srgb, var(--app-ink) 7%, transparent) 50%, transparent 50%),
-			linear-gradient(90deg, color-mix(in srgb, var(--app-ink) 3.5%, transparent) 50%, transparent 50%),
-			linear-gradient(color-mix(in srgb, var(--app-ink) 3.5%, transparent) 50%, transparent 50%);
-		background-position: 0 0, 64px 64px, 16px 16px, 32px 32px;
-		background-size: 128px 128px, 128px 128px, 64px 64px, 64px 64px;
-		-webkit-mask-image: radial-gradient(ellipse at center, transparent 0 20%, rgb(0 0 0 / 0.12) 38%, rgb(0 0 0 / 0.72) 72%, #000 100%);
-		mask-image: radial-gradient(ellipse at center, transparent 0 20%, rgb(0 0 0 / 0.12) 38%, rgb(0 0 0 / 0.72) 72%, #000 100%);
-		opacity: 0.68;
-		transform: rotate(-1.5deg) scale(1.04);
+	.login-background {
+		opacity: 0.94;
+		filter: grayscale(1) contrast(0.98);
 	}
 
-	.pixel-grid {
-		background-image:
-			linear-gradient(to right, color-mix(in srgb, var(--app-border) 72%, transparent) 1px, transparent 1px),
-			linear-gradient(to bottom, color-mix(in srgb, var(--app-border) 72%, transparent) 1px, transparent 1px);
-		background-size: 32px 32px;
-		-webkit-mask-image: radial-gradient(ellipse at center, transparent 0 26%, rgb(0 0 0 / 0.08) 48%, #000 100%);
-		mask-image: radial-gradient(ellipse at center, transparent 0 26%, rgb(0 0 0 / 0.08) 48%, #000 100%);
-		opacity: 0.62;
+	.login-vignette {
+		background: radial-gradient(circle at center, color-mix(in srgb, var(--app-bg) 58%, transparent) 0 14%, transparent 58%);
 	}
 
 	.login-panel {
-		background: color-mix(in srgb, var(--app-surface) 94%, transparent);
-		backdrop-filter: blur(10px);
+		background: color-mix(in srgb, var(--app-surface) 95%, transparent);
+		backdrop-filter: blur(12px);
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.pixel-gradient {
-			transform: none;
-		}
+	:global(.dark) .login-background {
+		opacity: 0.72;
+		filter: grayscale(1) invert(1) brightness(0.24) contrast(1.08);
+	}
+
+	:global(.dark) .login-vignette {
+		background: radial-gradient(circle at center, color-mix(in srgb, var(--app-bg) 66%, transparent) 0 16%, transparent 62%);
 	}
 </style>
