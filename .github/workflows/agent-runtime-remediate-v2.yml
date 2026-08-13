@@ -1,0 +1,40 @@
+name: Agent runtime remediate v2
+
+on:
+  push:
+    branches: ["agent/runtime-observability-correctness"]
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python .github/agent-runtime-remediate.py
+      - name: Format Go
+        run: gofmt -w backend/internal/deployment/metrics_response.go backend/internal/deployment/metrics_response_test.go
+      - name: Backend tests
+        working-directory: backend
+        run: go test ./internal/deployment
+      - name: Frontend setup
+        working-directory: frontend
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+      - name: Frontend validation
+        working-directory: frontend
+        run: |
+          pnpm test -- --run
+          pnpm check
+          pnpm build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend frontend
+          git diff --cached --check
+          git commit -m "fix: make project observability runtime-aware"
+          git push
