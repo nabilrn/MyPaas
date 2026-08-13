@@ -116,6 +116,14 @@ func repoDigestFromInspect(raw []byte) (string, error) {
 }
 
 func (d *DockerCLI) Run(ctx context.Context, opts RunOptions, log func(string)) error {
+	volumes, err := d.persistentVolumesForRun(ctx, opts)
+	if err != nil {
+		return err
+	}
+	if len(volumes) > 0 {
+		return d.RunWithVolumes(ctx, opts, volumes, log)
+	}
+
 	args := []string{
 		"run", "-d",
 		"--name", opts.Name,
