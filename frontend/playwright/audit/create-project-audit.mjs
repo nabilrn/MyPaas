@@ -32,6 +32,8 @@ const geometryTargets = [
 	{ name: 'analysis timeline', text: 'Preparing project' },
 	{ name: 'deployment type', text: 'Deployment type' },
 	{ name: 'container port', label: 'Container port' },
+	{ name: 'project directory', text: 'Project directory' },
+	{ name: 'manual base directory', label: 'Manual path' },
 	{ name: 'environment section', text: 'Environment' },
 	{ name: 'Advanced trigger', text: 'Advanced settings' },
 	{ name: 'Advanced content', selector: 'details[open]' },
@@ -110,7 +112,7 @@ export async function runAudit({ mode = 'mock' } = {}) {
 
 function buildScenarios(mode) {
 	if (mode === 'production') {
-		return [
+		const scenarios = [
 			{
 				name: 'non-destructive-main',
 				primary: true,
@@ -133,6 +135,17 @@ function buildScenarios(mode) {
 				description: 'Safely reproducible production repository error. Does not submit.'
 			}
 		];
+		if (process.env.MYPAAS_AUDIT_SUBDIR_REPO_URL && process.env.MYPAAS_AUDIT_SUBDIR_PATH) {
+			scenarios.splice(2, 0, {
+				name: 'subdir-base-directory',
+				primary: true,
+				sourceType: 'git',
+				repositoryURL: process.env.MYPAAS_AUDIT_SUBDIR_REPO_URL,
+				baseDirectory: process.env.MYPAAS_AUDIT_SUBDIR_PATH,
+				description: 'Real production Git flow with Base Directory selection. Does not submit.'
+			});
+		}
+		return scenarios;
 	}
 
 	return [
@@ -140,7 +153,7 @@ function buildScenarios(mode) {
 		{ name: 'dockerfile-missing-port', mock: 'missing-port', repositoryURL: 'https://github.com/example/api-no-port' },
 		{ name: 'compose-required-env', mock: 'compose-required-env', repositoryURL: 'https://github.com/example/compose-env' },
 		{ name: 'compose-doctor-blocker', mock: 'compose-blocker', repositoryURL: 'https://github.com/example/compose-blocker' },
-		{ name: 'nested-base-directory', mock: 'nested', repositoryURL: 'https://github.com/example/monorepo' },
+		{ name: 'nested-base-directory', mock: 'nested', repositoryURL: 'https://github.com/example/monorepo', baseDirectory: 'apps/api' },
 		{ name: 'slow-repository-inspection', mock: 'slow', repositoryURL: 'https://github.com/example/slow-repo' },
 		{ name: 'backend-500', mock: 'backend-500', repositoryURL: 'https://github.com/example/backend-500' },
 		{ name: 'timeout', mock: 'timeout', repositoryURL: 'https://github.com/example/timeout' },
@@ -263,6 +276,19 @@ async function runGitFlow(page, audit, runDir, scenario, consoleEvents, networkE
 	await waitForAnalysisSettled(page, scenario);
 	await checkpoint(page, audit, runDir, '03-runtime-detected', consoleEvents, networkEvents);
 	await checkpoint(page, audit, runDir, '04-configuration-required', consoleEvents, networkEvents);
+
+	if (scenario.baseDirectory) {
+		await toggleAdvanced(page, true);
+		await checkpoint(page, audit, runDir, '05-advanced-open', consoleEvents, networkEvents);
+		await chooseBaseDirectory(page, scenario.baseDirectory);
+		await checkpoint(page, audit, runDir, '06-base-directory-selected', consoleEvents, networkEvents);
+		await waitForAnalysisSettled(page, scenario);
+		await checkpoint(page, audit, runDir, '07-subdir-runtime-detected', consoleEvents, networkEvents);
+		await toggleAdvanced(page, false);
+		await checkpoint(page, audit, runDir, '08-advanced-closed', consoleEvents, networkEvents);
+		await checkpoint(page, audit, runDir, '09-readiness', consoleEvents, networkEvents);
+		return;
+	}
 
 	await toggleAdvanced(page, true);
 	await checkpoint(page, audit, runDir, '05-advanced-open', consoleEvents, networkEvents);
@@ -567,13 +593,32 @@ async function fillContainerPort(page, port) {
 	await page.waitForTimeout(150);
 }
 
+async function chooseBaseDirectory(page, baseDirectory) {
+	const directoryButton = page.getByRole('button', { name: new RegExp(escapeRegex(baseDirectory), 'i') }).first();
+	if (await directoryButton.count()) {
+		await directoryButton.click();
+	} else {
+		const input = page.getByLabel('Manual path').first();
+		await input.waitFor({ state: 'visible', timeout: 20_000 });
+		await input.fill(baseDirectory);
+		await input.dispatchEvent('input', { inputType: 'insertFromPaste', data: baseDirectory });
+		await input.blur();
+	}
+	await page.waitForTimeout(150);
+}
+
 async function toggleAdvanced(page, open) {
-	const summary = page.getByText('Advanced settings', { exact: false }).first();
-	if (!(await summary.count())) return;
-	const detailsOpen = await page.locator('details[open]').count();
-	if ((open && detailsOpen > 0) || (!open && detailsOpen === 0)) return;
+	const advanced = page.locator('details').filter({ hasText: 'Advanced settings' }).first();
+	if (!(await advanced.count())) return;
+	const summary = advanced.locator('summary').first();
+	const detailsOpen = await advanced.evaluate((details) => details.hasAttribute('open')).catch(() => false);
+	if ((open && detailsOpen) || (!open && !detailsOpen)) return;
 	await summary.click();
 	await page.waitForTimeout(150);
+}
+
+function escapeRegex(value) {
+	return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function clickReanalyzeIfAvailable(page) {

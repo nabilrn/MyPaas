@@ -28,6 +28,12 @@ Scenarios:
 - `registry-ghcr-ready`
 - `invalid-repository-error`
 
+Subdirectory coverage:
+
+- Default production audit keeps Base Directory non-destructive and does not assume an arbitrary external monorepo fixture.
+- Explicit production subdirectory coverage is opt-in with `MYPAAS_AUDIT_SUBDIR_REPO_URL` and `MYPAAS_AUDIT_SUBDIR_PATH`.
+- Deterministic mocked coverage includes `nested-base-directory`, opens Advanced settings, sets the Base Directory, re-runs analysis, and captures readiness evidence after the subdirectory-specific result settles.
+
 Production audit remained non-destructive. It did not submit Create Project, create a real project, deploy an application, delete resources, or mutate production resources.
 
 ## Findings
