@@ -10,6 +10,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { remainingVisualDelay } from '$lib/utils/analysis-choreography';
+	import { createProjectBlockingSummary, presentRepositoryInspectionError } from '$lib/utils/create-project-presentation';
 	import { projectHost, projectURL } from '$lib/utils/urls';
 	import {
 		projectCreationReadiness,
@@ -92,6 +93,7 @@
 	let detectError = '';
 	let detectMessage = '';
 	let repoInspectError = '';
+	let repoInspectErrorDetail = '';
 	let repoInspectMessage = '';
 	let repoInspectTimer: ReturnType<typeof setTimeout> | undefined;
 	let repoInspectRequest = 0;
@@ -163,6 +165,10 @@
 		?? (missingRequiredEnvKeys.length > 0
 			? `Fill required env values: ${missingRequiredEnvKeys.slice(0, 3).join(', ')}${missingRequiredEnvKeys.length > 3 ? '...' : ''}`
 			: '');
+	$: configurationBlockers = createProjectBlockingSummary({
+		composeBlockingMessages: composeBlockingIssues.map((issue) => issue.message),
+		missingRequiredEnvKeys
+	});
 	$: portToServiceMap = buildPortToServiceMap(composePlan?.services ?? []);
 	$: localhostEnvWarnings = detectLocalhostInEnvDrafts(envDrafts, portToServiceMap);
 	$: currentRepoInspectKey = [form.repoUrl.trim(), form.branch.trim(), form.baseDirectory.trim()].join('\n');
@@ -594,6 +600,7 @@
 		detectError = '';
 		detectMessage = '';
 		repoInspectError = '';
+		repoInspectErrorDetail = '';
 		repoInspectMessage = '';
 		repoTree = [];
 		repoTreeTruncated = false;
@@ -688,6 +695,7 @@
 		if (form.sourceType !== 'git' || inspectingRepo || detecting || analysisPresentationBusy) return;
 		detectError = '';
 		repoInspectError = '';
+		repoInspectErrorDetail = '';
 		try {
 			await inspectRepository(false, true);
 		} catch {
@@ -712,6 +720,7 @@
 		const startedAt = Date.now();
 		inspectingRepo = true;
 		repoInspectError = '';
+		repoInspectErrorDetail = '';
 		detectError = '';
 		try {
 			const inspection = await api.projects.inspectRepository({
@@ -737,13 +746,15 @@
 		} catch (err) {
 			await waitForMinimumVisualDuration(startedAt, REPOSITORY_MIN_VISIBLE_MS);
 			if (requestId !== repoInspectRequest) return undefined;
-			const message = err instanceof Error ? err.message : 'Failed to inspect repository';
-			repoInspectError = message;
+			const rawMessage = err instanceof Error ? err.message : 'Failed to inspect repository';
+			const presentation = presentRepositoryInspectionError(rawMessage);
+			repoInspectError = presentation.message;
+			repoInspectErrorDetail = presentation.detail;
 			repoInspectMessage = '';
 			repoTree = [];
 			repoTreeTruncated = false;
 			lastRepoInspectKey = '';
-			if (showToast) toast.error(message);
+			if (showToast) toast.error(repoInspectError);
 			throw err;
 		} finally {
 			if (requestId === repoInspectRequest) inspectingRepo = false;
@@ -1272,6 +1283,13 @@
 						{/each}
 					</div>
 
+					{#if repoInspectErrorDetail}
+						<details class="mt-5 max-w-2xl rounded-md border border-gray-200 dark:border-gray-800">
+							<summary class="app-focus cursor-pointer px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300">Technical details</summary>
+							<pre class="whitespace-pre-wrap break-words border-t border-gray-100 px-3 py-2 font-mono text-[11px] text-gray-500 dark:border-gray-800 dark:text-gray-400">{repoInspectErrorDetail}</pre>
+						</details>
+					{/if}
+
 					{#if detectError && directoryChoices.length > 0}
 						<div class="mt-5 border-l-2 border-gray-300 pl-4 dark:border-gray-700">
 							<p class="text-sm font-medium text-gray-950 dark:text-white">Application may be inside a subdirectory</p>
@@ -1328,6 +1346,23 @@
 							</div>
 						</div>
 
+						{#if configurationBlockers.length > 0}
+							<div class={`border-t px-4 py-3 ${composeBlockingIssues.length > 0 ? 'border-red-100 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/10' : 'border-amber-100 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/10'}`}>
+								<div class="flex gap-2.5">
+									<CircleAlert class={`mt-0.5 h-4 w-4 shrink-0 ${composeBlockingIssues.length > 0 ? 'text-red-600 dark:text-red-300' : 'text-amber-700 dark:text-amber-200'}`} aria-hidden="true" />
+									<div class="min-w-0">
+										<p class={`text-sm font-medium ${composeBlockingIssues.length > 0 ? 'text-red-800 dark:text-red-100' : 'text-amber-900 dark:text-amber-100'}`}>Resolve before creating</p>
+										<div class={`mt-1.5 space-y-1 text-xs ${composeBlockingIssues.length > 0 ? 'text-red-700 dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+											{#each configurationBlockers as blocker}<p>{blocker}</p>{/each}
+										</div>
+										{#if form.deployMode === 'compose' && (composePlan?.issues.length ?? 0) > composeBlockingIssues.length}
+											<p class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">Non-blocking Compose diagnostics remain available under Advanced settings.</p>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/if}
+
 						{#if form.deployMode === 'compose' && !form.mainService}
 							<div class="border-t border-gray-100 px-4 py-4 dark:border-gray-800">
 								<label class="mb-1 block text-xs font-medium text-gray-700 dark:text-gray-200" for="mainService">Public service</label>
@@ -1351,13 +1386,6 @@
 								</div>
 								<input id="appPort" type="number" min="1" max="65535" value={form.appPort} placeholder="3000" on:input={handleAppPortInput} class="field max-w-xs font-mono" />
 								<p class="mt-1 text-xs text-amber-700 dark:text-amber-200">Detection could not resolve this value automatically.</p>
-							</div>
-						{/if}
-
-						{#if composeBlockingIssues.length > 0}
-							<div class="border-t border-red-100 bg-red-50/50 px-4 py-3 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-950/10 dark:text-red-200">
-								<p class="font-medium">Compose needs attention</p>
-								<p class="mt-0.5">{composeBlockingIssues[0].message}</p>
 							</div>
 						{/if}
 					</div>
@@ -1400,13 +1428,6 @@
 							<input type="checkbox" bind:checked={form.sharedPostgres} class="h-4 w-4 rounded border-gray-300 text-gray-950 focus:ring-gray-950 dark:border-gray-700" />
 							Enable
 						</label>
-					</div>
-				{/if}
-
-				{#if missingRequiredEnvKeys.length > 0}
-					<div class="mb-4 border-l-2 border-amber-400 pl-3 text-sm text-amber-900 dark:text-amber-100">
-						<p class="font-medium">{missingRequiredEnvKeys.length} required value{missingRequiredEnvKeys.length === 1 ? '' : 's'} missing</p>
-						<p class="mt-0.5 font-mono text-xs">{missingRequiredEnvKeys.join(', ')}</p>
 					</div>
 				{/if}
 
