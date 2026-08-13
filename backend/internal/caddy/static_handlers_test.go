@@ -15,7 +15,7 @@ func TestStaticFileHandlersIncludeHistoryFallback(t *testing.T) {
 
 	for _, want := range []string{
 		`"root":"/srv/site"`,
-		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/","/index.html"]`,
+		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html","/index.html"]`,
 		`"handler":"rewrite","uri":"{http.matchers.file.relative}"`,
 		`"handler":"file_server"`,
 	} {

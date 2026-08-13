@@ -89,7 +89,7 @@ func staticFileHandlers(root string) []map[string]any {
 						"file": map[string]any{
 							"try_files": []string{
 								"{http.request.uri.path}",
-								"{http.request.uri.path}/",
+								"{http.request.uri.path}/index.html",
 								"/index.html",
 							},
 						},
