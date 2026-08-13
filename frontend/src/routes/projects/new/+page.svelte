@@ -11,6 +11,7 @@
 	import { toast } from '$stores/toast';
 	import { remainingVisualDelay } from '$lib/utils/analysis-choreography';
 	import { createProjectBlockingSummary, presentRepositoryInspectionError } from '$lib/utils/create-project-presentation';
+	import { createProjectEnvironmentCopy, retainUserProvidedEnvironmentDrafts } from '$lib/utils/create-project-source';
 	import { projectHost, projectURL } from '$lib/utils/urls';
 	import {
 		projectCreationReadiness,
@@ -141,6 +142,7 @@
 	$: previewOrigin = projectURL(form.name || 'your-app', $page.url.protocol, $page.url.hostname);
 	$: managedDatabaseUrl = form.sharedPostgres && form.deployMode !== 'static';
 	$: deployModeOptions = deployModes.map((mode) => ({ value: mode.id, label: mode.title, description: mode.body }));
+	$: environmentCopy = createProjectEnvironmentCopy(form.sourceType);
 	$: portStateLabel = form.deployMode === 'static'
 		? 'Managed by Caddy'
 		: appPortSource === 'detected'
@@ -445,6 +447,7 @@
 		composePlan = null;
 		if (sourceType === 'registry') {
 			resetRepositoryInspection();
+			envDrafts = retainUserProvidedEnvironmentDrafts(envDrafts);
 			form.deployMode = 'image';
 			form.mainService = '';
 			form.composeFilePath = '';
@@ -1313,7 +1316,7 @@
 									<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Deployment setup</h2>
 									<span class={`rounded-full px-2 py-0.5 text-[11px] font-medium ${canSubmit ? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'}`}>{canSubmit ? 'Ready' : 'Needs configuration'}</span>
 								</div>
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Detected deployment and environment results are summarized here. Low-level overrides stay in Advanced settings.</p>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{environmentCopy.setupSummary}</p>
 							</div>
 							{#if form.sourceType === 'git'}
 								<ActionButton variant="secondary" size="xs" type="button" on:click={reanalyzeSource} disabled={inspectingRepo || detecting || repoInspectScheduled || analysisPresentationBusy} loading={inspectingRepo || detecting || repoInspectScheduled || analysisPresentationBusy} loadingLabel="Analyzing...">
@@ -1342,7 +1345,7 @@
 							<div class="bg-white px-4 py-3 dark:bg-gray-950">
 								<p class="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Environment</p>
 								<p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">{envDrafts.length + (managedDatabaseUrl ? 1 : 0)} variable{envDrafts.length + (managedDatabaseUrl ? 1 : 0) === 1 ? '' : 's'}</p>
-								<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{missingRequiredEnvKeys.length > 0 ? `${missingRequiredEnvKeys.length} required value${missingRequiredEnvKeys.length === 1 ? '' : 's'} missing` : 'Scan complete · no required values missing'}</p>
+								<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{missingRequiredEnvKeys.length > 0 ? `${missingRequiredEnvKeys.length} required value${missingRequiredEnvKeys.length === 1 ? '' : 's'} missing` : environmentCopy.noRequiredSummary}</p>
 							</div>
 						</div>
 
@@ -1385,7 +1388,7 @@
 									<InfoDisclosure id="container-port-info" label="About container ports">The port your app listens on inside the container. MyPaas manages host allocation and the public route.</InfoDisclosure>
 								</div>
 								<input id="appPort" type="number" min="1" max="65535" value={form.appPort} placeholder="3000" on:input={handleAppPortInput} class="field max-w-xs font-mono" />
-								<p class="mt-1 text-xs text-amber-700 dark:text-amber-200">Detection could not resolve this value automatically.</p>
+								<p class="mt-1 text-xs text-amber-700 dark:text-amber-200">{environmentCopy.portRequirement}</p>
 							</div>
 						{/if}
 					</div>
@@ -1396,7 +1399,7 @@
 				<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
 					<div>
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Environment</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Detected from the repository automatically. Required values are shown first.</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{environmentCopy.sectionDescription}</p>
 					</div>
 					<div>
 						<input bind:this={envFileInput} type="file" accept=".env,text/plain" class="hidden" on:change={handleEnvFileImport} />
@@ -1479,7 +1482,7 @@
 						Scanning for environment variables…
 					</div>
 				{:else}
-					<p class="text-sm text-gray-500 dark:text-gray-400">No environment variables detected. Add one only if your application needs it.</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400">{environmentCopy.emptyState}</p>
 				{/if}
 
 				<div class="mt-4 flex gap-2">
