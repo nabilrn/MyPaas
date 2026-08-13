@@ -1,0 +1,32 @@
+name: Agent observability SSE remediation
+
+on:
+  push:
+    branches: ["agent/project-observability-sse"]
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply remediation
+        run: python .github/agent-observability-sse.py
+      - name: Format
+        run: gofmt -w backend/internal/deployment backend/cmd/api/main.go
+      - name: Backend package tests
+        working-directory: backend
+        run: go test ./internal/deployment
+      - name: Backend full tests
+        working-directory: backend
+        run: go test ./...
+      - name: Commit remediation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend
+          git diff --cached --check
+          git commit -m "refactor: stream project observability efficiently"
+          git push
