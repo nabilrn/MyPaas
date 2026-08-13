@@ -68,11 +68,15 @@ class InstallConfigTest(unittest.TestCase):
 
         self.assertIn('INSTALL_STATD="${INSTALL_STATD:-true}"', installer)
         self.assertIn('STATD_INSTALL_MODE="${STATD_INSTALL_MODE:-release}"', installer)
-        self.assertIn('STATD_VERSION="${STATD_VERSION:-v0.1.0}"', installer)
+        self.assertIn('STATD_VERSION="${STATD_VERSION:-v0.2.0}"', installer)
+        self.assertIn('STATD_ONLY="${STATD_ONLY:-false}"', installer)
+        self.assertIn("--statd-only)", installer)
         self.assertIn("mypaas-statd-linux-${arch}.tar.gz", installer)
         self.assertIn("SHA256SUMS.selected", installer)
         self.assertIn("sha256sum -c", installer)
-        self.assertIn("systemctl enable --now mypaas-statd", installer)
+        self.assertIn("mypaas-statd --version", installer)
+        self.assertIn("systemctl enable mypaas-statd", installer)
+        self.assertIn("systemctl restart mypaas-statd", installer)
         self.assertIn("STATD_SOCKET=/run/mypaas/statd.sock", installer)
         self.assertNotIn('pull --ff-only origin "$STATD_REF" || true', installer)
 
@@ -139,7 +143,7 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("CADDY_ADMIN: unix//run/mypaas/caddy-admin.sock", api)
         self.assertIn('CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"', caddy)
         self.assertIn("/run/mypaas:/run/mypaas", caddy)
-        self.assertNotIn("2019:2019", caddy)
+        self.assertNotIn("2019:2019", compose)
 
     def test_api_container_drops_capabilities_and_blocks_privilege_gain(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
@@ -153,7 +157,7 @@ class InstallConfigTest(unittest.TestCase):
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
         caddy = compose.split("  caddy:\n", 1)[1].split("\n  cloudflared:\n", 1)[0]
 
-        self.assertIn("caddy_logs:/var/log/caddy", caddy)
+        self.assertIn("caddy_logs:/var/log/caddy", compose)
         self.assertIn("  caddy_logs:\n", compose)
 
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
