@@ -48,19 +48,13 @@ describe('retainUserProvidedEnvironmentDrafts', () => {
 				key: 'API_KEY',
 				source: 'manual',
 				value: 'keep-me',
-				sensitive: true,
-				defaultValue: undefined,
-				services: undefined,
-				conflict: undefined
+				sensitive: true
 			},
 			{
 				key: 'FEATURE_FLAG',
 				source: 'env-file',
 				value: 'true',
-				sensitive: false,
-				defaultValue: undefined,
-				services: undefined,
-				conflict: undefined
+				sensitive: false
 			}
 		]);
 	});
