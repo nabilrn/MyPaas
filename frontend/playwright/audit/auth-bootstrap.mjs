@@ -16,16 +16,21 @@ const context = await browser.newContext();
 const page = await context.newPage();
 
 console.log(`Opening ${targetURL}`);
-console.log('Complete GitHub OAuth manually if redirected. This waits until MyPaaS is authenticated.');
+console.log('Complete GitHub OAuth manually if redirected.');
+console.log('The browser will stay open until the Create Project form is actually visible.');
 
 await page.goto(targetURL, { waitUntil: 'domcontentloaded' });
-await page.waitForFunction(() => {
-	const path = window.location.pathname;
-	const bodyText = document.body?.innerText || '';
-	const onCreateProject = path === '/projects/new' && /Create project|New project|Repository URL/i.test(bodyText);
-	const onDashboard = /^\/projects(?:\/new)?$/.test(path) && !/Sign in with GitHub|Continue with GitHub/i.test(bodyText);
-	return onCreateProject || onDashboard;
-}, undefined, { timeout: 10 * 60 * 1000 });
+const deadline = Date.now() + 10 * 60 * 1000;
+while (Date.now() < deadline) {
+	if (await page.getByLabel('Repository URL').isVisible().catch(() => false)) break;
+	if (new URL(page.url()).pathname === '/projects') {
+		await page.goto(targetURL, { waitUntil: 'domcontentloaded' });
+		continue;
+	}
+	await page.waitForTimeout(1000);
+}
+
+await page.getByLabel('Repository URL').waitFor({ state: 'visible', timeout: 5000 });
 
 await context.storageState({ path: authFile });
 await browser.close();

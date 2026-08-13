@@ -221,9 +221,9 @@ async function runScenario(browser, options) {
 		await toggleAdvanced(page, false);
 		await checkpoint(page, audit, runDir, '06-advanced-closed', consoleEvents, networkEvents);
 
-		await clickReanalyzeIfAvailable(page);
+		const reanalysisResponse = await clickReanalyzeIfAvailable(page);
 		await checkpoint(page, audit, runDir, '07-reanalyze-triggered', consoleEvents, networkEvents);
-		await waitForAnalysisSettled(page, scenario);
+		await waitForAnalysisSettled(page, scenario, reanalysisResponse);
 		await checkpoint(page, audit, runDir, '08-readiness', consoleEvents, networkEvents);
 
 		if (scenario.allowSubmit) {
@@ -516,9 +516,12 @@ async function toggleAdvanced(page, open) {
 async function clickReanalyzeIfAvailable(page) {
 	const button = page.getByRole('button', { name: /re-analyze|try again/i }).first();
 	if ((await button.count()) && await button.isEnabled()) {
+		const responsePromise = page.waitForResponse(isDeploymentDetectionResponse, { timeout: 20_000 }).catch(() => undefined);
 		await button.click();
 		await page.waitForTimeout(100);
+		return responsePromise;
 	}
+	return undefined;
 }
 
 async function clickCreateIfEnabled(page) {
@@ -529,16 +532,32 @@ async function clickCreateIfEnabled(page) {
 	}
 }
 
-async function waitForAnalysisSettled(page, scenario) {
+async function waitForAnalysisSettled(page, scenario, responsePromise) {
 	if (scenario.mock === 'timeout') {
 		await page.waitForTimeout(1100);
 		return;
 	}
-	await Promise.race([
-		page.getByText(/Ready to create|Needs configuration|Failed|not found|Compose needs attention|Detection could not resolve/i).first().waitFor({ timeout: 15_000 }),
-		page.waitForResponse((res) => res.url().includes('/api/projects/detect-mode') && res.request().method() === 'POST', { timeout: 15_000 })
-	]).catch(() => undefined);
-	await page.waitForTimeout(700);
+	if (responsePromise) {
+		await responsePromise;
+	} else {
+		await page.waitForResponse(isDeploymentDetectionResponse, { timeout: 20_000 }).catch(() => undefined);
+	}
+	await page.waitForFunction(() => {
+		const text = document.body?.innerText || '';
+		const hasSettledState = /Ready to create|Needs configuration|Failed|not found|Compose needs attention|Detection could not resolve|required value/i.test(text);
+		const isBusy = /Analyzing deployment|Scanning runtime files|Scanning repository for environment variables|Finishing environment scan/i.test(text);
+		return hasSettledState && !isBusy;
+	}, undefined, { timeout: 20_000 }).catch(() => undefined);
+	await page.waitForTimeout(250);
+}
+
+function isDeploymentDetectionResponse(response) {
+	if (!response.url().includes('/api/projects/detect-mode') || response.request().method() !== 'POST') return false;
+	try {
+		return response.request().postDataJSON()?.inspectOnly !== true;
+	} catch {
+		return true;
+	}
 }
 
 async function installMockRoutes(page, scenario) {
