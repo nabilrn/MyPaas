@@ -893,7 +893,7 @@ func pickMainService(ctx context.Context, workspace, composeFile string, service
 	if service := pickServiceWithPublishedPort(ctx, workspace, composeFile, services); service != "" {
 		return service
 	}
-	for _, preferred := range []string{"app", "web", "frontend", "api", "backend", "server"} {
+	for _, preferred := range composePublicServicePreference {
 		for _, service := range services {
 			if service == preferred {
 				return service
@@ -905,6 +905,9 @@ func pickMainService(ctx context.Context, workspace, composeFile string, service
 	}
 	return services[0]
 }
+
+var composePublicServicePreference = []string{"frontend", "web", "app", "client", "ui", "dashboard", "www", "api", "backend", "server"}
+var composeFrontendServiceHints = []string{"frontend", "web", "app", "client", "ui", "dashboard", "www"}
 
 func pickServiceWithPublishedPort(ctx context.Context, workspace, composeFile string, services []string) string {
 	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "config", "--format", "json")
@@ -926,14 +929,18 @@ func pickMainServiceFromComposeConfig(rawConfig []byte, services []string) strin
 	if err := json.Unmarshal(rawConfig, &config); err != nil {
 		return ""
 	}
+	var fallback string
 	for _, service := range services {
 		raw, ok := config.Services[service]
 		if !ok {
 			continue
 		}
 		if parseComposePorts(raw.Ports, nil) > 0 {
-			return service
+			fallback = bestComposePublicService(fallback, service)
 		}
+	}
+	if fallback != "" {
+		return fallback
 	}
 	for _, service := range services {
 		raw, ok := config.Services[service]
@@ -941,10 +948,45 @@ func pickMainServiceFromComposeConfig(rawConfig []byte, services []string) strin
 			continue
 		}
 		if parseComposeExpose(raw.Expose, nil) > 0 {
-			return service
+			fallback = bestComposePublicService(fallback, service)
 		}
 	}
-	return ""
+	return fallback
+}
+
+func bestComposePublicService(current, candidate string) string {
+	if current == "" {
+		return candidate
+	}
+	if composePublicServiceRank(candidate) < composePublicServiceRank(current) {
+		return candidate
+	}
+	return current
+}
+
+func composePublicServiceRank(service string) int {
+	service = strings.ToLower(strings.TrimSpace(service))
+	for idx, preferred := range composeFrontendServiceHints {
+		if service == preferred {
+			return idx
+		}
+	}
+	for idx, preferred := range composeFrontendServiceHints {
+		if strings.Contains(service, preferred) {
+			return idx + len(composePublicServicePreference)
+		}
+	}
+	for idx, preferred := range []string{"api", "backend", "server"} {
+		if service == preferred {
+			return idx + len(composePublicServicePreference)*2
+		}
+	}
+	for idx, preferred := range []string{"api", "backend", "server"} {
+		if strings.Contains(service, preferred) {
+			return idx + len(composePublicServicePreference)*3
+		}
+	}
+	return len(composePublicServicePreference) * 4
 }
 
 func inferDockerfileAppPort(workspace string, envVars []envdiscover.Var) int32 {

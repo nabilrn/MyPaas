@@ -230,6 +230,35 @@ func TestPickMainServiceFromComposeConfigPrefersPortsOverExpose(t *testing.T) {
 	}
 }
 
+func TestPickMainServiceFromComposeConfigPrefersFrontendWhenBackendAlsoPublishesPort(t *testing.T) {
+	raw := []byte(`{
+		"services": {
+			"db": {},
+			"backend": {"ports": [{"target": 3001, "published": "3001"}]},
+			"frontend": {"ports": [{"target": 8080, "published": "8080"}]}
+		}
+	}`)
+
+	got := pickMainServiceFromComposeConfig(raw, []string{"db", "backend", "frontend"})
+	if got != "frontend" {
+		t.Fatalf("pickMainServiceFromComposeConfig() = %q, want frontend", got)
+	}
+}
+
+func TestPickMainServiceFromComposeConfigPrefersNamedFrontendExposeOverBackendPort(t *testing.T) {
+	raw := []byte(`{
+		"services": {
+			"api": {"ports": [{"target": 3000}]},
+			"public-frontend": {"ports": [{"target": 4173}]}
+		}
+	}`)
+
+	got := pickMainServiceFromComposeConfig(raw, []string{"api", "public-frontend"})
+	if got != "public-frontend" {
+		t.Fatalf("pickMainServiceFromComposeConfig() = %q, want public-frontend", got)
+	}
+}
+
 func TestNormalizeServiceResourcesDefaultsToEmptyObject(t *testing.T) {
 	tests := []json.RawMessage{
 		nil,

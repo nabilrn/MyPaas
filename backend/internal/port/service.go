@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -70,7 +72,11 @@ func pgUUID(id uuid.UUID) pgtype.UUID {
 }
 
 func canBind(port int32) bool {
-	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(int(port))))
+	host := strings.TrimSpace(os.Getenv("DOCKER_BIND_HOST"))
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(int(port))))
 	if err != nil {
 		return false
 	}
