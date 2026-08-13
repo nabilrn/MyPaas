@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bot, ChevronLeft, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -17,6 +17,8 @@
 		{ href: '/projects', label: 'Projects', icon: FolderKanban },
 		{ href: '/admin/users', label: 'Users', icon: Users },
 		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
+		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
+		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft },
 		{ href: '/admin/settings', label: 'Settings', icon: Settings }
 	];
 
