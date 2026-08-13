@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest';
 import appCss from '../../app.css?raw';
 import logsPage from '../../routes/projects/[id]/logs/+page.svelte?raw';
 
-function ruleBody(css: string, selector: string): string {
-	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`));
-	return match?.[1] ?? '';
-}
-
 describe('console surface interaction contract', () => {
 	it('leaves overflow behavior to each console consumer', () => {
-		expect(ruleBody(appCss, '.console-surface')).not.toContain('overflow-hidden');
+		const afterSelector = appCss.split('.console-surface {')[1] ?? '';
+		const consoleRule = afterSelector.split('}')[0] ?? '';
+		expect(consoleRule.length).toBeGreaterThan(0);
+		expect(consoleRule).not.toContain('overflow-hidden');
 	});
 
 	it('keeps project logs text-selectable with visible selection feedback', () => {
