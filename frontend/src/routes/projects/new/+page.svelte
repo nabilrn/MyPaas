@@ -1381,7 +1381,7 @@
 							</div>
 						{/if}
 
-						{#if form.deployMode !== 'auto' && form.deployMode !== 'static' && !form.appPort}
+						{#if form.deployMode !== 'auto' && form.deployMode !== 'static' && (form.sourceType === 'registry' || !form.appPort)}
 							<div class="border-t border-gray-100 px-4 py-4 dark:border-gray-800">
 								<div class="mb-1 flex items-center gap-1">
 									<label class="block text-xs font-medium text-gray-700 dark:text-gray-200" for="appPort">Container port</label>
@@ -1547,7 +1547,7 @@
 								{#if form.deployMode === 'compose' && form.mainService}
 									<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="mainServiceAdvanced">Public service override</label><input id="mainServiceAdvanced" type="text" bind:value={form.mainService} class="field w-full font-mono" /></div>
 								{/if}
-								{#if form.deployMode !== 'static' && form.appPort}
+								{#if form.sourceType === 'git' && form.deployMode !== 'static' && form.appPort}
 									<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="appPortAdvanced">Container port override</label><input id="appPortAdvanced" type="number" min="1" max="65535" value={form.appPort} on:input={handleAppPortInput} class="field w-full font-mono" /></div>
 								{/if}
 							</div>

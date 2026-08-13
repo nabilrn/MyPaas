@@ -563,7 +563,14 @@ async function fillImageRef(page, imageRef) {
 async function fillContainerPort(page, port) {
 	const input = page.getByRole('spinbutton', { name: 'Container port' }).first();
 	await input.waitFor({ state: 'visible', timeout: 20_000 });
-	await input.fill(port);
+	const expectedPort = String(port);
+	await input.fill('');
+	await input.pressSequentially(expectedPort, { delay: 25 });
+	await input.waitFor({ state: 'visible', timeout: 20_000 });
+	const actualPort = await input.inputValue();
+	if (actualPort !== expectedPort) {
+		throw new Error(`Container port input lost the typed value: expected ${expectedPort}, got ${actualPort}`);
+	}
 	await page.waitForTimeout(150);
 }
 
