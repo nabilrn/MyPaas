@@ -13,7 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply remediation
-        run: python .github/agent-observability-sse.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/agent-observability-sse.py')
+          text = p.read_text()
+          text = text.replace('\\t\\tr.Get("/{id}', '\\t\\t\\tr.Get("/{id}')
+          p.write_text(text)
+          PY
+          python .github/agent-observability-sse.py
       - name: Format
         run: gofmt -w backend/internal/deployment backend/cmd/api/main.go
       - name: Backend package tests
