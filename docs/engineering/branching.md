@@ -59,6 +59,8 @@ docs: define beta readiness gates
 
 ## Beta readiness workstreams
 
+Use `docs/engineering/beta-readiness-master-plan.md` as the source of truth for pre-beta sequencing.
+
 Use these branch families for pre-beta core work:
 
 - `core/update-*` for self-update, rollback, release image consistency, and update verification.
