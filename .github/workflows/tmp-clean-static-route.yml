@@ -1,0 +1,24 @@
+name: Finalize static route fix
+
+on:
+  push:
+    branches:
+      - fix/static-spa-route-fallback
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove temporary validation workflows
+        run: |
+          rm -f .github/workflows/tmp-static-spa-route-validation.yml
+          rm -f .github/workflows/tmp-clean-static-route.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: finalize static routing fix"
+          git push
