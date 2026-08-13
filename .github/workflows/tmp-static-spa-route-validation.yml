@@ -1,0 +1,84 @@
+name: Temporary static SPA route validation
+
+on:
+  push:
+    branches:
+      - fix/static-spa-route-fallback
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Run Caddy client tests
+        working-directory: backend
+        run: go test ./internal/caddy
+      - name: Emit the exact static route as a runnable Caddy config
+        run: |
+          cat > backend/internal/caddy/emit_static_config_test.go <<'EOF'
+          package caddy
+
+          import (
+            "encoding/json"
+            "os"
+            "testing"
+          )
+
+          func TestEmitStaticConfig(t *testing.T) {
+            config := map[string]any{
+              "apps": map[string]any{
+                "http": map[string]any{
+                  "servers": map[string]any{
+                    "srv0": map[string]any{
+                      "listen": []string{":8080"},
+                      "routes": []map[string]any{{
+                        "handle": staticFileHandlers("/srv"),
+                        "terminal": true,
+                      }},
+                    },
+                  },
+                },
+              },
+            }
+            raw, err := json.Marshal(config)
+            if err != nil { t.Fatal(err) }
+            if err := os.WriteFile("/tmp/mypaas-static-caddy.json", raw, 0o644); err != nil { t.Fatal(err) }
+          }
+          EOF
+          (cd backend && go test ./internal/caddy -run '^TestEmitStaticConfig$')
+          rm backend/internal/caddy/emit_static_config_test.go
+      - name: Validate Caddy JSON and SPA history routing
+        run: |
+          mkdir -p /tmp/mypaas-static-site/assets /tmp/mypaas-static-site/docs
+          printf 'ROOT-SPA\n' > /tmp/mypaas-static-site/index.html
+          printf 'ASSET\n' > /tmp/mypaas-static-site/assets/existing.txt
+          printf 'DOCS\n' > /tmp/mypaas-static-site/docs/index.html
+
+          docker run --rm \
+            -v /tmp/mypaas-static-caddy.json:/etc/caddy/caddy.json:ro \
+            -v /tmp/mypaas-static-site:/srv:ro \
+            caddy:2-alpine caddy validate --config /etc/caddy/caddy.json
+
+          docker run -d --name mypaas-static-route-test \
+            -p 18080:8080 \
+            -v /tmp/mypaas-static-caddy.json:/etc/caddy/caddy.json:ro \
+            -v /tmp/mypaas-static-site:/srv:ro \
+            caddy:2-alpine caddy run --config /etc/caddy/caddy.json
+          trap 'docker rm -f mypaas-static-route-test >/dev/null 2>&1 || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/ >/dev/null; then break; fi
+            sleep 1
+          done
+
+          test "$(curl -fsS http://127.0.0.1:18080/)" = "ROOT-SPA"
+          test "$(curl -fsS http://127.0.0.1:18080/dashboard/settings)" = "ROOT-SPA"
+          test "$(curl -fsS http://127.0.0.1:18080/assets/existing.txt)" = "ASSET"
+          test "$(curl -fsSL http://127.0.0.1:18080/docs)" = "DOCS"
