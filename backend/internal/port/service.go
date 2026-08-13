@@ -2,10 +2,12 @@ package port
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -21,6 +23,8 @@ import (
 type Service struct {
 	pool *pgxpool.Pool
 }
+
+var dockerPortBindings = runningDockerPortBindings
 
 func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
@@ -76,10 +80,74 @@ func canBind(port int32) bool {
 	if host == "" {
 		host = "127.0.0.1"
 	}
+	if dockerHostPortBound(host, port) {
+		return false
+	}
+	if !isLocalBindHost(host) {
+		return true
+	}
 	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(int(port))))
 	if err != nil {
 		return false
 	}
 	_ = ln.Close()
 	return true
+}
+
+func isLocalBindHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return host == "" || host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0" || host == "::" || host == "::1"
+}
+
+func dockerHostPortBound(host string, port int32) bool {
+	bindings, err := dockerPortBindings(context.Background())
+	if err != nil {
+		return false
+	}
+	wantedPort := strconv.Itoa(int(port))
+	wantedHost := strings.TrimSpace(host)
+	for _, row := range bindings {
+		for _, ports := range row.NetworkSettings.Ports {
+			for _, binding := range ports {
+				if strings.TrimSpace(binding.HostPort) != wantedPort {
+					continue
+				}
+				boundHost := strings.TrimSpace(binding.HostIP)
+				if boundHost == "" || boundHost == "0.0.0.0" || boundHost == "::" || boundHost == wantedHost {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+type dockerInspectPortRow struct {
+	NetworkSettings struct {
+		Ports map[string][]struct {
+			HostIP   string `json:"HostIp"`
+			HostPort string `json:"HostPort"`
+		} `json:"Ports"`
+	} `json:"NetworkSettings"`
+}
+
+func runningDockerPortBindings(ctx context.Context) ([]dockerInspectPortRow, error) {
+	idsRaw, err := exec.CommandContext(ctx, "docker", "ps", "-q").CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+	ids := strings.Fields(string(idsRaw))
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := append([]string{"inspect"}, ids...)
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	if err != nil {
+		return nil, err
+	}
+	var rows []dockerInspectPortRow
+	if err := json.Unmarshal(out, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
