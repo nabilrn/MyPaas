@@ -141,14 +141,21 @@
 		emptyDescription="Add a collaborator or owner to allow GitHub OAuth sign-in."
 		on:retry={load}
 	>
-		<table class="data-table">
+		<table class="data-table table-fixed">
+			<colgroup>
+				<col class="w-[42%]" />
+				<col class="w-[14%]" />
+				<col class="w-[14%]" />
+				<col class="w-[14%]" />
+				<col class="w-[16%]" />
+			</colgroup>
 			<thead>
 				<tr>
 					<th>User</th>
 					<th>Role</th>
 					<th>Last login</th>
 					<th>Added</th>
-					<th class="text-right">Action</th>
+					<th class="text-center">Action</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -167,16 +174,16 @@
 								</div>
 							</div>
 						</td>
-						<td>
+						<td class="whitespace-nowrap">
 							<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
 								<span class="status-dot {user.role === 'owner' ? 'bg-gray-950 dark:bg-white' : 'bg-gray-400 dark:bg-gray-500'}"></span>
 								{user.role}
 							</span>
 						</td>
-						<td class="text-sm">{formatDate(user.lastLoginAt)}</td>
-						<td class="text-sm">{formatDate(user.createdAt)}</td>
-						<td class="text-right">
-							<div class="flex justify-end gap-2">
+						<td class="whitespace-nowrap text-sm">{formatDate(user.lastLoginAt)}</td>
+						<td class="whitespace-nowrap text-sm">{formatDate(user.createdAt)}</td>
+						<td class="whitespace-nowrap text-center">
+							<div class="flex justify-center gap-2">
 								{#if confirmRemoveUserId === user.id}
 									<ActionButton variant="ghost" size="xs" on:click={() => (confirmRemoveUserId = '')}>Cancel</ActionButton>
 									<ActionButton variant="danger" size="xs" on:click={() => handleRemove(user.id, user.email)} disabled={removingUserId !== '' && removingUserId !== user.id} loading={removingUserId === user.id} loadingLabel="Removing">
@@ -184,7 +191,7 @@
 										Remove
 									</ActionButton>
 								{:else}
-									<ActionButton variant="ghostDanger" size="xs" on:click={() => requestRemove(user.id)} disabled={removingUserId !== ''}>
+									<ActionButton variant="ghostDanger" size="xs" className="min-w-[6rem]" on:click={() => requestRemove(user.id)} disabled={removingUserId !== ''}>
 										<Trash2 slot="icon" class="h-3.5 w-3.5" />
 										Remove
 									</ActionButton>
