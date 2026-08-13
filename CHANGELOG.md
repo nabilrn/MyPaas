@@ -114,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+- Project log consoles now remain scrollable inside the shared terminal surface and show a visible highlight when log text is selected.
 - Stop/start/restart lifecycle actions now keep Caddy routes aligned with container state, and project SSE metrics no longer overwrite a stopped project back to running.
 - Ignore the Linux Docker socket `DOCKER_HOST` value for local Windows Docker CLI calls and use the non-deprecated `docker stop --timeout` flag
 - Treat missing Docker containers as empty log output instead of logging an internal server error while a project has not deployed successfully yet
