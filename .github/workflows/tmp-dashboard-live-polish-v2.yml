@@ -1,7 +1,7 @@
-name: Temporary dashboard live polish v2
+name: Temporary dashboard live polish
 on:
   push:
-    branches: [agent/dashboard-live-telemetry-polish]
+    branches: [agent/dashboard-live-telemetry-polish-ready]
 permissions:
   contents: write
 jobs:
@@ -78,7 +78,7 @@ jobs:
           pnpm build
       - name: Commit product patch
         run: |
-          rm .github/workflows/tmp-dashboard-live-polish.yml .github/workflows/tmp-dashboard-live-polish-v2.yml
+          rm .github/workflows/tmp-dashboard-live-polish.yml .github/workflows/tmp-dashboard-live-polish-v2.yml .dashboard-live-trigger
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
