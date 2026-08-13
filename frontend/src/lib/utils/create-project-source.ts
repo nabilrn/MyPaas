@@ -36,12 +36,13 @@ export function retainUserProvidedEnvironmentDrafts<T extends EnvironmentDraftLi
 
 		if (retainedSources.length === 0) return [];
 
-		return [{
-			...draft,
-			source: retainedSources.join(', '),
-			defaultValue: undefined,
-			services: undefined,
-			conflict: undefined
-		}];
+		const {
+			defaultValue: _defaultValue,
+			services: _services,
+			conflict: _conflict,
+			...rest
+		} = draft;
+
+		return [{ ...rest, source: retainedSources.join(', ') } as T];
 	});
 }
