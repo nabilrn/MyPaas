@@ -1,0 +1,293 @@
+name: Agent runtime observability remediation
+
+on:
+  push:
+    branches:
+      - agent/runtime-observability-correctness
+
+permissions:
+  contents: write
+
+jobs:
+  remediate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply scoped remediation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing replacement anchor in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # Backend: do not serialize synthetic idle/static samples as live runtime metrics.
+          replace_once(
+              'backend/internal/deployment/metrics_response.go',
+              'import (\n\t"time"\n',
+              'import (\n\t"strings"\n\t"time"\n',
+          )
+          replace_once(
+              'backend/internal/deployment/metrics_response.go',
+              '\tfor _, item := range metrics {\n\t\tif collectedAt.IsZero() || item.CollectedAt.After(collectedAt) {',
+              '\tfor _, item := range metrics {\n\t\tif strings.EqualFold(strings.TrimSpace(item.Uptime), "n/a") {\n\t\t\tcontinue\n\t\t}\n\t\tif collectedAt.IsZero() || item.CollectedAt.After(collectedAt) {',
+          )
+
+          Path('backend/internal/deployment/metrics_response_test.go').write_text(r'''package deployment
+
+import (
+	"testing"
+	"time"
+
+	"mypaas/internal/container"
+)
+
+func TestMetricsSnapshotSkipsSyntheticIdleSamples(t *testing.T) {
+	now := time.Date(2026, 8, 13, 9, 0, 0, 0, time.UTC)
+	resp := MetricsSnapshotFromContainers([]container.Metrics{
+		{Service: "static", CPUPercent: 0, MemoryMB: 0, MemoryLimitMB: 64, Uptime: "n/a", CollectedAt: now},
+		{Service: "app", CPUPercent: 3.5, MemoryMB: 12, MemoryLimitMB: 256, Uptime: "2m", CollectedAt: now.Add(time.Second)},
+	})
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected one live runtime metric, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Service != "app" {
+		t.Fatalf("expected app metric, got %q", resp.Items[0].Service)
+	}
+	if resp.CollectedAt != now.Add(time.Second).Format(time.RFC3339) {
+		t.Fatalf("unexpected collectedAt %q", resp.CollectedAt)
+	}
+}
+
+func TestMetricsSnapshotWithOnlyIdleSamplesHasNoCollectionTime(t *testing.T) {
+	resp := MetricsSnapshotFromContainers([]container.Metrics{{Service: "static", Uptime: "n/a", CollectedAt: time.Now().UTC()}})
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected no runtime metrics, got %d", len(resp.Items))
+	}
+	if resp.CollectedAt != "" {
+		t.Fatalf("expected empty collectedAt, got %q", resp.CollectedAt)
+	}
+}
+''')
+
+          # Frontend: bounded per-service rolling history for the diagnostics charts.
+          Path('frontend/src/lib/utils/project-metric-history.ts').write_text(r'''import type { ContainerMetrics } from '$types';
+
+export type ProjectMetricHistory = Record<string, {
+	cpu: number[];
+	memoryPercent: number[];
+}>;
+
+export function appendProjectMetricHistory(
+	history: ProjectMetricHistory,
+	items: ContainerMetrics[],
+	limit = 120
+): ProjectMetricHistory {
+	const boundedLimit = Math.max(1, Math.floor(limit));
+	const next: ProjectMetricHistory = { ...history };
+	for (const item of items) {
+		if (!item.service) continue;
+		const previous = history[item.service] ?? { cpu: [], memoryPercent: [] };
+		const cpu = Number.isFinite(item.cpu) ? Math.max(0, item.cpu) : 0;
+		const memoryPercent = item.memoryLimitMb > 0 && Number.isFinite(item.memoryMb)
+			? Math.max(0, (item.memoryMb / item.memoryLimitMb) * 100)
+			: 0;
+		next[item.service] = {
+			cpu: [...previous.cpu, cpu].slice(-boundedLimit),
+			memoryPercent: [...previous.memoryPercent, memoryPercent].slice(-boundedLimit)
+		};
+	}
+	return next;
+}
+''')
+
+          Path('frontend/src/lib/utils/project-metric-history.test.ts').write_text(r'''import { describe, expect, it } from 'vitest';
+
+import { appendProjectMetricHistory } from './project-metric-history';
+
+const metric = (service: string, cpu: number, memoryMb: number, memoryLimitMb = 100) => ({
+	service,
+	cpu,
+	memoryMb,
+	memoryLimitMb,
+	uptime: '1m'
+});
+
+describe('appendProjectMetricHistory', () => {
+	it('retains repeated samples instead of only value changes', () => {
+		let history = appendProjectMetricHistory({}, [metric('app', 2, 10)], 3);
+		history = appendProjectMetricHistory(history, [metric('app', 2, 10)], 3);
+		expect(history.app.cpu).toEqual([2, 2]);
+		expect(history.app.memoryPercent).toEqual([10, 10]);
+	});
+
+	it('keeps independent bounded history per service', () => {
+		let history = appendProjectMetricHistory({}, [metric('api', 1, 10), metric('worker', 4, 40)], 2);
+		history = appendProjectMetricHistory(history, [metric('api', 2, 20)], 2);
+		history = appendProjectMetricHistory(history, [metric('api', 3, 30)], 2);
+		expect(history.api.cpu).toEqual([2, 3]);
+		expect(history.worker.cpu).toEqual([4]);
+	});
+});
+''')
+
+          # Project inventory: static sites do not have container uptime/usage and must not be inferred as crashed.
+          replace_once(
+              'frontend/src/routes/projects/+page.svelte',
+              "\t$: getDerivedStatus = (project: Project) => {\n\t\tif (project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';\n\t\treturn project.status;\n\t};",
+              "\t$: getDerivedStatus = (project: Project) => {\n\t\tif (project.deployMode !== 'static' && project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';\n\t\treturn project.status;\n\t};",
+          )
+          replace_once(
+              'frontend/src/routes/projects/+page.svelte',
+              "\tasync function loadUptimesFor(rows: Project[]) {\n\t\tconst pending = rows.filter((project) => !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));",
+              "\tasync function loadUptimesFor(rows: Project[]) {\n\t\tconst staticUptimes = Object.fromEntries(rows.filter((project) => project.deployMode === 'static').map((project) => [project.id, 'n/a']));\n\t\tif (Object.keys(staticUptimes).length > 0) projectUptimes = { ...projectUptimes, ...staticUptimes };\n\t\tconst pending = rows.filter((project) => project.deployMode !== 'static' && !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));",
+          )
+
+          # Project overview: lifecycle status belongs to the header; overview keeps only actionable exception states.
+          replace_once(
+              'frontend/src/routes/projects/[id]/+page.svelte',
+              "\timport ResourceMeter from '$components/ResourceMeter.svelte';\n",
+              '',
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/+page.svelte',
+              "\t$: memoryPercent = primaryMetric && primaryMetric.memoryLimitMb > 0\n\t\t? Math.min((primaryMetric.memoryMb / primaryMetric.memoryLimitMb) * 100, 100)\n\t\t: 0;\n\t$: cpuPercent = primaryMetric ? Math.min(primaryMetric.cpu, 100) : 0;\n",
+              '',
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/+page.svelte',
+              "\t\t{#if project.status !== 'running'}",
+              "\t\t{#if project.status === 'building' || project.status === 'crashed' || project.status === 'pending'}",
+          )
+          p = Path('frontend/src/routes/projects/[id]/+page.svelte')
+          text = p.read_text()
+          title = text.index('>Runtime resources</h2>')
+          start = text.rfind('\t\t<section class="surface overflow-hidden">', 0, title)
+          end_marker = '\n\t\t<div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">'
+          end = text.index(end_marker, title)
+          replacement = r'''		{#if project.deployMode !== 'static'}
+			<section class="surface overflow-hidden">
+				<div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
+					<div>
+						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime summary</h2>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{runtimeSummary.label} · {metricsUpdatedLabel}</p>
+					</div>
+					<ActionLink href={`${base}/metrics`} variant="ghost" size="xs">
+						<Activity slot="icon" class="h-3.5 w-3.5" />
+						Diagnostics
+					</ActionLink>
+				</div>
+				{#if primaryMetric}
+					<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+						<div class="p-5">
+							<p class="metric-label">CPU</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.cpu.toFixed(2)}%</p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current runtime sample</p>
+						</div>
+						<div class="p-5">
+							<p class="metric-label">Memory</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.memoryMb.toFixed(1)} <span class="text-sm font-medium text-gray-500 dark:text-gray-400">MB</span></p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.memoryLimitMb.toFixed(0)} MB limit</p>
+						</div>
+						<div class="p-5">
+							<p class="metric-label">Uptime</p>
+							<p class="metric-value mt-2 text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{primaryMetric.uptime}</p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{primaryMetric.service}</p>
+						</div>
+					</div>
+				{:else}
+					<div class="px-5 py-8">
+						<EmptyState title="No active runtime metrics." description="CPU and memory samples are reported only while a container runtime is active." compact />
+					</div>
+				{/if}
+			</section>
+		{/if}
+'''
+          p.write_text(text[:start] + replacement + text[end:])
+
+          # Diagnostics: retain a real rolling history from the existing 5-second samples.
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              "\timport { api } from '$api';\n",
+              "\timport { api } from '$api';\n\timport { appendProjectMetricHistory, type ProjectMetricHistory } from '$lib/utils/project-metric-history';\n",
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              "\tlet error = '';\n",
+              "\tlet error = '';\n\tlet metricHistory: ProjectMetricHistory = {};\n",
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              "\t$: primary = metricItems.find((item) => item.service === selectedService) ?? metricItems[0] ?? null;\n",
+              "\t$: primary = metricItems.find((item) => item.service === selectedService) ?? metricItems[0] ?? null;\n\t$: primaryHistory = primary ? (metricHistory[primary.service] ?? { cpu: [], memoryPercent: [] }) : { cpu: [], memoryPercent: [] };\n",
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              "\t\t\tconst result = await api.metrics.snapshot($page.params.id ?? '');\n\t\t\tconst nextServices = result.items.map((item) => item.service);",
+              "\t\t\tconst result = await api.metrics.snapshot($page.params.id ?? '');\n\t\t\tmetricHistory = appendProjectMetricHistory(metricHistory, result.items);\n\t\t\tconst nextServices = result.items.map((item) => item.service);",
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              "\t\t\t\t{ label: 'Telemetry', value: 'statd preferred' },\n\t\t\t\t{ label: 'Persistent storage', value: 'Not measured' }\n",
+              "\t\t\t\t{ label: 'Telemetry', value: 'statd preferred' }\n",
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              '<CapacityMetricChart label="CPU" value={`${primary.cpu.toFixed(2)}%`} detail="current runtime sample" percent={cpuPercent} resource="cpu" className="bg-white dark:bg-neutral-900" />',
+              '<CapacityMetricChart label="CPU" value={`${primary.cpu.toFixed(2)}%`} detail="rolling samples · current runtime" percent={cpuPercent} series={primaryHistory.cpu} resource="cpu" className="bg-white dark:bg-neutral-900" />',
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              '<CapacityMetricChart label="Memory" value={`${primary.memoryMb.toFixed(1)} MB`} detail={`${primary.memoryLimitMb.toFixed(0)} MB limit`} percent={Math.min(memoryPercent, 100)} resource="memory" className="bg-white dark:bg-neutral-900" />',
+              '<CapacityMetricChart label="Memory" value={`${primary.memoryMb.toFixed(1)} MB`} detail={`${primary.memoryLimitMb.toFixed(0)} MB limit · rolling usage`} percent={Math.min(memoryPercent, 100)} series={primaryHistory.memoryPercent} resource="memory" className="bg-white dark:bg-neutral-900" />',
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              '\n\t\t\t\t\t<p class="mt-3 text-[11px] leading-4 text-gray-500 dark:text-gray-400">Persistent storage means project-owned managed data. Host root-disk usage is intentionally not substituted here.</p>',
+              '',
+          )
+          replace_once(
+              'frontend/src/routes/projects/[id]/metrics/+page.svelte',
+              '<EmptyState title="No metrics yet." description="Metrics appear after the project has a running container or service." compact />',
+              '<EmptyState title="No active runtime metrics." description="Static projects and stopped runtimes do not expose container CPU or memory samples. Edge analytics remains available when Cloudflare is configured." compact />',
+          )
+          PY
+
+      - name: Format backend changes
+        run: gofmt -w backend/internal/deployment/metrics_response.go backend/internal/deployment/metrics_response_test.go
+
+      - name: Backend regression tests
+        working-directory: backend
+        run: go test ./internal/deployment
+
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Frontend tests and checks
+        working-directory: frontend
+        run: |
+          pnpm test -- --run
+          pnpm check
+          pnpm build
+
+      - name: Commit remediation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/internal/deployment/metrics_response.go backend/internal/deployment/metrics_response_test.go frontend/src/lib/utils/project-metric-history.ts frontend/src/lib/utils/project-metric-history.test.ts frontend/src/routes/projects/+page.svelte frontend/src/routes/projects/[id]/+page.svelte frontend/src/routes/projects/[id]/metrics/+page.svelte
+          git diff --cached --check
+          git commit -m "fix: make project observability runtime-aware"
+          git push
