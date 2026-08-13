@@ -23,7 +23,7 @@ class StatdReconcileTest(unittest.TestCase):
     def test_updater_reconciles_host_dependency_even_when_checkout_is_current(self) -> None:
         updater = UPDATER.read_text(encoding="utf-8")
 
-        current_branch = updater.split('if [[ "$current_sha" == "$target_sha" ]]; then', 1)[1].split("fi", 1)[0]
+        current_branch = updater.split('if [[ "$current_sha" == "$target_sha" ]]; then', 1)[1].split("\n  fi\n", 1)[0]
         self.assertIn("reconcile_statd", current_branch)
         self.assertIn("redeploy_current_for_env_drift", current_branch)
         self.assertIn("container_env_value", updater)
