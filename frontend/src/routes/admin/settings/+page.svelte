@@ -157,7 +157,7 @@
 </svelte:head>
 
 <div class="page-shell space-y-4 py-6">
-	<p class="text-sm text-gray-500 dark:text-gray-400">Platform limits, AI-agent access, and migration workflows for this MyPaaS instance.</p>
+	<p class="px-5 text-sm text-gray-500 dark:text-gray-400">Platform limits, AI-agent access, and migration workflows for this MyPaaS instance.</p>
 
 	<SectionPanel title="Resource configuration" description="Default platform limits and project resource quotas.">
 		<svelte:fragment slot="actions">
@@ -282,7 +282,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-3 p-4">
 					<div>
 						<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-emerald-500"></span>Migration package ready</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Expires in {formatHoursLeft(migration.expiresAt)} hours.</p>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Expires in {formatHoursLeft(migration.expiresAt)} hours.</p>
 					</div>
 					<ActionLink href={downloadUrl} variant="secondary" size="sm">
 						<Download slot="icon" class="h-4 w-4" />
