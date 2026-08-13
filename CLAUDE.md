@@ -9,7 +9,7 @@ Konteks persistent untuk Claude Code di project ini. File ini **dibaca setiap se
 **MyPaas** adalah self-hosted personal deployment platform untuk satu user (owner) + beberapa collaborator whitelisted. Mengganti kebiasaan deploy manual via GitHub Actions untuk project personal, termasuk project yang butuh multi-service (app + cache + database + message broker).
 
 **Scope ringkas:**
-- Owner connect Git repository → MyPaas detect Dockerfile atau docker-compose.yml → build & run → accessible via subdomain dengan SSL otomatis (via Cloudflare)
+- Owner connect Git repository atau public OCI image → MyPaas resolve Compose/Dockerfile/static/image mode → deploy → accessible via subdomain melalui Cloudflare + Caddy
 - Push ke GitHub → otomatis redeploy via webhook
 - Support rollback ke deployment sukses sebelumnya
 - Dashboard ala Vercel/Railway — clean, realtime metrics & logs, multi-service aware
@@ -53,8 +53,8 @@ Konteks persistent untuk Claude Code di project ini. File ini **dibaca setiap se
 - Gin, Echo, Fiber (pakai Chi — stdlib compatible)
 - GORM, sqlx (pakai sqlc — type-safe, zero overhead)
 - Kubernetes, Nomad, Docker Swarm
-- Buildpack atau auto-detect runtime tanpa Dockerfile/Compose
-- WebSocket (pakai SSE untuk semua streaming)
+- Buildpack sebagai deployment mode. Nixpacks hanya inspection signal; backend/SSR tetap wajib punya Compose atau production Dockerfile
+- WebSocket untuk project telemetry/event streaming (pakai shared SSE stream)
 - React, Vue, Next.js untuk frontend (pakai SvelteKit)
 - npm/yarn (selalu pnpm)
 - Redis, RabbitMQ untuk job queue internal MyPaas (pakai in-memory queue + DB untuk scope awal)
@@ -63,90 +63,18 @@ Konteks persistent untuk Claude Code di project ini. File ini **dibaca setiap se
 
 ## Repository structure
 
-```
-mypaas/
-├── CLAUDE.md
-├── README.md
-├── CHANGELOG.md
-├── LICENSE                      # MIT
-├── .gitignore
-├── .env.example
-├── docker-compose.dev.yml
-├── docker-compose.prod.yml
-├── Caddyfile.dev
-├── Caddyfile.prod
-├── Makefile
-├── docs/
-│   ├── PRD.md
-│   ├── ARCHITECTURE.md
-│   ├── TIMELINE.md
-│   ├── adr/
-│   └── workflows/
-├── backend/
-│   ├── go.mod
-│   ├── go.sum
-│   ├── Dockerfile
-│   ├── sqlc.yaml
-│   ├── migrations/
-│   │   ├── 000001_init_schema.up.sql
-│   │   ├── 000001_init_schema.down.sql
-│   │   ├── 000002_seed_ports.up.sql
-│   │   └── 000002_seed_ports.down.sql
-│   ├── query/                   # sqlc query files
-│   │   ├── users.sql
-│   │   ├── projects.sql
-│   │   ├── deployments.sql
-│   │   ├── env_vars.sql
-│   │   └── port_registry.sql
-│   ├── cmd/
-│   │   ├── api/
-│   │   │   └── main.go
-│   │   └── cli/
-│   │       └── main.go
-│   └── internal/
-│       ├── db/                  # generated sqlc code + connection pool
-│       ├── config/
-│       ├── auth/                # OAuth, JWT, middleware
-│       ├── user/
-│       ├── project/
-│       ├── deployment/          # deploy engine, queue, orchestration
-│       ├── container/           # Docker client wrapper (Dockerfile + Compose)
-│       ├── caddy/
-│       ├── webhook/
-│       ├── monitoring/          # SSE streamer, metrics collector
-│       ├── port/
-│       ├── crypto/              # AES-GCM untuk env vars
-│       ├── audit/
-│       ├── httpx/
-│       ├── errs/
-│       └── logger/
-└── frontend/
-    ├── package.json
-    ├── Dockerfile
-    ├── svelte.config.js
-    ├── tailwind.config.ts
-    └── src/
-        ├── app.html
-        ├── routes/
-        │   ├── +layout.svelte
-        │   ├── +page.svelte
-        │   ├── login/
-        │   ├── projects/
-        │   │   ├── new/
-        │   │   └── [id]/
-        │   │       ├── +page.svelte
-        │   │       ├── deployments/
-        │   │       ├── logs/
-        │   │       ├── metrics/
-        │   │       ├── env/
-        │   │       └── settings/
-        │   └── admin/users/
-        └── lib/
-            ├── api/
-            ├── components/
-            ├── stores/
-            ├── types/
-            └── utils/
+```mermaid
+flowchart TB
+    Root["MyPaas repository"]
+    Root --> Docs["docs/ — current architecture, ADRs, audits, historical requirements"]
+    Root --> Backend["backend/ — Go API, workers, CLI, MCP, migrations"]
+    Backend --> Cmd["cmd/api · cmd/cli · cmd/mcp"]
+    Backend --> Internal["internal/ — auth, project, deployment, container, caddy, monitoring, storage"]
+    Root --> Frontend["frontend/ — SvelteKit dashboard"]
+    Frontend --> Routes["src/routes — projects, admin, login, docs"]
+    Frontend --> Lib["src/lib — API, components, stores, types, utils"]
+    Root --> Scripts["scripts/ — bootstrap, install, verify, migration, recovery"]
+    Root --> Infra["docker-compose.* · Caddyfile.* · .env.example"]
 ```
 
 **Aturan:**

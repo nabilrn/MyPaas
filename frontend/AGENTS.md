@@ -20,7 +20,7 @@ MyPaaS is a flat monochrome operational UI. Prefer consistency, information hier
 - Global topbar owns only page context/breadcrumbs and the notification bell.
 - Mobile navigation must still expose account and appearance controls because the desktop sidebar is hidden.
 - The notification center is generic infrastructure for real platform/release/deployment/resource events. Never fabricate unread state or release availability.
-- Root routes must not repeat the same title in both the topbar and page body. Deep routes may use the topbar for breadcrumb context such as `Projects / project / Metrics`.
+- Root routes must not repeat the same title in both the topbar and page body. Deep routes may use the topbar for breadcrumb context such as `Projects / project / Deployments`. Project observability belongs on Project Detail, not a standalone Metrics route.
 - Do not keep a second route-level breadcrumb implementation hidden with CSS. Navigation context must have one owner.
 
 ## Layout and density
@@ -65,7 +65,7 @@ Use `.console-surface` and `.code-surface` for terminal/code content instead of 
 
 - Product UI uses bundled Inter Variable with the system sans stack as fallback.
 - Technical identifiers such as commit SHAs, domains, env keys, ports, filenames, branches, and repository identifiers use IBM Plex Mono with a system monospace fallback.
-- Live metric numbers use tabular numerals so polling does not visually shift digits.
+- Live metric numbers use tabular numerals so streaming/background updates do not visually shift digits.
 - Prefer weights 400, 500, and 600. Avoid making every hierarchy level bold.
 - Normal body, controls, and primary table values should generally be 14–15px. Section titles should generally be 15–16px. Page/object titles should generally be 20–24px.
 - Metadata is normally 12–13px. Do not introduce generic 10–11px text; reserve micro typography for exceptional technical annotations only.
@@ -83,6 +83,7 @@ Use `.console-surface` and `.code-surface` for terminal/code content instead of 
 - Chart color communicates the resource being measured, not generic brand emphasis.
 - Never manufacture fake history from a current percentage. Overview trend charts must use real bounded rolling samples or clearly render a current-value meter instead.
 - Network counters are cumulative unless an API explicitly returns a rate. Derive transfer rate only from successive valid samples and elapsed time; reset the baseline if a counter decreases.
+- Preserve last-known telemetry during successful background refreshes. Do not show a spinner for every host/project telemetry sample; loading indicators are for initial connection or explicit recovery only.
 - Do not present policy quotas such as maximum project count as equivalent to physical RAM/CPU/storage/network capacity.
 
 ## Empty, status, and notification states

@@ -352,7 +352,6 @@
 	<SectionPanel title="Host resources" description="Live host utilization when the telemetry service is available. Allocation remains visible as capacity context." contentClass="p-0" className="mb-5">
 		<svelte:fragment slot="actions">
 			<div class="flex items-center gap-3">
-				{#if hostStatsInFlight}<LoaderCircle class="h-3.5 w-3.5 animate-spin text-gray-400 motion-reduce:animate-none dark:text-gray-500" aria-hidden="true" />{/if}
 				<a
 				href="https://github.com/nabilrn/mypaas-statd"
 				target="_blank"

@@ -5,7 +5,7 @@
 **Status:** Current  
 **Applies to:** `main`  
 **Last verified:** 2026-08-13  
-**Verified against commit:** `f76102997089a3f1a3b5e7d9f4326582ff22e02c`  
+**Verified against commit:** `8769f0bb5373e8ec8ca584d6e2cbbf6fb5820cbf`  
 **Current production statd release:** `v0.2.0`
 
 ---
@@ -127,6 +127,19 @@ Example:
 ```
 
 The steady-state path avoids repeated Docker/Podman process-discovery spawns. A cached runtime identity is invalidated and rediscovered when it becomes unusable.
+
+### Project SSE fan-out
+
+`mypaas-statd` remains a snapshot source, not a browser-facing stream. MyPaaS samples through one shared per-project metrics hub and fans the resulting snapshot out to subscribed Project Detail clients over SSE. Multiple browser subscribers therefore do not multiply statd/Docker sampling loops. Cloudflare traffic analytics stay on a separate slow REST path.
+
+```mermaid
+flowchart LR
+    Statd["mypaas-statd snapshot"] --> Hub["MyPaaS project metrics hub"]
+    Fallback["Docker-compatible fallback"] --> Hub
+    Hub --> SSE["Shared project SSE"]
+    SSE --> A["Project Detail A"]
+    SSE --> B["Project Detail B"]
+```
 
 ## Runtime snapshot model
 

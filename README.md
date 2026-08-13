@@ -12,26 +12,32 @@ The control plane is built with a Go API, SvelteKit dashboard, PostgreSQL, Caddy
 
 ## Architecture
 
-```text
-Internet
-   |
-Cloudflare Tunnel
-   |
- Caddy  <----- Unix Admin socket -----> Go API
-   |                                      |
-   |---------------------> dashboard      +--> PostgreSQL
-   |                                      +--> Docker-compatible CLI/socket
-   |                                      |        |--> Docker Engine
-   |                                      |        `--> Podman socket compatibility
-   |                                      `--> mypaas-statd Unix socket
-   |
-   +----------------------> static files
-   |
-   `----------------------> routed runtimes through ROUTING_NETWORK
-
-PROJECT_NETWORK: user workloads + optional shared PostgreSQL
-CONTROL_NETWORK: API/dashboard/cloudflared/PostgreSQL/Caddy
-ROUTING_NETWORK: Caddy + only explicitly routed runtimes
+```mermaid
+flowchart TB
+    Internet["Internet"] --> Tunnel["Cloudflare Tunnel"] --> Caddy["Caddy"]
+    Caddy --> Dashboard["SvelteKit dashboard"]
+    Caddy --> API["Go API"]
+    Caddy --> Static["Static releases"]
+    Caddy --> Routed["Explicitly routed runtimes"]
+    API --> Postgres[("PostgreSQL")]
+    API --> Engine["Docker-compatible CLI / socket"]
+    Engine --> Docker["Docker Engine"]
+    Engine --> Podman["Podman socket compatibility"]
+    API --> Statd["mypaas-statd Unix socket"]
+    API -. "Caddy Admin Unix socket" .-> Caddy
+    subgraph Networks["Production networks"]
+        Control["CONTROL_NETWORK\ncontrol plane"]
+        Projects["PROJECT_NETWORK\nuser workloads + optional shared PostgreSQL"]
+        Routing["ROUTING_NETWORK\nCaddy + explicitly routed runtimes"]
+    end
+    Caddy --- Control
+    API --- Control
+    Dashboard --- Control
+    Postgres --- Control
+    Postgres --- Projects
+    Routed --- Projects
+    Routed --- Routing
+    Caddy --- Routing
 ```
 
 MyPaas currently targets a **single Linux VM**, not a Kubernetes cluster. The runtime abstraction is intentionally small: the backend invokes the `docker` CLI and Docker-compatible socket contract even when Podman is the actual engine.
@@ -229,7 +235,7 @@ Installer-managed checkouts must be clean. Bootstrap fetches the configured upst
 STATD_SOCKET=/run/mypaas/statd.sock
 ```
 
-Production installation is version-pinned. The default installer targets `STATD_VERSION=v0.1.0`, downloads `mypaas-statd-linux-amd64.tar.gz` plus `SHA256SUMS`, verifies the selected checksum and bundled `VERSION`, installs the binary/systemd unit, and waits for the socket after enabling the service. Set `INSTALL_STATD=false` to keep the Docker-compatible metrics path only. `STATD_INSTALL_MODE=source` remains an explicit development/fork fallback rather than the production default. See `docs/STATD.md` for the protocol, benchmark evidence, compatibility contract, and distribution model.
+Production installation is version-pinned. The default installer targets `STATD_VERSION=v0.2.0`, downloads `mypaas-statd-linux-amd64.tar.gz` plus `SHA256SUMS`, verifies the selected checksum and bundled `VERSION`, installs the binary/systemd unit, and waits for the socket after enabling the service. Set `INSTALL_STATD=false` to keep the Docker-compatible metrics path only. `STATD_INSTALL_MODE=source` remains an explicit development/fork fallback rather than the production default. See `docs/STATD.md` for the protocol, benchmark evidence, compatibility contract, and distribution model.
 
 When `STATD_SOCKET` is empty, static projects are involved, or statd is unavailable, MyPaas falls back to the existing Docker-compatible metrics path. When the socket is configured and a live Dockerfile/Compose project is running, the API asks statd for cached cgroup v2 snapshots and avoids spawning Docker/Podman process-discovery commands on steady-state metrics refreshes.
 
@@ -321,7 +327,7 @@ Write access is time-limited and must be explicitly enabled.
 
 ## Logs, Metrics, and Observability
 
-Project operations expose runtime CPU/memory snapshots, uptime, per-service Compose metrics, recent logs, live SSE logs/events, deployment/build logs, and optional Cloudflare request/bandwidth/error analytics.
+Project Detail owns project observability: runtime CPU/memory/uptime samples arrive through the shared project SSE stream, while Cloudflare request/bandwidth/error analytics use a separate slow-refresh REST path. Recent logs and deployment/build logs remain available through their dedicated surfaces.
 
 Runtime project metrics use this order:
 
@@ -587,24 +593,21 @@ Pull requests are checked by GitHub Actions with backend tests, Go race detectio
 
 ## Project Structure
 
-```text
-MyPaas/
-├── backend/
-│   ├── cmd/
-│   │   ├── api/                Go HTTP API
-│   │   ├── cli/                mypaas CLI
-│   │   └── mcp/                local stdio MCP bridge
-│   ├── internal/               deployment, container, migration, DB Studio, auth, etc.
-│   ├── migrations/             PostgreSQL schema migrations
-│   └── query/                  sqlc queries
-├── frontend/                   SvelteKit dashboard
-├── benchmarks/                 evidence harnesses for current hot paths
-├── docs/                       PRD, architecture, ADRs, and audits
-├── scripts/                    bootstrap, install, deploy, verify, update, migration tooling
-├── docker-compose.dev.yml      local dependencies
-├── docker-compose.prod.yml     production control plane
-├── Caddyfile.*                 routing configuration
-└── Makefile                    development and operations targets
+```mermaid
+flowchart TB
+    Root["MyPaas"]
+    Root --> Backend["backend — Go control plane"]
+    Backend --> Cmd["cmd — api · cli · mcp"]
+    Backend --> Internal["internal — deployment · container · migration · DB Studio · auth"]
+    Backend --> Migrations["migrations — PostgreSQL schema"]
+    Backend --> Query["query — sqlc queries"]
+    Root --> Frontend["frontend — SvelteKit dashboard"]
+    Root --> Benchmarks["benchmarks — hot-path evidence harnesses"]
+    Root --> Docs["docs — architecture · ADRs · audits · historical PRD"]
+    Root --> Scripts["scripts — bootstrap · install · deploy · verify · update · migration"]
+    Root --> Compose["docker-compose.dev.yml · docker-compose.prod.yml"]
+    Root --> Caddy["Caddyfile.*"]
+    Root --> Make["Makefile"]
 ```
 
 ---

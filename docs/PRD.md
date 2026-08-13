@@ -1,11 +1,13 @@
 # MyPaas — Product Requirements Document
 
 **Author:** Nabil Rizki Navisa
-**Status:** v2.0
-**Last updated:** 20 April 2026
-**Timeline:** 10-15 hari
+**Status:** Historical product baseline (v2.0)
+**Last updated:** 13 August 2026 — diagram/documentation normalization
+**Timeline:** Historical planning estimate: 10-15 hari
 
 ---
+
+> **Historical document:** this PRD predates the current production-hardening architecture. For current behavior, use `README.md` and `docs/README.md`; this file preserves product-requirement history.
 
 ## 1. Overview
 
@@ -90,50 +92,47 @@ Konsekuensinya untuk MyPaas:
 
 ### 3.1 Topology dalam satu VM
 
-```
-Internet
-   ↓
-Cloudflare (SSL + Zero Trust Tunnel)
-   ↓
-VM Ubuntu
-   ├── Caddy (:80) — internal reverse proxy
-   │
-   ├── MyPaas Master
-   │     ├── Go API binary (:8080)
-   │     └── SvelteKit Dashboard (:3000)
-   │
-   ├── PostgreSQL (:5432)
-   │
-   └── User Project Containers
-         ├── Project A (Dockerfile mode)
-         │     └── app container (:3001 → internal :3000)
-         │
-         └── Project B (Compose mode)
-               ├── app container (:3002 → internal :3000)
-               ├── redis container (internal network only)
-               └── postgres container (internal network only)
+```mermaid
+flowchart TB
+    Internet["Internet"] --> Cloudflare["Cloudflare SSL + Zero Trust Tunnel"] --> VM["Linux VM"]
+    VM --> Caddy["Caddy :80"]
+    VM --> API["Go API"]
+    VM --> Dashboard["SvelteKit dashboard"]
+    VM --> Postgres[("PostgreSQL")]
+    VM --> Projects["User project workloads"]
+    Projects --> Dockerfile["Dockerfile runtime"]
+    Projects --> Compose["Compose services"]
+    Projects --> Static["Static release served by Caddy"]
+    Projects --> Image["Public OCI image runtime"]
+    VM --> Statd["mypaas-statd systemd daemon"]
 ```
 
 ### 3.2 Request flows
 
 **Dashboard access:**
-```
-user → dashboard.nabilrizkinavisa.me → Cloudflare → Tunnel → Caddy → Dashboard :3000
+```mermaid
+flowchart LR
+    User["User"] --> Domain["MyPaaS public domain"] --> Cloudflare["Cloudflare Tunnel"] --> Caddy --> Dashboard["SvelteKit dashboard"]
 ```
 
 **API access:**
-```
-dashboard → api.nabilrizkinavisa.me → Cloudflare → Tunnel → Caddy → Go API :8080
+```mermaid
+flowchart LR
+    Dashboard["Dashboard"] --> Caddy["Caddy /api route"] --> API["Go API :8080"]
 ```
 
 **Deployed project access:**
-```
-user → {projectName}.nabilrizkinavisa.me → Cloudflare → Tunnel → Caddy → container :PORT
+```mermaid
+flowchart LR
+    User["User"] --> ProjectHost["project.public-domain"] --> Cloudflare["Cloudflare Tunnel"] --> Caddy --> Target{"Deployment target"}
+    Target --> Static["Static files"]
+    Target --> Runtime["Routed runtime"]
 ```
 
 **Webhook:**
-```
-GitHub push → webhook.nabilrizkinavisa.me/{projectId} → Caddy → Go API → enqueue deploy
+```mermaid
+flowchart LR
+    GitHub["GitHub push"] --> Webhook["/webhook endpoint"] --> Caddy --> API["Go API"] --> Queue["Per-project deployment queue"]
 ```
 
 ### 3.3 Subdomain allocation

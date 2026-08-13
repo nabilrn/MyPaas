@@ -5,7 +5,7 @@
 **Status:** Current  
 **Applies to:** `main`  
 **Last verified:** 2026-08-13  
-**Verified against commit:** `f76102997089a3f1a3b5e7d9f4326582ff22e02c`
+**Verified against commit:** `8769f0bb5373e8ec8ca584d6e2cbbf6fb5820cbf`
 
 ---
 
@@ -24,34 +24,45 @@ Optional Cloudflare analytics add request, bandwidth, error, and timeseries data
 
 ## Runtime metrics path
 
-```mermaid
-sequenceDiagram
-    participant Client as Dashboard / REST / SSE
-    participant API as MyPaaS API
-    participant Engine as Docker-compatible engine
-    participant Statd as mypaas-statd
-    participant Cgroup as cgroup v2
+Project runtime telemetry uses a shared per-project sampler/fan-out path. Browser clients do not independently trigger Docker/statd sampling loops.
 
-    Client->>API: Request project metrics
-    alt STATD_SOCKET configured and runtime supported
-        API->>Engine: Cold-path runtime identity discovery when needed
-        Engine-->>API: PID / service / StartedAt metadata
-        API->>API: Cache bounded runtime metadata
-        API->>Statd: hello + register/snapshot
-        Statd->>Cgroup: Read runtime counters
-        Cgroup-->>Statd: CPU / memory / PID data
-        Statd-->>API: Cached snapshot
-        API-->>Client: Runtime metrics
-    else statd disabled/unavailable/static/unusable
-        API->>Engine: Docker-compatible metrics fallback
-        Engine-->>API: Runtime metrics
-        API-->>Client: Runtime metrics
-    end
+```mermaid
+flowchart LR
+    Statd["mypaas-statd"] --> Hub["Project metrics hub\nshared sampler"]
+    Engine["Docker-compatible fallback"] --> Hub
+    Hub --> Snapshot["Latest project snapshot"]
+    Snapshot --> SSE["Project SSE stream"]
+    SSE --> ClientA["Project Detail client A"]
+    SSE --> ClientB["Project Detail client B"]
 ```
 
-The steady-state statd path is designed to avoid spawning Docker/Podman process-discovery commands on every refresh. Runtime metadata is cached by the API and rediscovered when the cached identity becomes unusable.
+```mermaid
+sequenceDiagram
+    participant UI as Project Detail
+    participant API as MyPaaS API
+    participant Hub as Project metrics hub
+    participant Statd as mypaas-statd
+    participant Engine as Docker-compatible engine
 
-Static projects do not have an application runtime and therefore do not use statd runtime snapshots.
+    UI->>API: Open project SSE stream
+    API->>Hub: Subscribe project
+    alt sampler tick
+        Hub->>Statd: Request preferred runtime snapshot
+        alt statd unavailable or unusable
+            Hub->>Engine: Docker-compatible fallback
+            Engine-->>Hub: Runtime snapshot
+        else statd usable
+            Statd-->>Hub: Runtime snapshot
+        end
+    end
+    Hub-->>API: Fan out shared snapshot
+    API-->>UI: metrics SSE event
+    UI->>UI: Append bounded rolling samples
+```
+
+The API keeps bounded runtime identity metadata for statd and a shared project metrics hub for fan-out. A second browser viewing the same project subscribes to the same project sampler instead of creating another runtime sampling loop. Static projects have no application runtime and do not start runtime telemetry sampling.
+
+Cloudflare traffic analytics are intentionally separate from runtime SSE. Project Detail fetches edge analytics through the analytics REST path on a slow refresh cadence; 24-hour request/bandwidth/error aggregates are not queried on every runtime metrics tick.
 
 ## Host telemetry path
 

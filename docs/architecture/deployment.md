@@ -5,7 +5,7 @@
 **Status:** Current  
 **Applies to:** `main`  
 **Last verified:** 2026-08-13  
-**Verified against commit:** `f76102997089a3f1a3b5e7d9f4326582ff22e02c`
+**Verified against commit:** `8769f0bb5373e8ec8ca584d6e2cbbf6fb5820cbf`
 
 ---
 
@@ -193,6 +193,8 @@ sequenceDiagram
 ```
 
 The static Node builder has a simple safety ceiling of 2 GiB RAM, 2 CPUs, and 512 PIDs. The deployment context supplies the outer build timeout.
+
+For static releases, Caddy preserves real files and directories first. When a requested path does not map to an existing static asset, the route falls back to the release `index.html`, so client-side SPA deep links remain routable without shadowing real assets.
 
 ## Rollback semantics
 

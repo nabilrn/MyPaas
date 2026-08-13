@@ -6,14 +6,9 @@ Reduce cognitive load on the **New Project** page without weakening deployment v
 
 The intended mental model is:
 
-```text
-Choose source
-  ↓
-MyPaas detects the deployment setup
-  ↓
-User fixes only missing values
-  ↓
-Create project
+```mermaid
+flowchart TB
+    Source["Choose source"] --> Detect["MyPaaS detects deployment setup"] --> Fix["User fixes only missing values"] --> Create["Create project"]
 ```
 
 ## Current pain points

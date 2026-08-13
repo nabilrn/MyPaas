@@ -5,7 +5,7 @@
 **Status:** Current  
 **Applies to:** `main`  
 **Last verified:** 2026-08-13  
-**Verified against commit:** `f76102997089a3f1a3b5e7d9f4326582ff22e02c`
+**Verified against commit:** `8769f0bb5373e8ec8ca584d6e2cbbf6fb5820cbf`
 
 ---
 
