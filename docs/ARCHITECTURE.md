@@ -1,236 +1,134 @@
 # Architecture — MyPaaS
 
-> Current single-host architecture, trust boundaries, deployment flow, and runtime observability.
+> Canonical architecture entry point for the current single-host implementation.
 
-**Status:** production-hardening baseline  
-**Last updated:** 2026-08-11
-
----
-
-## 1. High-Level Architecture
-
-```text
-Internet
-   |
-Cloudflare Tunnel
-   |
- Caddy
-   |----------------------> SvelteKit dashboard
-   |----------------------> Go API
-   |                          |
-   |                          +--> PostgreSQL
-   |                          +--> Caddy Admin Unix socket
-   |                          +--> Docker-compatible CLI/socket
-   |                                   |
-   |                                   +--> Docker Engine
-   |                                   `--> Podman socket compatibility
-   |
-   +----------------------> static project files
-   |
-   `----------------------> routed container runtime
-
-Host
- `--> mypaas-statd (systemd, cgroup v2, Unix socket)
-```
-
-MyPaaS targets one Linux VM. It is not a Kubernetes scheduler and does not implement a second Podman-specific orchestration backend. The Go control plane uses the Docker-compatible command/socket contract; Podman production hosts expose that contract through `podman.socket`.
-
-`mypaas-statd` is deliberately host-native. It is a small cgroup v2 telemetry daemon consumed over `/run/mypaas/statd.sock`; API/business orchestration remains in Go.
+**Status:** Current  
+**Applies to:** `main`  
+**Last verified:** 2026-08-13  
+**Verified against commit:** `f76102997089a3f1a3b5e7d9f4326582ff22e02c`
 
 ---
 
-## 2. Production Components
+## System at a glance
 
-### 2.1 Go API
+```mermaid
+flowchart TB
+    Internet["Internet"] --> CF["Cloudflare Tunnel"]
+    CF --> Caddy["Caddy ingress + project router"]
 
-Responsibilities include:
+    subgraph Control["MyPaaS control plane"]
+        Dashboard["SvelteKit dashboard"]
+        API["Go API"]
+        Postgres[("PostgreSQL")]
+    end
 
-- GitHub OAuth, authorization, and project state;
-- repository inspection and deployment orchestration;
-- Dockerfile, Compose, registry-image, static, and hybrid deployment flows;
-- lifecycle, rollback, backups, cleanup, DB Studio, CLI/MCP APIs;
-- Caddy route reconciliation;
-- log/SSE delivery;
-- statd metrics integration with Docker-compatible fallback.
+    subgraph Host["Linux host"]
+        Engine["Docker Engine or rootful Podman\nthrough Docker-compatible contract"]
+        Statd["mypaas-statd\nsystemd + Unix socket"]
+        Cgroup["cgroup v2"]
+    end
 
-The API mounts the Docker-compatible engine socket. That socket is a host-authority trust boundary; the API container therefore drops Linux capabilities and enables `no-new-privileges`, but the socket itself still means an API compromise must be treated as host compromise.
+    subgraph Projects["Project execution"]
+        Runtime["Container runtime"]
+        Static["Atomic static release"]
+    end
 
-### 2.2 Caddy
+    Caddy --> Dashboard
+    Caddy --> API
+    Caddy --> Runtime
+    Caddy --> Static
 
-Caddy handles:
-
-- dashboard/API ingress from Cloudflare Tunnel;
-- static project serving;
-- dynamic project reverse-proxy routes.
-
-Production Caddy administration is **Unix-socket only**:
-
-```text
-/run/mypaas/caddy-admin.sock
+    API --> Postgres
+    API --> Engine
+    API --> Statd
+    Engine --> Runtime
+    Statd --> Cgroup
 ```
 
-TCP admin port `2019` is not part of the production contract.
+MyPaaS targets one Linux VM. It is a self-hosted deployment control plane, not a Kubernetes scheduler, multi-node orchestrator, or mutually hostile multi-tenant sandbox.
 
-### 2.3 PostgreSQL
+## Production components
 
-PostgreSQL stores MyPaaS control-plane state and can optionally provision project-specific shared databases/users. Its control-plane data uses the production Compose named volume; project bind-mount state remains under `/var/lib/mypaas`.
+`docker-compose.prod.yml` runs five control-plane containers:
 
-### 2.4 Container Engine
+| Component | Responsibility | Important boundary |
+| --- | --- | --- |
+| `api` | Auth, project state, deployments, lifecycle, routing, backups, migration, DB Studio, CLI/MCP APIs | Holds Docker-compatible engine authority |
+| `dashboard` | SvelteKit operator UI | Control network only |
+| `postgres` | MyPaaS state and optional shared project PostgreSQL | Intentionally dual-homed on control + project networks |
+| `caddy` | Dashboard/API ingress, static serving, dynamic project routing | Admin API is Unix-socket only in production |
+| `cloudflared` | Outbound Cloudflare Tunnel client | Control network only |
 
-The runtime abstraction intentionally remains CLI-oriented:
+`mypaas-statd` is host-native and is **not** a sixth Compose service. It runs under systemd and communicates with the API through `/run/mypaas/statd.sock`.
 
-```text
-Go control plane
-    |
- docker CLI / docker compose
-    |
- Docker-compatible socket
-    |
- Docker Engine or rootful Podman
+## Runtime abstraction
+
+MyPaaS deliberately keeps one engine contract:
+
+```mermaid
+flowchart LR
+    API["Go control plane"] --> CLI["docker CLI / docker compose"]
+    CLI --> Socket["Docker-compatible socket"]
+    Socket --> Docker["Docker Engine"]
+    Socket --> Podman["Rootful Podman socket compatibility"]
 ```
 
-Compose is rendered, security-validated, sanitized, and then combined with a MyPaaS-managed override before execution.
+Podman support does not introduce a separate orchestration backend. Production Podman hosts expose the Docker-compatible command/socket surface expected by the control plane.
 
-### 2.5 mypaas-statd
+## Network model
 
-`mypaas-statd` reads cgroup v2 CPU/memory/PID counters on the host and serves bounded cached snapshots over a local Unix socket. It removes repeated Docker/Podman process spawning from the normal metrics hot path while preserving the existing Docker-compatible fallback.
-
-See `docs/STATD.md` for the protocol, benchmark evidence, release model, and operational metrics.
-
----
-
-## 3. Network Model
-
-Production uses three distinct external networks.
+Production uses three distinct external networks:
 
 | Network | Members | Purpose |
 | --- | --- | --- |
-| `CONTROL_NETWORK` | API, dashboard, cloudflared, PostgreSQL, Caddy | control-plane communication |
-| `PROJECT_NETWORK` | user workloads, PostgreSQL | workload/service communication and optional shared DB access |
-| `ROUTING_NETWORK` | Caddy + explicitly routed runtimes | public application data plane |
+| `CONTROL_NETWORK` | API, dashboard, cloudflared, PostgreSQL, Caddy | Control-plane communication |
+| `PROJECT_NETWORK` | Project workloads, PostgreSQL | Workload communication and optional shared PostgreSQL |
+| `ROUTING_NETWORK` | Caddy + explicitly routed runtimes | Public application data plane |
 
-The normal project workload is not attached to the control network. Caddy is not attached to the general project network. A runtime gets a routing-network attachment only when MyPaaS activates its public route.
+The API is not attached to the project or routing networks. Caddy is not attached to the general project network. A container runtime receives routing-network membership only while MyPaaS activates its public route.
 
-PostgreSQL is intentionally dual-homed on control + project because shared PostgreSQL is an explicit platform feature.
+See [Networking and trust boundaries](architecture/networking.md) for the detailed topology and route-activation sequence.
 
-For the detailed security rationale, see `docs/SECURITY_BOUNDARIES.md`.
+## Deployment model
 
----
+Supported source/deployment modes are:
 
-## 4. Dynamic Runtime Routing
+| Source | Mode | Runtime model |
+| --- | --- | --- |
+| Git | Dockerfile | Build image, start replacement container, activate route |
+| Git | Compose | Render + validate Compose, apply managed override, start services, route public service |
+| Git | Static | Build when needed, publish atomic release, serve files directly from Caddy |
+| Registry | Image | Pull public OCI image, start replacement container, activate route |
 
-Allocated host ports remain part of the deployment/lifecycle identity model, but production Caddy does not hairpin through those published ports.
+Allocated host ports remain runtime identity keys for container-backed projects. In production they are **not** the Caddy traffic path. Route activation resolves the matching runtime, verifies project-network membership, attaches it to `ROUTING_NETWORK` with `mypaas-port-<allocated-port>`, and configures Caddy to dial that alias on the internal container port.
 
-When a route is activated, the API:
+See [Deployment architecture](architecture/deployment.md).
 
-1. lists running containers through the Docker-compatible engine;
-2. batch-inspects the candidates;
-3. finds the container whose published binding owns the project's allocated host port;
-4. verifies that runtime belongs to `PROJECT_NETWORK` and determines its internal application port;
-5. attaches it to `ROUTING_NETWORK` with the deterministic alias `mypaas-port-<allocated-port>`;
-6. configures Caddy to proxy to `mypaas-port-<allocated-port>:<internal-port>`.
+## Security posture
 
-This avoids relying on Docker/Podman bridge-gateway hairpin behavior, compatibility-layer IP fields, or container-name stability. The alias is tied to the allocated deployment port, so a Dockerfile/image replacement can be routed before its temporary container name is renamed.
+The control plane intentionally treats the container-engine socket as host-level authority. Dropping capabilities and enabling `no-new-privileges` reduces the API container's ambient Linux privilege, but it does not make the engine socket a low-privilege interface.
 
-Route resolution is fail-closed. Failure to identify or attach the intended runtime does not silently fall back to an arbitrary host address.
+Repository Compose files are untrusted input. MyPaaS renders and validates the configuration before execution and rejects host-escape features including privileged mode, host/container namespace sharing, engine socket mounts, host bind mounts, devices, added capabilities, GPUs, custom runtimes, external networks, external volumes, unsafe build entitlements, build SSH/secrets, and privileged lifecycle hooks.
 
-Static routes do not use this runtime path; Caddy serves their files from the host-managed static directory.
+Safe engine-managed named volumes are allowed by Compose sanitization; migration has a separate portability preflight for engine-managed volume state.
 
----
+This is a strong single-host policy boundary. It is not equivalent to VM or microVM isolation for arbitrary hostile tenants.
 
-## 5. Deployment Flow
+See [Security boundaries](SECURITY_BOUNDARIES.md).
 
-```text
-1. Trigger
-   GitHub webhook / manual deploy / rollback / registry deploy
+## Observability model
 
-2. Persist + queue
-   create deployment state
-   bounded in-memory worker concurrency
+Runtime metrics prefer `mypaas-statd` over its local Unix socket. The daemon reads cgroup v2 and avoids repeated Docker/Podman process spawning on the steady-state metrics path. Runtime-statd failure is non-fatal and falls back to the Docker-compatible implementation.
 
-3. Prepare source
-   clone/checkout or pull registry image
-   resolve base directory / Compose layout / env files
+With the current v0.2.0 rollout, host stats can also include optional CPU, memory, storage, and network snapshots from statd. Capacity/allocation values remain available when host telemetry is disabled or unavailable.
 
-4. Build where required
-   docker build for Dockerfile projects
-   docker compose up --build for Compose
-   bounded ephemeral Node builder for static SPA builds
+Project logs remain on the Docker-compatible CLI path. The repository keeps a benchmark harness for that path so a future native collector is justified by evidence rather than architecture preference.
 
-5. Start runtime
-   Dockerfile/image: replacement container lifecycle
-   Compose: sanitized config + managed override
-   Static: atomic static release switch
+See [Observability architecture](architecture/observability.md) and [mypaas-statd integration](STATD.md).
 
-6. Route
-   runtime project -> managed routing alias + Caddy route
-   static project  -> Caddy file-server route
+## Persistence and recovery
 
-7. Commit state
-   active deployment + running state
-
-8. Cleanup
-   temporary workspace / old runtime/image state as applicable
-```
-
-The static Node builder currently has a simple safety ceiling of 2 GiB RAM, 2 CPUs, and 512 PIDs. The deployment context still supplies the outer build timeout.
-
----
-
-## 6. Compose Security Boundary
-
-Repository Compose is untrusted input. MyPaaS evaluates the rendered configuration before execution and rejects host-escape features including:
-
-- privileged containers;
-- host/container namespace sharing;
-- Docker/Podman socket mounts;
-- host bind mounts;
-- devices and GPUs;
-- added Linux capabilities;
-- custom runtimes;
-- external networks/volumes;
-- unsafe build entitlements, SSH, and build secrets;
-- privileged lifecycle hooks.
-
-Repository-defined host ports and container names are stripped before the managed runtime override is applied.
-
-Compose subprocesses receive a fail-closed host-environment allowlist. Project variables are provided through the project's generated `--env-file`; arbitrary control-plane credentials are not inherited simply because they exist in the API process environment.
-
-This is a strong single-host policy boundary, not a substitute for VM/microVM isolation between mutually hostile tenants.
-
----
-
-## 7. Logs and Metrics
-
-### 7.1 Logs
-
-Current project log collection still uses the Docker-compatible CLI path. Compose collection discovers services and reads recent logs per service, and live project events are delivered through SSE.
-
-`benchmarks/log_path.py` mirrors the current Compose log-command path and records request latency, subprocess count, and child CPU. It exists specifically to decide whether a future persistent/native log collector is justified. No `mypaas-logd` architecture should be introduced without measured evidence.
-
-### 7.2 Runtime metrics
-
-Preferred live runtime path:
-
-```text
-API
- |
-Unix socket
- |
-mypaas-statd
- |
-cgroup v2
-```
-
-The handler keeps bounded runtime metadata so steady-state statd reads do not repeatedly rediscover runtime PIDs through Docker/Podman commands. Statd failure is non-fatal and falls back to the Docker-compatible metrics implementation.
-
-The API exposes low-cardinality statd availability/fallback counters through `/metrics`, and transition-aware logging prevents repeated SSE fallback from flooding production logs.
-
----
-
-## 8. Persistence and Recovery
-
-Host-managed persistent paths include:
+Host-managed application state includes:
 
 ```text
 /var/lib/mypaas/volumes
@@ -239,54 +137,23 @@ Host-managed persistent paths include:
 /var/lib/mypaas/backups
 ```
 
-VM export performs storage preflight before downtime, quiesces running runtimes without changing desired database state, creates the package, restores runtimes, and only then marks the package ready.
+Control-plane PostgreSQL data uses the production Compose `postgres_data` named volume.
 
-Engine-managed Compose named/external volumes are rejected by migration preflight because they cannot be assumed portable between Docker Engine and Podman. See ADR-019.
+VM export performs storage preflight before downtime, quiesces runtime workloads without changing desired database state, packages supported state, restores runtimes, and only then marks the export ready. Engine-managed Compose named/external volumes are rejected by migration preflight because their portability between Docker Engine and Podman cannot be assumed.
 
-Migration import provisions the control/project/routing external networks before bringing up the production Compose stack.
+## Verification boundary
 
----
+Repository CI verifies code, race safety, frontend checks/build, script regressions, production Compose rendering, and Docker/Podman command-contract behavior. `scripts/verify-production.sh` validates live production topology including API readiness, network membership, configured statd service/socket, the Caddy Admin Unix socket, and the absence of a published Caddy TCP admin endpoint.
 
-## 9. Runtime and Operational Verification
+Real-host performance and final production behavior remain staging/benchmark concerns; they are not inferred solely from CI.
 
-Repository CI covers:
+## Detailed architecture
 
-- Go tests;
-- Go race detection;
-- frontend unit/type/build checks;
-- Bash syntax;
-- script regression tests;
-- benchmark-harness unit tests;
-- production Compose rendering;
-- Docker/Podman command-contract smoke testing.
-
-`scripts/verify-production.sh` additionally checks the live production topology, API readiness, statd service/socket when configured, the Caddy Admin Unix socket, and the absence of a published Caddy TCP admin endpoint.
-
-Real-host performance claims and final production-like Podman behavior remain staging/benchmark concerns rather than being inferred solely from CI.
-
----
-
-## 10. Scope Boundaries
-
-Current architecture intentionally remains:
-
-- single-host;
-- owner/small trusted-team oriented;
-- no Kubernetes;
-- no multi-node scheduler or HA control plane;
-- no private-registry credential manager;
-- Docker-compatible Podman support rather than a separate native Podman backend;
-- no native helper daemon unless profiling demonstrates a concrete hot-path benefit.
-
-For mutually untrusted external tenants, stronger VM/microVM-style isolation and a narrower engine-authority boundary would be required.
-
----
-
-## References
-
-- `docs/STATD.md` — native telemetry integration and benchmark evidence
-- `docs/SECURITY_BOUNDARIES.md` — control-plane/runtime trust boundaries
-- `docs/adr/ADR-019-migration-safety-boundaries.md` — migration fail-closed decisions
-- `docs/PRD.md` — product requirements
-- `PRODUCT.md` — product direction
-- `AGENTS.md` — engineering constraints
+- [Overview](architecture/overview.md)
+- [Networking and trust boundaries](architecture/networking.md)
+- [Deployment architecture](architecture/deployment.md)
+- [Observability architecture](architecture/observability.md)
+- [Security boundaries](SECURITY_BOUNDARIES.md)
+- [mypaas-statd integration](STATD.md)
+- [Architecture decisions](adr/)
+- [Documentation index](README.md)
