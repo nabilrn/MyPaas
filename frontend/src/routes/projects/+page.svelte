@@ -13,7 +13,7 @@
 	import { toast } from '$stores/toast';
 	import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
-	import { describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
+	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Project } from '$types';
 
@@ -326,7 +326,7 @@
 </svelte:head>
 
 <div class="page-shell py-6">
-	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
 		<p class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
 			<span class={`status-dot ${syncDotClass}`}></span>
 			{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}
@@ -454,16 +454,16 @@
 			{/if}
 		</svelte:fragment>
 
-		<table class="data-table hidden table-fixed lg:table">
+		<table class="data-table hidden table-fixed xl:table">
 			<colgroup>
 				<col class="w-[20%]" />
-				<col class="w-[16%]" />
-				<col class="w-[11%]" />
-				<col class="w-[13%]" />
-				<col class="w-[11%]" />
+				<col class="w-[22%]" />
 				<col class="w-[8%]" />
-				<col class="w-[8%]" />
-				<col class="w-[13%]" />
+				<col class="w-[12%]" />
+				<col class="w-[10%]" />
+				<col class="w-[7%]" />
+				<col class="w-[7%]" />
+				<col class="w-[14%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -496,18 +496,18 @@
 						</td>
 						<td>
 							{#if source.href}
-								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
+								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
 									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="truncate">{source.label}</span>
+									<span class="max-w-[30ch] truncate">{compactRepositoryLabel(source.label)}</span>
 								</a>
 							{:else}
-								<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 truncate text-sm text-gray-700 dark:text-gray-300">
+								<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
 									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="truncate">{source.label}</span>
+									<span class="max-w-[30ch] truncate">{compactRepositoryLabel(source.label)}</span>
 								</span>
 							{/if}
 						</td>
-						<td>
+						<td class="whitespace-nowrap">
 							{#if project.sourceType === 'git' && project.branch}
 								<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}>
 									<GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -523,7 +523,7 @@
 								<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
 							</div>
 						</td>
-						<td class="metric-value">
+						<td class="metric-value whitespace-nowrap">
 							{#if project.id in projectMemory}
 								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
 							{:else if uptimeLoadingIds.has(project.id)}
@@ -532,9 +532,9 @@
 								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
 							{/if}
 						</td>
-						<td class="metric-value text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
-						<td class="text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
-						<td class="text-right">
+						<td class="metric-value whitespace-nowrap text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
+						<td class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
+						<td class="whitespace-nowrap text-right">
 							<ActionButton
 								variant={projectPrimaryVariant(project)}
 								size="xs"
@@ -553,7 +553,7 @@
 			</tbody>
 		</table>
 
-		<div class="divide-y divide-gray-100 dark:divide-neutral-800 lg:hidden">
+		<div class="divide-y divide-gray-100 dark:divide-neutral-800 xl:hidden">
 			{#each visibleProjects as project}
 				{@const source = describeProjectSource(project)}
 				{@const crashed = getDerivedStatus(project) === 'crashed'}
@@ -581,24 +581,24 @@
 					</a>
 					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
 						{#if source.href}
-							<a href={source.href} target="_blank" rel="noopener" class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white">
+							<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white">
 								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								<span class="truncate">{source.label}</span>
+								<span class="truncate">{compactRepositoryLabel(source.label, 36)}</span>
 							</a>
 						{:else}
-							<span class="inline-flex min-w-0 items-center gap-1 truncate">
+							<span class="inline-flex min-w-0 items-center gap-1 truncate" title={source.label}>
 								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								<span class="truncate">{source.label}</span>
+								<span class="truncate">{compactRepositoryLabel(source.label, 36)}</span>
 							</span>
 						{/if}
 						{#if project.sourceType === 'git' && project.branch}
-							<span class="inline-flex items-center gap-1 font-mono">
+							<span class="inline-flex items-center gap-1 whitespace-nowrap font-mono">
 								<GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 								{project.branch}
 							</span>
 						{/if}
 						<span>{runtimeLabel(project)}</span>
-						<span class="metric-value">
+						<span class="metric-value whitespace-nowrap">
 							{#if project.id in projectMemory}
 								{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
 							{:else}
