@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bell, ChevronRight, ClipboardList, FolderKanban, LogOut, Menu, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, ChevronRight, ClipboardList, FolderKanban, LogOut, Menu, Moon, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -16,6 +16,8 @@
 		{ href: '/projects', label: 'Projects', icon: FolderKanban },
 		{ href: '/admin/users', label: 'Users', icon: Users },
 		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
+		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
+		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft },
 		{ href: '/admin/settings', label: 'Settings', icon: Settings }
 	];
 
@@ -54,6 +56,8 @@
 		}
 		if (currentPath.startsWith('/admin/users')) return { root: 'Users', rootHref: '/admin/users', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/audit-logs')) return { root: 'Audit', rootHref: '/admin/audit-logs', middle: null, current: '' };
+		if (currentPath.startsWith('/admin/mcp')) return { root: 'MCP', rootHref: '/admin/mcp', middle: null, current: '' };
+		if (currentPath.startsWith('/admin/migration')) return { root: 'Migration', rootHref: '/admin/migration', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/settings')) return { root: 'Settings', rootHref: '/admin/settings', middle: null, current: '' };
 		return { root: 'Projects', rootHref: '/projects', middle: null, current: '' };
 	}
