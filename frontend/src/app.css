@@ -182,6 +182,13 @@
 		color: var(--app-subtle);
 		@apply px-4 py-2 text-left text-xs font-medium;
 	}
+	/* Explicit table alignment utilities must win over the default header alignment. */
+	.data-table thead th.text-right {
+		text-align: right;
+	}
+	.data-table thead th.text-center {
+		text-align: center;
+	}
 	.data-table tbody {
 		@apply divide-y divide-gray-100 dark:divide-neutral-800;
 	}
