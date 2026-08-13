@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
+import { appendRollingSample, boundedPercent, deriveAdaptiveMetricDomain, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
 
 describe('host telemetry helpers', () => {
 	it('bounds resource percentages', () => {
@@ -11,6 +11,30 @@ describe('host telemetry helpers', () => {
 
 	it('keeps only the newest rolling samples', () => {
 		expect(appendRollingSample([1, 2, 3], 4, 3)).toEqual([2, 3, 4]);
+	});
+
+	it('zooms percentage domains enough to show small utilization movement', () => {
+		const domain = deriveAdaptiveMetricDomain([38.7, 39.1, 39.4], 100);
+		expect(domain.min).toBeLessThanOrEqual(38.7);
+		expect(domain.max).toBeGreaterThanOrEqual(39.4);
+		expect(domain.max - domain.min).toBeCloseTo(4, 5);
+	});
+
+	it('keeps adaptive percentage domains inside physical bounds', () => {
+		const low = deriveAdaptiveMetricDomain([0.1, 0.5], 100);
+		expect(low.min).toBe(0);
+		expect(low.max).toBeCloseTo(4, 5);
+
+		const high = deriveAdaptiveMetricDomain([98.5, 99.2], 100);
+		expect(high.max).toBe(100);
+		expect(high.min).toBeLessThanOrEqual(98.5);
+	});
+
+	it('uses a relative rolling scale for unbounded rate metrics', () => {
+		const domain = deriveAdaptiveMetricDomain([100, 105, 110], null);
+		expect(domain.min).toBeLessThanOrEqual(100);
+		expect(domain.max).toBeGreaterThanOrEqual(110);
+		expect(domain.max - domain.min).toBeCloseTo(15, 5);
 	});
 
 	it('derives cpu usage from cumulative total and idle counters', () => {
