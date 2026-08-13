@@ -45,17 +45,26 @@ export function deriveAdaptiveMetricDomain(series: number[], maxValue: number | 
 	}
 
 	const observedSpan = Math.max(0, rawMax - rawMin);
-	const minimumSpan = hardMax !== null ? Math.max(4, hardMax * 0.04) : Math.max(1, rawMax * 0.05);
-	const desiredSpan = Math.max(minimumSpan, observedSpan * 1.5);
+	const minimumSpan = hardMax !== null
+		? rawMax <= 1
+			? 0.25
+			: rawMax <= 5
+				? 1
+				: Math.max(2, hardMax * 0.02)
+		: Math.max(1, rawMax * 0.05);
+	const desiredSpan = Math.max(minimumSpan, observedSpan * (hardMax !== null ? 1.6 : 1.5));
 	const center = (rawMin + rawMax) / 2;
 	let min = center - desiredSpan / 2;
 	let max = center + desiredSpan / 2;
 
-	if (min < 0) {
-		max -= min;
+	if (rawMin <= desiredSpan * 0.2 || min < 0) {
 		min = 0;
+		max = Math.max(desiredSpan, rawMax * 1.15);
 	}
-	if (hardMax !== null && max > hardMax) {
+	if (hardMax !== null && hardMax - rawMax <= desiredSpan * 0.5) {
+		max = hardMax;
+		min = Math.max(0, hardMax - desiredSpan);
+	} else if (hardMax !== null && max > hardMax) {
 		min -= max - hardMax;
 		max = hardMax;
 		if (min < 0) min = 0;

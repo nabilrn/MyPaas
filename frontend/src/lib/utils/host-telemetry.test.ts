@@ -17,13 +17,20 @@ describe('host telemetry helpers', () => {
 		const domain = deriveAdaptiveMetricDomain([38.7, 39.1, 39.4], 100);
 		expect(domain.min).toBeLessThanOrEqual(38.7);
 		expect(domain.max).toBeGreaterThanOrEqual(39.4);
-		expect(domain.max - domain.min).toBeCloseTo(4, 5);
+		expect(domain.max - domain.min).toBeCloseTo(2, 5);
+	});
+
+	it('magnifies very small non-zero utilization without inventing movement', () => {
+		const domain = deriveAdaptiveMetricDomain([0.82, 0.86, 0.9], 100);
+		expect(domain.min).toBeGreaterThan(0);
+		expect(domain.max).toBeGreaterThanOrEqual(0.9);
+		expect(domain.max - domain.min).toBeCloseTo(0.25, 5);
 	});
 
 	it('keeps adaptive percentage domains inside physical bounds', () => {
 		const low = deriveAdaptiveMetricDomain([0.1, 0.5], 100);
 		expect(low.min).toBe(0);
-		expect(low.max).toBeCloseTo(4, 5);
+		expect(low.max).toBeCloseTo(0.64, 5);
 
 		const high = deriveAdaptiveMetricDomain([98.5, 99.2], 100);
 		expect(high.max).toBe(100);

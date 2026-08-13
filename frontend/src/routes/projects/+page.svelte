@@ -34,7 +34,6 @@
 	let projectMemory: Record<string, number> = {};
 	let uptimeLoadingIds = new Set<string>();
 	let uptimeRefreshToken = 0;
-	let lastRefreshedAt: Date | null = null;
 	let projectsInFlight = false;
 	let hostStatsInFlight = false;
 	let ramSeries: number[] = [];
@@ -76,9 +75,8 @@
 	$: composeCount = projects.filter((project) => project.deployMode === 'compose').length;
 	$: staticCount = projects.filter((project) => project.deployMode === 'static').length;
 	$: imageCount = projects.filter((project) => project.deployMode === 'image').length;
-	$: dashboardRefreshing = loading || projectsInFlight || hostStatsInFlight;
-	$: syncLabel = error ? 'Refresh needs attention' : dashboardRefreshing ? 'Refreshing' : 'Up to date';
-	$: syncDotClass = error ? 'bg-amber-500' : dashboardRefreshing ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';
+	$: syncLabel = error ? 'Updates delayed' : loading ? 'Connecting' : 'Live';
+	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-emerald-500 dark:bg-emerald-400';
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) currentPage = maxPage;
 	$: pageStart = currentPage * pageSize;
@@ -112,7 +110,6 @@
 		error = '';
 		try {
 			projects = await api.projects.list();
-			lastRefreshedAt = new Date();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load projects';
 		} finally {
@@ -258,9 +255,6 @@
 		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
-	function formatRefreshTime(value: Date) {
-		return value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-	}
 
 	function formatBytes(value: number) {
 		if (!Number.isFinite(value) || value < 0) return '-';
@@ -329,14 +323,10 @@
 	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
 		<p class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
 			<span class={`status-dot ${syncDotClass}`}></span>
-			{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}
+			<span>{syncLabel}</span>
 			<span class="text-gray-400 dark:text-gray-500">· {projects.length} project{projects.length === 1 ? '' : 's'}</span>
 		</p>
 		<div class="flex items-center gap-2">
-			<ActionButton variant="secondary" loading={dashboardRefreshing} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>
-				<RefreshCw slot="icon" class="h-4 w-4" />
-				Refresh
-			</ActionButton>
 			<ActionLink href="/projects/new" variant="primary">
 				<Plus slot="icon" class="h-4 w-4" />
 				New project

@@ -25,31 +25,31 @@
 		neutral: {
 			dot: 'bg-gray-400/75 dark:bg-gray-400/70',
 			stroke: 'stroke-gray-500/60 dark:stroke-gray-300/55',
-			fill: 'fill-gray-400/[0.035] dark:fill-gray-300/[0.05]',
+			fill: 'fill-gray-400/[0.07] dark:fill-gray-300/[0.08]',
 			point: 'fill-gray-500/75 dark:fill-gray-300/70'
 		},
 		memory: {
 			dot: 'bg-emerald-400/70 dark:bg-emerald-300/65',
 			stroke: 'stroke-emerald-500/60 dark:stroke-emerald-300/55',
-			fill: 'fill-emerald-400/[0.035] dark:fill-emerald-300/[0.05]',
+			fill: 'fill-emerald-400/[0.07] dark:fill-emerald-300/[0.08]',
 			point: 'fill-emerald-500/75 dark:fill-emerald-300/70'
 		},
 		cpu: {
 			dot: 'bg-sky-400/70 dark:bg-sky-300/65',
 			stroke: 'stroke-sky-500/60 dark:stroke-sky-300/55',
-			fill: 'fill-sky-400/[0.035] dark:fill-sky-300/[0.05]',
+			fill: 'fill-sky-400/[0.07] dark:fill-sky-300/[0.08]',
 			point: 'fill-sky-500/75 dark:fill-sky-300/70'
 		},
 		storage: {
 			dot: 'bg-amber-400/70 dark:bg-amber-300/65',
 			stroke: 'stroke-amber-500/58 dark:stroke-amber-300/52',
-			fill: 'fill-amber-400/[0.03] dark:fill-amber-300/[0.045]',
+			fill: 'fill-amber-400/[0.06] dark:fill-amber-300/[0.07]',
 			point: 'fill-amber-500/70 dark:fill-amber-300/65'
 		},
 		network: {
 			dot: 'bg-violet-400/70 dark:bg-violet-300/65',
 			stroke: 'stroke-violet-500/60 dark:stroke-violet-300/55',
-			fill: 'fill-violet-400/[0.035] dark:fill-violet-300/[0.05]',
+			fill: 'fill-violet-400/[0.07] dark:fill-violet-300/[0.08]',
 			point: 'fill-violet-500/75 dark:fill-violet-300/70'
 		}
 	} as const;
@@ -164,7 +164,7 @@
 						d={linePath}
 						fill="none"
 						class={resourceClass.stroke}
-						stroke-width="1.2"
+						stroke-width="1.45"
 						stroke-linecap="round"
 						stroke-linejoin="round"
 						vector-effect="non-scaling-stroke"
