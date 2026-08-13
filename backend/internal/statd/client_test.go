@@ -107,13 +107,19 @@ func TestHostSnapshot(t *testing.T) {
 		if err := expectLine(reader, "{\"op\":\"host_snapshot\"}\n"); err != nil {
 			return err
 		}
-		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"storage\":{\"total_bytes\":1000,\"available_bytes\":400},\"network\":{\"interface\":\"eth0\",\"rx_bytes\":123,\"tx_bytes\":456}}\n"))
+		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"memory\":{\"total_bytes\":4096000,\"available_bytes\":1536000},\"cpu\":{\"total_ticks\":630,\"idle_ticks\":450},\"storage\":{\"total_bytes\":1000,\"available_bytes\":400},\"network\":{\"interface\":\"eth0\",\"rx_bytes\":123,\"tx_bytes\":456}}\n"))
 		return err
 	})
 
 	snapshot, err := NewClient(server.path).HostSnapshot(context.Background())
 	if err != nil {
 		t.Fatalf("host snapshot: %v", err)
+	}
+	if snapshot.Memory == nil || snapshot.Memory.TotalBytes != 4096000 || snapshot.Memory.AvailableBytes != 1536000 {
+		t.Fatalf("unexpected memory snapshot: %+v", snapshot.Memory)
+	}
+	if snapshot.CPU == nil || snapshot.CPU.TotalTicks != 630 || snapshot.CPU.IdleTicks != 450 {
+		t.Fatalf("unexpected cpu snapshot: %+v", snapshot.CPU)
 	}
 	if snapshot.Storage == nil || snapshot.Storage.TotalBytes != 1000 || snapshot.Storage.AvailableBytes != 400 {
 		t.Fatalf("unexpected storage snapshot: %+v", snapshot.Storage)
@@ -132,7 +138,7 @@ func TestHostSnapshotAllowsPartialSections(t *testing.T) {
 		if err := expectLine(reader, "{\"op\":\"host_snapshot\"}\n"); err != nil {
 			return err
 		}
-		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"storage\":{\"total_bytes\":4096,\"available_bytes\":1024},\"network\":null}\n"))
+		_, err := conn.Write([]byte("{\"ok\":true,\"protocol\":1,\"memory\":null,\"cpu\":null,\"storage\":{\"total_bytes\":4096,\"available_bytes\":1024},\"network\":null}\n"))
 		return err
 	})
 
@@ -140,7 +146,7 @@ func TestHostSnapshotAllowsPartialSections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("host snapshot: %v", err)
 	}
-	if snapshot.Storage == nil || snapshot.Network != nil {
+	if snapshot.Memory != nil || snapshot.CPU != nil || snapshot.Storage == nil || snapshot.Network != nil {
 		t.Fatalf("unexpected partial snapshot: %+v", snapshot)
 	}
 	waitServer(t, server.done)
