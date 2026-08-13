@@ -2,6 +2,7 @@ package project
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
 	"time"
@@ -110,6 +111,40 @@ func ResponseFromDB(project db.Project) Response {
 	return resp
 }
 
+const maxVisibleNonBlockingCreateDiagnostics = 3
+
+func compactComposePlanForCreate(plan *ComposePlan) *ComposePlan {
+	if plan == nil || len(plan.Issues) == 0 {
+		return plan
+	}
+
+	blocking := make([]ComposeIssue, 0, len(plan.Issues))
+	nonBlocking := make([]ComposeIssue, 0, len(plan.Issues))
+	for _, issue := range plan.Issues {
+		if issue.Severity == "error" {
+			blocking = append(blocking, issue)
+		} else {
+			nonBlocking = append(nonBlocking, issue)
+		}
+	}
+	if len(nonBlocking) <= maxVisibleNonBlockingCreateDiagnostics {
+		return plan
+	}
+
+	visible := append([]ComposeIssue{}, blocking...)
+	visible = append(visible, nonBlocking[:maxVisibleNonBlockingCreateDiagnostics]...)
+	hidden := len(nonBlocking) - maxVisibleNonBlockingCreateDiagnostics
+	visible = append(visible, ComposeIssue{
+		Severity: "info",
+		Code:     "ADDITIONAL_DIAGNOSTICS",
+		Message:  fmt.Sprintf("%d additional non-blocking Compose diagnostic%s hidden to keep required fixes prominent.", hidden, map[bool]string{true: "", false: "s"}[hidden == 1]),
+	})
+
+	copyPlan := *plan
+	copyPlan.Issues = visible
+	return &copyPlan
+}
+
 func DetectResponseFromResult(result DetectResult) DetectResponse {
 	resp := DetectResponse{
 		DeployMode:        result.DeployMode,
@@ -122,7 +157,7 @@ func DetectResponseFromResult(result DetectResult) DetectResponse {
 		HasDockerfile:     result.HasDockerfile,
 		EnvVars:           result.EnvVars,
 		AppPort:           result.AppPort,
-		ComposePlan:       result.ComposePlan,
+		ComposePlan:       compactComposePlanForCreate(result.ComposePlan),
 		Tree:              result.Tree,
 		TreeTruncated:     result.TreeTruncated,
 		ComposeCandidates: result.ComposeCandidates,
