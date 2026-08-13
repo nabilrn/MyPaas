@@ -169,13 +169,15 @@ type hostStatsResponse struct {
 	HostCPUCores   int                        `json:"host_cpu_cores"`
 	AllocatedRAMMB int32                      `json:"allocated_ram_mb"`
 	AllocatedCPU   float64                    `json:"allocated_cpu"`
+	Memory         *statd.HostMemorySnapshot  `json:"memory"`
+	CPU            *statd.HostCPUSnapshot     `json:"cpu"`
 	Storage        *statd.HostStorageSnapshot `json:"storage"`
 	Network        *statd.HostNetworkSnapshot `json:"network"`
 }
 
 // HostStats returns host capacity plus optional host telemetry from mypaas-statd.
-// Storage/network remain nil when statd is disabled, unavailable, still on v0.1,
-// or has not produced a valid host sample. Existing capacity data remains usable.
+// Host telemetry remains nil when statd is disabled, unavailable, still on v0.1,
+// or has not produced a valid section. Existing capacity/allocation data remains usable.
 func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 	cap := host.GetCapacity()
 
@@ -190,10 +192,14 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var memory *statd.HostMemorySnapshot
+	var cpu *statd.HostCPUSnapshot
 	var storage *statd.HostStorageSnapshot
 	var network *statd.HostNetworkSnapshot
 	if socketPath := strings.TrimSpace(os.Getenv("STATD_SOCKET")); socketPath != "" {
 		if snapshot, snapshotErr := statd.NewClient(socketPath).HostSnapshot(r.Context()); snapshotErr == nil {
+			memory = snapshot.Memory
+			cpu = snapshot.CPU
 			storage = snapshot.Storage
 			network = snapshot.Network
 		}
@@ -204,6 +210,8 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 		HostCPUCores:   cap.TotalCPUCores,
 		AllocatedRAMMB: allocatedRAM,
 		AllocatedCPU:   allocatedCPU,
+		Memory:         memory,
+		CPU:            cpu,
 		Storage:        storage,
 		Network:        network,
 	})
