@@ -204,164 +204,164 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <title>MyPaas Install Wizard</title>
   <style>
     :root {{
-      color-scheme: light dark;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #f6f8fb;
-      --surface: #ffffff;
-      --surface-muted: #f2f5f8;
-      --surface-soft: #f8fafc;
-      --border: #d9e0e8;
-      --border-strong: #b8c3cf;
-      --ink: #111827;
-      --muted: #4b5563;
-      --subtle: #6b7280;
-      --accent: #047857;
-      --accent-strong: #065f46;
-      --accent-soft: #dff7ed;
-      --danger: #b91c1c;
-      --danger-soft: #fef2f2;
-      --warning: #92400e;
-      --warning-soft: #fffbeb;
-      --info: #1d4ed8;
-      --info-soft: #eff6ff;
-      --focus: rgba(4, 120, 87, .18);
-      background: var(--bg);
-      color: var(--ink);
+    color-scheme: light dark;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --app-bg: #fafafa;
+    --app-surface: #ffffff;
+    --app-surface-muted: #f7f7f7;
+    --app-surface-raised: #ffffff;
+    --app-border: #e5e5e5;
+    --app-border-strong: #d4d4d4;
+    --app-ink: #171717;
+    --app-muted: #525252;
+    --app-subtle: #737373;
+    --app-accent: #171717;
+    --app-accent-strong: #0a0a0a;
+    --app-accent-soft: #e5e5e5;
+    --app-danger: #dc2626;
+    --app-danger-soft: #fef2f2;
+    --app-warning: #b45309;
+    --app-warning-soft: #fffbeb;
+    --app-info: #0369a1;
+    --app-info-soft: #f0f9ff;
+    --app-focus: rgb(23 23 23 / .14);
+    background: var(--app-bg);
+    color: var(--app-ink);
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; min-height: 100vh; background: var(--app-bg); color: var(--app-ink); -webkit-font-smoothing: antialiased; }}
+  main {{ width: min(100%, 1180px); margin: 0 auto; padding: 28px 20px 44px; }}
+  header {{ display: grid; gap: 12px; margin-bottom: 18px; }}
+  h1 {{ margin: 0; font-size: 26px; line-height: 1.18; font-weight: 680; letter-spacing: -.025em; }}
+  h2 {{ margin: 0 0 5px; font-size: 16px; line-height: 1.35; font-weight: 650; letter-spacing: -.012em; }}
+  h3 {{ margin: 0; font-size: 14px; line-height: 1.35; }}
+  p {{ margin: 0; color: var(--app-muted); line-height: 1.55; }}
+  a {{ color: var(--app-ink); text-underline-offset: 2px; text-decoration-color: var(--app-border-strong); }}
+  a:hover {{ text-decoration-color: currentColor; }}
+  .topline {{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; }}
+  .product-mark {{ display: inline-flex; align-items: center; gap: 9px; color: var(--app-ink); font-size: 13px; font-weight: 700; letter-spacing: -.01em; }}
+  .mark-dot {{ width: 8px; height: 8px; border-radius: 2px; background: var(--app-ink); box-shadow: 4px 4px 0 color-mix(in srgb, var(--app-ink) 18%, transparent); }}
+  .header-copy {{ display: grid; gap: 6px; max-width: 780px; }}
+  .install-meta {{ display: flex; flex-wrap: wrap; gap: 8px; }}
+  .meta-chip {{ display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface); padding: 5px 8px; color: var(--app-muted); font-size: 12px; }}
+  .layout {{ display: grid; grid-template-columns: 246px minmax(0, 1fr); gap: 18px; align-items: start; }}
+  .panel {{ border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); }}
+  .panel-header {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--app-border); background: var(--app-surface); padding: 17px 18px; }}
+  .panel-title {{ min-width: 0; }}
+  .panel-title p {{ max-width: 68ch; color: var(--app-subtle); font-size: 13px; }}
+  .step-count {{ flex: 0 0 auto; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface-muted); padding: 5px 8px; color: var(--app-subtle); font-size: 12px; font-weight: 600; }}
+  .panel-body {{ padding: 18px; }}
+  .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
+  .field {{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }}
+  label {{ font-size: 12px; font-weight: 600; color: var(--app-muted); }}
+  input {{ width: 100%; min-height: 42px; border: 1px solid var(--app-border); border-radius: 6px; padding: 8px 10px; font: inherit; background: var(--app-surface); color: var(--app-ink); transition: border-color .14s ease, box-shadow .14s ease; }}
+  input::placeholder {{ color: var(--app-subtle); }}
+  input:hover {{ border-color: var(--app-border-strong); }}
+  input:focus {{ outline: none; border-color: var(--app-accent); box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px var(--app-focus); }}
+  form.was-validated .wizard-step:not([hidden]) input:invalid {{ border-color: var(--app-danger); }}
+  .full {{ grid-column: 1 / -1; }}
+  .hint {{ font-size: 12px; color: var(--app-subtle); line-height: 1.45; }}
+  .alert {{ margin-bottom: 14px; border: 1px solid #fecaca; border-radius: 6px; background: var(--app-danger-soft); color: var(--app-danger); padding: 10px 12px; font-size: 13px; }}
+  .notice {{ border: 1px solid #bae6fd; border-radius: 6px; background: var(--app-info-soft); color: var(--app-info); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
+  .warning {{ border: 1px solid #fde68a; border-radius: 6px; background: var(--app-warning-soft); color: var(--app-warning); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
+  details {{ border-top: 1px solid var(--app-border); }}
+  summary {{ cursor: pointer; padding: 15px 18px; font-size: 13px; font-weight: 600; color: var(--app-muted); }}
+  summary:focus-visible {{ outline: none; box-shadow: inset 0 0 0 2px var(--app-accent); }}
+  button {{ min-height: 42px; border: 1px solid var(--app-accent); border-radius: 6px; background: var(--app-accent); color: var(--app-surface); padding: 0 16px; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; transition: background-color .14s ease, border-color .14s ease, box-shadow .14s ease, color .14s ease; }}
+  button:hover {{ background: var(--app-accent-strong); border-color: var(--app-accent-strong); }}
+  button:focus-visible {{ outline: none; box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px var(--app-focus); }}
+  button:disabled {{ cursor: not-allowed; opacity: .58; }}
+  button.secondary {{ border-color: var(--app-border); background: var(--app-surface); color: var(--app-muted); }}
+  button.secondary:hover {{ border-color: var(--app-border-strong); background: var(--app-surface-muted); color: var(--app-ink); }}
+  .actions {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--app-border); padding: 15px 18px; }}
+  .actions-right {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }}
+  .action-hint {{ color: var(--app-subtle); font-size: 12px; }}
+  ol {{ margin: 10px 0 0 20px; padding: 0; color: var(--app-muted); line-height: 1.55; }}
+  li + li {{ margin-top: 8px; }}
+  code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-surface-muted); padding: 1px 4px; color: var(--app-ink); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }}
+  .stack {{ display: grid; gap: 14px; }}
+  .stepper {{ position: sticky; top: 20px; display: grid; gap: 4px; padding: 8px; }}
+  .step-tab {{ display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid transparent; border-radius: 6px; padding: 10px; color: var(--app-subtle); transition: background-color .14s ease, border-color .14s ease; }}
+  .step-number {{ display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; background: var(--app-surface-muted); color: var(--app-muted); font-size: 12px; font-weight: 700; }}
+  .step-title {{ display: block; color: var(--app-ink); font-size: 13px; font-weight: 650; }}
+  .step-body {{ display: block; margin-top: 2px; font-size: 12px; }}
+  .step-tab.active {{ border-color: var(--app-border-strong); background: var(--app-surface-muted); color: var(--app-muted); }}
+  .step-tab.active .step-number {{ background: var(--app-accent); color: var(--app-surface); }}
+  .step-tab.done .step-number {{ background: var(--app-accent-soft); color: var(--app-ink); }}
+  .wizard-step[hidden] {{ display: none; }}
+  .guide {{ display: grid; gap: 12px; margin-bottom: 16px; }}
+  .guide-card {{ border: 1px solid var(--app-border); border-radius: 8px; background: color-mix(in srgb, var(--app-surface-muted) 68%, var(--app-surface)); padding: 14px; }}
+  .guide-card strong {{ display: block; margin-bottom: 4px; color: var(--app-ink); font-size: 13px; }}
+  .example-grid {{ display: grid; gap: 8px; margin-top: 12px; }}
+  .example-row {{ display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }}
+  .example-row span {{ color: var(--app-subtle); }}
+  .review {{ display: grid; gap: 10px; margin-top: 12px; }}
+  .review-row {{ display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 12px; border-bottom: 1px solid var(--app-border); padding-bottom: 10px; }}
+  .review-row span:first-child {{ color: var(--app-subtle); }}
+  .review-row span:last-child {{ min-width: 0; overflow-wrap: anywhere; font-weight: 600; }}
+  .theme-toggle {{ cursor: pointer; width: 30px; min-height: 30px; padding: 0; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-muted); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }}
+  .theme-toggle:hover {{ border-color: var(--app-border-strong); background: var(--app-surface-muted); color: var(--app-ink); }}
+  @media (max-width: 900px) {{
+    main {{ padding: 20px 14px 34px; }}
+    .layout {{ grid-template-columns: 1fr; }}
+    .stepper {{ position: static; grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; }}
+    .grid {{ grid-template-columns: 1fr; }}
+    .panel-header {{ flex-direction: column; }}
+  }}
+  @media (max-width: 620px) {{
+    h1 {{ font-size: 23px; }}
+    .stepper {{ grid-template-columns: 1fr; }}
+    .actions {{ align-items: stretch; flex-direction: column; }}
+    .actions-right, .actions-right button, .actions > button {{ width: 100%; }}
+    .review-row, .example-row {{ grid-template-columns: 1fr; gap: 4px; }}
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    *, *::before, *::after {{ scroll-behavior: auto !important; transition-duration: .01ms !important; }}
+  }}
+  :root.dark {{
+    --app-bg: #0a0a0a;
+    --app-surface: #141414;
+    --app-surface-muted: #1a1a1a;
+    --app-surface-raised: #171717;
+    --app-border: #292929;
+    --app-border-strong: #404040;
+    --app-ink: #fafafa;
+    --app-muted: #a3a3a3;
+    --app-subtle: #737373;
+    --app-accent: #fafafa;
+    --app-accent-strong: #ffffff;
+    --app-accent-soft: #333333;
+    --app-danger: #f87171;
+    --app-danger-soft: rgb(127 29 29 / .25);
+    --app-warning: #fbbf24;
+    --app-warning-soft: rgb(120 53 15 / .22);
+    --app-info: #38bdf8;
+    --app-info-soft: rgb(12 74 110 / .25);
+    --app-focus: rgb(250 250 250 / .14);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root:not(.light) {{
+      --app-bg: #0a0a0a;
+      --app-surface: #141414;
+      --app-surface-muted: #1a1a1a;
+      --app-surface-raised: #171717;
+      --app-border: #292929;
+      --app-border-strong: #404040;
+      --app-ink: #fafafa;
+      --app-muted: #a3a3a3;
+      --app-subtle: #737373;
+      --app-accent: #fafafa;
+      --app-accent-strong: #ffffff;
+      --app-accent-soft: #333333;
+      --app-danger: #f87171;
+      --app-danger-soft: rgb(127 29 29 / .25);
+      --app-warning: #fbbf24;
+      --app-warning-soft: rgb(120 53 15 / .22);
+      --app-info: #38bdf8;
+      --app-info-soft: rgb(12 74 110 / .25);
+      --app-focus: rgb(250 250 250 / .14);
     }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; background: var(--bg); color: var(--ink); }}
-    main {{ width: min(100%, 1180px); margin: 0 auto; padding: 28px 20px 44px; }}
-    header {{ display: grid; gap: 12px; margin-bottom: 18px; }}
-    h1 {{ margin: 0; font-size: 26px; line-height: 1.18; letter-spacing: 0; }}
-    h2 {{ margin: 0 0 6px; font-size: 17px; line-height: 1.3; }}
-    h3 {{ margin: 0; font-size: 14px; line-height: 1.35; }}
-    p {{ margin: 0; color: var(--muted); line-height: 1.55; }}
-    a {{ color: var(--accent-strong); text-underline-offset: 2px; }}
-    a:hover {{ color: var(--accent); }}
-    .topline {{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; }}
-    .product-mark {{ display: inline-flex; align-items: center; gap: 8px; color: var(--accent-strong); font-size: 13px; font-weight: 750; }}
-    .mark-dot {{ width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }}
-    .header-copy {{ display: grid; gap: 6px; max-width: 780px; }}
-    .install-meta {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .meta-chip {{ display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 5px 8px; color: var(--muted); font-size: 12px; }}
-    .layout {{ display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }}
-    .panel {{ border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
-    .panel-header {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface-muted) 58%, transparent); padding: 18px; }}
-    .panel-title {{ min-width: 0; }}
-    .panel-title p {{ max-width: 68ch; }}
-    .step-count {{ flex: 0 0 auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 5px 8px; color: var(--subtle); font-size: 12px; font-weight: 700; }}
-    .panel-body {{ padding: 18px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
-    .field {{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }}
-    label {{ font-size: 12px; font-weight: 700; color: var(--muted); }}
-    input {{ width: 100%; min-height: 42px; border: 1px solid var(--border-strong); border-radius: 6px; padding: 8px 10px; font: inherit; background: var(--surface); color: var(--ink); }}
-    input::placeholder {{ color: var(--subtle); }}
-    input:hover {{ border-color: var(--subtle); }}
-    input:focus {{ outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }}
-    form.was-validated .wizard-step:not([hidden]) input:invalid {{ border-color: var(--danger); }}
-    .full {{ grid-column: 1 / -1; }}
-    .hint {{ font-size: 12px; color: var(--subtle); line-height: 1.45; }}
-    .alert {{ margin-bottom: 14px; border: 1px solid #fca5a5; border-radius: 6px; background: var(--danger-soft); color: var(--danger); padding: 10px 12px; font-size: 14px; }}
-    .notice {{ border: 1px solid #bfdbfe; border-radius: 6px; background: var(--info-soft); color: var(--info); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
-    .warning {{ border: 1px solid #fde68a; border-radius: 6px; background: var(--warning-soft); color: var(--warning); padding: 10px 12px; font-size: 13px; line-height: 1.5; }}
-    details {{ border-top: 1px solid var(--border); }}
-    summary {{ cursor: pointer; padding: 16px 18px; font-weight: 700; color: var(--muted); }}
-    summary:focus-visible {{ outline: none; box-shadow: inset 0 0 0 3px var(--focus); }}
-    button {{ min-height: 42px; border: 1px solid var(--accent-strong); border-radius: 6px; background: var(--accent); color: #fff; padding: 0 16px; font-weight: 750; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease; }}
-    button:hover {{ background: var(--accent-strong); }}
-    button:focus-visible {{ outline: none; box-shadow: 0 0 0 3px var(--focus); }}
-    button:disabled {{ cursor: not-allowed; opacity: .68; }}
-    button.secondary {{ border-color: var(--border-strong); background: var(--surface); color: var(--muted); }}
-    button.secondary:hover {{ background: var(--surface-muted); color: var(--ink); }}
-    .actions {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border); padding: 16px 18px; }}
-    .actions-right {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }}
-    .action-hint {{ color: var(--subtle); font-size: 12px; }}
-    ol {{ margin: 10px 0 0 20px; padding: 0; color: var(--muted); line-height: 1.55; }}
-    li + li {{ margin-top: 8px; }}
-    code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-muted); padding: 1px 4px; color: var(--ink); font-size: 12px; }}
-    .stack {{ display: grid; gap: 14px; }}
-    .stepper {{ position: sticky; top: 20px; display: grid; gap: 8px; padding: 10px; }}
-    .step-tab {{ display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; border: 1px solid transparent; border-radius: 8px; padding: 10px; color: var(--subtle); transition: background-color .16s ease, border-color .16s ease; }}
-    .step-number {{ display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 7px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 800; }}
-    .step-title {{ display: block; color: var(--ink); font-size: 13px; font-weight: 750; }}
-    .step-body {{ display: block; margin-top: 2px; font-size: 12px; }}
-    .step-tab.active {{ border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); background: var(--accent-soft); color: var(--accent-strong); }}
-    .step-tab.active .step-number {{ background: var(--accent); color: #fff; }}
-    .step-tab.done .step-number {{ background: var(--accent-soft); color: var(--accent-strong); }}
-    .wizard-step[hidden] {{ display: none; }}
-    .guide {{ display: grid; gap: 12px; margin-bottom: 16px; }}
-    .guide-card {{ border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); padding: 14px; }}
-    .guide-card strong {{ display: block; margin-bottom: 4px; color: var(--ink); }}
-    .example-grid {{ display: grid; gap: 8px; margin-top: 12px; }}
-    .example-row {{ display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }}
-    .example-row span {{ color: var(--subtle); }}
-    .review {{ display: grid; gap: 10px; }}
-    .review-row {{ display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 12px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
-    .review-row span:first-child {{ color: var(--subtle); }}
-    .review-row span:last-child {{ min-width: 0; overflow-wrap: anywhere; font-weight: 650; }}
-    @media (max-width: 900px) {{
-      main {{ padding: 20px 14px 34px; }}
-      .layout {{ grid-template-columns: 1fr; }}
-      .stepper {{ position: static; grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; }}
-      .grid {{ grid-template-columns: 1fr; }}
-      .panel-header {{ flex-direction: column; }}
-    }}
-    @media (max-width: 620px) {{
-      h1 {{ font-size: 23px; }}
-      .stepper {{ grid-template-columns: 1fr; }}
-      .actions {{ align-items: stretch; flex-direction: column; }}
-      .actions-right, .actions-right button, .actions > button {{ width: 100%; }}
-      .review-row, .example-row {{ grid-template-columns: 1fr; gap: 4px; }}
-    }}
-    @media (prefers-reduced-motion: reduce) {{
-      *, *::before, *::after {{ scroll-behavior: auto !important; transition-duration: .01ms !important; }}
-    }}
-    :root.dark {{
-      --bg: #0f172a;
-      --surface: #111827;
-      --surface-muted: #1f2937;
-      --surface-soft: #0b1220;
-      --border: #2d3748;
-      --border-strong: #475569;
-      --ink: #f8fafc;
-      --muted: #cbd5e1;
-      --subtle: #94a3b8;
-      --accent: #34d399;
-      --accent-strong: #a7f3d0;
-      --accent-soft: rgba(16, 185, 129, .16);
-      --danger: #fecaca;
-      --danger-soft: rgba(127, 29, 29, .28);
-      --warning: #fde68a;
-      --warning-soft: rgba(146, 64, 14, .22);
-      --info: #bfdbfe;
-      --info-soft: rgba(30, 64, 175, .24);
-      --focus: rgba(52, 211, 153, .22);
-    }}
-    @media (prefers-color-scheme: dark) {{
-      :root:not(.light) {{
-        --bg: #0f172a;
-        --surface: #111827;
-        --surface-muted: #1f2937;
-        --surface-soft: #0b1220;
-        --border: #2d3748;
-        --border-strong: #475569;
-        --ink: #f8fafc;
-        --muted: #cbd5e1;
-        --subtle: #94a3b8;
-        --accent: #34d399;
-        --accent-strong: #a7f3d0;
-        --accent-soft: rgba(16, 185, 129, .16);
-        --danger: #fecaca;
-        --danger-soft: rgba(127, 29, 29, .28);
-        --warning: #fde68a;
-        --warning-soft: rgba(146, 64, 14, .22);
-        --info: #bfdbfe;
-        --info-soft: rgba(30, 64, 175, .24);
-        --focus: rgba(52, 211, 153, .22);
-      }}
-    }}
-    .theme-toggle {{ cursor: pointer; padding: 5px 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; transition: color .16s, background .16s; }}
-    .theme-toggle:hover {{ color: var(--ink); background: var(--surface-muted); }}
+  }}
   </style>
 </head>
 <body>
@@ -781,46 +781,47 @@ def success_html() -> bytes:
   <title>MyPaas Install Wizard Complete</title>
   <style>
     :root {{
-      color-scheme: light dark;
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #f6f8fb;
-      --surface: #ffffff;
-      --border: #d9e0e8;
-      --ink: #111827;
-      --muted: #4b5563;
-      --accent: #047857;
-      --accent-soft: #dff7ed;
+    color-scheme: light dark;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --app-bg: #fafafa;
+    --app-surface: #ffffff;
+    --app-surface-muted: #f7f7f7;
+    --app-border: #e5e5e5;
+    --app-ink: #171717;
+    --app-muted: #525252;
+    --app-success: #059669;
+    --app-success-soft: #ecfdf5;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; min-height: 100vh; background: var(--app-bg); color: var(--app-ink); -webkit-font-smoothing: antialiased; }}
+  main {{ width: min(100%, 680px); margin: 0 auto; padding: 48px 20px; }}
+  section {{ display: grid; gap: 12px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); padding: 24px; }}
+  .status-mark {{ display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--app-success) 30%, var(--app-border)); border-radius: 8px; background: var(--app-success-soft); color: var(--app-success); font-weight: 800; }}
+  h1 {{ margin: 0; font-size: 24px; line-height: 1.2; font-weight: 680; letter-spacing: -.02em; }}
+  p {{ margin: 0; color: var(--app-muted); line-height: 1.55; }}
+  code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-surface-muted); padding: 1px 4px; color: var(--app-ink); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }}
+  :root.dark {{
+    --app-bg: #0a0a0a;
+    --app-surface: #141414;
+    --app-surface-muted: #1a1a1a;
+    --app-border: #292929;
+    --app-ink: #fafafa;
+    --app-muted: #a3a3a3;
+    --app-success: #34d399;
+    --app-success-soft: rgb(6 78 59 / .25);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root:not(.light) {{
+      --app-bg: #0a0a0a;
+      --app-surface: #141414;
+      --app-surface-muted: #1a1a1a;
+      --app-border: #292929;
+      --app-ink: #fafafa;
+      --app-muted: #a3a3a3;
+      --app-success: #34d399;
+      --app-success-soft: rgb(6 78 59 / .25);
     }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; background: var(--bg); color: var(--ink); }}
-    main {{ width: min(100%, 680px); margin: 0 auto; padding: 48px 20px; }}
-    section {{ display: grid; gap: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 24px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }}
-    .status-mark {{ display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 900; }}
-    h1 {{ margin: 0; font-size: 24px; line-height: 1.2; }}
-    p {{ margin: 0; color: var(--muted); line-height: 1.55; }}
-    code {{ display: inline-block; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--border); border-radius: 4px; background: #f3f4f6; padding: 1px 4px; color: var(--ink); }}
-    :root.dark {{
-      --bg: #0f172a;
-      --surface: #111827;
-      --border: #2d3748;
-      --ink: #f8fafc;
-      --muted: #cbd5e1;
-      --accent: #34d399;
-      --accent-soft: rgba(16, 185, 129, .16);
-    }}
-    :root.dark code {{ background: #1f2937; }}
-    @media (prefers-color-scheme: dark) {{
-      :root:not(.light) {{
-        --bg: #0f172a;
-        --surface: #111827;
-        --border: #2d3748;
-        --ink: #f8fafc;
-        --muted: #cbd5e1;
-        --accent: #34d399;
-        --accent-soft: rgba(16, 185, 129, .16);
-      }}
-      :root:not(.light) code {{ background: #1f2937; }}
-    }}
+  }}
   </style>
 </head>
 <body>
