@@ -35,7 +35,7 @@ func TestStatdRuntimeCacheGenerationAndCopy(t *testing.T) {
 	projectID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
 	deploymentID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	project := db.Project{
-		ID:                 projectID,
+		ID: projectID,
 		ActiveDeploymentID: pgtype.UUID{Bytes: deploymentID, Valid: true},
 	}
 	startedAt := time.Now().Add(-90 * time.Minute).UTC().Round(0)
@@ -116,7 +116,7 @@ func TestMetricFromStatd(t *testing.T) {
 	memoryMax := uint64(512 * 1024 * 1024)
 	snapshot := statd.Snapshot{
 		Valid: true,
-		CPU:   statd.CPUSnapshot{Percent: &cpu},
+		CPU: statd.CPUSnapshot{Percent: &cpu},
 		Memory: statd.MemorySnapshot{
 			CurrentBytes: 64 * 1024 * 1024,
 			MaxBytes:     &memoryMax,
