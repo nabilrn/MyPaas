@@ -321,13 +321,16 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (D
 		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 
-	// Vibecoder Fallback: use nixpacks plan
-	plan, _ := nixpacks.PlanWorkspace(ctx, workspace)
-	if plan != nil && isStaticSPA(workspace) {
+	// Known static frontend frameworks are classified directly from repository signals.
+	// Nixpacks remains optional enrichment for unknown runtime projects; it is not a
+	// prerequisite for recognizing a static build.
+	if isStaticSPA(workspace) {
 		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 
-	// If it's not a static SPA (or if nixpacks failed), reject it and provide the AI prompt
+	plan, _ := nixpacks.PlanWorkspace(ctx, workspace)
+
+	// If it is not a known static frontend, reject it and provide the AI prompt.
 	prompt := "I am deploying my project to a Docker-based platform. Please generate a production-ready, multi-stage Dockerfile for my project. The final stage must expose port 3000 and run the app. Make it as memory-efficient as possible using Alpine images."
 	providers := ""
 	if plan != nil && len(plan.Providers) > 0 {
@@ -366,23 +369,7 @@ func findStaticFrontendCandidates(workspace string) []string {
 }
 
 func isStaticSPA(workspace string) bool {
-	b, err := os.ReadFile(filepath.Join(workspace, "package.json"))
-	if err != nil {
-		return false
-	}
-	content := string(b)
-
-	// If it has SSR/Backend frameworks, it's not an SPA
-	if strings.Contains(content, `"next"`) || strings.Contains(content, `"nuxt"`) || strings.Contains(content, `"@nestjs/core"`) {
-		return false
-	}
-
-	// If it has SPA frameworks/bundlers
-	if strings.Contains(content, `"vite"`) || strings.Contains(content, `"react-scripts"`) || strings.Contains(content, `"@sveltejs/adapter-static"`) || strings.Contains(content, `"astro"`) || strings.Contains(content, `"vue-cli-service"`) {
-		return true
-	}
-
-	return false
+	return isStaticFrontend(workspace)
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, error) {
