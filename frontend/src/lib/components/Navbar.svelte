@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ChevronLeft, ClipboardList, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -58,23 +58,25 @@
 </script>
 
 <aside class="fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-200 bg-white transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 lg:flex {$sidebarCollapsed ? 'w-16' : 'w-64'}">
-	<div class="flex items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'h-20 flex-col justify-center gap-1 px-2' : 'h-20 justify-between gap-2.5 px-5'}">
+	<div class="flex h-16 items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-5'}">
 		{#if $sidebarCollapsed}
-			<a href="/projects" class="flex items-center justify-center rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
+			<button
+				type="button"
+				class="app-focus flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
+				aria-label="Expand sidebar"
+				title="Expand sidebar"
+				on:click={() => sidebarCollapsed.toggle()}
+			>
 				<BrandLogo compact />
-			</a>
+			</button>
 		{:else}
 			<a href="/projects" class="flex min-w-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
 				<BrandLogo />
 			</a>
-		{/if}
-		<IconButton label={$sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} variant="ghost" on:click={() => sidebarCollapsed.toggle()}>
-			{#if $sidebarCollapsed}
-				<ChevronRight class="h-4 w-4" aria-hidden="true" />
-			{:else}
+			<IconButton label="Collapse sidebar" variant="ghost" on:click={() => sidebarCollapsed.toggle()}>
 				<ChevronLeft class="h-4 w-4" aria-hidden="true" />
-			{/if}
-		</IconButton>
+			</IconButton>
+		{/if}
 	</div>
 
 	<nav class="flex-1 overflow-y-auto py-4 {$sidebarCollapsed ? 'px-2' : 'px-3'}" aria-label="Primary navigation">
