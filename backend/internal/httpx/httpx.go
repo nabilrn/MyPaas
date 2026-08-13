@@ -39,6 +39,15 @@ func Error(w http.ResponseWriter, status int, code, message string, details map[
 	})
 }
 
+func validationMessage(err error) string {
+	message := err.Error()
+	if strings.Contains(strings.ToLower(message), "failed to inspect remote branches") {
+		slog.Debug("repository inspection validation failed", "error", err)
+		return "Repository could not be inspected. Check the repository URL and visibility, then try again."
+	}
+	return message
+}
+
 func DomainError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errs.ErrUnauthorized):
@@ -72,7 +81,7 @@ func DomainError(w http.ResponseWriter, err error) {
 		}
 		Error(w, http.StatusBadRequest, "NO_DEPLOY_CONFIG", message, nil)
 	case errors.Is(err, errs.ErrValidation), errors.Is(err, errs.ErrBadRequest):
-		Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error(), nil)
+		Error(w, http.StatusBadRequest, "VALIDATION_FAILED", validationMessage(err), nil)
 	default:
 		slog.Error("unhandled request error", "error", err)
 		Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Unexpected server error.", nil)
