@@ -52,7 +52,7 @@ describe('compactRepositoryLabel', () => {
 
 	it('preserves the repository name while shortening a long owner path', () => {
 		const value = compactRepositoryLabel('kk-infrastruktur-dan-tata-kelola-dsi/sumbar-smart-portal', 30);
-		expect(value).toBe('kk-infr…/sumbar-smart-portal');
+		expect(value).toBe('kk-infras…/sumbar-smart-portal');
 		expect(value.length).toBeLessThanOrEqual(30);
 	});
 
