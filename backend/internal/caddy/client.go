@@ -75,16 +75,43 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 	return c.replaceHostRoute(ctx, host, route)
 }
 
-func (c *Client) AddFileServerRoute(ctx context.Context, host, root string) error {
-	route, err := json.Marshal(map[string]any{
-		"match": []map[string]any{{"host": []string{host}}},
-		"handle": []map[string]any{
-			{
-				"handler":     "file_server",
-				"root":        root,
-				"index_names": []string{"index.html"},
+func staticFileHandlers(root string) []map[string]any {
+	return []map[string]any{
+		{
+			"handler": "vars",
+			"root":    root,
+		},
+		{
+			"handler": "subroute",
+			"routes": []map[string]any{
+				{
+					"match": []map[string]any{{
+						"file": map[string]any{
+							"try_files": []string{
+								"{http.request.uri.path}",
+								"{http.request.uri.path}/",
+								"/index.html",
+							},
+						},
+					}},
+					"handle": []map[string]any{{
+						"handler": "rewrite",
+						"uri":     "{http.matchers.file.relative}",
+					}},
+				},
 			},
 		},
+		{
+			"handler":     "file_server",
+			"index_names": []string{"index.html"},
+		},
+	}
+}
+
+func (c *Client) AddFileServerRoute(ctx context.Context, host, root string) error {
+	route, err := json.Marshal(map[string]any{
+		"match":    []map[string]any{{"host": []string{host}}},
+		"handle":   staticFileHandlers(root),
 		"terminal": true,
 	})
 	if err != nil {
@@ -114,16 +141,7 @@ func (c *Client) AddHybridRoute(ctx context.Context, host, root string, port int
 						}},
 					},
 					{
-						"handle": []map[string]any{
-							{
-								"handler": "vars",
-								"root":    root,
-							},
-							{
-								"handler":     "file_server",
-								"index_names": []string{"index.html"},
-							},
-						},
+						"handle": staticFileHandlers(root),
 					},
 				},
 			},
