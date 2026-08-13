@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendRollingSample, boundedPercent, deriveNetworkRate } from './host-telemetry';
+import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
 
 describe('host telemetry helpers', () => {
 	it('bounds resource percentages', () => {
@@ -11,6 +11,25 @@ describe('host telemetry helpers', () => {
 
 	it('keeps only the newest rolling samples', () => {
 		expect(appendRollingSample([1, 2, 3], 4, 3)).toEqual([2, 3, 4]);
+	});
+
+	it('derives cpu usage from cumulative total and idle counters', () => {
+		expect(deriveCPUUsage(
+			{ totalTicks: 1_000, idleTicks: 700 },
+			{ totalTicks: 1_200, idleTicks: 760 }
+		)).toBe(70);
+	});
+
+	it('resets the cpu baseline on counter reset or invalid delta', () => {
+		expect(deriveCPUUsage(null, { totalTicks: 100, idleTicks: 50 })).toBeNull();
+		expect(deriveCPUUsage(
+			{ totalTicks: 1_000, idleTicks: 700 },
+			{ totalTicks: 900, idleTicks: 650 }
+		)).toBeNull();
+		expect(deriveCPUUsage(
+			{ totalTicks: 1_000, idleTicks: 700 },
+			{ totalTicks: 1_000, idleTicks: 700 }
+		)).toBeNull();
 	});
 
 	it('derives network rates from cumulative counters and elapsed time', () => {
