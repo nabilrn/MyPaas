@@ -23,9 +23,8 @@ jobs:
           from pathlib import Path
           page=Path('frontend/src/routes/projects/+page.svelte')
           s=page.read_text()
-          s=s.replace('ExternalLink, FolderGit2, GitBranch, LoaderCircle, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X','ExternalLink, FolderGit2, GitBranch, LoaderCircle, Package, Play, Plus, Rocket, Search, Square, TriangleAlert, X')
           s=s.replace("\tlet lastRefreshedAt: Date | null = null;\n",'')
-          s=s.replace("\t$: dashboardRefreshing = loading || projectsInFlight || hostStatsInFlight;\n\t$: syncLabel = error ? 'Refresh needs attention' : dashboardRefreshing ? 'Refreshing' : 'Up to date';\n\t$: syncDotClass = error ? 'bg-amber-500' : dashboardRefreshing ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';","\t$: syncLabel = error ? 'Updates delayed' : loading ? 'Connecting' : 'Live updates';\n\t$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-emerald-500 dark:bg-emerald-400';")
+          s=s.replace("\t$: dashboardRefreshing = loading || projectsInFlight || hostStatsInFlight;\n\t$: syncLabel = error ? 'Refresh needs attention' : dashboardRefreshing ? 'Refreshing' : 'Up to date';\n\t$: syncDotClass = error ? 'bg-amber-500' : dashboardRefreshing ? 'bg-gray-400 animate-pulse' : 'bg-gray-500 dark:bg-gray-400';","\t$: syncLabel = error ? 'Updates delayed' : loading ? 'Connecting' : 'Live';\n\t$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-emerald-500 dark:bg-emerald-400';")
           s=s.replace("\t\t\tlastRefreshedAt = new Date();\n",'')
           s=s.replace("\n\tfunction formatRefreshTime(value: Date) {\n\t\treturn value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });\n\t}\n",'\n')
           old='''\t\t<p class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">\n\t\t\t<span class={`status-dot ${syncDotClass}`}></span>\n\t\t\t{syncLabel}{lastRefreshedAt ? ` · ${formatRefreshTime(lastRefreshedAt)}` : ''}\n\t\t\t<span class="text-gray-400 dark:text-gray-500">· {projects.length} project{projects.length === 1 ? '' : 's'}</span>\n\t\t</p>\n\t\t<div class="flex items-center gap-2">\n\t\t\t<ActionButton variant="secondary" loading={dashboardRefreshing} loadingLabel="Refreshing" on:click={() => refreshDashboardData()}>\n\t\t\t\t<RefreshCw slot="icon" class="h-4 w-4" />\n\t\t\t\tRefresh\n\t\t\t</ActionButton>\n\t\t\t<ActionLink href="/projects/new" variant="primary">'''
@@ -57,6 +56,18 @@ jobs:
             'stroke-width="1.2"':'stroke-width="1.45"'}.items():
               assert a in s; s=s.replace(a,b)
           p.write_text(s)
+
+          p=Path('frontend/src/lib/components/StorageCapacityMetric.svelte'); s=p.read_text()
+          old="""\t$: fillClass = usedPercent >= 90\n\t\t? 'fill-red-500/65 dark:fill-red-400/55'\n\t\t: usedPercent >= 80\n\t\t\t? 'fill-amber-500/60 dark:fill-amber-300/50'\n\t\t\t: 'fill-gray-700/55 dark:fill-gray-200/45';"""
+          new="""\t$: fillClass = usedPercent >= 90\n\t\t? 'fill-red-500/70 dark:fill-red-400/60'\n\t\t: usedPercent >= 80\n\t\t\t? 'fill-orange-600/70 dark:fill-orange-300/60'\n\t\t\t: 'fill-orange-500/65 dark:fill-orange-400/55';\n\t$: fillStrokeClass = usedPercent >= 90\n\t\t? 'stroke-red-600/55 dark:stroke-red-300/50'\n\t\t: 'stroke-orange-600/55 dark:stroke-orange-300/50';"""
+          assert old in s
+          s=s.replace(old,new)
+          s=s.replace('grid-cols-[minmax(0,1fr)_6rem]','grid-cols-[minmax(0,1fr)_5.5rem]')
+          s=s.replace('class="h-28 w-24"','class="h-24 w-20"')
+          old='''\t\t\t{#if available && usedPercent > 0}\n\t\t\t\t<rect x="20" y={fillTop} width="56" height={76 - fillTop} class={fillClass} />\n\t\t\t\t<ellipse cx="48" cy={fillTop} rx="28" ry="7" class={fillClass} />\n\t\t\t\t<ellipse cx="48" cy="76" rx="28" ry="7" class={fillClass} />\n\t\t\t{/if}\n\t\t\t<ellipse cx="48" cy="20" rx="28" ry="8" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.5" />\n\t\t\t<path d="M20 20v56c0 4.4 12.5 8 28 8s28-3.6 28-8V20" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.5" />\n\t\t\t<path d="M20 76c0 4.4 12.5 8 28 8s28-3.6 28-8" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.5" />'''
+          new='''\t\t\t<ellipse cx="48" cy="76" rx="28" ry="7" fill="none" class="stroke-gray-300/70 dark:stroke-gray-700/70" stroke-width="1" />\n\t\t\t{#if available && usedPercent > 0}\n\t\t\t\t<rect x="20.75" y={fillTop} width="54.5" height={76 - fillTop} class={fillClass} />\n\t\t\t\t<ellipse cx="48" cy={fillTop} rx="27.25" ry="6.6" class={`${fillClass} ${fillStrokeClass}`} stroke-width="0.8" />\n\t\t\t\t<ellipse cx="48" cy="76" rx="27.25" ry="6.6" class={fillClass} />\n\t\t\t\t<path d={`M24 ${fillTop} C 34 ${fillTop - 3.2} 62 ${fillTop - 3.2} 72 ${fillTop}`} fill="none" class="stroke-white/40 dark:stroke-white/25" stroke-width="0.8" stroke-linecap="round" />\n\t\t\t{/if}\n\t\t\t<ellipse cx="48" cy="20" rx="28" ry="8" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.4" />\n\t\t\t<path d="M20 20v56c0 4.4 12.5 8 28 8s28-3.6 28-8V20" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.4" />\n\t\t\t<path d="M20 76c0 4.4 12.5 8 28 8s28-3.6 28-8" fill="none" class="stroke-gray-500 dark:stroke-gray-400" stroke-width="1.4" />'''
+          assert old in s
+          p.write_text(s.replace(old,new))
           PY
       - name: Validate frontend
         working-directory: frontend
@@ -71,5 +82,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "refactor: calm live dashboard telemetry"
+          git commit -m "refactor: polish live dashboard telemetry"
           git push
