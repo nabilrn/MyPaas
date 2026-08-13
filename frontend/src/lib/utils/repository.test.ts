@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeProjectSource, describeRepoUrl } from './repository';
+import { compactRepositoryLabel, describeProjectSource, describeRepoUrl } from './repository';
 
 describe('describeRepoUrl', () => {
 	it('extracts owner/repo from GitHub HTTPS URLs', () => {
@@ -42,6 +42,25 @@ describe('describeRepoUrl', () => {
 		expect(result.host).toBe('git');
 		expect(result.label).toBe('not a url');
 		expect(result.href).toBeNull();
+	});
+});
+
+describe('compactRepositoryLabel', () => {
+	it('leaves short labels unchanged', () => {
+		expect(compactRepositoryLabel('nabilrn/MyPaas', 30)).toBe('nabilrn/MyPaas');
+	});
+
+	it('preserves the repository name while shortening a long owner path', () => {
+		const value = compactRepositoryLabel('kk-infrastruktur-dan-tata-kelola-dsi/sumbar-smart-portal', 30);
+		expect(value).toBe('kk-infr…/sumbar-smart-portal');
+		expect(value.length).toBeLessThanOrEqual(30);
+	});
+
+	it('bounds an unusually long repository name', () => {
+		const value = compactRepositoryLabel('org/an-extremely-long-repository-name-that-keeps-going', 20);
+		expect(value.length).toBeLessThanOrEqual(20);
+		expect(value.startsWith('…/')).toBe(true);
+		expect(value.endsWith('…')).toBe(true);
 	});
 });
 
