@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -165,19 +166,39 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 type hostStatsResponse struct {
-	HostRAMBytes   int64                      `json:"host_ram_bytes"`
-	HostCPUCores   int                        `json:"host_cpu_cores"`
-	AllocatedRAMMB int32                      `json:"allocated_ram_mb"`
-	AllocatedCPU   float64                    `json:"allocated_cpu"`
-	Memory         *statd.HostMemorySnapshot  `json:"memory"`
-	CPU            *statd.HostCPUSnapshot     `json:"cpu"`
-	Storage        *statd.HostStorageSnapshot `json:"storage"`
-	Network        *statd.HostNetworkSnapshot `json:"network"`
+	HostRAMBytes       int64                      `json:"host_ram_bytes"`
+	HostCPUCores       int                        `json:"host_cpu_cores"`
+	AllocatedRAMMB     int32                      `json:"allocated_ram_mb"`
+	AllocatedCPU       float64                    `json:"allocated_cpu"`
+	TelemetryStatus    string                     `json:"telemetry_status"`
+	TelemetryErrorCode string                     `json:"telemetry_error_code,omitempty"`
+	Memory             *statd.HostMemorySnapshot  `json:"memory"`
+	CPU                *statd.HostCPUSnapshot     `json:"cpu"`
+	Storage            *statd.HostStorageSnapshot `json:"storage"`
+	Network            *statd.HostNetworkSnapshot `json:"network"`
+}
+
+func hostTelemetryErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var protocolErr *statd.ProtocolError
+	if errors.As(err, &protocolErr) {
+		if protocolErr.Code != "" {
+			return protocolErr.Code
+		}
+		return "PROTOCOL_ERROR"
+	}
+	if errors.Is(err, statd.ErrInvalidInput) {
+		return "INVALID_CONFIG"
+	}
+	return "CONNECT_OR_IO_ERROR"
 }
 
 // HostStats returns host capacity plus optional host telemetry from mypaas-statd.
-// Host telemetry remains nil when statd is disabled, unavailable, still on v0.1,
-// or has not produced a valid section. Existing capacity/allocation data remains usable.
+// Capacity/allocation data remains usable when host telemetry is disabled or unavailable.
+// telemetry_status and telemetry_error_code make the fail-open path observable without
+// exposing raw socket or filesystem errors to the dashboard.
 func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 	cap := host.GetCapacity()
 
@@ -196,24 +217,37 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 	var cpu *statd.HostCPUSnapshot
 	var storage *statd.HostStorageSnapshot
 	var network *statd.HostNetworkSnapshot
+	telemetryStatus := "disabled"
+	telemetryErrorCode := ""
 	if socketPath := strings.TrimSpace(os.Getenv("STATD_SOCKET")); socketPath != "" {
-		if snapshot, snapshotErr := statd.NewClient(socketPath).HostSnapshot(r.Context()); snapshotErr == nil {
+		telemetryStatus = "unavailable"
+		snapshot, snapshotErr := statd.NewClient(socketPath).HostSnapshot(r.Context())
+		if snapshotErr == nil {
 			memory = snapshot.Memory
 			cpu = snapshot.CPU
 			storage = snapshot.Storage
 			network = snapshot.Network
+			if memory != nil || cpu != nil || storage != nil || network != nil {
+				telemetryStatus = "available"
+			} else {
+				telemetryErrorCode = "EMPTY_SNAPSHOT"
+			}
+		} else {
+			telemetryErrorCode = hostTelemetryErrorCode(snapshotErr)
 		}
 	}
 
 	httpx.JSON(w, http.StatusOK, hostStatsResponse{
-		HostRAMBytes:   cap.TotalRAMBytes,
-		HostCPUCores:   cap.TotalCPUCores,
-		AllocatedRAMMB: allocatedRAM,
-		AllocatedCPU:   allocatedCPU,
-		Memory:         memory,
-		CPU:            cpu,
-		Storage:        storage,
-		Network:        network,
+		HostRAMBytes:       cap.TotalRAMBytes,
+		HostCPUCores:       cap.TotalCPUCores,
+		AllocatedRAMMB:     allocatedRAM,
+		AllocatedCPU:       allocatedCPU,
+		TelemetryStatus:    telemetryStatus,
+		TelemetryErrorCode: telemetryErrorCode,
+		Memory:             memory,
+		CPU:                cpu,
+		Storage:            storage,
+		Network:            network,
 	})
 }
 
