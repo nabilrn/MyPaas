@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import appCss from '../../app.css?raw';
 import logsPage from '../../routes/projects/[id]/logs/+page.svelte?raw';
 
-describe('console surface interaction contract', () => {
-	it('leaves overflow behavior to each console consumer', () => {
-		const afterSelector = appCss.split('.console-surface {')[1] ?? '';
-		const consoleRule = afterSelector.split('}')[0] ?? '';
-		expect(consoleRule.length).toBeGreaterThan(0);
-		expect(consoleRule).not.toContain('overflow-hidden');
+describe('project log console interaction contract', () => {
+	it('forces the log viewport to remain scrollable inside the shared console surface', () => {
+		expect(logsPage).toContain('!overflow-auto');
 	});
 
 	it('keeps project logs text-selectable with visible selection feedback', () => {
