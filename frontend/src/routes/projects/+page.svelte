@@ -7,6 +7,7 @@
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import Pagination from '$components/Pagination.svelte';
+	import ProjectStatus from '$components/ProjectStatus.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
@@ -146,9 +147,7 @@
 			};
 			currentCPUUsage = deriveCPUUsage(cpuBaseline, current);
 			cpuBaseline = current;
-			if (currentCPUUsage !== null) {
-				cpuSeries = appendRollingSample(cpuSeries, currentCPUUsage, telemetrySamples);
-			}
+			if (currentCPUUsage !== null) cpuSeries = appendRollingSample(cpuSeries, currentCPUUsage, telemetrySamples);
 		} else {
 			cpuBaseline = null;
 			currentCPUUsage = null;
@@ -171,9 +170,7 @@
 			};
 			currentNetworkRate = deriveNetworkRate(networkBaseline, current);
 			networkBaseline = current;
-			if (currentNetworkRate) {
-				networkSeries = appendRollingSample(networkSeries, currentNetworkRate.totalBytesPerSecond, telemetrySamples);
-			}
+			if (currentNetworkRate) networkSeries = appendRollingSample(networkSeries, currentNetworkRate.totalBytesPerSecond, telemetrySamples);
 		} else {
 			networkBaseline = null;
 			currentNetworkRate = null;
@@ -360,6 +357,20 @@
 	{/if}
 
 	<SectionPanel title="Host resources" description="Live host utilization when the telemetry service is available. Allocation remains visible as capacity context." contentClass="p-0" className="mb-5">
+		<svelte:fragment slot="actions">
+			<a
+				href="https://github.com/nabilrn/mypaas-statd"
+				target="_blank"
+				rel="noopener"
+				class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-500 transition-colors hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
+				title="Open mypaas-statd repository"
+			>
+				<GitHubMark class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+				<span>Telemetry by <span class="font-medium">mypaas-statd</span></span>
+				<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+			</a>
+		</svelte:fragment>
+
 		{#if hostStats}
 			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
 				<CapacityMetricChart
@@ -374,7 +385,7 @@
 				<CapacityMetricChart
 					label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'}
 					value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`}
-					indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(0)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''}
+					indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''}
 					detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'}
 					series={hostStats.cpu ? cpuSeries : []}
 					resource="cpu"
@@ -456,36 +467,37 @@
 
 		<table class="data-table hidden table-fixed xl:table">
 			<colgroup>
+				<col class="w-[17%]" />
+				<col class="w-[9%]" />
 				<col class="w-[20%]" />
-				<col class="w-[22%]" />
 				<col class="w-[8%]" />
-				<col class="w-[12%]" />
+				<col class="w-[11%]" />
 				<col class="w-[10%]" />
 				<col class="w-[7%]" />
 				<col class="w-[7%]" />
-				<col class="w-[14%]" />
+				<col class="w-[11%]" />
 			</colgroup>
 			<thead>
 				<tr>
 					<th>Project</th>
+					<th>Status</th>
 					<th>Repository</th>
 					<th>Branch</th>
 					<th>Runtime</th>
 					<th>Usage</th>
 					<th>Uptime</th>
 					<th>Updated</th>
-					<th class="text-right">Action</th>
+					<th class="text-center">Action</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
-					{@const crashed = getDerivedStatus(project) === 'crashed'}
+					{@const derivedStatus = getDerivedStatus(project)}
 					<tr>
 						<td>
 							<div class="min-w-0">
 								<a href="/projects/{project.id}" class="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
-									{#if crashed}<span class="status-dot bg-red-500" title="Crashed"></span>{/if}
 									<span class="truncate">{project.name}</span>
 								</a>
 								<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
@@ -494,16 +506,17 @@
 								</a>
 							</div>
 						</td>
+						<td class="whitespace-nowrap"><ProjectStatus status={derivedStatus} /></td>
 						<td>
 							{#if source.href}
 								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
 									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="max-w-[30ch] truncate">{compactRepositoryLabel(source.label)}</span>
+									<span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span>
 								</a>
 							{:else}
 								<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
 									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="max-w-[30ch] truncate">{compactRepositoryLabel(source.label)}</span>
+									<span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span>
 								</span>
 							{/if}
 						</td>
@@ -534,11 +547,11 @@
 						</td>
 						<td class="metric-value whitespace-nowrap text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
 						<td class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
-						<td class="whitespace-nowrap text-right">
+						<td class="whitespace-nowrap text-center">
 							<ActionButton
 								variant={projectPrimaryVariant(project)}
 								size="xs"
-								className="min-w-[6.25rem]"
+								className="mx-auto min-w-[5.75rem]"
 								on:click={() => handlePrimaryProjectAction(project)}
 								loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
 								loadingLabel={projectPrimaryLabel(project)}
@@ -556,16 +569,18 @@
 		<div class="divide-y divide-gray-100 dark:divide-neutral-800 xl:hidden">
 			{#each visibleProjects as project}
 				{@const source = describeProjectSource(project)}
-				{@const crashed = getDerivedStatus(project) === 'crashed'}
 				<div class="px-4 py-3">
 					<div class="flex items-center justify-between gap-3">
-						<a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
-							{#if crashed}<span class="status-dot bg-red-500" title="Crashed"></span>{/if}
-							<span class="truncate">{project.name}</span>
-						</a>
+						<div class="min-w-0">
+							<a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
+								<span class="truncate">{project.name}</span>
+							</a>
+							<div class="mt-1"><ProjectStatus status={getDerivedStatus(project)} /></div>
+						</div>
 						<ActionButton
 							variant={projectPrimaryVariant(project)}
 							size="xs"
+							className="min-w-[5.75rem]"
 							on:click={() => handlePrimaryProjectAction(project)}
 							loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
 							loadingLabel={projectPrimaryLabel(project)}
