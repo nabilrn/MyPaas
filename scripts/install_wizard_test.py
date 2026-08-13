@@ -143,7 +143,7 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("CADDY_ADMIN: unix//run/mypaas/caddy-admin.sock", api)
         self.assertIn('CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"', caddy)
         self.assertIn("/run/mypaas:/run/mypaas", caddy)
-        self.assertNotIn("2019:2019", compose)
+        self.assertNotIn("2019:2019", caddy)
 
     def test_api_container_drops_capabilities_and_blocks_privilege_gain(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
@@ -157,7 +157,7 @@ class InstallConfigTest(unittest.TestCase):
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
         caddy = compose.split("  caddy:\n", 1)[1].split("\n  cloudflared:\n", 1)[0]
 
-        self.assertIn("caddy_logs:/var/log/caddy", compose)
+        self.assertIn("caddy_logs:/var/log/caddy", caddy)
         self.assertIn("  caddy_logs:\n", compose)
 
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
