@@ -36,6 +36,14 @@ class DeployToVmTest(unittest.TestCase):
         self.assertNotIn('export DOCKER_BIND_HOST="$control_gateway"', content)
         self.assertNotIn('export CADDY_UPSTREAM_HOST="$DOCKER_BIND_HOST"', content)
 
+    def test_deploy_uses_checkout_sha_image_tag_by_default(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('MYPAAS_IMAGE_TAG="$(git -c safe.directory="$ROOT_DIR" rev-parse HEAD)"', content)
+        self.assertIn('$DOCKER_BIN pull "$API_IMAGE_REPO:$MYPAAS_IMAGE_TAG"', content)
+        self.assertIn('$DOCKER_BIN pull "$DASHBOARD_IMAGE_REPO:$MYPAAS_IMAGE_TAG"', content)
+        self.assertIn("Wait for the Docker publish workflow to finish", content)
+
 
 if __name__ == "__main__":
     unittest.main()

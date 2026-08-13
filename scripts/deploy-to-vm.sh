@@ -16,6 +16,8 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 COMPOSE_BIN="${COMPOSE_BIN:-$DOCKER_BIN compose}"
+API_IMAGE_REPO="${MYPAAS_API_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-api}"
+DASHBOARD_IMAGE_REPO="${MYPAAS_DASHBOARD_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-dashboard}"
 
 cd "$ROOT_DIR"
 
@@ -67,6 +69,26 @@ fi
 for network in "$CONTROL_NETWORK" "$PROJECT_NETWORK" "$ROUTING_NETWORK"; do
   $DOCKER_BIN network inspect "$network" >/dev/null 2>&1 || $DOCKER_BIN network create "$network" >/dev/null
 done
+
+if [[ -z "${MYPAAS_IMAGE_TAG:-}" && -d "$ROOT_DIR/.git" ]]; then
+  MYPAAS_IMAGE_TAG="$(git -c safe.directory="$ROOT_DIR" rev-parse HEAD)"
+  export MYPAAS_IMAGE_TAG
+  echo "Using MyPaas image tag ${MYPAAS_IMAGE_TAG:0:12} from the current checkout."
+fi
+
+if [[ -n "${MYPAAS_IMAGE_TAG:-}" ]]; then
+  echo "Pulling MyPaas release images for ${MYPAAS_IMAGE_TAG:0:12}..."
+  if ! $DOCKER_BIN pull "$API_IMAGE_REPO:$MYPAAS_IMAGE_TAG"; then
+    echo "Missing API image $API_IMAGE_REPO:$MYPAAS_IMAGE_TAG." >&2
+    echo "Wait for the Docker publish workflow to finish, or set MYPAAS_IMAGE_TAG explicitly." >&2
+    exit 1
+  fi
+  if ! $DOCKER_BIN pull "$DASHBOARD_IMAGE_REPO:$MYPAAS_IMAGE_TAG"; then
+    echo "Missing dashboard image $DASHBOARD_IMAGE_REPO:$MYPAAS_IMAGE_TAG." >&2
+    echo "Wait for the Docker publish workflow to finish, or set MYPAAS_IMAGE_TAG explicitly." >&2
+    exit 1
+  fi
+fi
 
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
