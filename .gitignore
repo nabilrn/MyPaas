@@ -27,6 +27,10 @@ frontend/build/
 frontend/.svelte-kit/
 frontend/dist/
 frontend/.vercel/
+frontend/playwright/.auth/
+frontend/artifacts/
+frontend/test-results/
+frontend/playwright-report/
 
 # Node / pnpm
 npm-debug.log

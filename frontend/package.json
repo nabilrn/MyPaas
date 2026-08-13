@@ -12,9 +12,15 @@
     "lint": "prettier --plugin-search-dir . --check .",
     "format": "prettier --plugin-search-dir . --write .",
     "test": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "audit:auth": "node playwright/audit/auth-bootstrap.mjs",
+    "audit:create": "node playwright/audit/run-create-audit.mjs --mode=mock",
+    "audit:create:prod": "node playwright/audit/run-create-audit.mjs --mode=production",
+    "audit:create:ui": "playwright test --config=playwright.config.js --ui",
+    "audit:create:mock": "node playwright/audit/run-create-audit.mjs --mode=mock"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@sveltejs/adapter-node": "^5.0.0",
     "@sveltejs/kit": "^2.5.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
