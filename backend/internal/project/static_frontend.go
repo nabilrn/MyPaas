@@ -34,6 +34,9 @@ func isStaticFrontend(workspace string) bool {
 		}
 		return !astroUsesServerRuntime(workspace, manifest)
 	}
+	if packageHas(manifest, "@sveltejs/kit") {
+		return packageHas(manifest, "@sveltejs/adapter-static") && build != ""
+	}
 	if packageHas(manifest, "@sveltejs/adapter-static") {
 		return build != ""
 	}
