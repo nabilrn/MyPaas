@@ -24,8 +24,9 @@ WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
 USE_PODMAN="${USE_PODMAN:-false}"
 MIGRATE_URL="${MIGRATE_URL:-}"
 INSTALL_STATD="${INSTALL_STATD:-true}"
+STATD_ONLY="${STATD_ONLY:-false}"
 STATD_INSTALL_MODE="${STATD_INSTALL_MODE:-release}"
-STATD_VERSION="${STATD_VERSION:-v0.1.0}"
+STATD_VERSION="${STATD_VERSION:-v0.2.0}"
 STATD_RELEASE_BASE_URL="${STATD_RELEASE_BASE_URL:-https://github.com/nabilrn/mypaas-statd/releases/download}"
 STATD_REPO_URL="${STATD_REPO_URL:-https://github.com/nabilrn/mypaas-statd.git}"
 STATD_REF="${STATD_REF:-main}"
@@ -39,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --podman)
       USE_PODMAN="true"
+      shift
+      ;;
+    --statd-only)
+      STATD_ONLY="true"
       shift
       ;;
     *)
@@ -214,7 +219,7 @@ install_docker_debian() {
 
   local arch
   arch="$(dpkg --print-architecture)"
-  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/%s %s stable\n' "$arch" "$distro" "$codename" \
+  printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stable\n' "$arch" /etc/apt/keyrings/docker.gpg "$distro" "$codename" \
     | sudo_cmd tee /etc/apt/sources.list.d/docker.list >/dev/null
 
   sudo_cmd apt-get update
@@ -292,6 +297,8 @@ install_statd_release() {
     (cd "$tmpdir" && sha256sum -c SHA256SUMS.selected >/dev/null)
     tar -C "$tmpdir" -xzf "$tmpdir/$artifact"
     [[ "$(cat "$tmpdir/VERSION")" == "$STATD_VERSION" ]] || die "mypaas-statd release VERSION does not match $STATD_VERSION"
+    [[ "$("$tmpdir/mypaas-statd" --version)" == "mypaas-statd ${STATD_VERSION#v}" ]] \
+      || die "mypaas-statd release binary version does not match $STATD_VERSION"
     sudo_cmd install -Dm0755 "$tmpdir/mypaas-statd" /usr/local/bin/mypaas-statd
     sudo_cmd install -Dm0644 "$tmpdir/mypaas-statd.service" /etc/systemd/system/mypaas-statd.service
   )
@@ -349,12 +356,17 @@ install_statd() {
   esac
 
   sudo_cmd systemctl daemon-reload
-  sudo_cmd systemctl enable --now mypaas-statd
+  sudo_cmd systemctl enable mypaas-statd >/dev/null
+  sudo_cmd systemctl restart mypaas-statd
   for _ in {1..20}; do
     [[ -S /run/mypaas/statd.sock ]] && break
     sleep 0.1
   done
   [[ -S /run/mypaas/statd.sock ]] || die "mypaas-statd started but /run/mypaas/statd.sock was not created"
+  if [[ "$STATD_INSTALL_MODE" == "release" ]]; then
+    [[ "$(sudo_cmd /usr/local/bin/mypaas-statd --version)" == "mypaas-statd ${STATD_VERSION#v}" ]] \
+      || die "installed mypaas-statd version does not match $STATD_VERSION"
+  fi
 }
 
 docker_prefix() {
@@ -588,6 +600,13 @@ prepare_host() {
 }
 
 main() {
+  if [[ "$STATD_ONLY" == "true" ]]; then
+    [[ "$(uname -s)" == "Linux" ]] || die "mypaas-statd install requires Linux"
+    install_statd
+    log "mypaas-statd $STATD_VERSION installation complete"
+    return
+  fi
+
   ensure_dependencies
 
   if [[ -n "$MIGRATE_URL" ]]; then
