@@ -123,6 +123,23 @@ running_image_id() {
   $docker_cmd inspect --format '{{.Image}}' "$container" 2>/dev/null || true
 }
 
+container_env_value() {
+  local docker_cmd="$1"
+  local container="$2"
+  local key="$3"
+  $docker_cmd inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container" 2>/dev/null \
+    | sed -n "s/^${key}=//p" | tail -n 1
+}
+
+env_file_value() {
+  local key="$1"
+  grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
+}
+
+reconcile_statd() {
+  ENV_FILE="$ENV_FILE" MYPAAS_INSTALL_DIR="$ROOT_DIR" bash "$ROOT_DIR/scripts/reconcile-statd.sh"
+}
+
 verify_stack() {
   local docker_cmd="$1"
   local attempt
@@ -134,6 +151,20 @@ verify_stack() {
     sleep "$VERIFY_DELAY_SECONDS"
   done
   return 1
+}
+
+redeploy_current_for_env_drift() {
+  local docker_cmd="$1"
+  local current_sha="$2"
+  local desired_socket api_socket
+  desired_socket="$(env_file_value STATD_SOCKET)"
+  api_socket="$(container_env_value "$docker_cmd" mypaas-api STATD_SOCKET)"
+  if [[ -n "$desired_socket" && "$api_socket" != "$desired_socket" ]]; then
+    log "API runtime environment is missing the reconciled STATD_SOCKET; recreating the current stack"
+    MYPAAS_IMAGE_TAG="$current_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
+      ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+    verify_stack "$docker_cmd" || die "current MyPaas stack failed verification after STATD_SOCKET reconciliation"
+  fi
 }
 
 main() {
@@ -158,16 +189,21 @@ main() {
   log "Checking $REMOTE/$REF for MyPaas updates"
   git_repo fetch --depth 1 "$REMOTE" "$REF"
 
-  local current_sha target_sha
+  local current_sha target_sha docker_cmd
   current_sha="$(git_repo rev-parse HEAD)"
   target_sha="$(git_repo rev-parse FETCH_HEAD)"
+  docker_cmd="$(docker_prefix)"
+
   if [[ "$current_sha" == "$target_sha" ]]; then
+    # Host-native dependencies and ignored production env files can drift even
+    # when the Git checkout is already current. Reconcile them before returning.
+    reconcile_statd
+    redeploy_current_for_env_drift "$docker_cmd" "$current_sha"
     log "MyPaas is already up to date (${current_sha:0:12})"
     return 0
   fi
 
-  local docker_cmd target_api target_dashboard
-  docker_cmd="$(docker_prefix)"
+  local target_api target_dashboard
   target_api="$API_IMAGE_REPO:$target_sha"
   target_dashboard="$DASHBOARD_IMAGE_REPO:$target_sha"
 
@@ -196,7 +232,9 @@ main() {
   restore_checkout_owner
 
   local deploy_ok=true
-  if ! MYPAAS_IMAGE_TAG="$target_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
+  if ! reconcile_statd; then
+    deploy_ok=false
+  elif ! MYPAAS_IMAGE_TAG="$target_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
     ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"; then
     deploy_ok=false
   elif ! verify_stack "$docker_cmd"; then
