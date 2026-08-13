@@ -29,7 +29,7 @@ func TestParseImageVolumeTargetsHandlesNullVolumes(t *testing.T) {
 	}
 }
 
-func TestRunArgsWithBindMountsIncludesStableMounts(t *testing.T) {
+func TestRunArgsWithVolumesIncludesStableVolume(t *testing.T) {
 	cli := NewDockerCLI("127.0.0.1", "mypaas-projects")
 	opts := RunOptions{
 		Name:          "mypaas-wa-api-next",
@@ -40,27 +40,27 @@ func TestRunArgsWithBindMountsIncludesStableMounts(t *testing.T) {
 		CPULimit:      0.5,
 		EnvFile:       "/tmp/project.env",
 	}
-	mounts := []BindMount{{Source: "/var/lib/mypaas/volumes/project-id/app/data", Target: "/app/data"}}
+	volumes := []VolumeMount{{Name: "mypaas-project-data-123", Target: "/app/data"}}
 
-	got, err := cli.runArgsWithBindMounts(opts, mounts)
+	got, err := cli.runArgsWithVolumes(opts, volumes)
 	if err != nil {
-		t.Fatalf("runArgsWithBindMounts() error = %v", err)
+		t.Fatalf("runArgsWithVolumes() error = %v", err)
 	}
 	joined := strings.Join(got, " ")
-	if !strings.Contains(joined, "--mount type=bind,src=/var/lib/mypaas/volumes/project-id/app/data,dst=/app/data") {
-		t.Fatalf("run args missing persistent bind mount: %v", got)
+	if !strings.Contains(joined, "--mount type=volume,source=mypaas-project-data-123,target=/app/data") {
+		t.Fatalf("run args missing persistent named volume: %v", got)
 	}
 	if got[len(got)-1] != opts.Image {
 		t.Fatalf("last run arg = %q, want image %q", got[len(got)-1], opts.Image)
 	}
 }
 
-func TestRunArgsWithBindMountsRejectsInvalidMount(t *testing.T) {
+func TestRunArgsWithVolumesRejectsInvalidVolume(t *testing.T) {
 	cli := NewDockerCLI("127.0.0.1")
-	_, err := cli.runArgsWithBindMounts(RunOptions{
+	_, err := cli.runArgsWithVolumes(RunOptions{
 		Name: "demo", Image: "example/demo:latest", HostPort: 3001, ContainerPort: 3000, MemoryMB: 128, CPULimit: 0.5,
-	}, []BindMount{{Source: "", Target: "/app/data"}})
+	}, []VolumeMount{{Name: "", Target: "/app/data"}})
 	if err == nil {
-		t.Fatal("runArgsWithBindMounts() error = nil, want validation error")
+		t.Fatal("runArgsWithVolumes() error = nil, want validation error")
 	}
 }
