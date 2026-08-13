@@ -16,6 +16,11 @@ export type NetworkRate = {
 	totalBytesPerSecond: number;
 };
 
+export type MetricDomain = {
+	min: number;
+	max: number;
+};
+
 export function boundedPercent(used: number, total: number) {
 	if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return 0;
 	return Math.max(0, Math.min(100, (used / total) * 100));
@@ -24,6 +29,42 @@ export function boundedPercent(used: number, total: number) {
 export function appendRollingSample(series: number[], value: number, maxSamples = 24) {
 	if (!Number.isFinite(value) || maxSamples <= 0) return series.slice(-Math.max(0, maxSamples));
 	return [...series, value].slice(-maxSamples);
+}
+
+export function deriveAdaptiveMetricDomain(series: number[], maxValue: number | null = 100): MetricDomain {
+	const clean = series.filter((sample) => Number.isFinite(sample) && sample >= 0);
+	const rawMin = clean.length > 0 ? Math.min(...clean) : 0;
+	const rawMax = clean.length > 0 ? Math.max(...clean) : 0;
+	const hardMax = maxValue !== null && Number.isFinite(maxValue) && maxValue > 0 ? maxValue : null;
+
+	if (clean.length < 2) {
+		return {
+			min: 0,
+			max: hardMax ?? Math.max(1, rawMax * 1.15)
+		};
+	}
+
+	const observedSpan = Math.max(0, rawMax - rawMin);
+	const minimumSpan = hardMax !== null ? Math.max(4, hardMax * 0.04) : Math.max(1, rawMax * 0.05);
+	const desiredSpan = Math.max(minimumSpan, observedSpan * 1.5);
+	const center = (rawMin + rawMax) / 2;
+	let min = center - desiredSpan / 2;
+	let max = center + desiredSpan / 2;
+
+	if (min < 0) {
+		max -= min;
+		min = 0;
+	}
+	if (hardMax !== null && max > hardMax) {
+		min -= max - hardMax;
+		max = hardMax;
+		if (min < 0) min = 0;
+	}
+	if (max <= min) {
+		max = hardMax !== null ? Math.min(hardMax, min + 1) : min + 1;
+	}
+
+	return { min, max };
 }
 
 export function deriveCPUUsage(previous: CPUCounterSample | null, current: CPUCounterSample): number | null {
