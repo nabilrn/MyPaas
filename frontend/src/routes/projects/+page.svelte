@@ -11,14 +11,14 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
-	import { appendRollingSample, boundedPercent, deriveNetworkRate, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
+	import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Project } from '$types';
 
 	const pageSize = 20;
-	const telemetrySamples = 24;
+	const telemetrySamples = 40;
 
 	let projects: Project[] = [];
 	let hostStats: HostStats | null = null;
@@ -35,10 +35,13 @@
 	let uptimeRefreshToken = 0;
 	let lastRefreshedAt: Date | null = null;
 	let projectsInFlight = false;
+	let hostStatsInFlight = false;
 	let ramSeries: number[] = [];
 	let cpuSeries: number[] = [];
 	let storageSeries: number[] = [];
 	let networkSeries: number[] = [];
+	let cpuBaseline: CPUCounterSample | null = null;
+	let currentCPUUsage: number | null = null;
 	let networkBaseline: NetworkCounterSample | null = null;
 	let currentNetworkRate: NetworkRate | null = null;
 
@@ -50,10 +53,14 @@
 		: projects;
 	$: hostRamMb = hostStats ? hostStats.host_ram_bytes / (1024 * 1024) : 0;
 	$: ramAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_ram_mb, hostRamMb) : 0;
-	$: cpuAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_cpu, hostStats.host_cpu_cores) : 0;
+	$: cpuAllocationRawPercent = hostStats && hostStats.host_cpu_cores > 0 ? (hostStats.allocated_cpu / hostStats.host_cpu_cores) * 100 : 0;
+	$: liveMemoryAvailable = Boolean(hostStats?.memory && hostStats.memory.total_bytes > 0);
+	$: hostMemoryUsedBytes = hostStats?.memory ? Math.max(0, hostStats.memory.total_bytes - hostStats.memory.available_bytes) : 0;
+	$: hostMemoryUsagePercent = hostStats?.memory ? boundedPercent(hostMemoryUsedBytes, hostStats.memory.total_bytes) : 0;
 	$: storageUsedBytes = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
 	$: storagePercent = hostStats?.storage ? boundedPercent(storageUsedBytes, hostStats.storage.total_bytes) : 0;
-	$: hostRamWarning = ramAllocationPercent >= 85;
+	$: hostRamWarning = ramAllocationPercent >= 85 || (liveMemoryAvailable && hostMemoryUsagePercent >= 90);
+	$: cpuAllocationWarning = Boolean(hostStats && hostStats.host_cpu_cores > 0 && hostStats.allocated_cpu > hostStats.host_cpu_cores);
 	$: storageWarning = Boolean(hostStats?.storage && storagePercent >= 85);
 	$: getDerivedStatus = (project: Project) => {
 		if (project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
@@ -79,18 +86,21 @@
 
 	onMount(() => {
 		void refreshDashboardData();
-		const dashboardRefresh = setInterval(() => void loadProjects(true), 5000);
-		return () => clearInterval(dashboardRefresh);
+		const projectRefresh = setInterval(() => void loadProjects(true), 5000);
+		const hostRefresh = setInterval(() => void loadHostStats(), 3000);
+		return () => {
+			clearInterval(projectRefresh);
+			clearInterval(hostRefresh);
+		};
 	});
 
 	async function refreshDashboardData(background = false) {
-		if (projectsInFlight) return;
 		uptimeRefreshToken += 1;
 		projectUptimes = {};
 		projectCpu = {};
 		projectMemory = {};
 		uptimeLoadingIds = new Set();
-		await loadProjects(background);
+		await Promise.all([loadProjects(background), loadHostStats()]);
 	}
 
 	async function loadProjects(background = false) {
@@ -99,10 +109,7 @@
 		if (!background) loading = true;
 		error = '';
 		try {
-			const [projectRows, nextHostStats] = await Promise.all([api.projects.list(), api.admin.getHostStats()]);
-			projects = projectRows;
-			hostStats = nextHostStats;
-			recordHostTelemetry(nextHostStats, Date.now());
+			projects = await api.projects.list();
 			lastRefreshedAt = new Date();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load projects';
@@ -112,10 +119,41 @@
 		}
 	}
 
+	async function loadHostStats() {
+		if (hostStatsInFlight) return;
+		hostStatsInFlight = true;
+		try {
+			const nextHostStats = await api.admin.getHostStats();
+			hostStats = nextHostStats;
+			recordHostTelemetry(nextHostStats, Date.now());
+		} finally {
+			hostStatsInFlight = false;
+		}
+	}
+
 	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {
-		const totalRamMb = stats.host_ram_bytes / (1024 * 1024);
-		ramSeries = appendRollingSample(ramSeries, boundedPercent(stats.allocated_ram_mb, totalRamMb), telemetrySamples);
-		cpuSeries = appendRollingSample(cpuSeries, boundedPercent(stats.allocated_cpu, stats.host_cpu_cores), telemetrySamples);
+		if (stats.memory && stats.memory.total_bytes > 0) {
+			const used = Math.max(0, stats.memory.total_bytes - stats.memory.available_bytes);
+			ramSeries = appendRollingSample(ramSeries, boundedPercent(used, stats.memory.total_bytes), telemetrySamples);
+		} else {
+			ramSeries = [];
+		}
+
+		if (stats.cpu) {
+			const current: CPUCounterSample = {
+				totalTicks: stats.cpu.total_ticks,
+				idleTicks: stats.cpu.idle_ticks
+			};
+			currentCPUUsage = deriveCPUUsage(cpuBaseline, current);
+			cpuBaseline = current;
+			if (currentCPUUsage !== null) {
+				cpuSeries = appendRollingSample(cpuSeries, currentCPUUsage, telemetrySamples);
+			}
+		} else {
+			cpuBaseline = null;
+			currentCPUUsage = null;
+			cpuSeries = [];
+		}
 
 		if (stats.storage && stats.storage.total_bytes > 0) {
 			const used = Math.max(0, stats.storage.total_bytes - stats.storage.available_bytes);
@@ -306,13 +344,14 @@
 		</div>
 	</div>
 
-	{#if hostRamWarning || storageWarning}
+	{#if hostRamWarning || cpuAllocationWarning || storageWarning}
 		<div class="alert-warning mb-5" role="alert">
 			<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
 			<div>
 				<p class="font-semibold">Host capacity needs attention</p>
 				<p class="mt-1">
-					{#if hostRamWarning}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
+					{#if liveMemoryAvailable && hostMemoryUsagePercent >= 90}RAM usage is {hostMemoryUsagePercent.toFixed(0)}%.{:else if ramAllocationPercent >= 85}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
+					{#if cpuAllocationWarning} CPU allocation is {cpuAllocationRawPercent.toFixed(0)}%.{/if}
 					{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if}
 					 Keep enough headroom for builds, runtime spikes, and platform services.
 				</p>
@@ -320,24 +359,24 @@
 		</div>
 	{/if}
 
-	<SectionPanel title="Host resources" description="Real rolling samples from MyPaaS capacity data and host telemetry. RAM and CPU values represent allocation, not live host utilization." contentClass="p-0" className="mb-5">
+	<SectionPanel title="Host resources" description="Live host utilization when the telemetry service is available. Allocation remains visible as capacity context." contentClass="p-0" className="mb-5">
 		{#if hostStats}
 			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
 				<CapacityMetricChart
-					label="RAM allocation"
-					value={`${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`}
-					indicator={`${ramAllocationPercent.toFixed(0)}%`}
-					detail={`${ramAllocationPercent.toFixed(0)}% allocated`}
-					series={ramSeries}
+					label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'}
+					value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`}
+					indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`}
+					detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'}
+					series={hostStats.memory ? ramSeries : []}
 					resource="memory"
 					className="bg-white dark:bg-neutral-900"
 				/>
 				<CapacityMetricChart
-					label="CPU allocation"
-					value={`${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`}
-					indicator={`${cpuAllocationPercent.toFixed(0)}%`}
-					detail={`${cpuAllocationPercent.toFixed(0)}% allocated`}
-					series={cpuSeries}
+					label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'}
+					value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`}
+					indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(0)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''}
+					detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'}
+					series={hostStats.cpu ? cpuSeries : []}
 					resource="cpu"
 					className="bg-white dark:bg-neutral-900"
 				/>
@@ -345,7 +384,7 @@
 					label="Storage"
 					value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'}
 					indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''}
-					detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Requires Phase 6 host telemetry'}
+					detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'}
 					series={storageSeries}
 					resource="storage"
 					className="bg-white dark:bg-neutral-900"
@@ -354,7 +393,7 @@
 					label="Network"
 					value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'}
 					indicator={hostStats.network?.interface ?? ''}
-					detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Requires Phase 6 host telemetry'}
+					detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'}
 					series={networkSeries}
 					resource="network"
 					maxValue={null}
