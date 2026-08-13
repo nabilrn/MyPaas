@@ -50,3 +50,25 @@ export function describeRepoUrl(repoUrl: string): RepositoryDisplay {
 	if (hostname === 'gitlab.com') return { host: 'gitlab', label, href: httpsHref };
 	return { host: 'git', label: path ? `${hostname}/${path}` : hostname, href: httpsHref };
 }
+
+/**
+ * Bound source labels without sacrificing the most useful repository segment.
+ * The full value remains available to callers for title/tooltips and links.
+ */
+export function compactRepositoryLabel(label: string, maxCharacters = 30): string {
+	if (maxCharacters < 4 || label.length <= maxCharacters) return label;
+
+	const slash = label.lastIndexOf('/');
+	if (slash > 0 && slash < label.length - 1) {
+		const owner = label.slice(0, slash);
+		const repository = label.slice(slash + 1);
+		const ownerBudget = maxCharacters - repository.length - 2; // ellipsis + slash
+		if (ownerBudget >= 1) {
+			return `${owner.slice(0, ownerBudget)}…/${repository}`;
+		}
+		const repositoryBudget = maxCharacters - 3; // …/ + trailing ellipsis
+		return `…/${repository.slice(0, Math.max(1, repositoryBudget))}…`;
+	}
+
+	return `${label.slice(0, maxCharacters - 1)}…`;
+}
