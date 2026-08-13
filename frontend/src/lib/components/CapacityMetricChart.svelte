@@ -10,8 +10,6 @@
 	export let maxValue: number | null = 100;
 	export let rangeLabel = '0–100%';
 	export let className = '';
-	// Compatibility for current-value callsites. A single real sample is rendered
-	// as a point only and is never expanded into synthetic history.
 	export let percent: number | null = null;
 	export let tone: 'neutral' | 'success' | 'info' | 'warning' | 'danger' = 'neutral';
 
@@ -21,28 +19,28 @@
 	const resourceClasses = {
 		neutral: {
 			dot: 'bg-gray-400 dark:bg-gray-500',
-			stroke: 'stroke-gray-500/80 dark:stroke-gray-300/70',
-			fill: 'fill-gray-400/5 dark:fill-gray-300/5'
+			stroke: 'stroke-gray-500/55 dark:stroke-gray-300/50',
+			fill: 'fill-gray-400/[0.025] dark:fill-gray-300/[0.035]'
 		},
 		memory: {
-			dot: 'bg-emerald-400 dark:bg-emerald-400',
-			stroke: 'stroke-emerald-400/80 dark:stroke-emerald-300/70',
-			fill: 'fill-emerald-400/5 dark:fill-emerald-300/5'
+			dot: 'bg-emerald-400/80 dark:bg-emerald-300/75',
+			stroke: 'stroke-emerald-500/55 dark:stroke-emerald-300/50',
+			fill: 'fill-emerald-400/[0.025] dark:fill-emerald-300/[0.035]'
 		},
 		cpu: {
-			dot: 'bg-sky-400 dark:bg-sky-400',
-			stroke: 'stroke-sky-400/80 dark:stroke-sky-300/70',
-			fill: 'fill-sky-400/5 dark:fill-sky-300/5'
+			dot: 'bg-sky-400/80 dark:bg-sky-300/75',
+			stroke: 'stroke-sky-500/55 dark:stroke-sky-300/50',
+			fill: 'fill-sky-400/[0.025] dark:fill-sky-300/[0.035]'
 		},
 		storage: {
-			dot: 'bg-amber-400 dark:bg-amber-400',
-			stroke: 'stroke-amber-400/80 dark:stroke-amber-300/70',
-			fill: 'fill-amber-400/5 dark:fill-amber-300/5'
+			dot: 'bg-amber-400/80 dark:bg-amber-300/75',
+			stroke: 'stroke-amber-500/55 dark:stroke-amber-300/50',
+			fill: 'fill-amber-400/[0.025] dark:fill-amber-300/[0.035]'
 		},
 		network: {
-			dot: 'bg-violet-400 dark:bg-violet-400',
-			stroke: 'stroke-violet-400/80 dark:stroke-violet-300/70',
-			fill: 'fill-violet-400/5 dark:fill-violet-300/5'
+			dot: 'bg-violet-400/80 dark:bg-violet-300/75',
+			stroke: 'stroke-violet-500/55 dark:stroke-violet-300/50',
+			fill: 'fill-violet-400/[0.025] dark:fill-violet-300/[0.035]'
 		}
 	} as const;
 
@@ -60,9 +58,9 @@
 	$: rawMin = cleanSeries.length > 0 ? Math.min(...cleanSeries) : 0;
 	$: rawMax = cleanSeries.length > 0 ? Math.max(...cleanSeries) : 0;
 	$: fallbackMax = maxValue && maxValue > 0 ? maxValue : Math.max(1, rawMax) * 1.15;
-	$: minimumSpan = maxValue && maxValue > 0 ? Math.max(6, maxValue * 0.08) : Math.max(1, rawMax * 0.3);
+	$: minimumSpan = maxValue && maxValue > 0 ? Math.max(12, maxValue * 0.12) : Math.max(1, rawMax * 0.3);
 	$: observedSpan = Math.max(0, rawMax - rawMin);
-	$: desiredSpan = Math.max(minimumSpan, observedSpan * 1.4);
+	$: desiredSpan = Math.max(minimumSpan, observedSpan * 1.35);
 	$: domainCenter = (rawMin + rawMax) / 2;
 	$: proposedMin = Math.max(0, domainCenter - desiredSpan / 2);
 	$: proposedMax = domainCenter + desiredSpan / 2;
@@ -110,7 +108,7 @@
 
 	<div class="mt-3 h-20 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-neutral-950">
 		<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
-			<g class="stroke-gray-100/80 dark:stroke-neutral-800/70" stroke-width="1">
+			<g class="stroke-gray-100/55 dark:stroke-neutral-800/45" stroke-width="0.8">
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
 				<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
@@ -119,8 +117,8 @@
 				<line x1={chartWidth * 0.75} x2={chartWidth * 0.75} y1="0" y2={chartHeight} />
 			</g>
 			{#if areaPath}<path d={areaPath} class={resourceClass.fill} />{/if}
-			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="1.5" vector-effect="non-scaling-stroke" />{/if}
-			{#if currentPoint}<circle cx={currentPoint.x} cy={currentPoint.y} r="2.5" class={`${resourceClass.stroke} ${resourceClass.fill}`} stroke-width="1.25" />{/if}
+			{#if linePath}<path d={linePath} fill="none" class={resourceClass.stroke} stroke-width="1.25" vector-effect="non-scaling-stroke" />{/if}
+			{#if currentPoint}<circle cx={currentPoint.x} cy={currentPoint.y} r="2" class={`${resourceClass.stroke} ${resourceClass.fill}`} stroke-width="1" />{/if}
 		</svg>
 	</div>
 
