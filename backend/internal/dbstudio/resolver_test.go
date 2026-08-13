@@ -55,6 +55,19 @@ func TestComposeProjectCandidatesIncludeMyPaasPrefix(t *testing.T) {
 	}
 }
 
+func TestComposeProjectCandidatesIncludeDeploymentPrefixForPrefixedProject(t *testing.T) {
+	got := composeProjectCandidates("mypaas-sample-crud-db")
+	want := []string{"mypaas-mypaas-sample-crud-db", "mypaas-sample-crud-db"}
+	if len(got) != len(want) {
+		t.Fatalf("candidates length = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("candidate[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestParseComposeNetworkInspect(t *testing.T) {
 	endpoints, err := parseComposeNetworkInspect(`{
 		"mypaas-prod": {"IPAddress": "172.20.0.9"},

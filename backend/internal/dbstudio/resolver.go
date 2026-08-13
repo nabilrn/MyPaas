@@ -379,10 +379,7 @@ func composeProjectCandidates(projectName string) []string {
 	if projectName == "" {
 		return nil
 	}
-	candidates := []string{projectName}
-	if !strings.HasPrefix(projectName, "mypaas-") {
-		candidates = append([]string{"mypaas-" + projectName}, candidates...)
-	}
+	candidates := []string{"mypaas-" + projectName, projectName}
 	seen := make(map[string]struct{}, len(candidates))
 	out := make([]string, 0, len(candidates))
 	for _, candidate := range candidates {
