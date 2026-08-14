@@ -233,3 +233,4 @@ else
 fi
 
 echo "Production verification passed."
+exit 1
