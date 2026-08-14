@@ -7,7 +7,12 @@ import (
 	"strings"
 )
 
-const PersistentVolumesLabel = "io.mypaas.persistent-volumes"
+const persistentVolumesLabel = "io.mypaas.persistent-volumes"
+
+type BindMount struct {
+	Source string
+	Target string
+}
 
 type imageInspectConfig struct {
 	Volumes map[string]json.RawMessage `json:"Volumes"`
@@ -37,7 +42,7 @@ func parseImageVolumeTargets(raw []byte) ([]string, error) {
 		addTarget(target)
 	}
 
-	if labelValue := rows[0].Config.Labels[PersistentVolumesLabel]; labelValue != "" {
+	if labelValue := rows[0].Config.Labels[persistentVolumesLabel]; labelValue != "" {
 		for _, target := range strings.Split(labelValue, ",") {
 			addTarget(target)
 		}
