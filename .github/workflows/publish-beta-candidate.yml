@@ -3,7 +3,7 @@ name: Publish Beta Candidate Images
 on:
   push:
     branches:
-      - "infra/publish-beta-candidate-images"
+      - "infra/publish-beta-candidate-run"
 
 env:
   REGISTRY: ghcr.io
