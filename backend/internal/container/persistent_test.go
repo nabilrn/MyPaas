@@ -29,6 +29,32 @@ func TestParseImageVolumeTargetsHandlesNullVolumes(t *testing.T) {
 	}
 }
 
+func TestParseImageVolumeTargetsReadsPersistenceLabel(t *testing.T) {
+	raw := []byte(`[{"Config":{"Volumes":null,"Labels":{"io.mypaas.persistent-volumes":" /var/lib/app, /app/data "}}}]`)
+
+	got, err := parseImageVolumeTargets(raw)
+	if err != nil {
+		t.Fatalf("parseImageVolumeTargets() error = %v", err)
+	}
+	want := []string{"/app/data", "/var/lib/app"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("parseImageVolumeTargets() = %v, want %v", got, want)
+	}
+}
+
+func TestParseImageVolumeTargetsDeduplicatesLabelAndDockerVolume(t *testing.T) {
+	raw := []byte(`[{"Config":{"Volumes":{"/app/data":{}},"Labels":{"io.mypaas.persistent-volumes":"/app/data,/var/lib/app"}}}]`)
+
+	got, err := parseImageVolumeTargets(raw)
+	if err != nil {
+		t.Fatalf("parseImageVolumeTargets() error = %v", err)
+	}
+	want := []string{"/app/data", "/var/lib/app"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("parseImageVolumeTargets() = %v, want %v", got, want)
+	}
+}
+
 func TestRunArgsWithVolumesIncludesStableVolume(t *testing.T) {
 	cli := NewDockerCLI("127.0.0.1", "mypaas-projects")
 	opts := RunOptions{
