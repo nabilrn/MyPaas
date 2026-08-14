@@ -1,0 +1,95 @@
+name: Publish Beta Rerun Images
+
+on:
+  push:
+    branches:
+      - "infra/publish-beta-rerun-run"
+
+env:
+  REGISTRY: ghcr.io
+  TARGET_SHA: 91ab957ba072fcc96ffb7b78727d110c61826de4
+  TARGET_ROLLBACK_TAG: rollback-91ab957ba072
+  LEGACY_SHA: b94361be993963c0ad04a5c3a76130bc8d8ef8ee
+  LEGACY_ROLLBACK_TAG: rollback-b94361be9939
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API candidate image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ env.TARGET_SHA }}
+            ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ env.TARGET_ROLLBACK_TAG }}
+
+      - name: Build and push Dashboard candidate image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/nabilrn/mypaas-dashboard:${{ env.TARGET_SHA }}
+            ${{ env.REGISTRY }}/nabilrn/mypaas-dashboard:${{ env.TARGET_ROLLBACK_TAG }}
+
+      - name: Publish legacy API rollback alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$REGISTRY/nabilrn/mypaas-api:$LEGACY_SHA" >/dev/null
+          docker buildx imagetools create \
+            --tag "$REGISTRY/nabilrn/mypaas-api:$LEGACY_ROLLBACK_TAG" \
+            "$REGISTRY/nabilrn/mypaas-api:$LEGACY_SHA"
+
+      - name: Publish legacy Dashboard rollback alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$REGISTRY/nabilrn/mypaas-dashboard:$LEGACY_SHA" >/dev/null
+          docker buildx imagetools create \
+            --tag "$REGISTRY/nabilrn/mypaas-dashboard:$LEGACY_ROLLBACK_TAG" \
+            "$REGISTRY/nabilrn/mypaas-dashboard:$LEGACY_SHA"
+
+      - name: Verify published identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in \
+            "$REGISTRY/nabilrn/mypaas-api:$TARGET_SHA" \
+            "$REGISTRY/nabilrn/mypaas-api:$TARGET_ROLLBACK_TAG" \
+            "$REGISTRY/nabilrn/mypaas-dashboard:$TARGET_SHA" \
+            "$REGISTRY/nabilrn/mypaas-dashboard:$TARGET_ROLLBACK_TAG" \
+            "$REGISTRY/nabilrn/mypaas-api:$LEGACY_ROLLBACK_TAG" \
+            "$REGISTRY/nabilrn/mypaas-dashboard:$LEGACY_ROLLBACK_TAG"; do
+            echo "=== $image ==="
+            docker buildx imagetools inspect "$image" | sed -n '1,12p'
+          done
