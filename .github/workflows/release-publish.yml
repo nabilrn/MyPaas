@@ -3,7 +3,8 @@ name: Publish Release
 on:
   pull_request:
     types:
-      - edited
+      - opened
+      - reopened
 
 permissions:
   actions: read
@@ -50,7 +51,6 @@ jobs:
           python3 - <<'PY'
           import json
           import os
-          import sys
 
           target = os.environ["TARGET_SHA"]
           runs = json.load(open("/tmp/runs.json", encoding="utf-8")).get("workflow_runs", [])
