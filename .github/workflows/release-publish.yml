@@ -1,26 +1,26 @@
 name: Publish Release
 
 on:
-  workflow_run:
-    workflows:
-      - CI
+  pull_request:
     types:
-      - completed
+      - edited
 
 permissions:
+  actions: read
   contents: write
+  pull-requests: read
 
 jobs:
   publish:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'release/v') }}
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'release/v') && contains(github.event.pull_request.title, '[publish-release]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate release request
         id: release
         shell: bash
         env:
-          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
+          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           tag="${RELEASE_BRANCH#release/}"
@@ -35,6 +35,39 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "notes=docs/releases/${tag#v}.md" >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact release SHA passed CI
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&event=pull_request&per_page=100" \
+            > /tmp/runs.json
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          target = os.environ["TARGET_SHA"]
+          runs = json.load(open("/tmp/runs.json", encoding="utf-8")).get("workflow_runs", [])
+          matches = [
+              run for run in runs
+              if run.get("name") == "CI" and run.get("head_sha") == target
+          ]
+          if not matches:
+              raise SystemExit(f"no CI run found for release SHA {target}")
+          latest = max(matches, key=lambda run: run.get("created_at", ""))
+          if latest.get("status") != "completed" or latest.get("conclusion") != "success":
+              raise SystemExit(
+                  f"CI is not green for {target}: "
+                  f"status={latest.get('status')} conclusion={latest.get('conclusion')}"
+              )
+          print(f"verified CI run {latest.get('id')} completed/success for {target}")
+          PY
 
       - name: Checkout exact CI-tested release source
         uses: actions/checkout@v4
