@@ -14,6 +14,190 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  beta2-prep:
+    name: Beta2 prep patch
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'agent/v0.5.0-beta.2-release' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/v0.5.0-beta.2-release
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Apply safe CMD healthcheck conversion and regression coverage
+        shell: python
+        run: |
+          from pathlib import Path
+
+          docker_go = Path('backend/internal/container/docker.go')
+          text = docker_go.read_text()
+          old = '''\t\t\t\t\t\targ := fmt.Sprint(test[i])
+\t\t\t\t\t\tif strings.ContainsAny(arg, " \\t\\\"'") {
+\t\t\t\t\t\t\tbuilder.WriteString("'")
+\t\t\t\t\t\t\tbuilder.WriteString(strings.ReplaceAll(arg, "'", "'\\\\''"))
+\t\t\t\t\t\t\tbuilder.WriteString("'")
+\t\t\t\t\t\t} else {
+\t\t\t\t\t\t\tbuilder.WriteString(arg)
+\t\t\t\t\t\t}
+'''
+          new = '''\t\t\t\t\t\targ := fmt.Sprint(test[i])
+\t\t\t\t\t\tbuilder.WriteString("'")
+\t\t\t\t\t\tbuilder.WriteString(strings.ReplaceAll(arg, "'", "'\\\\''"))
+\t\t\t\t\t\tbuilder.WriteString("'")
+'''
+          if old not in text:
+              raise SystemExit('expected healthcheck conversion block not found')
+          docker_go.write_text(text.replace(old, new, 1))
+
+          Path('backend/internal/container/compose_healthcheck_test.go').write_text(r'''package container
+
+import (
+    "encoding/json"
+    "testing"
+)
+
+func TestSanitizeComposeConfigConvertsCMDHealthcheckWithShellSafeQuoting(t *testing.T) {
+    raw := []byte(`{
+        "services": {
+            "web": {
+                "image": "demo",
+                "healthcheck": {
+                    "test": ["CMD", "curl", "-fsS", "http://localhost:8080/health?token=$abc&x=1", "hello world", "quote'it", ""]
+                }
+            }
+        }
+    }`)
+
+    out, err := sanitizeComposeConfig(raw)
+    if err != nil {
+        t.Fatalf("sanitizeComposeConfig() error = %v", err)
+    }
+
+    var doc struct {
+        Services map[string]struct {
+            Healthcheck struct {
+                Test []any `json:"test"`
+            } `json:"healthcheck"`
+        } `json:"services"`
+    }
+    if err := json.Unmarshal(out, &doc); err != nil {
+        t.Fatalf("sanitized json invalid: %v", err)
+    }
+
+    got := doc.Services["web"].Healthcheck.Test
+    if len(got) != 2 {
+        t.Fatalf("healthcheck test = %#v, want two entries", got)
+    }
+    if got[0] != "CMD-SHELL" {
+        t.Fatalf("healthcheck mode = %#v, want CMD-SHELL", got[0])
+    }
+    want := `'curl' '-fsS' 'http://localhost:8080/health?token=$abc&x=1' 'hello world' 'quote'\''it' ''`
+    if got[1] != want {
+        t.Fatalf("healthcheck command = %#v, want %#v", got[1], want)
+    }
+}
+
+func TestSanitizeComposeConfigPreservesExistingCMDShellHealthcheck(t *testing.T) {
+    raw := []byte(`{
+        "services": {
+            "web": {
+                "image": "demo",
+                "healthcheck": {
+                    "test": ["CMD-SHELL", "curl -fsS $URL || exit 1"]
+                }
+            }
+        }
+    }`)
+
+    out, err := sanitizeComposeConfig(raw)
+    if err != nil {
+        t.Fatalf("sanitizeComposeConfig() error = %v", err)
+    }
+
+    var doc map[string]any
+    if err := json.Unmarshal(out, &doc); err != nil {
+        t.Fatalf("sanitized json invalid: %v", err)
+    }
+    test := doc["services"].(map[string]any)["web"].(map[string]any)["healthcheck"].(map[string]any)["test"].([]any)
+    if test[0] != "CMD-SHELL" || test[1] != "curl -fsS $URL || exit 1" {
+        t.Fatalf("existing CMD-SHELL healthcheck changed: %#v", test)
+    }
+}
+''')
+
+          Path('docs/releases/v0.5.0-beta.2.md').write_text('''# MyPaas v0.5.0-beta.2
+
+**Release type:** Prerelease / beta  
+**Release date:** 2026-08-18  
+**Release tag:** `v0.5.0-beta.2`
+
+`v0.5.0-beta.2` is a focused runtime hotfix release following `v0.5.0-beta.1`.
+
+## Runtime fix
+
+Compose healthchecks rendered in exec form (`CMD`) are converted to an equivalent shell form (`CMD-SHELL`) before MyPaas writes its sanitized Compose configuration. This avoids a Podman Compose argument-splitting incompatibility observed after `v0.5.0-beta.1`.
+
+The conversion now shell-quotes **every** original argument, including empty arguments and values containing shell metacharacters such as `$`, `&`, and `;`. Existing `CMD-SHELL` healthchecks are preserved unchanged.
+
+## Scope
+
+This is intentionally a narrow beta hotfix. The runtime code delta from `v0.5.0-beta.1` is limited to Compose healthcheck normalization; the remaining intervening changes are documentation/product-positioning updates clarifying MyPaas' Podman-first policy and Docker compatibility mode.
+
+## Validation
+
+The release candidate is gated by the normal MyPaas CI suite:
+
+- backend Go tests;
+- Go race detector;
+- frontend unit/type/build checks;
+- deployment-script regression tests;
+- production Compose rendering;
+- Docker explicit routing-network alias contract;
+- rootful Podman compatibility smoke.
+
+Dedicated regression coverage additionally verifies shell-safe `CMD` healthcheck conversion and preservation of existing `CMD-SHELL` healthchecks.
+
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/v0.5.0-beta.2/scripts/bootstrap.sh | \
+  env MYPAAS_REF=v0.5.0-beta.2 bash
+```
+
+Fresh supported Linux hosts remain Podman-first by default. To intentionally use Docker Engine compatibility mode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nabilrn/MyPaas/v0.5.0-beta.2/scripts/bootstrap.sh | \
+  env MYPAAS_REF=v0.5.0-beta.2 USE_PODMAN=false bash
+```
+
+## Upgrade note
+
+Operators on `v0.5.0-beta.1` who deploy Compose applications with exec-form healthchecks should prefer this beta. As with any stateful update, verify backups and platform health before upgrading and verify at least one existing routed project afterward.
+
+## Known beta boundaries
+
+The broader limitations documented for `v0.5.0-beta.1` remain: MyPaas is a single-host platform, is intended for an owner/small trusted-team model, does not provide hostile multi-tenant VM-grade isolation, and does not support an in-place Docker-to-Podman state migration.
+''')
+      - name: Format and test targeted backend package
+        working-directory: backend
+        run: |
+          gofmt -w internal/container/docker.go internal/container/compose_healthcheck_test.go
+          go test ./internal/container
+      - name: Commit prepared changes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/internal/container/docker.go backend/internal/container/compose_healthcheck_test.go docs/releases/v0.5.0-beta.2.md
+          git commit -m "fix: harden Podman healthcheck conversion [beta2-prep]"
+          git push origin HEAD:agent/v0.5.0-beta.2-release
+
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
