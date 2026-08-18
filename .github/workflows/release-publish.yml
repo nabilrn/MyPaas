@@ -1,0 +1,75 @@
+name: Publish Release
+
+on:
+  create:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: ${{ github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release request
+        id: release
+        shell: bash
+        env:
+          RELEASE_BRANCH: ${{ github.event.ref }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_BRANCH#release/}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag derived from branch: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "notes=docs/releases/${tag#v}.md" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve and verify release source
+        id: source
+        shell: bash
+        env:
+          NOTES_FILE: ${{ steps.release.outputs.notes }}
+        run: |
+          set -euo pipefail
+          test -f "$NOTES_FILE" || {
+            echo "Missing release notes: $NOTES_FILE" >&2
+            exit 1
+          }
+          sha="$(git rev-parse HEAD)"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARGET_SHA: ${{ steps.source.outputs.sha }}
+          NOTES_FILE: ${{ steps.release.outputs.notes }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; leaving it unchanged."
+            exit 0
+          fi
+
+          release_flags=()
+          if [[ "$TAG" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET_SHA" \
+            --title "MyPaas $TAG" \
+            --notes-file "$NOTES_FILE" \
+            "${release_flags[@]}"
