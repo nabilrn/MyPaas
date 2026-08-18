@@ -2,20 +2,23 @@ name: Publish Release
 
 on:
   create:
+  push:
+    branches:
+      - "release/v*"
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    if: ${{ github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/v') }}
+    if: ${{ startsWith(github.ref_name, 'release/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate release request
         id: release
         shell: bash
         env:
-          RELEASE_BRANCH: ${{ github.event.ref }}
+          RELEASE_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           tag="${RELEASE_BRANCH#release/}"
@@ -29,7 +32,7 @@ jobs:
       - name: Checkout exact release branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.ref }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 1
           persist-credentials: false
 
