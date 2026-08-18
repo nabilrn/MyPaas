@@ -1,16 +1,16 @@
 name: Beta2 Prep
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/v0.5.0-beta.2-release
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[beta2-prep]') }}
+    if: ${{ github.head_ref == 'agent/v0.5.0-beta.2-release' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
