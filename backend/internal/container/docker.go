@@ -831,13 +831,9 @@ func sanitizeComposeConfig(raw []byte) ([]byte, error) {
 							builder.WriteString(" ")
 						}
 						arg := fmt.Sprint(test[i])
-						if strings.ContainsAny(arg, " \t\"'") {
-							builder.WriteString("'")
-							builder.WriteString(strings.ReplaceAll(arg, "'", "'\\''"))
-							builder.WriteString("'")
-						} else {
-							builder.WriteString(arg)
-						}
+						builder.WriteString("'")
+						builder.WriteString(strings.ReplaceAll(arg, "'", "'\\''"))
+						builder.WriteString("'")
 					}
 					hc["test"] = []any{"CMD-SHELL", builder.String()}
 				}
