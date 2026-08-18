@@ -1,24 +1,26 @@
 name: Publish Release
 
 on:
-  create:
-  push:
-    branches:
-      - "release/v*"
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    if: ${{ startsWith(github.ref_name, 'release/v') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'release/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate release request
         id: release
         shell: bash
         env:
-          RELEASE_BRANCH: ${{ github.ref_name }}
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           tag="${RELEASE_BRANCH#release/}"
@@ -26,18 +28,22 @@ jobs:
             echo "Invalid release tag derived from branch: $tag" >&2
             exit 1
           fi
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Invalid release source SHA: $RELEASE_SHA" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "notes=docs/releases/${tag#v}.md" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact release branch
+      - name: Checkout exact CI-tested release source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ steps.release.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Resolve and verify release source
-        id: source
+      - name: Verify release notes
         shell: bash
         env:
           NOTES_FILE: ${{ steps.release.outputs.notes }}
@@ -47,16 +53,14 @@ jobs:
             echo "Missing release notes: $NOTES_FILE" >&2
             exit 1
           }
-          sha="$(git rev-parse HEAD)"
-          test -n "$sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.sha }}"
 
       - name: Publish GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
-          TARGET_SHA: ${{ steps.source.outputs.sha }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
           NOTES_FILE: ${{ steps.release.outputs.notes }}
         run: |
           set -euo pipefail
