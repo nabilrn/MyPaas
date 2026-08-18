@@ -35,7 +35,7 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
-          echo "notes=docs/releases/${tag#v}.md" >> "$GITHUB_OUTPUT"
+          echo "notes=docs/releases/${tag}.md" >> "$GITHUB_OUTPUT"
 
       - name: Verify exact release SHA passed CI
         shell: bash
