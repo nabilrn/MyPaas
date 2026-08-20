@@ -73,6 +73,11 @@ fi
 : "${DOCKER_SOCKET:?DOCKER_SOCKET is required}"
 : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 
+if [[ "$PUBLIC_DOMAIN" == http://* || "$PUBLIC_DOMAIN" == https://* || "$PUBLIC_DOMAIN" == */* || "$PUBLIC_DOMAIN" == *:* ]]; then
+  echo "PUBLIC_DOMAIN must be a bare hostname like mypaas.example.com, not a URL." >&2
+  exit 2
+fi
+
 if [[ "$SKIP_IMAGE_PULL" != "true" && "$SKIP_IMAGE_PULL" != "false" ]]; then
   echo "MYPAAS_SKIP_IMAGE_PULL must be true or false." >&2
   exit 2

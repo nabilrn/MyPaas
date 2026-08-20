@@ -122,6 +122,42 @@ prompt_optional() {
   printf '%s' "${value:-$default_value}"
 }
 
+env_alias() {
+  local canonical="$1"
+  shift
+  local value="${!canonical:-}"
+  local alias
+
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return
+  fi
+
+  for alias in "$@"; do
+    value="${!alias:-}"
+    if [[ -n "$value" ]]; then
+      printf '%s' "$value"
+      return
+    fi
+  done
+}
+
+normalize_public_domain() {
+  local value="$1"
+  value="${value#http://}"
+  value="${value#https://}"
+  value="${value%%/*}"
+  value="${value%%:*}"
+  printf '%s' "$value"
+}
+
+validate_public_domain() {
+  local value="$1"
+  [[ -n "$value" ]] || die "PUBLIC_DOMAIN is required"
+  [[ "$value" != http://* && "$value" != https://* ]] || die "PUBLIC_DOMAIN must be a hostname, not a URL"
+  [[ "$value" != */* && "$value" != *:* ]] || die "PUBLIC_DOMAIN must be a hostname without path or port"
+}
+
 random_base64() {
   local bytes="${1:-32}"
   openssl rand -base64 "$bytes" | tr -d '\n'
@@ -388,12 +424,12 @@ run_install_wizard() {
   local postgres_user postgres_db postgres_password jwt_secret encryption_key control_network project_network routing_network docker_bind_host metrics_password
   local wizard_token
 
-  public_domain="${PUBLIC_DOMAIN:-}"
-  owner_email="${OWNER_EMAIL:-}"
-  github_client_id="${GITHUB_CLIENT_ID:-}"
-  github_client_secret="${GITHUB_CLIENT_SECRET:-}"
-  callback_url="${GITHUB_CALLBACK_URL:-}"
-  cloudflare_tunnel_token="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+  public_domain="$(normalize_public_domain "$(env_alias PUBLIC_DOMAIN)")"
+  owner_email="$(env_alias OWNER_EMAIL GITHUB_EMAIL_ACCOUNT)"
+  github_client_id="$(env_alias GITHUB_CLIENT_ID GITHUB_OAUTH_CLIENT_ID)"
+  github_client_secret="$(env_alias GITHUB_CLIENT_SECRET GITHUB_OAUTH_CLIENT_SECRET GITHUB_OAUTH_CLIENT_SCREET)"
+  callback_url="$(env_alias GITHUB_CALLBACK_URL REDIRECT_URI RECIRECT_URI)"
+  cloudflare_tunnel_token="$(env_alias CLOUDFLARE_TUNNEL_TOKEN CLOUDFLARE_TUNNELS_TOKEN)"
   postgres_user="${POSTGRES_USER:-mypaas}"
   postgres_db="${POSTGRES_DB:-mypaas}"
   postgres_password="${POSTGRES_PASSWORD:-$(random_hex 24)}"
@@ -472,12 +508,18 @@ write_env_file() {
   local postgres_user postgres_db postgres_password jwt_secret encryption_key control_network project_network routing_network
   local docker_bind_host
 
-  public_domain="$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")"
-  owner_email="$(prompt_required OWNER_EMAIL "Owner GitHub primary email")"
-  github_client_id="$(prompt_required GITHUB_CLIENT_ID "GitHub OAuth Client ID")"
-  github_client_secret="$(prompt_required GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret")"
-  callback_url="$(prompt_optional GITHUB_CALLBACK_URL "GitHub OAuth callback URL" "https://$public_domain/api/auth/github/callback")"
-  cloudflare_tunnel_token="$(prompt_required CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token")"
+  public_domain="$(normalize_public_domain "$(prompt_required PUBLIC_DOMAIN "Public dashboard domain, e.g. mypaas.example.com")")"
+  validate_public_domain "$public_domain"
+  owner_email="$(env_alias OWNER_EMAIL GITHUB_EMAIL_ACCOUNT)"
+  owner_email="${owner_email:-$(prompt_required OWNER_EMAIL "Owner GitHub primary email")}"
+  github_client_id="$(env_alias GITHUB_CLIENT_ID GITHUB_OAUTH_CLIENT_ID)"
+  github_client_id="${github_client_id:-$(prompt_required GITHUB_CLIENT_ID "GitHub OAuth Client ID")}"
+  github_client_secret="$(env_alias GITHUB_CLIENT_SECRET GITHUB_OAUTH_CLIENT_SECRET GITHUB_OAUTH_CLIENT_SCREET)"
+  github_client_secret="${github_client_secret:-$(prompt_required GITHUB_CLIENT_SECRET "GitHub OAuth Client Secret")}"
+  callback_url="$(env_alias GITHUB_CALLBACK_URL REDIRECT_URI RECIRECT_URI)"
+  callback_url="${callback_url:-$(prompt_optional GITHUB_CALLBACK_URL "GitHub OAuth callback URL" "https://$public_domain/api/auth/github/callback")}"
+  cloudflare_tunnel_token="$(env_alias CLOUDFLARE_TUNNEL_TOKEN CLOUDFLARE_TUNNELS_TOKEN)"
+  cloudflare_tunnel_token="${cloudflare_tunnel_token:-$(prompt_required CLOUDFLARE_TUNNEL_TOKEN "Cloudflare Tunnel token")}"
 
   postgres_user="$(prompt_optional POSTGRES_USER "Postgres user" "mypaas")"
   postgres_db="$(prompt_optional POSTGRES_DB "Postgres database" "mypaas")"
