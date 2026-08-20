@@ -43,15 +43,20 @@ complexity.
 - Support managed or external PostgreSQL for heavier production workloads.
 - Add a build queue dashboard with pending/running/failed states.
 - Add per-project autoscaling only after worker scheduling is mature.
-- Consider Kubernetes as an optional enterprise runtime, not as a beta-default
-  dependency.
 
 ## Current Benchmark Interpretation
 
-The `v0.5.0-beta.2` SUT stayed healthy under smoke, API-only normal load,
-static+API normal load, admin CRUD load, and a deliberately brutal 1000 VU
-public spike. The brutal spike saturated the public/tunnel path but did not
-exhaust VM CPU/RAM or crash the platform.
+The current performance interpretation is provisional and is based on the
+external k6 preflight retained in `nabilrn/mypaas-test-vibecoder` under
+`benchmarks/k6/PROOF.md`. Release decisions should use that sanitized proof
+summary together with the exact MyPaaS release/SHA, fixture SHAs, VM profile,
+and public-vs-origin path used by the run.
 
-Therefore, Cloudflare connector replicas belong in a future performance mode,
-not as a private beta blocker.
+The working result is that controlled private beta correctness is acceptable at
+the tested normal loads, while the public static+API path remains latency-bound
+and the deliberately brutal 1000 VU public spike exceeds the current tunnel
+path capacity. These are workload-specific observations, not universal capacity
+claims.
+
+Cloudflare connector replicas remain future P2 performance-mode work and are
+not implemented as part of private-beta correctness hardening.
