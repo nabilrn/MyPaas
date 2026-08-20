@@ -203,14 +203,16 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("env_alias GITHUB_CALLBACK_URL REDIRECT_URI RECIRECT_URI", installer)
         self.assertIn("env_alias CLOUDFLARE_TUNNEL_TOKEN CLOUDFLARE_TUNNELS_TOKEN", installer)
 
-    def test_terminal_installer_normalizes_public_domain_and_deploy_rejects_urls(self) -> None:
+    def test_terminal_installer_normalizes_public_domain_and_deploy_rejects_malformed_hosts(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
         deployer = (ROOT_DIR / "scripts" / "deploy-to-vm.sh").read_text(encoding="utf-8")
 
         self.assertIn("normalize_public_domain", installer)
         self.assertIn("validate_public_domain", installer)
         self.assertIn("PUBLIC_DOMAIN must be a hostname, not a URL", installer)
-        self.assertIn("PUBLIC_DOMAIN must be a bare hostname like mypaas.example.com, not a URL.", deployer)
+        self.assertIn("is_valid_public_domain", deployer)
+        self.assertIn('[[ "$value" == *.* ]] || return 1', deployer)
+        self.assertIn("PUBLIC_DOMAIN must be a bare DNS hostname like mypaas.example.com", deployer)
 
     def test_wizard_runner_uses_ephemeral_cloudflare_tunnel_and_cleanup(self) -> None:
         runner = RUNNER_PATH.read_text(encoding="utf-8")
