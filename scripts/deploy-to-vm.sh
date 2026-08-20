@@ -73,8 +73,15 @@ fi
 : "${DOCKER_SOCKET:?DOCKER_SOCKET is required}"
 : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 
-if [[ "$PUBLIC_DOMAIN" == http://* || "$PUBLIC_DOMAIN" == https://* || "$PUBLIC_DOMAIN" == */* || "$PUBLIC_DOMAIN" == *:* ]]; then
-  echo "PUBLIC_DOMAIN must be a bare hostname like mypaas.example.com, not a URL." >&2
+is_valid_public_domain() {
+  local value="$1"
+  [[ ${#value} -le 253 ]] || return 1
+  [[ "$value" == *.* ]] || return 1
+  [[ "$value" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]]
+}
+
+if ! is_valid_public_domain "$PUBLIC_DOMAIN"; then
+  echo "PUBLIC_DOMAIN must be a bare DNS hostname like mypaas.example.com; URLs, paths, ports, credentials, queries, and malformed labels are not allowed." >&2
   exit 2
 fi
 
