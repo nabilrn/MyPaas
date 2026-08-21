@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	immutableAssetCacheControl = "public, max-age=31536000, immutable"
+	staticAssetCacheControl    = "public, max-age=3600, stale-while-revalidate=86400"
+)
+
 type Client struct {
 	baseURL      string
 	upstreamHost string
@@ -50,23 +55,98 @@ func NewClient(adminAddress, upstreamHost string) *Client {
 	}
 }
 
+func reverseProxyHandler(dial string) map[string]any {
+	return map[string]any{
+		"handler": "reverse_proxy",
+		"upstreams": []map[string]any{{
+			"dial": dial,
+		}},
+		"load_balancing": map[string]any{
+			"try_duration": "10s",
+			"try_interval": "250ms",
+		},
+	}
+}
+
+func cacheHeaderHandler(value string) map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string][]string{
+				"Cache-Control": []string{value},
+			},
+			// Apply after the upstream response so framework-provided defaults do
+			// not accidentally replace the platform policy for matched assets.
+			"deferred": true,
+		},
+	}
+}
+
+func compressionHandler() map[string]any {
+	return map[string]any{
+		"handler": "encode",
+		"encodings": map[string]any{
+			"gzip": map[string]any{},
+		},
+	}
+}
+
+func runtimeProxyHandlers(dial string) []map[string]any {
+	return []map[string]any{{
+		"handler": "subroute",
+		"routes": []map[string]any{
+			{
+				// Keep application APIs on the existing proxy path. In particular,
+				// do not add cache or compression middleware ahead of /api/*.
+				"match": []map[string]any{{"path": []string{"/api/*"}}},
+				"handle": []map[string]any{
+					reverseProxyHandler(dial),
+				},
+			},
+			{
+				// Next.js build assets are content-addressed and safe to cache for a
+				// year. This route also ensures text assets are compressed before the
+				// response leaves Caddy.
+				"match": []map[string]any{{"path": []string{"/_next/static/*"}}},
+				"handle": []map[string]any{
+					cacheHeaderHandler(immutableAssetCacheControl),
+					compressionHandler(),
+					reverseProxyHandler(dial),
+				},
+			},
+			{
+				// Public assets outside framework-specific immutable paths get a
+				// bounded cache lifetime. /api/* is matched first and never reaches
+				// this route even if an API path happens to end in an asset suffix.
+				"match": []map[string]any{{
+					"path_regexp": map[string]any{
+						"name":    "mypaas_static_asset",
+						"pattern": `(?i)\.(?:js|mjs|css|map|woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico)$`,
+					},
+				}},
+				"handle": []map[string]any{
+					cacheHeaderHandler(staticAssetCacheControl),
+					compressionHandler(),
+					reverseProxyHandler(dial),
+				},
+			},
+			{
+				"handle": []map[string]any{
+					reverseProxyHandler(dial),
+				},
+			},
+		},
+	}}
+}
+
 func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 	dial, err := c.upstreamDial(ctx, port)
 	if err != nil {
 		return err
 	}
 	route, err := json.Marshal(map[string]any{
-		"match": []map[string]any{{"host": []string{host}}},
-		"handle": []map[string]any{{
-			"handler": "reverse_proxy",
-			"upstreams": []map[string]any{{
-				"dial": dial,
-			}},
-			"load_balancing": map[string]any{
-				"try_duration": "10s",
-				"try_interval": "250ms",
-			},
-		}},
+		"match":    []map[string]any{{"host": []string{host}}},
+		"handle":   runtimeProxyHandlers(dial),
 		"terminal": true,
 	})
 	if err != nil {
