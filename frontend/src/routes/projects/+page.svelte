@@ -5,6 +5,7 @@
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
+	import DeliveryMetricsPanel from '$components/DeliveryMetricsPanel.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
@@ -414,6 +415,8 @@
 			</div>
 		{/if}
 	</SectionPanel>
+
+	<DeliveryMetricsPanel />
 
 	<TableShell
 		title="Inventory"
