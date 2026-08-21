@@ -2,7 +2,6 @@ package caddy
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -53,40 +52,100 @@ func TestAddRoutePostsNewRoute(t *testing.T) {
 }
 
 func TestRuntimeProxyHandlersSeparateStaticDeliveryFromAPI(t *testing.T) {
-	raw, err := json.Marshal(runtimeProxyHandlers("project-gateway:3000"))
-	if err != nil {
-		t.Fatalf("marshal runtime proxy handlers: %v", err)
+	handlers := runtimeProxyHandlers("project-gateway:3000")
+	if len(handlers) != 1 {
+		t.Fatalf("top-level handler count = %d, want 1", len(handlers))
 	}
-	body := string(raw)
-
-	for _, want := range []string{
-		`"path":["/api/*"]`,
-		`"path":["/_next/static/*"]`,
-		`"Cache-Control":["public, max-age=31536000, immutable"]`,
-		`"handler":"encode"`,
-		`"gzip":{}`,
-		`"project-gateway:3000"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("runtime proxy handlers do not contain %s: %s", want, body)
-		}
+	if got := handlers[0]["handler"]; got != "subroute" {
+		t.Fatalf("top-level handler = %v, want subroute", got)
 	}
 
-	if got := strings.Count(body, `"Cache-Control"`); got != 1 {
-		t.Fatalf("Cache-Control policy count = %d, want 1: %s", got, body)
+	routes, ok := handlers[0]["routes"].([]map[string]any)
+	if !ok {
+		t.Fatalf("routes have unexpected type %T", handlers[0]["routes"])
 	}
-	if got := strings.Count(body, `"handler":"encode"`); got != 2 {
-		t.Fatalf("encode handler count = %d, want 2: %s", got, body)
+	if len(routes) != 3 {
+		t.Fatalf("route count = %d, want 3", len(routes))
 	}
 
-	apiStart := strings.Index(body, `"path":["/api/*"]`)
-	nextStaticStart := strings.Index(body, `"path":["/_next/static/*"]`)
-	if apiStart < 0 || nextStaticStart <= apiStart {
-		t.Fatalf("API route must precede Next.js static route: %s", body)
+	apiMatch, ok := routes[0]["match"].([]map[string]any)
+	if !ok || len(apiMatch) != 1 {
+		t.Fatalf("API match has unexpected shape: %#v", routes[0]["match"])
 	}
-	apiSegment := body[apiStart:nextStaticStart]
-	if strings.Contains(apiSegment, `Cache-Control`) || strings.Contains(apiSegment, `"handler":"encode"`) {
-		t.Fatalf("API route unexpectedly gained cache/compression middleware: %s", apiSegment)
+	apiPaths, ok := apiMatch[0]["path"].([]string)
+	if !ok || len(apiPaths) != 1 || apiPaths[0] != "/api/*" {
+		t.Fatalf("API path matcher = %#v, want [/api/*]", apiMatch[0]["path"])
+	}
+	apiHandle, ok := routes[0]["handle"].([]map[string]any)
+	if !ok || len(apiHandle) != 1 {
+		t.Fatalf("API handle has unexpected shape: %#v", routes[0]["handle"])
+	}
+	if got := apiHandle[0]["handler"]; got != "reverse_proxy" {
+		t.Fatalf("API handler = %v, want reverse_proxy only", got)
+	}
+	if _, exists := apiHandle[0]["response"]; exists {
+		t.Fatalf("API reverse proxy unexpectedly contains response-header policy: %#v", apiHandle[0])
+	}
+	if _, exists := apiHandle[0]["encodings"]; exists {
+		t.Fatalf("API reverse proxy unexpectedly contains encoding policy: %#v", apiHandle[0])
+	}
+
+	staticMatch, ok := routes[1]["match"].([]map[string]any)
+	if !ok || len(staticMatch) != 1 {
+		t.Fatalf("static match has unexpected shape: %#v", routes[1]["match"])
+	}
+	staticPaths, ok := staticMatch[0]["path"].([]string)
+	if !ok || len(staticPaths) != 1 || staticPaths[0] != "/_next/static/*" {
+		t.Fatalf("static path matcher = %#v, want [/_next/static/*]", staticMatch[0]["path"])
+	}
+	staticHandle, ok := routes[1]["handle"].([]map[string]any)
+	if !ok || len(staticHandle) != 3 {
+		t.Fatalf("static handle has unexpected shape: %#v", routes[1]["handle"])
+	}
+	if got := staticHandle[0]["handler"]; got != "headers" {
+		t.Fatalf("static first handler = %v, want headers", got)
+	}
+	response, ok := staticHandle[0]["response"].(map[string]any)
+	if !ok {
+		t.Fatalf("static header response has unexpected shape: %#v", staticHandle[0]["response"])
+	}
+	if deferred, ok := response["deferred"].(bool); !ok || !deferred {
+		t.Fatalf("static header policy deferred = %#v, want true", response["deferred"])
+	}
+	set, ok := response["set"].(map[string][]string)
+	if !ok {
+		t.Fatalf("static header set has unexpected shape: %#v", response["set"])
+	}
+	cacheControl := set["Cache-Control"]
+	if len(cacheControl) != 1 || cacheControl[0] != immutableAssetCacheControl {
+		t.Fatalf("static Cache-Control = %#v, want %q", cacheControl, immutableAssetCacheControl)
+	}
+	if got := staticHandle[1]["handler"]; got != "encode" {
+		t.Fatalf("static second handler = %v, want encode", got)
+	}
+	encodings, ok := staticHandle[1]["encodings"].(map[string]any)
+	if !ok {
+		t.Fatalf("static encodings have unexpected shape: %#v", staticHandle[1]["encodings"])
+	}
+	if _, ok := encodings["gzip"]; !ok {
+		t.Fatalf("static encodings do not include gzip: %#v", encodings)
+	}
+	if got := staticHandle[2]["handler"]; got != "reverse_proxy" {
+		t.Fatalf("static third handler = %v, want reverse_proxy", got)
+	}
+
+	fallbackHandle, ok := routes[2]["handle"].([]map[string]any)
+	if !ok || len(fallbackHandle) != 2 {
+		t.Fatalf("fallback handle has unexpected shape: %#v", routes[2]["handle"])
+	}
+	if got := fallbackHandle[0]["handler"]; got != "encode" {
+		t.Fatalf("fallback first handler = %v, want encode", got)
+	}
+	if got := fallbackHandle[1]["handler"]; got != "reverse_proxy" {
+		t.Fatalf("fallback second handler = %v, want reverse_proxy", got)
+	}
+	if _, exists := fallbackHandle[0]["response"]; exists {
+		t.Fatalf("fallback unexpectedly contains cache header policy: %#v", fallbackHandle[0])
 	}
 }
 
