@@ -63,10 +63,8 @@ func TestRuntimeProxyHandlersSeparateStaticDeliveryFromAPI(t *testing.T) {
 		`"path":["/api/*"]`,
 		`"path":["/_next/static/*"]`,
 		`"Cache-Control":["public, max-age=31536000, immutable"]`,
-		`"Cache-Control":["public, max-age=3600, stale-while-revalidate=86400"]`,
 		`"handler":"encode"`,
 		`"gzip":{}`,
-		`"mypaas_static_asset"`,
 		`"project-gateway:3000"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -74,6 +72,9 @@ func TestRuntimeProxyHandlersSeparateStaticDeliveryFromAPI(t *testing.T) {
 		}
 	}
 
+	if got := strings.Count(body, `"Cache-Control"`); got != 1 {
+		t.Fatalf("Cache-Control policy count = %d, want 1: %s", got, body)
+	}
 	if got := strings.Count(body, `"handler":"encode"`); got != 2 {
 		t.Fatalf("encode handler count = %d, want 2: %s", got, body)
 	}
