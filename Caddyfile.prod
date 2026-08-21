@@ -10,6 +10,9 @@
 	# endpoint is Unix-socket-only, MyPaaS can inspect delivery health without
 	# exposing another public metrics listener.
 	metrics
+	servers {
+		metrics
+	}
 
 	log default {
 		level info
