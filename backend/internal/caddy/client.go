@@ -150,6 +150,51 @@ func staticFileHandlers(root string) []map[string]any {
 			"routes": []map[string]any{
 				{
 					"match": []map[string]any{{
+						"path": []string{
+							"/_next/static/*",
+							"*.css",
+							"*.js",
+							"*.mjs",
+							"*.woff",
+							"*.woff2",
+							"*.ttf",
+							"*.otf",
+							"*.png",
+							"*.jpg",
+							"*.jpeg",
+							"*.webp",
+							"*.avif",
+							"*.gif",
+							"*.svg",
+							"*.ico",
+						},
+					}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control":                {"public, max-age=31536000, immutable"},
+								"CDN-Cache-Control":            {"public, max-age=31536000, immutable"},
+								"Cloudflare-CDN-Cache-Control": {"public, max-age=31536000, immutable"},
+							},
+						},
+					}},
+				},
+				{
+					"match": []map[string]any{{
+						"path": []string{"*.html", "/"},
+					}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control": {"no-cache, no-store, must-revalidate"},
+							},
+						},
+					}},
+				},
+				{
+					"match": []map[string]any{{
 						"file": map[string]any{
 							"try_files": []string{
 								"{http.request.uri.path}",
