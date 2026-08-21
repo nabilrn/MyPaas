@@ -2,6 +2,7 @@ package caddy
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -48,6 +49,43 @@ func TestAddRoutePostsNewRoute(t *testing.T) {
 	}
 	if !strings.Contains(postedBody, `"host.docker.internal:3456"`) {
 		t.Fatalf("posted body does not contain configured upstream: %s", postedBody)
+	}
+}
+
+func TestRuntimeProxyHandlersSeparateStaticDeliveryFromAPI(t *testing.T) {
+	raw, err := json.Marshal(runtimeProxyHandlers("project-gateway:3000"))
+	if err != nil {
+		t.Fatalf("marshal runtime proxy handlers: %v", err)
+	}
+	body := string(raw)
+
+	for _, want := range []string{
+		`"path":["/api/*"]`,
+		`"path":["/_next/static/*"]`,
+		`"Cache-Control":["public, max-age=31536000, immutable"]`,
+		`"Cache-Control":["public, max-age=3600, stale-while-revalidate=86400"]`,
+		`"handler":"encode"`,
+		`"gzip":{}`,
+		`"mypaas_static_asset"`,
+		`"project-gateway:3000"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("runtime proxy handlers do not contain %s: %s", want, body)
+		}
+	}
+
+	if got := strings.Count(body, `"handler":"encode"`); got != 2 {
+		t.Fatalf("encode handler count = %d, want 2: %s", got, body)
+	}
+
+	apiStart := strings.Index(body, `"path":["/api/*"]`)
+	nextStaticStart := strings.Index(body, `"path":["/_next/static/*"]`)
+	if apiStart < 0 || nextStaticStart <= apiStart {
+		t.Fatalf("API route must precede Next.js static route: %s", body)
+	}
+	apiSegment := body[apiStart:nextStaticStart]
+	if strings.Contains(apiSegment, `Cache-Control`) || strings.Contains(apiSegment, `"handler":"encode"`) {
+		t.Fatalf("API route unexpectedly gained cache/compression middleware: %s", apiSegment)
 	}
 }
 
