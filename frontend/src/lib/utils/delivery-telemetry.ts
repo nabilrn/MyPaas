@@ -9,6 +9,8 @@ export type DeliveryRate = {
 	ttfbP95Ms: number | null;
 };
 
+const statusClasses = ['2xx', '3xx', '4xx', '5xx'] as const;
+
 export function deriveDeliveryRate(previous: CaddyDeliveryStats | null, current: CaddyDeliveryStats): DeliveryRate | null {
 	if (!previous) return null;
 	const elapsedSeconds = (current.sampled_at_unix_ms - previous.sampled_at_unix_ms) / 1000;
@@ -21,18 +23,26 @@ export function deriveDeliveryRate(previous: CaddyDeliveryStats | null, current:
 		return null;
 	}
 
+	let statusTotalDelta = 0;
+	let status5xxDelta = 0;
+	for (const statusClass of statusClasses) {
+		const previousCount = previous.responses_by_status_class?.[statusClass] ?? 0;
+		const currentCount = current.responses_by_status_class?.[statusClass] ?? 0;
+		if (currentCount < previousCount) return null;
+		const delta = currentCount - previousCount;
+		statusTotalDelta += delta;
+		if (statusClass === '5xx') status5xxDelta = delta;
+	}
+
 	const requestDelta = current.requests_total - previous.requests_total;
 	const errorDelta = current.request_errors_total - previous.request_errors_total;
 	const bodyBytesDelta = current.response_body_bytes_total - previous.response_body_bytes_total;
-	const previous5xx = previous.responses_by_status_class?.['5xx'] ?? 0;
-	const current5xx = current.responses_by_status_class?.['5xx'] ?? 0;
-	const status5xxDelta = current5xx >= previous5xx ? current5xx - previous5xx : 0;
 
 	return {
 		requestsPerSecond: requestDelta / elapsedSeconds,
 		responseBodyBytesPerSecond: bodyBytesDelta / elapsedSeconds,
 		middlewareErrorsPerSecond: errorDelta / elapsedSeconds,
-		status5xxPercent: requestDelta > 0 ? (status5xxDelta / requestDelta) * 100 : 0,
+		status5xxPercent: statusTotalDelta > 0 ? (status5xxDelta / statusTotalDelta) * 100 : 0,
 		requestP95Ms: histogramDeltaQuantile(previous.request_duration_buckets, current.request_duration_buckets, 0.95),
 		ttfbP95Ms: histogramDeltaQuantile(previous.response_ttfb_buckets, current.response_ttfb_buckets, 0.95)
 	};
