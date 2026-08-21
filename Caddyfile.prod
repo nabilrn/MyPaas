@@ -10,7 +10,7 @@
 	# endpoint is Unix-socket-only, MyPaaS can inspect delivery health without
 	# exposing another public metrics listener.
 	metrics
-	servers {
+	servers :80 {
 		metrics
 	}
 

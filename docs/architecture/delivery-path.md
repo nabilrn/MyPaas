@@ -35,9 +35,9 @@ The dashboard derives host network throughput from successive RX/TX counter samp
 
 ### Caddy delivery plane
 
-Caddy native Prometheus metrics are enabled globally with `servers { metrics }`
-and scraped through the existing private Admin Unix socket. MyPaaS does not add
-a public metrics port or a separate metrics service.
+Caddy native Prometheus metrics are enabled for the `:80` HTTP server and
+scraped through the existing private Admin Unix socket. MyPaaS does not add a
+public metrics port or a separate metrics service.
 
 Caddy instruments middleware handlers individually. One request can appear in
 multiple handler series as it passes through `subroute`, headers, encoding, and
