@@ -7,32 +7,43 @@ import (
 	"testing"
 )
 
-func TestDeliveryStatsAggregatesSrv0Metrics(t *testing.T) {
+func TestDeliveryStatsAggregatesTerminalSrv0HandlersOnly(t *testing.T) {
 	body := `# HELP caddy_http_requests_total test
 caddy_http_requests_total{handler="reverse_proxy",server="srv0"} 120
 caddy_http_requests_total{handler="file_server",server="srv0"} 30
+caddy_http_requests_total{handler="encode",server="srv0"} 140
 caddy_http_requests_total{handler="metrics",server="other"} 999
 caddy_http_request_errors_total{handler="reverse_proxy",server="srv0"} 3
+caddy_http_request_errors_total{handler="encode",server="srv0"} 50
 caddy_http_requests_in_flight{handler="reverse_proxy",server="srv0"} 4
 caddy_http_requests_in_flight{handler="file_server",server="srv0"} 2
+caddy_http_requests_in_flight{handler="encode",server="srv0"} 6
 caddy_http_response_size_bytes_sum{code="200",handler="reverse_proxy",method="GET",server="srv0"} 1048576
 caddy_http_response_size_bytes_sum{code="200",handler="file_server",method="GET",server="srv0"} 524288
+caddy_http_response_size_bytes_sum{code="200",handler="encode",method="GET",server="srv0"} 999999999
 caddy_http_request_duration_seconds_count{code="200",handler="reverse_proxy",method="GET",server="srv0"} 110
 caddy_http_request_duration_seconds_count{code="200",handler="file_server",method="GET",server="srv0"} 30
 caddy_http_request_duration_seconds_count{code="500",handler="reverse_proxy",method="GET",server="srv0"} 10
+caddy_http_request_duration_seconds_count{code="200",handler="encode",method="GET",server="srv0"} 140
 caddy_http_request_duration_seconds_count{code="503",handler="reverse_proxy",method="GET",server="other"} 999
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.1"} 80
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.1"} 20
+caddy_http_request_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="0.1"} 100
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.5"} 110
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.5"} 28
+caddy_http_request_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="0.5"} 138
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="+Inf"} 120
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="+Inf"} 30
+caddy_http_request_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="+Inf"} 140
 caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.05"} 90
 caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.05"} 20
+caddy_http_response_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="0.05"} 109
 caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.25"} 118
 caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.25"} 29
+caddy_http_response_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="0.25"} 139
 caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="+Inf"} 120
 caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="+Inf"} 30
+caddy_http_response_duration_seconds_bucket{code="200",handler="encode",method="GET",server="srv0",le="+Inf"} 140
 caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3000"} 1
 caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3001"} 0
 `
