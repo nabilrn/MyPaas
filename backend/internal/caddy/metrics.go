@@ -35,6 +35,12 @@ type DeliveryStats struct {
 // DeliveryStats returns a compact snapshot from Caddy's native Prometheus
 // metrics endpoint. The admin API is normally exposed only through the shared
 // Unix socket, so these metrics do not need another public listener.
+//
+// Caddy instruments every middleware handler. Summing all handler series would
+// count a request repeatedly as it passes through subroute/headers/encode and
+// finally reaches a terminal handler. MyPaaS therefore aggregates only the
+// terminal handlers used by its public project routes: reverse_proxy and
+// file_server.
 func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/metrics", nil)
 	if err != nil {
@@ -65,8 +71,10 @@ func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 			continue
 		}
 
-		if strings.HasPrefix(name, "caddy_http_") && labels["server"] != caddyHTTPServerName {
-			continue
+		if strings.HasPrefix(name, "caddy_http_") {
+			if labels["server"] != caddyHTTPServerName || !isTerminalDeliveryHandler(labels["handler"]) {
+				continue
+			}
 		}
 
 		switch name {
@@ -104,6 +112,15 @@ func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 	stats.RequestDurationBuckets = sortedHistogramBuckets(requestBuckets)
 	stats.ResponseTTFBBuckets = sortedHistogramBuckets(ttfbBuckets)
 	return stats, nil
+}
+
+func isTerminalDeliveryHandler(handler string) bool {
+	switch handler {
+	case "reverse_proxy", "file_server":
+		return true
+	default:
+		return false
+	}
 }
 
 func sortedHistogramBuckets(values map[string]float64) []HistogramBucket {
