@@ -12,10 +12,7 @@ import (
 	"time"
 )
 
-const (
-	immutableAssetCacheControl = "public, max-age=31536000, immutable"
-	staticAssetCacheControl    = "public, max-age=3600, stale-while-revalidate=86400"
-)
+const immutableAssetCacheControl = "public, max-age=31536000, immutable"
 
 type Client struct {
 	baseURL      string
@@ -104,9 +101,8 @@ func runtimeProxyHandlers(dial string) []map[string]any {
 				},
 			},
 			{
-				// Next.js build assets are content-addressed and safe to cache for a
-				// year. This route also ensures text assets are compressed before the
-				// response leaves Caddy.
+				// Next.js build assets are content-addressed and include JavaScript,
+				// CSS, fonts, and imported images. They are safe to cache for a year.
 				"match": []map[string]any{{"path": []string{"/_next/static/*"}}},
 				"handle": []map[string]any{
 					cacheHeaderHandler(immutableAssetCacheControl),
@@ -115,23 +111,11 @@ func runtimeProxyHandlers(dial string) []map[string]any {
 				},
 			},
 			{
-				// Public assets outside framework-specific immutable paths get a
-				// bounded cache lifetime. /api/* is matched first and never reaches
-				// this route even if an API path happens to end in an asset suffix.
-				"match": []map[string]any{{
-					"path_regexp": map[string]any{
-						"name":    "mypaas_static_asset",
-						"pattern": `(?i)\.(?:js|mjs|css|map|woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif|ico)$`,
-					},
-				}},
+				// Compress other compressible app responses (for example HTML and
+				// text assets) without changing their cache semantics. Caddy's encode
+				// handler skips content types that do not benefit from compression.
 				"handle": []map[string]any{
-					cacheHeaderHandler(staticAssetCacheControl),
 					compressionHandler(),
-					reverseProxyHandler(dial),
-				},
-			},
-			{
-				"handle": []map[string]any{
 					reverseProxyHandler(dial),
 				},
 			},
