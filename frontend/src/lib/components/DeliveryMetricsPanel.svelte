@@ -92,7 +92,7 @@
 		<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
 			<CapacityMetricChart
 				label="Delivery rate"
-				value={rate ? `${rate.requestsPerSecond.toFixed(1)} req/s` : 'Collecting…'}
+				value={rate ? `${rate.requestsPerSecond.toFixed(1)} req/s` : 'Collecting...'}
 				indicator={current ? `${current.requests_in_flight.toFixed(0)} active` : ''}
 				detail={upstreamLabel}
 				series={requestSeries}
@@ -103,7 +103,7 @@
 			/>
 			<CapacityMetricChart
 				label="Handler p95"
-				value={rate ? formatDuration(rate.requestP95Ms) : 'Collecting…'}
+				value={rate ? formatDuration(rate.requestP95Ms) : 'Collecting...'}
 				indicator={rate?.ttfbP95Ms !== null && rate?.ttfbP95Ms !== undefined ? `TTFB ${formatDuration(rate.ttfbP95Ms)}` : ''}
 				detail="reverse_proxy + file_server histogram delta"
 				series={latencySeries}
@@ -114,7 +114,7 @@
 			/>
 			<CapacityMetricChart
 				label="Handler response body"
-				value={rate ? `${formatBytes(rate.responseBodyBytesPerSecond)}/s` : 'Collecting…'}
+				value={rate ? `${formatBytes(rate.responseBodyBytesPerSecond)}/s` : 'Collecting...'}
 				detail="Terminal-handler body rate; host TX also includes tunnel/protocol overhead"
 				series={throughputSeries}
 				resource="network"
@@ -124,8 +124,8 @@
 			/>
 			<CapacityMetricChart
 				label="5xx responses"
-				value={rate ? `${rate.status5xxPercent.toFixed(2)}%` : 'Collecting…'}
-				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s terminal-handler errors · latest sample interval` : 'Latest sample interval'}
+				value={rate ? `${rate.status5xxPercent.toFixed(2)}%` : 'Collecting...'}
+				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s terminal-handler errors - latest sample interval` : 'Latest sample interval'}
 				series={errorSeries}
 				resource="neutral"
 				maxValue={100}

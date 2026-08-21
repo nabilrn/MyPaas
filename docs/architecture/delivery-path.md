@@ -1,12 +1,9 @@
 # Delivery Path Observability
 
-> Separating application compute pressure from public request-delivery pressure.
-
-## Why this exists
-
-CPU and memory utilization do not describe the full serving capacity of a web platform. A project can remain well below its CPU and RAM limits while page delivery degrades because of response size, proxy latency, connection pressure, tunnel behavior, CDN cache misses, or external network constraints.
-
-MyPaaS therefore treats compute and delivery as separate observable planes:
+MyPaaS tracks application compute and public delivery as separate signals. CPU
+and memory can stay low while users still see slow pages because of large
+responses, proxy latency, connection pressure, tunnel behavior, CDN cache
+misses, or the external network path.
 
 ```mermaid
 flowchart LR
@@ -23,43 +20,54 @@ flowchart LR
     App -->|runtime metrics| Statd
 ```
 
-## Current telemetry boundary
+## Telemetry Boundary
 
 ### Host and runtime
 
-`mypaas-statd` remains responsible for host and project-runtime telemetry, including:
+`mypaas-statd` reports host and project-runtime telemetry:
 
-- host CPU and memory;
-- host storage;
-- host network RX/TX cumulative counters;
-- project CPU, memory, PID and OOM-related runtime snapshots.
+- host CPU and memory
+- host storage
+- host network RX/TX cumulative counters
+- project CPU, memory, PID, and OOM-related runtime snapshots
 
 The dashboard derives host network throughput from successive RX/TX counter samples.
 
 ### Caddy delivery plane
 
-Caddy native Prometheus metrics are enabled through the existing private Admin Unix socket. MyPaaS does not add a public Caddy metrics port or another metrics service.
+Caddy native Prometheus metrics are enabled through the existing private Admin
+Unix socket. MyPaaS does not add a public metrics port or a separate metrics
+service.
 
-Caddy instruments middleware handlers individually, so a request can appear in multiple handler series while it moves through `subroute`, headers, encoding, and the final delivery handler. MyPaaS deliberately aggregates only the terminal handlers used by project delivery (`reverse_proxy` and `file_server`) rather than summing every middleware series.
+Caddy instruments middleware handlers individually. One request can appear in
+multiple handler series as it passes through `subroute`, headers, encoding, and
+the terminal delivery handler. MyPaaS aggregates only the terminal handlers used
+by project routes: `reverse_proxy` and `file_server`.
 
-The owner-only delivery snapshot exposes low-cardinality aggregate counters/histograms used by the dashboard to derive short-interval values:
+The owner-only delivery snapshot exposes low-cardinality counters and
+histograms. The dashboard uses consecutive samples to derive:
 
-- terminal delivery requests per second;
-- terminal delivery requests in flight;
-- request-duration p95;
-- response TTFB p95;
-- response-body bytes per second;
-- HTTP 5xx share;
-- terminal-handler middleware error rate;
-- reverse-proxy upstream health when exported by Caddy.
+- terminal delivery requests per second
+- terminal delivery requests in flight
+- request-duration p95
+- response TTFB p95
+- response-body bytes per second
+- HTTP 5xx share
+- terminal-handler middleware error rate
+- reverse-proxy upstream health, when exported by Caddy
 
-These values are platform-wide for Caddy server `srv0`. They are diagnostic signals, not per-project billing metrics. Requests handled by a different terminal Caddy module would require that module to be added deliberately rather than being silently mixed into the totals.
+These values are platform-wide for Caddy server `srv0`. They are diagnostic
+signals, not per-project billing metrics. Requests handled by another terminal
+Caddy module must be added deliberately; they are not mixed into the totals by
+default.
 
-Caddy documents that metrics collection has overhead on very busy servers. MyPaaS therefore treats delivery telemetry as a diagnostic feature whose overhead should itself be measured during qualification; the presence of metrics must not be assumed to be performance-neutral.
+Caddy metrics can add overhead on very busy servers. Treat delivery telemetry as
+a diagnostic feature and measure its overhead during qualification.
 
 ## Interpreting the layers
 
-The dashboard should compare the signals instead of treating any one metric as the bottleneck:
+Compare signals across layers instead of treating one metric as proof of the
+bottleneck:
 
 ```text
 High app CPU + high Caddy latency
@@ -78,18 +86,29 @@ Low Caddy response-body rate + high host TX
   -> inspect non-Caddy/tunnel/platform traffic and protocol overhead
 ```
 
-Caddy response-body bytes and host NIC TX are intentionally different measurements. NIC traffic includes tunnel/protocol overhead and other host traffic.
+Caddy response-body bytes and host NIC TX are different measurements. NIC
+traffic includes tunnel/protocol overhead and other host traffic.
 
 ## Cloudflare boundary
 
-Cloudflare cache status, edge behavior, and Tunnel connector health are separate from Caddy origin metrics. They should be correlated during benchmarks but must not be inferred from Caddy counters.
+Cloudflare cache status, edge behavior, and Tunnel connector health are outside
+Caddy origin metrics. Correlate them during benchmarks; do not infer them from
+Caddy counters.
 
-A future controlled performance experiment may compare one, two, and four Cloudflare Tunnel connectors. Connector replication should only become a permanent platform option if repeatable benchmark evidence shows that connector count is a material bottleneck.
+A controlled experiment may compare one, two, and four Cloudflare Tunnel
+connectors. Connector replication should become a platform option only if
+repeatable benchmark evidence shows connector count is a material bottleneck.
 
 ## Replica boundary
 
-Application replicas and Caddy upstream load balancing are future scale-out features. They should not be introduced merely because public page latency is high. Replica work is justified only after evidence shows the project runtime/origin is the constrained layer after cache, runner, edge/tunnel, and proxy behavior have been isolated.
+Application replicas and Caddy upstream load balancing are future scale-out
+features. Do not introduce them only because public page latency is high.
+Replica work is justified after cache behavior, benchmark runner limits,
+edge/tunnel behavior, and proxy behavior have been isolated and the project
+runtime is still the constrained layer.
 
 ## Evidence hygiene
 
-Performance qualification keeps raw k6 output, raw Caddy logs, screenshots, tokens, cookies, and environment files outside the repository. Commits should contain only sanitized methodology, scripts, and summarized results tied to exact application/MyPaaS revisions.
+Keep raw k6 output, raw Caddy logs, screenshots, tokens, cookies, and
+environment files outside the repository. Commit only sanitized methodology,
+scripts, and summarized results tied to exact application and MyPaaS revisions.
