@@ -17,12 +17,22 @@ caddy_http_requests_in_flight{handler="reverse_proxy",server="srv0"} 4
 caddy_http_requests_in_flight{handler="file_server",server="srv0"} 2
 caddy_http_response_size_bytes_sum{code="200",handler="reverse_proxy",method="GET",server="srv0"} 1048576
 caddy_http_response_size_bytes_sum{code="200",handler="file_server",method="GET",server="srv0"} 524288
+caddy_http_request_duration_seconds_count{code="200",handler="reverse_proxy",method="GET",server="srv0"} 110
+caddy_http_request_duration_seconds_count{code="200",handler="file_server",method="GET",server="srv0"} 30
+caddy_http_request_duration_seconds_count{code="500",handler="reverse_proxy",method="GET",server="srv0"} 10
+caddy_http_request_duration_seconds_count{code="503",handler="reverse_proxy",method="GET",server="other"} 999
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.1"} 80
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.1"} 20
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.5"} 110
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.5"} 28
 caddy_http_request_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="+Inf"} 120
 caddy_http_request_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="+Inf"} 30
+caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.05"} 90
+caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.05"} 20
+caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="0.25"} 118
+caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="0.25"} 29
+caddy_http_response_duration_seconds_bucket{code="200",handler="reverse_proxy",method="GET",server="srv0",le="+Inf"} 120
+caddy_http_response_duration_seconds_bucket{code="200",handler="file_server",method="GET",server="srv0",le="+Inf"} 30
 caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3000"} 1
 caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3001"} 0
 `
@@ -52,6 +62,9 @@ caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3001"} 0
 	if stats.ResponseBodyBytesTotal != 1572864 {
 		t.Fatalf("response bytes total = %v, want 1572864", stats.ResponseBodyBytesTotal)
 	}
+	if stats.ResponsesByStatusClass["2xx"] != 140 || stats.ResponsesByStatusClass["5xx"] != 10 {
+		t.Fatalf("status classes = %#v, want 2xx=140 and 5xx=10", stats.ResponsesByStatusClass)
+	}
 	if stats.UpstreamsHealthy != 1 || stats.UpstreamsTotal != 2 {
 		t.Fatalf("upstreams = %d/%d healthy, want 1/2", stats.UpstreamsHealthy, stats.UpstreamsTotal)
 	}
@@ -66,6 +79,18 @@ caddy_reverse_proxy_upstreams_healthy{upstream="runtime:3001"} 0
 	}
 	if stats.RequestDurationBuckets[2].UpperBound != "+Inf" || stats.RequestDurationBuckets[2].Count != 150 {
 		t.Fatalf("last bucket = %#v, want le=+Inf count=150", stats.RequestDurationBuckets[2])
+	}
+	if len(stats.ResponseTTFBBuckets) != 3 {
+		t.Fatalf("TTFB bucket count = %d, want 3", len(stats.ResponseTTFBBuckets))
+	}
+	if stats.ResponseTTFBBuckets[0].UpperBound != "0.05" || stats.ResponseTTFBBuckets[0].Count != 110 {
+		t.Fatalf("first TTFB bucket = %#v, want le=0.05 count=110", stats.ResponseTTFBBuckets[0])
+	}
+	if stats.ResponseTTFBBuckets[1].UpperBound != "0.25" || stats.ResponseTTFBBuckets[1].Count != 147 {
+		t.Fatalf("second TTFB bucket = %#v, want le=0.25 count=147", stats.ResponseTTFBBuckets[1])
+	}
+	if stats.ResponseTTFBBuckets[2].UpperBound != "+Inf" || stats.ResponseTTFBBuckets[2].Count != 150 {
+		t.Fatalf("last TTFB bucket = %#v, want le=+Inf count=150", stats.ResponseTTFBBuckets[2])
 	}
 }
 
