@@ -20,14 +20,16 @@ type HistogramBucket struct {
 }
 
 type DeliveryStats struct {
-	SampledAtUnixMs       int64             `json:"sampled_at_unix_ms"`
-	RequestsTotal         float64           `json:"requests_total"`
-	RequestErrorsTotal    float64           `json:"request_errors_total"`
-	RequestsInFlight      float64           `json:"requests_in_flight"`
-	ResponseBodyBytesTotal float64          `json:"response_body_bytes_total"`
-	RequestDurationBuckets []HistogramBucket `json:"request_duration_buckets"`
-	UpstreamsHealthy      int               `json:"upstreams_healthy"`
-	UpstreamsTotal        int               `json:"upstreams_total"`
+	SampledAtUnixMs        int64              `json:"sampled_at_unix_ms"`
+	RequestsTotal          float64            `json:"requests_total"`
+	RequestErrorsTotal     float64            `json:"request_errors_total"`
+	RequestsInFlight       float64            `json:"requests_in_flight"`
+	ResponseBodyBytesTotal float64            `json:"response_body_bytes_total"`
+	ResponsesByStatusClass map[string]float64 `json:"responses_by_status_class"`
+	RequestDurationBuckets []HistogramBucket  `json:"request_duration_buckets"`
+	ResponseTTFBBuckets    []HistogramBucket  `json:"response_ttfb_buckets"`
+	UpstreamsHealthy       int                `json:"upstreams_healthy"`
+	UpstreamsTotal         int                `json:"upstreams_total"`
 }
 
 // DeliveryStats returns a compact snapshot from Caddy's native Prometheus
@@ -49,8 +51,12 @@ func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 		return DeliveryStats{}, fmt.Errorf("caddy metrics returned %s", resp.Status)
 	}
 
-	stats := DeliveryStats{SampledAtUnixMs: time.Now().UnixMilli()}
-	buckets := make(map[string]float64)
+	stats := DeliveryStats{
+		SampledAtUnixMs:        time.Now().UnixMilli(),
+		ResponsesByStatusClass: map[string]float64{"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0},
+	}
+	requestBuckets := make(map[string]float64)
+	ttfbBuckets := make(map[string]float64)
 	scanner := bufio.NewScanner(io.LimitReader(resp.Body, 2<<20))
 	scanner.Buffer(make([]byte, 64*1024), 512*1024)
 	for scanner.Scan() {
@@ -72,9 +78,17 @@ func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 			stats.RequestsInFlight += value
 		case "caddy_http_response_size_bytes_sum":
 			stats.ResponseBodyBytesTotal += value
+		case "caddy_http_request_duration_seconds_count":
+			if class := statusClass(labels["code"]); class != "" {
+				stats.ResponsesByStatusClass[class] += value
+			}
 		case "caddy_http_request_duration_seconds_bucket":
 			if upperBound := labels["le"]; upperBound != "" {
-				buckets[upperBound] += value
+				requestBuckets[upperBound] += value
+			}
+		case "caddy_http_response_duration_seconds_bucket":
+			if upperBound := labels["le"]; upperBound != "" {
+				ttfbBuckets[upperBound] += value
 			}
 		case "caddy_reverse_proxy_upstreams_healthy":
 			stats.UpstreamsTotal++
@@ -87,18 +101,32 @@ func (c *Client) DeliveryStats(ctx context.Context) (DeliveryStats, error) {
 		return DeliveryStats{}, fmt.Errorf("scan caddy metrics: %w", err)
 	}
 
-	stats.RequestDurationBuckets = make([]HistogramBucket, 0, len(buckets))
-	for upperBound, count := range buckets {
-		stats.RequestDurationBuckets = append(stats.RequestDurationBuckets, HistogramBucket{
-			UpperBound: upperBound,
-			Count:      count,
-		})
-	}
-	sort.Slice(stats.RequestDurationBuckets, func(i, j int) bool {
-		return prometheusUpperBound(stats.RequestDurationBuckets[i].UpperBound) < prometheusUpperBound(stats.RequestDurationBuckets[j].UpperBound)
-	})
-
+	stats.RequestDurationBuckets = sortedHistogramBuckets(requestBuckets)
+	stats.ResponseTTFBBuckets = sortedHistogramBuckets(ttfbBuckets)
 	return stats, nil
+}
+
+func sortedHistogramBuckets(values map[string]float64) []HistogramBucket {
+	buckets := make([]HistogramBucket, 0, len(values))
+	for upperBound, count := range values {
+		buckets = append(buckets, HistogramBucket{UpperBound: upperBound, Count: count})
+	}
+	sort.Slice(buckets, func(i, j int) bool {
+		return prometheusUpperBound(buckets[i].UpperBound) < prometheusUpperBound(buckets[j].UpperBound)
+	})
+	return buckets
+}
+
+func statusClass(code string) string {
+	if len(code) != 3 {
+		return ""
+	}
+	switch code[0] {
+	case '2', '3', '4', '5':
+		return string(code[0]) + "xx"
+	default:
+		return ""
+	}
 }
 
 func parsePrometheusSample(line string) (string, map[string]string, float64, bool) {
