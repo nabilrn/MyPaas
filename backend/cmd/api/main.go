@@ -355,6 +355,7 @@ func registerRoutes(
 			r.Get("/audit-logs", auditHandler.List)
 			r.Get("/settings", settingsHandler.Get)
 			r.Get("/host-stats", settingsHandler.HostStats)
+			r.Get("/delivery-stats", settingsHandler.DeliveryStats)
 			r.Put("/settings", settingsHandler.Update)
 			r.Post("/settings/cloudflare", settingsHandler.UpdateCloudflareConfig)
 			r.Post("/settings/s3", settingsHandler.UpdateS3Config)
