@@ -40,18 +40,22 @@ The dashboard derives host network throughput from successive RX/TX counter samp
 
 Caddy native Prometheus metrics are enabled through the existing private Admin Unix socket. MyPaaS does not add a public Caddy metrics port or another metrics service.
 
+Caddy instruments middleware handlers individually, so a request can appear in multiple handler series while it moves through `subroute`, headers, encoding, and the final delivery handler. MyPaaS deliberately aggregates only the terminal handlers used by project delivery (`reverse_proxy` and `file_server`) rather than summing every middleware series.
+
 The owner-only delivery snapshot exposes low-cardinality aggregate counters/histograms used by the dashboard to derive short-interval values:
 
-- requests per second;
-- requests in flight;
+- terminal delivery requests per second;
+- terminal delivery requests in flight;
 - request-duration p95;
 - response TTFB p95;
 - response-body bytes per second;
 - HTTP 5xx share;
-- Caddy middleware error rate;
+- terminal-handler middleware error rate;
 - reverse-proxy upstream health when exported by Caddy.
 
-These values are platform-wide for Caddy server `srv0`. They are diagnostic signals, not per-project billing metrics.
+These values are platform-wide for Caddy server `srv0`. They are diagnostic signals, not per-project billing metrics. Requests handled by a different terminal Caddy module would require that module to be added deliberately rather than being silently mixed into the totals.
+
+Caddy documents that metrics collection has overhead on very busy servers. MyPaaS therefore treats delivery telemetry as a diagnostic feature whose overhead should itself be measured during qualification; the presence of metrics must not be assumed to be performance-neutral.
 
 ## Interpreting the layers
 
