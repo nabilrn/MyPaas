@@ -5,6 +5,12 @@
 	# Keep the configuration plane off TCP entirely. The API and Caddy share
 	# /run/mypaas, and only the API control plane needs this socket.
 	admin unix//run/mypaas/caddy-admin.sock
+
+	# Collect native HTTP/reverse-proxy Prometheus metrics. Because the admin
+	# endpoint is Unix-socket-only, MyPaaS can inspect delivery health without
+	# exposing another public metrics listener.
+	metrics
+
 	log default {
 		level info
 		format json
