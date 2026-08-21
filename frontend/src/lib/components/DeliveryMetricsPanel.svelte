@@ -80,7 +80,7 @@
 
 <SectionPanel
 	title="Delivery path"
-	description="Live Caddy request-path telemetry. Compare this with host Network to separate application/proxy pressure from tunnel and NIC traffic."
+	description="Live terminal-handler telemetry from Caddy. Compare it with host Network to separate origin/proxy pressure from tunnel and NIC traffic."
 	contentClass="p-0"
 	className="mb-5"
 >
@@ -91,7 +91,7 @@
 	{:else}
 		<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
 			<CapacityMetricChart
-				label="Request rate"
+				label="Delivery rate"
 				value={rate ? `${rate.requestsPerSecond.toFixed(1)} req/s` : 'Collecting…'}
 				indicator={current ? `${current.requests_in_flight.toFixed(0)} active` : ''}
 				detail={upstreamLabel}
@@ -102,10 +102,10 @@
 				className="bg-white dark:bg-neutral-900"
 			/>
 			<CapacityMetricChart
-				label="Caddy p95"
+				label="Handler p95"
 				value={rate ? formatDuration(rate.requestP95Ms) : 'Collecting…'}
 				indicator={rate?.ttfbP95Ms !== null && rate?.ttfbP95Ms !== undefined ? `TTFB ${formatDuration(rate.ttfbP95Ms)}` : ''}
-				detail="Recent request-duration histogram delta"
+				detail="reverse_proxy + file_server histogram delta"
 				series={latencySeries}
 				resource="neutral"
 				maxValue={null}
@@ -113,9 +113,9 @@
 				className="bg-white dark:bg-neutral-900"
 			/>
 			<CapacityMetricChart
-				label="Response body"
+				label="Handler response body"
 				value={rate ? `${formatBytes(rate.responseBodyBytesPerSecond)}/s` : 'Collecting…'}
-				detail="Caddy response body rate; host TX includes tunnel/protocol overhead"
+				detail="Terminal-handler body rate; host TX also includes tunnel/protocol overhead"
 				series={throughputSeries}
 				resource="network"
 				maxValue={null}
@@ -125,7 +125,7 @@
 			<CapacityMetricChart
 				label="5xx responses"
 				value={rate ? `${rate.status5xxPercent.toFixed(2)}%` : 'Collecting…'}
-				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s Caddy middleware errors · latest sample interval` : 'Latest sample interval'}
+				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s terminal-handler errors · latest sample interval` : 'Latest sample interval'}
 				series={errorSeries}
 				resource="neutral"
 				maxValue={100}
