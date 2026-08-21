@@ -15,6 +15,11 @@ func TestStaticFileHandlersIncludeHistoryFallback(t *testing.T) {
 
 	for _, want := range []string{
 		`"root":"/srv/site"`,
+		`"Cloudflare-CDN-Cache-Control":["public, max-age=31536000, immutable"]`,
+		`"CDN-Cache-Control":["public, max-age=31536000, immutable"]`,
+		`"Cache-Control":["public, max-age=31536000, immutable"]`,
+		`"Cache-Control":["no-cache, no-store, must-revalidate"]`,
+		`"/_next/static/*"`,
 		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html","/index.html"]`,
 		`"handler":"rewrite","uri":"{http.matchers.file.relative}"`,
 		`"handler":"file_server"`,

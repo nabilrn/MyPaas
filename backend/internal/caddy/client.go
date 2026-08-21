@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const immutableAssetCacheControl = "public, max-age=31536000, immutable"
+
 type Client struct {
 	baseURL      string
 	upstreamHost string
@@ -50,23 +52,85 @@ func NewClient(adminAddress, upstreamHost string) *Client {
 	}
 }
 
+func reverseProxyHandler(dial string) map[string]any {
+	return map[string]any{
+		"handler": "reverse_proxy",
+		"upstreams": []map[string]any{{
+			"dial": dial,
+		}},
+		"load_balancing": map[string]any{
+			"try_duration": "10s",
+			"try_interval": "250ms",
+		},
+	}
+}
+
+func cacheHeaderHandler(value string) map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string][]string{
+				"Cache-Control": []string{value},
+			},
+			// Apply after the upstream response so framework-provided defaults do
+			// not accidentally replace the platform policy for matched assets.
+			"deferred": true,
+		},
+	}
+}
+
+func compressionHandler() map[string]any {
+	return map[string]any{
+		"handler": "encode",
+		"encodings": map[string]any{
+			"gzip": map[string]any{},
+		},
+	}
+}
+
+func runtimeProxyHandlers(dial string) []map[string]any {
+	return []map[string]any{{
+		"handler": "subroute",
+		"routes": []map[string]any{
+			{
+				// Keep application APIs on the existing proxy path. In particular,
+				// do not add cache or compression middleware ahead of /api/*.
+				"match": []map[string]any{{"path": []string{"/api/*"}}},
+				"handle": []map[string]any{
+					reverseProxyHandler(dial),
+				},
+			},
+			{
+				// Next.js build assets are content-addressed and include JavaScript,
+				// CSS, fonts, and imported images. They are safe to cache for a year.
+				"match": []map[string]any{{"path": []string{"/_next/static/*"}}},
+				"handle": []map[string]any{
+					cacheHeaderHandler(immutableAssetCacheControl),
+					compressionHandler(),
+					reverseProxyHandler(dial),
+				},
+			},
+			{
+				// Compress other compressible app responses (for example HTML and
+				// text assets) without changing their cache semantics. Caddy's encode
+				// handler skips content types that do not benefit from compression.
+				"handle": []map[string]any{
+					compressionHandler(),
+					reverseProxyHandler(dial),
+				},
+			},
+		},
+	}}
+}
+
 func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 	dial, err := c.upstreamDial(ctx, port)
 	if err != nil {
 		return err
 	}
 	route, err := json.Marshal(map[string]any{
-		"match": []map[string]any{{"host": []string{host}}},
-		"handle": []map[string]any{{
-			"handler": "reverse_proxy",
-			"upstreams": []map[string]any{{
-				"dial": dial,
-			}},
-			"load_balancing": map[string]any{
-				"try_duration": "10s",
-				"try_interval": "250ms",
-			},
-		}},
+		"match":    []map[string]any{{"host": []string{host}}},
+		"handle":   runtimeProxyHandlers(dial),
 		"terminal": true,
 	})
 	if err != nil {
@@ -84,6 +148,51 @@ func staticFileHandlers(root string) []map[string]any {
 		{
 			"handler": "subroute",
 			"routes": []map[string]any{
+				{
+					"match": []map[string]any{{
+						"path": []string{
+							"/_next/static/*",
+							"*.css",
+							"*.js",
+							"*.mjs",
+							"*.woff",
+							"*.woff2",
+							"*.ttf",
+							"*.otf",
+							"*.png",
+							"*.jpg",
+							"*.jpeg",
+							"*.webp",
+							"*.avif",
+							"*.gif",
+							"*.svg",
+							"*.ico",
+						},
+					}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control":                {"public, max-age=31536000, immutable"},
+								"CDN-Cache-Control":            {"public, max-age=31536000, immutable"},
+								"Cloudflare-CDN-Cache-Control": {"public, max-age=31536000, immutable"},
+							},
+						},
+					}},
+				},
+				{
+					"match": []map[string]any{{
+						"path": []string{"*.html", "/"},
+					}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control": {"no-cache, no-store, must-revalidate"},
+							},
+						},
+					}},
+				},
 				{
 					"match": []map[string]any{{
 						"file": map[string]any{
