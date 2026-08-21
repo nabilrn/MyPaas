@@ -125,8 +125,7 @@
 			<CapacityMetricChart
 				label="5xx responses"
 				value={rate ? `${rate.status5xxPercent.toFixed(2)}%` : 'Collecting…'}
-				indicator={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s middleware` : ''}
-				detail="Server error share during the latest sample interval"
+				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s Caddy middleware errors · latest sample interval` : 'Latest sample interval'}
 				series={errorSeries}
 				resource="neutral"
 				maxValue={100}
