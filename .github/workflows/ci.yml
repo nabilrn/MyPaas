@@ -73,6 +73,13 @@ jobs:
         run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
+      - name: Production Caddy config
+        run: |
+          docker run --rm \
+            -e PUBLIC_DOMAIN=example.com \
+            -v "$PWD/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
   podman:
     name: Podman compatibility gate
