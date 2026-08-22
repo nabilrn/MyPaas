@@ -100,3 +100,17 @@ func TestApplyToConfig(t *testing.T) {
 		t.Fatalf("runtime config not updated: %+v", cfg)
 	}
 }
+
+func TestCloudflareTunnelInfo(t *testing.T) {
+	t.Parallel()
+
+	h := &Handler{cfg: &config.Config{
+		CloudflareTunnelProtocol:   "quic",
+		CloudflareTunnelConnectors: 2,
+	}}
+
+	got := h.cloudflareTunnelInfo()
+	if got.Protocol != "quic" || got.Connectors != 2 {
+		t.Fatalf("cloudflareTunnelInfo() = %+v", got)
+	}
+}

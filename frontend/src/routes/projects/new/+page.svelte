@@ -112,6 +112,9 @@
 	let envDrafts: EnvDraft[] = [];
 	let newEnvKey = '';
 	let appPortSource: PortSource = 'unresolved';
+	let detectedFramework = '';
+	let deliveryProfile = '';
+	let deliveryWarnings: string[] = [];
 	let projectNameTouched = false;
 	let deployModeManual = false;
 	let envFileInput: HTMLInputElement | null = null;
@@ -239,6 +242,7 @@
 				: form.deployMode === 'static'
 					? 'Static site'
 					: 'Analyzing';
+	$: deliveryProfileLabel = deliveryProfile ? `${deliveryProfile}${detectedFramework ? ` · ${detectedFramework}` : ''}` : '';
 	$: runtimeDetail = form.deployMode === 'static'
 		? 'served by Caddy'
 		: form.deployMode === 'compose'
@@ -505,6 +509,9 @@
 		composePlan = normalizeComposePlan(detected.composePlan);
 		composeCandidates = Array.isArray(detected.composeCandidates) ? detected.composeCandidates : [];
 		staticFrontendCandidates = Array.isArray(detected.staticFrontendCandidates) ? detected.staticFrontendCandidates : [];
+		detectedFramework = detected.framework || '';
+		deliveryProfile = detected.deliveryProfile || '';
+		deliveryWarnings = Array.isArray(detected.deliveryWarnings) ? detected.deliveryWarnings : [];
 		if (!manualMode) chooseDeployMode(detected.deployMode, false);
 		const effectiveMode = manualMode ?? detected.deployMode;
 		if (effectiveMode === 'compose' && detected.mainService && !form.mainService) form.mainService = detected.mainService;
@@ -534,6 +541,8 @@
 			: detected.deployMode === 'static'
 				? 'Static site'
 				: 'Dockerfile';
+		const detectedDeliveryLabel = deliveryProfile ? `${deliveryProfile}${detectedFramework ? ` · ${detectedFramework}` : ''}` : '';
+		if (detectedDeliveryLabel) detectMessage = `${detectMessage} · ${detectedDeliveryLabel}`;
 	}
 
 	async function refreshComposeCandidates(showToast = false) {
@@ -614,6 +623,9 @@
 		composeCandidates = [];
 		composeCandidatesError = '';
 		staticFrontendCandidates = [];
+		detectedFramework = '';
+		deliveryProfile = '';
+		deliveryWarnings = [];
 		form.composeFilePath = '';
 		form.composeWorkdir = '';
 		form.staticFrontendPath = '';
@@ -1344,7 +1356,8 @@
 							<div class="bg-white px-4 py-3 dark:bg-gray-950">
 								<p class="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Runtime</p>
 								<p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">{runtimeLabel}</p>
-								<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{runtimeDetail || portStateLabel}</p>
+								<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{deliveryProfileLabel || runtimeDetail || portStateLabel}</p>
+								{#if deliveryProfileLabel && runtimeDetail}<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{runtimeDetail}</p>{/if}
 							</div>
 							<div class="bg-white px-4 py-3 dark:bg-gray-950">
 								<p class="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Environment</p>
@@ -1352,6 +1365,15 @@
 								<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{missingRequiredEnvKeys.length > 0 ? `${missingRequiredEnvKeys.length} required value${missingRequiredEnvKeys.length === 1 ? '' : 's'} missing` : environmentCopy.noRequiredSummary}</p>
 							</div>
 						</div>
+
+						{#if deliveryWarnings.length > 0}
+							<div class="border-t border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-gray-800 dark:bg-gray-900/30">
+								<p class="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Delivery profile</p>
+								<div class="mt-1.5 space-y-1 text-xs text-gray-600 dark:text-gray-300">
+									{#each deliveryWarnings as warning}<p>{warning}</p>{/each}
+								</div>
+							</div>
+						{/if}
 
 						{#if configurationBlockers.length > 0}
 							<div class={`border-t px-4 py-3 ${composeBlockingIssues.length > 0 ? 'border-red-100 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/10' : 'border-amber-100 bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/10'}`}>

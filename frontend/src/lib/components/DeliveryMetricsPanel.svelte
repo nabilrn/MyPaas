@@ -14,6 +14,7 @@
 	let latencySeries: number[] = [];
 	let throughputSeries: number[] = [];
 	let errorSeries: number[] = [];
+	let cloudflare: { protocol: string; connectors: number } | null = null;
 	let status: 'loading' | 'available' | 'unavailable' = 'loading';
 	let inFlight = false;
 
@@ -32,11 +33,13 @@
 				status = 'unavailable';
 				baseline = null;
 				rate = null;
+				cloudflare = response.cloudflare ?? null;
 				return;
 			}
 
 			status = 'available';
 			current = response.caddy;
+			cloudflare = response.cloudflare ?? null;
 			const nextRate = deriveDeliveryRate(baseline, response.caddy);
 			baseline = response.caddy;
 			if (!nextRate) return;
@@ -76,6 +79,14 @@
 	$: upstreamLabel = current?.upstreams_total
 		? `${current.upstreams_healthy}/${current.upstreams_total} upstreams healthy`
 		: 'Passive proxy path';
+	$: tunnelLabel = rate
+		? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s terminal-handler errors`
+		: current
+			? 'Latest sample interval'
+			: '';
+	$: cloudflareSummary = cloudflare
+		? `${cloudflare.connectors} connector${cloudflare.connectors === 1 ? '' : 's'} · protocol ${cloudflare.protocol || 'auto'}`
+		: 'Tunnel topology unavailable';
 </script>
 
 <SectionPanel
@@ -125,12 +136,16 @@
 			<CapacityMetricChart
 				label="5xx responses"
 				value={rate ? `${rate.status5xxPercent.toFixed(2)}%` : 'Collecting...'}
-				detail={rate ? `${rate.middlewareErrorsPerSecond.toFixed(2)}/s terminal-handler errors - latest sample interval` : 'Latest sample interval'}
+				indicator={cloudflare ? `${cloudflare.connectors} tunnel` : ''}
+				detail={tunnelLabel}
 				series={errorSeries}
 				resource="neutral"
 				maxValue={100}
 				className="bg-white dark:bg-neutral-900"
 			/>
+		</div>
+		<div class="border-t border-gray-100 px-4 py-3 text-xs text-gray-500 dark:border-neutral-800 dark:text-gray-400">
+			Cloudflare Tunnel: <span class="font-mono text-gray-700 dark:text-gray-300">{cloudflareSummary}</span>
 		</div>
 	{/if}
 </SectionPanel>

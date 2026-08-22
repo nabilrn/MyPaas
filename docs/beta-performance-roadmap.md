@@ -40,11 +40,32 @@ complexity.
   so operators can distinguish static, SPA, API-only, generic container,
   Compose, and Next.js runtime deployments before benchmarking.
 
-## P3: Scale-Out Architecture
+## P3: Single-Host Scale Guardrails
 
-- Add multi-VM runtime workers.
+- Surface Cloudflare Tunnel connector count and protocol in owner-only
+  delivery telemetry so benchmark runs can be tied to the actual public path.
+- Keep project detection results visible in the create-project flow so owners
+  know whether an app is static, SPA, API-only, Compose, generic container, or
+  Next.js runtime before choosing benchmark expectations.
 - Support managed or external PostgreSQL for heavier production workloads.
 - Add a build queue dashboard with pending/running/failed states.
+
+## P4: Institutional Qualification
+
+- Maintain repeatable benchmark profiles for representative institutional
+  workloads: mostly-static public sites, dynamic API reads, authenticated CRUD,
+  and heavier frontend applications.
+- Record each run with exact MyPaaS SHA, application SHA, VM shape, tunnel
+  topology, route type, cache headers, and client-side k6 version.
+- Classify conclusions by layer: application, VM, Caddy, Cloudflare Tunnel,
+  Cloudflare edge, external database, and load generator.
+- Treat multi-VM runtime workers and per-project autoscaling as next-level
+  architecture, not as a prerequisite for the single-machine institutional
+  target.
+
+## P5: Scale-Out Architecture
+
+- Add multi-VM runtime workers.
 - Add per-project autoscaling only after worker scheduling is mature.
 
 ## Current Benchmark Interpretation

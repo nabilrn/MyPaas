@@ -20,6 +20,10 @@ export interface DeliveryStatsResponse {
 	status: 'available' | 'unavailable';
 	error_code?: string;
 	caddy: CaddyDeliveryStats | null;
+	cloudflare: {
+		protocol: string;
+		connectors: number;
+	};
 }
 
 async function requestDeliveryStats(retryOnUnauthorized = true): Promise<DeliveryStatsResponse> {
