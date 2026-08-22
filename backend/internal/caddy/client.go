@@ -82,8 +82,54 @@ func staticFileHandlers(root string) []map[string]any {
 			"root":    root,
 		},
 		{
+			"handler": "encode",
+			"encodings": map[string]any{
+				"gzip": map[string]any{},
+				"zstd": map[string]any{},
+			},
+		},
+		{
 			"handler": "subroute",
 			"routes": []map[string]any{
+				{
+					"match": []map[string]any{{
+						"path": []string{
+							"/_next/static/*",
+							"/assets/*",
+							"/static/*",
+							"/*.css",
+							"/*.js",
+							"/*.mjs",
+							"/*.woff",
+							"/*.woff2",
+							"/*.png",
+							"/*.jpg",
+							"/*.jpeg",
+							"/*.webp",
+							"/*.svg",
+							"/*.ico",
+						},
+					}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control": {"public, max-age=31536000, immutable"},
+							},
+						},
+					}},
+				},
+				{
+					"match": []map[string]any{{"path": []string{"/index.html", "/"}}},
+					"handle": []map[string]any{{
+						"handler": "headers",
+						"response": map[string]any{
+							"set": map[string][]string{
+								"Cache-Control": {"no-cache"},
+							},
+						},
+					}},
+				},
 				{
 					"match": []map[string]any{{
 						"file": map[string]any{

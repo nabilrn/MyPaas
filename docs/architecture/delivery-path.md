@@ -101,6 +101,25 @@ The default is `1`. Connector replication should become a broader platform
 feature only if repeatable benchmark evidence shows connector count is a
 material bottleneck.
 
+## Framework-aware delivery
+
+Project detection now reports a framework and delivery profile for common
+single-host workloads:
+
+- `static-site` for plain static sites and static-first frameworks.
+- `spa-static` for Vite-style SPA builds.
+- `next-standalone` for Dockerfile-backed Next.js runtimes.
+- `api-only` for common Node API runtimes.
+- `compose` for Compose projects where the selected main service owns routing.
+- `generic-container` when no framework-specific rule is detected.
+
+Static and hybrid frontend routes get conservative Caddy defaults: immutable
+cache headers for framework/static asset paths, `no-cache` for the HTML entry
+point, and gzip/zstd encoding where the client supports it. API routes remain
+proxied to the application and should keep application-defined cache behavior.
+This keeps correctness ahead of speed: dynamic handlers such as `/api/*` are
+not converted into cached responses by the platform.
+
 ## Replica boundary
 
 Application replicas and Caddy upstream load balancing are future scale-out

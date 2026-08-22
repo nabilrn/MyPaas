@@ -124,6 +124,9 @@ type DetectResult struct {
 	EnvVars                  []envdiscover.Var
 	AppPort                  int32
 	ComposePlan              *ComposePlan
+	Framework                string
+	DeliveryProfile          string
+	DeliveryWarnings         []string
 	Tree                     []RepoTreeEntry
 	TreeTruncated            bool
 	ComposeCandidates        []compose.Candidate
@@ -298,6 +301,7 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (D
 			envVars = envdiscover.AttributeServicesFromConfig(envVars, rawConfig)
 		}
 		composeFilePtr := composeFile
+		delivery := detectDeliveryProfile(workspace, "compose")
 		return DetectResult{
 			DeployMode:               "compose",
 			Branch:                   branch,
@@ -308,6 +312,9 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (D
 			EnvVars:                  envVars,
 			AppPort:                  appPort,
 			ComposePlan:              composePlan,
+			Framework:                delivery.Framework,
+			DeliveryProfile:          delivery.Profile,
+			DeliveryWarnings:         delivery.Warnings,
 			Tree:                     tree,
 			TreeTruncated:            treeTruncated,
 			ComposeCandidates:        composeCandidates,
@@ -315,17 +322,20 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (D
 		}, nil
 	}
 	if hasDockerfile {
-		return DetectResult{DeployMode: "dockerfile", Branch: branch, HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars), Tree: tree, TreeTruncated: treeTruncated, StaticFrontendCandidates: staticFrontendCandidates}, nil
+		delivery := detectDeliveryProfile(workspace, "dockerfile")
+		return DetectResult{DeployMode: "dockerfile", Branch: branch, HasDockerfile: true, EnvVars: envVars, AppPort: inferDockerfileAppPort(workspace, envVars), Framework: delivery.Framework, DeliveryProfile: delivery.Profile, DeliveryWarnings: delivery.Warnings, Tree: tree, TreeTruncated: treeTruncated, StaticFrontendCandidates: staticFrontendCandidates}, nil
 	}
 	if _, _, err := staticdeploy.FindSiteRoot(workspace); err == nil {
-		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Tree: tree, TreeTruncated: treeTruncated}, nil
+		delivery := detectDeliveryProfile(workspace, "static")
+		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Framework: delivery.Framework, DeliveryProfile: delivery.Profile, DeliveryWarnings: delivery.Warnings, Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 
 	// Known static frontend frameworks are classified directly from repository signals.
 	// Nixpacks remains optional enrichment for unknown runtime projects; it is not a
 	// prerequisite for recognizing a static build.
 	if isStaticSPA(workspace) {
-		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Tree: tree, TreeTruncated: treeTruncated}, nil
+		delivery := detectDeliveryProfile(workspace, "static")
+		return DetectResult{DeployMode: "static", Branch: branch, HasDockerfile: false, EnvVars: envVars, AppPort: 80, Framework: delivery.Framework, DeliveryProfile: delivery.Profile, DeliveryWarnings: delivery.Warnings, Tree: tree, TreeTruncated: treeTruncated}, nil
 	}
 
 	plan, _ := nixpacks.PlanWorkspace(ctx, workspace)

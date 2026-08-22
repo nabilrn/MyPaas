@@ -18,8 +18,9 @@ complexity.
 
 ## P1: Latency Work Without Runtime Complexity
 
-- Add Cloudflare/static asset cache guidance for CSS, JavaScript, SVG, image,
-  and immutable asset paths.
+- Apply default Caddy delivery rules for static projects and hybrid frontends:
+  immutable caching for framework/static asset paths, `no-cache` for the HTML
+  entry point, and gzip/zstd compression for compressible assets.
 - Add public API read-cache guidance for tenant-safe profile, study program,
   lecturer, event, banner, and published news endpoints.
 - Audit database indexes for public faculty read endpoints.
@@ -30,12 +31,14 @@ complexity.
 
 ## P2: Performance Mode
 
-- Add optional `CLOUDFLARED_REPLICAS` support for multiple connectors attached
-  to the same Cloudflare Tunnel.
+- Keep optional `CLOUDFLARE_TUNNEL_CONNECTORS` support for controlled
+  one-variable tunnel connector experiments.
 - Surface Cloudflare Tunnel connector count and health in the dashboard.
 - Add benchmark result summary rendering for k6 JSON output.
 - Add a documented deploy-under-load workflow using selected project IDs.
-- Add project-level static cache configuration where supported by routing.
+- Surface framework and delivery profile detection in the project detection API
+  so operators can distinguish static, SPA, API-only, generic container,
+  Compose, and Next.js runtime deployments before benchmarking.
 
 ## P3: Scale-Out Architecture
 
@@ -58,5 +61,7 @@ and the deliberately brutal 1000 VU public spike exceeds the current tunnel
 path capacity. These are workload-specific observations, not universal capacity
 claims.
 
-Cloudflare connector replicas remain future P2 performance-mode work and are
-not implemented as part of private-beta correctness hardening.
+Cloudflare connector replicas are available as an explicit experiment knob, not
+as automatic orchestration. Current qualification should still treat the
+single-VM deployment, one Caddy instance, and one application container as the
+baseline unless an experiment states otherwise.
