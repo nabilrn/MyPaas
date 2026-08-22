@@ -55,6 +55,8 @@ services:
       STATIC_ROOT: ${STATIC_ROOT:-/var/lib/mypaas/static}
       CADDY_STATIC_ROOT: ${CADDY_STATIC_ROOT:-/var/lib/mypaas/static}
       STATD_SOCKET: ${STATD_SOCKET:-}
+      CLOUDFLARE_TUNNEL_PROTOCOL: ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto}
+      CLOUDFLARE_TUNNEL_CONNECTORS: ${CLOUDFLARE_TUNNEL_CONNECTORS:-1}
       SHARED_POSTGRES_ENABLED: ${SHARED_POSTGRES_ENABLED:-true}
       SHARED_POSTGRES_HOST: ${SHARED_POSTGRES_HOST:-postgres}
       SHARED_POSTGRES_PORT: ${SHARED_POSTGRES_PORT:-5432}
@@ -125,7 +127,43 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mypaas-cloudflared
     restart: always
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
+  cloudflared-2:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-2
+    restart: always
+    profiles:
+      - tunnel-2
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
+  cloudflared-3:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-3
+    restart: always
+    profiles:
+      - tunnel-4
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
+  cloudflared-4:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-4
+    restart: always
+    profiles:
+      - tunnel-4
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
     networks:

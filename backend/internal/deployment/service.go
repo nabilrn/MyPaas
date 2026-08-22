@@ -171,6 +171,13 @@ func (s *Service) ListByProject(ctx context.Context, projectID uuid.UUID, limit,
 	})
 }
 
+func (s *Service) QueueItems(ctx context.Context, limit int32) ([]db.ListDeploymentQueueItemsRow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	return s.queries.ListDeploymentQueueItems(ctx, limit)
+}
+
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (db.Deployment, error) {
 	deployment, err := s.queries.GetDeploymentByID(ctx, id)
 	if err == pgx.ErrNoRows {

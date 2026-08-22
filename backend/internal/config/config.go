@@ -39,8 +39,10 @@ type Config struct {
 	MetricsUsername string
 	MetricsPassword string
 
-	CloudflareAPIToken string
-	CloudflareZoneID   string
+	CloudflareAPIToken         string
+	CloudflareZoneID           string
+	CloudflareTunnelProtocol   string
+	CloudflareTunnelConnectors int
 
 	S3Endpoint  string
 	S3Bucket    string
@@ -148,6 +150,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("IMAGE_CLEANUP_WEEKDAY: %w", err)
 	}
+	tunnelConnectors, err := envInt("CLOUDFLARE_TUNNEL_CONNECTORS", 1)
+	if err != nil {
+		return nil, fmt.Errorf("CLOUDFLARE_TUNNEL_CONNECTORS: %w", err)
+	}
 
 	cfg := &Config{
 		DatabaseURL: req("DATABASE_URL"),
@@ -179,8 +185,10 @@ func Load() (*Config, error) {
 		MetricsUsername: envStr("METRICS_USERNAME", ""),
 		MetricsPassword: envStr("METRICS_PASSWORD", ""),
 
-		CloudflareAPIToken: envStr("CLOUDFLARE_API_TOKEN", ""),
-		CloudflareZoneID:   envStr("CLOUDFLARE_ZONE_ID", ""),
+		CloudflareAPIToken:         envStr("CLOUDFLARE_API_TOKEN", ""),
+		CloudflareZoneID:           envStr("CLOUDFLARE_ZONE_ID", ""),
+		CloudflareTunnelProtocol:   envStr("CLOUDFLARE_TUNNEL_PROTOCOL", "auto"),
+		CloudflareTunnelConnectors: tunnelConnectors,
 
 		S3Endpoint:  envStr("S3_ENDPOINT", ""),
 		S3Bucket:    envStr("S3_BUCKET", ""),

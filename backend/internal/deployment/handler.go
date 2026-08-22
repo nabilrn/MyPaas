@@ -74,6 +74,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, ResponsesFromDB(rows))
 }
 
+func (h *Handler) Queue(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.service.QueueItems(r.Context(), project.IntQuery(r, "limit", 50))
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, QueueSummaryFromDB(rows))
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

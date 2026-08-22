@@ -19,7 +19,8 @@ import type {
 	DBStudioRowFilters,
 	DBStudioWriteSession,
 	LogsResponse,
-	CloudflareAnalytics
+	CloudflareAnalytics,
+	DeploymentQueueSummary
 } from '$types';
 
 export interface HostMemoryStats {
@@ -228,6 +229,8 @@ export const api = {
 		removeUser:  (id: string):             Promise<void>   => request(`/admin/users/${id}`, { method: 'DELETE' }),
 		listAuditLogs: (page = 0, pageSize = 50, lookahead = false): Promise<AuditLog[]> =>
 			request(`/admin/audit-logs?limit=${pageSize + (lookahead ? 1 : 0)}&offset=${page * pageSize}`),
+		deploymentQueue: (limit = 50): Promise<DeploymentQueueSummary> =>
+			request(`/admin/deployment-queue?limit=${limit}`),
 		getSettings: (): Promise<Record<string, number> & { mcp_api_token?: string; cloudflare_configured?: boolean; s3_endpoint?: string; s3_bucket?: string; s3_region?: string; s3_access_key?: string; s3_secret_key?: string }> => request('/admin/settings'),
 		updateSettings: (d: Record<string, number>): Promise<Record<string, number>> =>
 			request('/admin/settings', { method: 'PUT', body: JSON.stringify(d) }),

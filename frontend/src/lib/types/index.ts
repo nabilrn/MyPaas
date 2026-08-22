@@ -7,6 +7,7 @@ export type DeployStatus  = 'queued' | 'cloning' | 'building' | 'starting' | 'ru
 export type UserRole      = 'owner' | 'collaborator';
 export type TriggeredBy   = 'manual' | 'webhook' | 'rollback';
 export type ResourceProfile = 'static' | 'go-small' | 'node-python' | 'compose-main' | 'custom';
+export type DeliveryProfile = 'generic-container' | 'next-standalone' | 'static-site' | 'spa-static' | 'api-only' | 'compose';
 
 // ─── Domain models ───────────────────────────────────────────────────────────
 
@@ -64,6 +65,25 @@ export interface Deployment {
 	triggeredByUserId: string | null;
 	startedAt:         string;
 	finishedAt:        string | null;
+}
+
+export interface DeploymentQueueItem {
+	id: string;
+	projectId: string;
+	projectName: string;
+	projectSubdomain: string;
+	status: DeployStatus;
+	triggeredBy: TriggeredBy;
+	startedAt: string;
+	finishedAt: string | null;
+	errorMsg: string | null;
+}
+
+export interface DeploymentQueueSummary {
+	queued: number;
+	active: number;
+	failed24h: number;
+	items: DeploymentQueueItem[];
 }
 
 export interface EnvVar {
@@ -269,6 +289,9 @@ export interface ComposeFileDetection {
 
 export interface DeployModeDetection extends RepoInspection {
 	deployMode: DeployMode;
+	framework: string;
+	deliveryProfile: DeliveryProfile;
+	deliveryWarnings: string[];
 	mainService: string | null;
 	services: string[];
 	composeFile: string | null;
