@@ -255,6 +255,73 @@ func (q *Queries) GetRollbackTarget(ctx context.Context, arg GetRollbackTargetPa
 	return i, err
 }
 
+const listDeploymentQueueItems = `-- name: ListDeploymentQueueItems :many
+SELECT d.id, d.project_id, p.name AS project_name, p.subdomain AS project_subdomain,
+       d.status, d.triggered_by, d.started_at, d.finished_at, d.error_msg
+FROM deployments d
+JOIN projects p ON p.id = d.project_id
+WHERE p.deleted_at IS NULL
+  AND (
+    d.status IN ('queued', 'cloning', 'building', 'starting')
+    OR (
+      d.status = 'failed'
+      AND d.finished_at > NOW() - INTERVAL '24 hours'
+    )
+  )
+ORDER BY
+  CASE d.status
+    WHEN 'queued' THEN 0
+    WHEN 'cloning' THEN 1
+    WHEN 'building' THEN 2
+    WHEN 'starting' THEN 3
+    ELSE 4
+  END,
+  d.started_at DESC
+LIMIT $1
+`
+
+type ListDeploymentQueueItemsRow struct {
+	ID               uuid.UUID        `json:"id"`
+	ProjectID        uuid.UUID        `json:"project_id"`
+	ProjectName      string           `json:"project_name"`
+	ProjectSubdomain string           `json:"project_subdomain"`
+	Status           string           `json:"status"`
+	TriggeredBy      string           `json:"triggered_by"`
+	StartedAt        pgtype.Timestamp `json:"started_at"`
+	FinishedAt       pgtype.Timestamp `json:"finished_at"`
+	ErrorMsg         *string          `json:"error_msg"`
+}
+
+func (q *Queries) ListDeploymentQueueItems(ctx context.Context, limit int32) ([]ListDeploymentQueueItemsRow, error) {
+	rows, err := q.db.Query(ctx, listDeploymentQueueItems, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDeploymentQueueItemsRow
+	for rows.Next() {
+		var i ListDeploymentQueueItemsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.ProjectName,
+			&i.ProjectSubdomain,
+			&i.Status,
+			&i.TriggeredBy,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.ErrorMsg,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDeploymentsByProject = `-- name: ListDeploymentsByProject :many
 SELECT id, project_id, commit_sha, commit_message, status, build_log, error_msg, image_tag,
        triggered_by, triggered_by_user_id, started_at, finished_at

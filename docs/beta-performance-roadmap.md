@@ -65,8 +65,22 @@ complexity.
 
 ## P5: Scale-Out Architecture
 
+- Expose a build/deployment queue snapshot before adding worker scheduling so
+  owners can see queued, active, and recently failed deploy work from the
+  dashboard.
 - Add multi-VM runtime workers.
 - Add per-project autoscaling only after worker scheduling is mature.
+
+## P6: Institutional Operations
+
+- Define tested operating envelopes per workload class instead of one generic
+  concurrent-user claim.
+- Add runbooks for capacity review, backup/restore drills, incident triage,
+  Cloudflare path checks, and application-specific optimization reviews.
+- Add release gates that require passing smoke deploys, static header checks,
+  delivery telemetry availability, queue visibility, backup verification, and
+  benchmark summary provenance before an installation is called
+  institution-ready.
 
 ## Current Benchmark Interpretation
 

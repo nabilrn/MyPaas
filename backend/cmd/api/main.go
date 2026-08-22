@@ -128,10 +128,10 @@ func run() error {
 
 	appCtx, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
-	
+
 	dockerClient := container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)
 	backupService := backup.NewService(cfg, dockerClient)
-	
+
 	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
 
 	srv := &http.Server{
@@ -356,6 +356,7 @@ func registerRoutes(
 			r.Get("/settings", settingsHandler.Get)
 			r.Get("/host-stats", settingsHandler.HostStats)
 			r.Get("/delivery-stats", settingsHandler.DeliveryStats)
+			r.Get("/deployment-queue", deploymentHandler.Queue)
 			r.Put("/settings", settingsHandler.Update)
 			r.Post("/settings/cloudflare", settingsHandler.UpdateCloudflareConfig)
 			r.Post("/settings/s3", settingsHandler.UpdateS3Config)

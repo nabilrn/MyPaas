@@ -22,6 +22,7 @@ The beta qualification identity above is the last runtime-affecting candidate th
 | [Networking and trust boundaries](architecture/networking.md) | Network membership, isolation intent, Caddy routing boundary, and engine authority |
 | [Deployment architecture](architecture/deployment.md) | Dockerfile, Compose, static, registry-image flows, lifecycle states, and route activation |
 | [Observability architecture](architecture/observability.md) | Runtime metrics, host telemetry, statd fallback behavior, logs, and operational signals |
+| [Institutional readiness runbook](operations/institutional-readiness-runbook.md) | Evidence gates before calling a single-machine installation institution-ready |
 | [Security boundaries](SECURITY_BOUNDARIES.md) | Security contract and explicitly trusted/privileged surfaces |
 | [mypaas-statd integration](STATD.md) | statd installation, protocol compatibility, runtime flow, host telemetry, and benchmark evidence |
 | [Architecture decisions](adr/) | Why important architectural choices were made |

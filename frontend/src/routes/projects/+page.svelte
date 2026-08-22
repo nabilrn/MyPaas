@@ -10,6 +10,7 @@
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
+	import StatusBadge from '$components/StatusBadge.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
@@ -17,15 +18,17 @@
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
-	import type { Project } from '$types';
+	import type { DeploymentQueueSummary, Project } from '$types';
 
 	const pageSize = 20;
 	const telemetrySamples = 40;
 
 	let projects: Project[] = [];
 	let hostStats: HostStats | null = null;
+	let deploymentQueue: DeploymentQueueSummary | null = null;
 	let loading = true;
 	let error = '';
+	let queueError = '';
 	let projectActionId = '';
 	let projectActionType: 'start' | 'stop' | 'deploy' | '' = '';
 	let currentPage = 0;
@@ -37,6 +40,7 @@
 	let uptimeRefreshToken = 0;
 	let projectsInFlight = false;
 	let hostStatsInFlight = false;
+	let queueInFlight = false;
 	let ramSeries: number[] = [];
 	let cpuSeries: number[] = [];
 	let storageSeries: number[] = [];
@@ -89,9 +93,11 @@
 		void refreshDashboardData();
 		const projectRefresh = setInterval(() => void loadProjects(true), 5000);
 		const hostRefresh = setInterval(() => void loadHostStats(), 3000);
+		const queueRefresh = setInterval(() => void loadDeploymentQueue(), 5000);
 		return () => {
 			clearInterval(projectRefresh);
 			clearInterval(hostRefresh);
+			clearInterval(queueRefresh);
 		};
 	});
 
@@ -101,7 +107,7 @@
 		projectCpu = {};
 		projectMemory = {};
 		uptimeLoadingIds = new Set();
-		await Promise.all([loadProjects(background), loadHostStats()]);
+		await Promise.all([loadProjects(background), loadHostStats(), loadDeploymentQueue()]);
 	}
 
 	async function loadProjects(background = false) {
@@ -128,6 +134,19 @@
 			recordHostTelemetry(nextHostStats, Date.now());
 		} finally {
 			hostStatsInFlight = false;
+		}
+	}
+
+	async function loadDeploymentQueue() {
+		if (queueInFlight) return;
+		queueInFlight = true;
+		queueError = '';
+		try {
+			deploymentQueue = await api.admin.deploymentQueue(8);
+		} catch (err) {
+			queueError = err instanceof Error ? err.message : 'Deployment queue unavailable';
+		} finally {
+			queueInFlight = false;
 		}
 	}
 
@@ -254,6 +273,10 @@
 
 	function formatDate(value: string) {
 		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	}
+
+	function formatDateTime(value: string) {
+		return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 	}
 
 
@@ -417,6 +440,47 @@
 	</SectionPanel>
 
 	<DeliveryMetricsPanel />
+
+	{#if deploymentQueue || queueError}
+		<SectionPanel title="Deployment queue" description="Recent queued, active, and failed deployment work across this control plane." contentClass="p-0" className="mb-5">
+			{#if queueError && !deploymentQueue}
+				<div class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">Deployment queue is unavailable for this session.</div>
+			{:else if deploymentQueue}
+				<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-3">
+					<div class="bg-white px-4 py-3 dark:bg-neutral-900">
+						<p class="metric-label">Queued</p>
+						<p class="metric-value mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{deploymentQueue.queued}</p>
+					</div>
+					<div class="bg-white px-4 py-3 dark:bg-neutral-900">
+						<p class="metric-label">Active</p>
+						<p class="metric-value mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{deploymentQueue.active}</p>
+					</div>
+					<div class="bg-white px-4 py-3 dark:bg-neutral-900">
+						<p class="metric-label">Failed 24h</p>
+						<p class="metric-value mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{deploymentQueue.failed24h}</p>
+					</div>
+				</div>
+				{#if deploymentQueue.items.length > 0}
+					<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+						{#each deploymentQueue.items as item}
+							<a href={`/projects/${item.projectId}/deployments?focus=${encodeURIComponent(item.id)}`} class="grid gap-1 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-neutral-900 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+								<div class="min-w-0">
+									<p class="truncate font-medium text-gray-950 dark:text-white">{item.projectName}</p>
+									<p class="mt-0.5 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{item.projectSubdomain}.{$page.url.hostname} · {item.triggeredBy}</p>
+								</div>
+								<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 sm:justify-end">
+									<StatusBadge status={item.status} pulse />
+									<span class="whitespace-nowrap">{formatDateTime(item.startedAt)}</span>
+								</div>
+							</a>
+						{/each}
+					</div>
+				{:else}
+					<div class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">No queued or active deployments. Recent failures will appear here for 24 hours.</div>
+				{/if}
+			{/if}
+		</SectionPanel>
+	{/if}
 
 	<TableShell
 		title="Inventory"

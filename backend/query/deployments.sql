@@ -12,6 +12,30 @@ WHERE project_id = $1
 ORDER BY started_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: ListDeploymentQueueItems :many
+SELECT d.id, d.project_id, p.name AS project_name, p.subdomain AS project_subdomain,
+       d.status, d.triggered_by, d.started_at, d.finished_at, d.error_msg
+FROM deployments d
+JOIN projects p ON p.id = d.project_id
+WHERE p.deleted_at IS NULL
+  AND (
+    d.status IN ('queued', 'cloning', 'building', 'starting')
+    OR (
+      d.status = 'failed'
+      AND d.finished_at > NOW() - INTERVAL '24 hours'
+    )
+  )
+ORDER BY
+  CASE d.status
+    WHEN 'queued' THEN 0
+    WHEN 'cloning' THEN 1
+    WHEN 'building' THEN 2
+    WHEN 'starting' THEN 3
+    ELSE 4
+  END,
+  d.started_at DESC
+LIMIT $1;
+
 -- name: GetActiveDeploymentByProject :one
 SELECT id, project_id, commit_sha, commit_message, status, build_log, error_msg, image_tag,
        triggered_by, triggered_by_user_id, started_at, finished_at

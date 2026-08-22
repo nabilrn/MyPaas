@@ -67,6 +67,25 @@ export interface Deployment {
 	finishedAt:        string | null;
 }
 
+export interface DeploymentQueueItem {
+	id: string;
+	projectId: string;
+	projectName: string;
+	projectSubdomain: string;
+	status: DeployStatus;
+	triggeredBy: TriggeredBy;
+	startedAt: string;
+	finishedAt: string | null;
+	errorMsg: string | null;
+}
+
+export interface DeploymentQueueSummary {
+	queued: number;
+	active: number;
+	failed24h: number;
+	items: DeploymentQueueItem[];
+}
+
 export interface EnvVar {
 	id:        string;
 	projectId: string;
