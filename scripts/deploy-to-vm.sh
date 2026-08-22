@@ -73,6 +73,23 @@ fi
 : "${DOCKER_SOCKET:?DOCKER_SOCKET is required}"
 : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 
+CLOUDFLARE_TUNNEL_CONNECTORS="${CLOUDFLARE_TUNNEL_CONNECTORS:-1}"
+case "$CLOUDFLARE_TUNNEL_CONNECTORS" in
+  1)
+    COMPOSE_PROFILE_ARGS=()
+    ;;
+  2)
+    COMPOSE_PROFILE_ARGS=(--profile tunnel-2)
+    ;;
+  4)
+    COMPOSE_PROFILE_ARGS=(--profile tunnel-2 --profile tunnel-4)
+    ;;
+  *)
+    echo "CLOUDFLARE_TUNNEL_CONNECTORS must be 1, 2, or 4." >&2
+    exit 2
+    ;;
+esac
+
 is_valid_public_domain() {
   local value="$1"
   [[ ${#value} -le 253 ]] || return 1
@@ -160,16 +177,16 @@ if [[ -n "${MYPAAS_IMAGE_TAG:-}" ]]; then
 fi
 
 echo "Starting PostgreSQL..."
-$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
+$COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
 
 echo "Waiting for PostgreSQL..."
-until $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
+until $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
   sleep 2
 done
 
 if [[ -f "/tmp/mypaas-database.sql" ]]; then
   echo "Found database backup, restoring..."
-  cat /tmp/mypaas-database.sql | $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T -i postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  cat /tmp/mypaas-database.sql | $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T -i postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
   rm -f /tmp/mypaas-database.sql
   RESTORED_CONTROL_PLANE_DB=true
   echo "Database restored successfully."
@@ -188,12 +205,12 @@ $DOCKER_BIN run --rm \
 
 echo "Starting MyPaas..."
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
+  $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 fi
-$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+$COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
 if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
   echo "Recreating API after database restore to trigger runtime reconciliation..."
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate api
+  $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate api
 fi
 
 echo "MyPaas production stack is starting. Run scripts/verify-production.sh after the containers settle."

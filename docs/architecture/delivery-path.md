@@ -96,8 +96,10 @@ Caddy origin metrics. Correlate them during benchmarks; do not infer them from
 Caddy counters.
 
 A controlled experiment may compare one, two, and four Cloudflare Tunnel
-connectors. Connector replication should become a platform option only if
-repeatable benchmark evidence shows connector count is a material bottleneck.
+connectors by setting `CLOUDFLARE_TUNNEL_CONNECTORS` to `1`, `2`, or `4`.
+The default is `1`. Connector replication should become a broader platform
+feature only if repeatable benchmark evidence shows connector count is a
+material bottleneck.
 
 ## Replica boundary
 

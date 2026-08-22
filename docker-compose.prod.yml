@@ -131,6 +131,42 @@ services:
     networks:
       - control
 
+  cloudflared-2:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-2
+    restart: always
+    profiles:
+      - tunnel-2
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
+  cloudflared-3:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-3
+    restart: always
+    profiles:
+      - tunnel-4
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
+  cloudflared-4:
+    image: cloudflare/cloudflared:latest
+    container_name: mypaas-cloudflared-4
+    restart: always
+    profiles:
+      - tunnel-4
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - caddy
+    networks:
+      - control
+
 volumes:
   postgres_data:
   caddy_data:
