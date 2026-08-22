@@ -125,7 +125,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mypaas-cloudflared
     restart: always
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
     networks:
@@ -137,7 +137,7 @@ services:
     restart: always
     profiles:
       - tunnel-2
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
     networks:
@@ -149,7 +149,7 @@ services:
     restart: always
     profiles:
       - tunnel-4
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
     networks:
@@ -161,7 +161,7 @@ services:
     restart: always
     profiles:
       - tunnel-4
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy
     networks:
