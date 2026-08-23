@@ -18,6 +18,8 @@ func (d *DockerCLI) runArgsWithVolumes(opts RunOptions, volumes []VolumeMount) (
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
 		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
 		"--restart", "unless-stopped",
+		"--log-driver", ManagedLogDriver,
+		"--log-opt", "max-size=" + ManagedLogMaxSize,
 	}
 	if d.projectNetwork != "" {
 		args = append(args, "--network", d.projectNetwork)
