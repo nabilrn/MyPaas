@@ -19,7 +19,11 @@ import (
 
 var keyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-const PlatformPrefix = "MYPAAS_PLATFORM_"
+const (
+	PlatformPrefix          = "MYPAAS_PLATFORM_"
+	ReleaseCommandKey       = "MYPAAS_PLATFORM_RELEASE_COMMAND"
+	ReleaseCommandFileSuffix = ".mypaas-release-command"
+)
 
 type Service struct {
 	queries *db.Queries
@@ -124,7 +128,12 @@ func RuntimeValues(values map[string]string) map[string]string {
 	return out
 }
 
+// WriteEnvFile writes only application-visible variables to path. A release
+// command, when configured, is persisted in a private sidecar file so the
+// container lifecycle can execute it without exposing MYPAAS_PLATFORM_* values
+// to the application process.
 func WriteEnvFile(path string, values map[string]string) error {
+	releaseCommand := strings.TrimSpace(values[ReleaseCommandKey])
 	values = RuntimeValues(values)
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -139,7 +148,18 @@ func WriteEnvFile(path string, values map[string]string) error {
 		b.WriteString(escapeEnvValue(values[key]))
 		b.WriteString("\n")
 	}
-	return os.WriteFile(path, []byte(b.String()), 0600)
+	if err := os.WriteFile(path, []byte(b.String()), 0600); err != nil {
+		return err
+	}
+
+	releasePath := path + ReleaseCommandFileSuffix
+	if releaseCommand == "" {
+		if err := os.Remove(releasePath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return os.WriteFile(releasePath, []byte(releaseCommand), 0600)
 }
 
 func escapeEnvValue(value string) string {
