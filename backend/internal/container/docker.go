@@ -132,6 +132,8 @@ func (d *DockerCLI) Run(ctx context.Context, opts RunOptions, log func(string)) 
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
 		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
 		"--restart", "unless-stopped",
+		"--log-driver", ManagedLogDriver,
+		"--log-opt", "max-size=" + ManagedLogMaxSize,
 	}
 	if d.projectNetwork != "" {
 		args = append(args, "--network", d.projectNetwork)
@@ -821,6 +823,14 @@ func sanitizeComposeConfig(raw []byte) ([]byte, error) {
 		}
 		delete(service, "ports")
 		delete(service, "container_name")
+		if _, configured := service["logging"]; !configured {
+			service["logging"] = map[string]any{
+				"driver": ManagedLogDriver,
+				"options": map[string]any{
+					"max-size": ManagedLogMaxSize,
+				},
+			}
+		}
 
 		if hc, ok := service["healthcheck"].(map[string]any); ok {
 			if test, ok := hc["test"].([]any); ok && len(test) > 1 {
