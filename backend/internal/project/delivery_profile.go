@@ -61,7 +61,7 @@ func detectDeliveryProfile(workspace, deployMode string) deliveryProfileResult {
 			result.Warnings = append(result.Warnings, "Nuxt SSR detected. Caddy compresses proxied responses; /_nuxt/* is the framework-owned static namespace, but direct Caddy file delivery requires an explicit published artifact rather than guessing inside the image.")
 		case frameworkSvelteKit:
 			result.Profile = deliveryGenericContainer
-			result.Warnings = append(result.Warnings, "SvelteKit Node runtime detected. Caddy handles proxy compression; existing .br/.gz sidecars are preserved when static output is published, and /_app/immutable/* is safe for immutable caching only in a published static tree.")
+			result.Warnings = append(result.Warnings, "SvelteKit Node runtime detected. Caddy handles proxy compression; existing Brotli/gzip (.br/.gz) sidecars are preserved when static output is published, and /_app/immutable/* is safe for immutable caching only in a published static tree.")
 		case frameworkNestJS, frameworkNodeAPI:
 			result.Profile = deliveryAPIOnly
 			result.Warnings = append(result.Warnings, "API runtime detected. Caddy compresses eligible responses; API caching remains application-controlled and database/handler latency is not masked by a generic cache rule.")
