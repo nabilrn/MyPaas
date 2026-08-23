@@ -11,7 +11,7 @@ Static releases are published atomically under `STATIC_ROOT` and served directly
 Caddy applies:
 
 - `Cache-Control: public, max-age=0, must-revalidate` by default;
-- `Cache-Control: public, max-age=31536000, immutable` only to known fingerprinted build namespaces:
+- `Cache-Control: public, max-age=31536000, immutable` only to known fingerprinted build namespaces and only when the requested file exists:
   - Next.js `/_next/static/*` when present in a published static tree;
   - Astro `/_astro/*`;
   - Nuxt `/_nuxt/*`;
@@ -21,7 +21,22 @@ Caddy applies:
 - existing `.br` and `.gz` sidecars through Caddy `file_server` precompressed support;
 - build-time `.gz` sidecar generation for sufficiently large textual static assets.
 
-Unhashed files are deliberately not promoted to immutable caching. This avoids stale `public/` assets and other user-controlled filenames.
+Unhashed files are deliberately not promoted to immutable caching. This avoids stale `public/` assets and other user-controlled filenames. Missing requests in known static asset namespaces return `404` instead of falling through to an SPA shell.
+
+### Static routing semantics
+
+MyPaaS no longer applies `/index.html` history fallback to every static project.
+
+During static publication it recognizes obvious client-rendered Vite/legacy SPA builds and writes a reserved `.mypaas-spa-fallback` release marker. Caddy uses that marker only as a route condition:
+
+- React/Vue/Svelte-style Vite SPA builds receive history fallback after real-file lookup fails;
+- Astro static output, plain HTML, Vite multi-page builds, and SvelteKit static output keep ordinary file-server `404` behavior by default;
+- real files and directory indexes always win before SPA fallback;
+- missing `/assets/*`, `/_astro/*`, `/_nuxt/*`, `/_app/*`, `/_next/static/*`, and `/static/*` requests return `404` and never become `index.html`;
+- direct requests to `.mypaas-*` metadata are blocked;
+- source-controlled `.mypaas-*` files are discarded during publication so application code cannot forge routing metadata.
+
+This keeps deep-route behavior explicit enough for framework qualification without persisting another database field or guessing that every static build is an SPA.
 
 ### Dockerfile, registry, Compose and API runtimes
 
