@@ -250,18 +250,14 @@ func dumpPlainDatabase(ctx context.Context, databaseURL, outputPath string) erro
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
-	if err != nil {
-		return fmt.Errorf("create SQL dump: %w", err)
-	}
-	defer file.Close()
-
-	cmd := exec.CommandContext(ctx, "pg_dump", "--no-owner", "--no-privileges")
+	cmd := exec.CommandContext(ctx, "pg_dump", "--no-owner", "--no-privileges", "--file", outputPath)
 	cmd.Env = env
-	cmd.Stdout = file
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pg_dump: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.Chmod(outputPath, 0600); err != nil {
+		return fmt.Errorf("protect SQL dump: %w", err)
 	}
 	return nil
 }
@@ -461,7 +457,7 @@ func applyRetention(dir, prefix string, keep int) error {
 		if err != nil {
 			return err
 		}
-		files = append(files, fileInfo{name: entry.Name(), modTime: info.ModTime()})
+		files = append(files, fileInfo{name: entry.Name(), modTime: info.ModTime())
 	}
 
 	sort.Slice(files, func(i, j int) bool {
