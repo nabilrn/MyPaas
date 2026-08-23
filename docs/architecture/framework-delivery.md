@@ -92,3 +92,7 @@ The framework benchmark should test all fixtures in parallel only after this cod
 - host CPU, RAM and NIC throughput.
 
 No capacity or superiority claim is implied by these delivery defaults.
+
+## Validation gate
+
+Before VM qualification, the latest PR head must receive the same code-side gates used elsewhere in the beta hardening line: backend tests, Go race detection, frontend tests/type checks/build, deployment regressions, production Compose rendering, production Caddy validation, and container-engine compatibility checks. A previous green commit is not evidence that a newer delivery-routing head is green.
