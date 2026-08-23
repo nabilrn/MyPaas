@@ -19,6 +19,8 @@ import (
 
 var keyPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+const PlatformPrefix = "MYPAAS_PLATFORM_"
+
 type Service struct {
 	queries *db.Queries
 	cipher  *crypto.AESGCM
@@ -103,7 +105,27 @@ func (s *Service) DecryptedMap(ctx context.Context, projectID uuid.UUID) (map[st
 	return out, nil
 }
 
+func IsPlatformKey(key string) bool {
+	return strings.HasPrefix(normalizeKey(key), PlatformPrefix)
+}
+
+// RuntimeValues returns the project environment that may be passed to user
+// application processes. MYPAAS_PLATFORM_* keys are control-plane settings
+// stored with the project for backwards-compatible configuration, but they are
+// never injected into the application runtime.
+func RuntimeValues(values map[string]string) map[string]string {
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		if IsPlatformKey(key) {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
 func WriteEnvFile(path string, values map[string]string) error {
+	values = RuntimeValues(values)
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)
