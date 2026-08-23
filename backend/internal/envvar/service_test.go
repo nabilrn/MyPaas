@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,6 +55,44 @@ func TestRevealMissingKeyReturnsNotFound(t *testing.T) {
 	_, err = service.Reveal(context.Background(), uuid.New(), "missing")
 	if !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("expected not found, got %v", err)
+	}
+}
+
+func TestRuntimeValuesExcludePlatformControls(t *testing.T) {
+	values := map[string]string{
+		"DATABASE_URL":                 "postgres://example",
+		"MYPAAS_PLATFORM_REPLICA_COUNT": "3",
+		"mypaas_platform_release_command": "npm run migrate",
+	}
+	got := RuntimeValues(values)
+	if got["DATABASE_URL"] != "postgres://example" {
+		t.Fatalf("runtime values lost application env: %#v", got)
+	}
+	for key := range got {
+		if IsPlatformKey(key) {
+			t.Fatalf("platform control leaked into application env: %s", key)
+		}
+	}
+}
+
+func TestWriteEnvFileDoesNotLeakPlatformControls(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := WriteEnvFile(path, map[string]string{
+		"APP_ENV":                       "production",
+		"MYPAAS_PLATFORM_REPLICA_COUNT": "4",
+	}); err != nil {
+		t.Fatalf("WriteEnvFile() error = %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "APP_ENV=production") {
+		t.Fatalf("application env missing: %q", content)
+	}
+	if strings.Contains(content, "MYPAAS_PLATFORM_") {
+		t.Fatalf("platform env leaked into runtime file: %q", content)
 	}
 }
 
