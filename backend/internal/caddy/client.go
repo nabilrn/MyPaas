@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const spaFallbackMarker = "/.mypaas-spa-fallback"
+
 type Client struct {
 	baseURL      string
 	upstreamHost string
@@ -115,6 +117,15 @@ func staticFileHandlers(root string) []map[string]any {
 			"handler": "subroute",
 			"routes": []map[string]any{
 				{
+					// Deployment metadata must never become public site content.
+					"match": []map[string]any{{"path": []string{"/.mypaas-*"}}},
+					"handle": []map[string]any{{
+						"handler":     "static_response",
+						"status_code": 404,
+					}},
+					"terminal": true,
+				},
+				{
 					// The framework-owned namespaces are immutable by construction. Vite
 					// publicDir files can also live under /assets, so only the default
 					// generated [name]-[hash].[ext] shape is promoted to immutable.
@@ -137,12 +148,14 @@ func staticFileHandlers(root string) []map[string]any {
 					}},
 				},
 				{
+					// Real files and directory indexes win before any SPA history
+					// fallback. Mark this route terminal so a deployed SPA marker cannot
+					// overwrite an already resolved asset/page with index.html.
 					"match": []map[string]any{{
 						"file": map[string]any{
 							"try_files": []string{
 								"{http.request.uri.path}",
 								"{http.request.uri.path}/index.html",
-								"/index.html",
 							},
 						},
 					}},
@@ -150,6 +163,22 @@ func staticFileHandlers(root string) []map[string]any {
 						"handler": "rewrite",
 						"uri":     "{http.matchers.file.relative}",
 					}},
+					"terminal": true,
+				},
+				{
+					// CopyDir writes the marker only for recognized client-rendered SPA
+					// builds. Astro/prerendered/static HTML releases have no marker and
+					// therefore retain ordinary 404 behavior for unknown routes.
+					"match": []map[string]any{{
+						"file": map[string]any{
+							"try_files": []string{spaFallbackMarker},
+						},
+					}},
+					"handle": []map[string]any{{
+						"handler": "rewrite",
+						"uri":     "/index.html",
+					}},
+					"terminal": true,
 				},
 			},
 		},
@@ -330,7 +359,7 @@ func routeMatchesHost(raw json.RawMessage, host string) bool {
 			if item == host {
 				return true
 			}
-	}
+		}
 	}
 	return false
 }

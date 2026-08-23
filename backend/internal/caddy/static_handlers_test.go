@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestStaticFileHandlersApplySafeCachingCompressionAndHistoryFallback(t *testing.T) {
+func TestStaticFileHandlersApplyProfileAwareCachingCompressionAndFallback(t *testing.T) {
 	raw, err := json.Marshal(staticFileHandlers("/srv/site"))
 	if err != nil {
 		t.Fatalf("marshal handlers: %v", err)
@@ -25,8 +25,11 @@ func TestStaticFileHandlersApplySafeCachingCompressionAndHistoryFallback(t *test
 		`"/assets/*-*.*"`,
 		`"Cache-Control":["public, max-age=31536000, immutable"]`,
 		`"Cache-Control":["public, max-age=0, must-revalidate"]`,
-		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html","/index.html"]`,
-		`"handler":"rewrite","uri":"{http.matchers.file.relative}"`,
+		`"path":["/.mypaas-*"]`,
+		`"handler":"static_response","status_code":404`,
+		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html"]`,
+		`"try_files":["/.mypaas-spa-fallback"]`,
+		`"handler":"rewrite","uri":"/index.html"`,
 		`"handler":"file_server"`,
 		`"precompressed":{"br":{},"gzip":{}}`,
 	} {
@@ -35,9 +38,16 @@ func TestStaticFileHandlersApplySafeCachingCompressionAndHistoryFallback(t *test
 		}
 	}
 
-	for _, unsafe := range []string{`"/static/*"`, `"/assets/*"`, `"/*.js"`, `"/*.css"`, `"/*.svg"`} {
+	for _, unsafe := range []string{
+		`"/static/*"`,
+		`"/assets/*"`,
+		`"/*.js"`,
+		`"/*.css"`,
+		`"/*.svg"`,
+		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html","/index.html"]`,
+	} {
 		if strings.Contains(body, unsafe) {
-			t.Fatalf("handlers must not mark generic unhashed path %s immutable: %s", unsafe, body)
+			t.Fatalf("handlers contain unsafe/global behavior %s: %s", unsafe, body)
 		}
 	}
 }

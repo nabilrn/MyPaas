@@ -2,6 +2,7 @@ package staticdeploy
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,7 +15,15 @@ import (
 
 var candidateDirs = []string{"dist", "build", "out", "public", ".output/public", "_site", "site", "www", "."}
 
-const precompressMinBytes = 1024
+const (
+	precompressMinBytes = 1024
+	spaFallbackMarker   = ".mypaas-spa-fallback"
+)
+
+type packageManifest struct {
+	Dependencies    map[string]string `json:"dependencies"`
+	DevDependencies map[string]string `json:"devDependencies"`
+}
 
 func FindSiteRoot(workspace string) (string, string, error) {
 	workspace = filepath.Clean(workspace)
@@ -33,7 +42,8 @@ func CopyDir(src, dst string) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return fmt.Errorf("clear static target: %w", err)
 	}
-	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, walkErr error) error {
+	spaFallback := detectSPAFallback(src)
+	if err := filepath.WalkDir(src, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -55,7 +65,18 @@ func CopyDir(src, dst string) error {
 			return err
 		}
 		return precompressFile(target)
-	})
+	}); err != nil {
+		return err
+	}
+	if spaFallback {
+		// The marker is deployment metadata, not application content. Caddy
+		// explicitly blocks direct requests to .mypaas-* and only uses this file
+		// as a route condition for SPA history fallback.
+		if err := os.WriteFile(filepath.Join(dst, spaFallbackMarker), []byte("spa\n"), 0640); err != nil {
+			return fmt.Errorf("write static routing marker: %w", err)
+		}
+	}
+	return nil
 }
 
 func hasIndex(root string) bool {
@@ -156,6 +177,73 @@ func shouldPrecompress(path string) bool {
 		".map",
 	} {
 		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+// detectSPAFallback decides whether a published static tree should use
+// index.html as a history fallback. It deliberately recognizes only obvious
+// client-rendered Vite/legacy SPA builds. Astro, Nuxt prerender, SvelteKit
+// static output, and plain HTML keep normal file-server 404 semantics.
+func detectSPAFallback(siteRoot string) bool {
+	workspace := findPackageWorkspace(siteRoot)
+	if workspace == "" {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(workspace, "package.json"))
+	if err != nil {
+		return false
+	}
+	var manifest packageManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return false
+	}
+
+	if manifestHas(manifest, "astro") || manifestHas(manifest, "nuxt") || manifestHas(manifest, "next") || manifestHas(manifest, "@sveltejs/kit") {
+		return false
+	}
+	if manifestHas(manifest, "vite") {
+		if viteHasMultiPageInput(workspace) {
+			return false
+		}
+		return manifestHas(manifest, "react") || manifestHas(manifest, "vue") || manifestHas(manifest, "svelte") || manifestHas(manifest, "preact") || manifestHas(manifest, "solid-js")
+	}
+	return manifestHas(manifest, "react-scripts") || manifestHas(manifest, "@vue/cli-service")
+}
+
+func findPackageWorkspace(siteRoot string) string {
+	current := filepath.Clean(siteRoot)
+	for i := 0; i < 4; i++ {
+		if info, err := os.Stat(filepath.Join(current, "package.json")); err == nil && !info.IsDir() {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return ""
+}
+
+func manifestHas(manifest packageManifest, name string) bool {
+	if _, ok := manifest.Dependencies[name]; ok {
+		return true
+	}
+	_, ok := manifest.DevDependencies[name]
+	return ok
+}
+
+func viteHasMultiPageInput(workspace string) bool {
+	for _, name := range []string{"vite.config.js", "vite.config.mjs", "vite.config.ts", "vite.config.mts"} {
+		data, err := os.ReadFile(filepath.Join(workspace, name))
+		if err != nil {
+			continue
+		}
+		normalized := strings.NewReplacer(" ", "", "\t", "", "\n", "", "\r", "").Replace(strings.ToLower(string(data)))
+		if strings.Contains(normalized, "rollupoptions:") && strings.Contains(normalized, "input:") {
 			return true
 		}
 	}
