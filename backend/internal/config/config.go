@@ -27,6 +27,7 @@ type Config struct {
 	DockerSocket      string
 	DockerBindHost    string
 	ProjectNetwork    string
+	RoutingNetwork    string
 	CaddyAdmin        string
 	CaddyUpstreamHost string
 	StaticRoot        string
@@ -131,6 +132,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("BACKUP_WEEKLY_DAY: %w", err)
 	}
 	projectNetwork := envStr("PROJECT_NETWORK", "")
+	routingNetwork := envStr("ROUTING_NETWORK", "")
+	if projectNetwork != "" && routingNetwork == projectNetwork {
+		return nil, fmt.Errorf("ROUTING_NETWORK must be distinct from PROJECT_NETWORK")
+	}
 	sharedPostgresHostDefault := "host.docker.internal"
 	if projectNetwork != "" {
 		sharedPostgresHostDefault = "postgres"
@@ -181,6 +186,7 @@ func Load() (*Config, error) {
 		DockerSocket:      envStr("DOCKER_SOCKET", "/var/run/docker.sock"),
 		DockerBindHost:    envStr("DOCKER_BIND_HOST", "127.0.0.1"),
 		ProjectNetwork:    projectNetwork,
+		RoutingNetwork:    routingNetwork,
 		CaddyAdmin:        envStr("CADDY_ADMIN", "127.0.0.1:2019"),
 		CaddyUpstreamHost: envStr("CADDY_UPSTREAM_HOST", "host.docker.internal"),
 		StaticRoot:        envPath("STATIC_ROOT", "/var/lib/mypaas/static"),
