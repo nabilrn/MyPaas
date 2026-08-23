@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -139,48 +140,43 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 
 	values, err := s.envs.DecryptedMap(ctx, project.ID)
 	if err != nil {
-		return fmt.Errorf("read platform settings: %w", err)
+		return s.preservePrimaryOnError(ctx, project, fmt.Errorf("read platform settings: %w", err))
 	}
 	desired, err := DesiredCount(values)
 	if err != nil {
-		return err
+		return s.preservePrimaryOnError(ctx, project, err)
 	}
 	if desired > 1 {
 		if err := s.checkUserBudget(ctx, project.UserID); err != nil {
-			return err
+			return s.preservePrimaryOnError(ctx, project, err)
 		}
 	}
 
 	deployment, err := s.queries.GetLatestRunningDeployment(ctx, project.ID)
 	if err != nil {
-		return fmt.Errorf("resolve active runtime image: %w", err)
+		return s.preservePrimaryOnError(ctx, project, fmt.Errorf("resolve active runtime image: %w", err))
 	}
 	if deployment.ImageTag == nil || strings.TrimSpace(*deployment.ImageTag) == "" {
-		return fmt.Errorf("latest running deployment has no image")
+		return s.preservePrimaryOnError(ctx, project, fmt.Errorf("latest running deployment has no image"))
 	}
 	image := strings.TrimSpace(*deployment.ImageTag)
 
 	if desired > 1 {
 		volumes, err := s.docker.ImageVolumeTargets(ctx, image)
 		if err != nil {
-			return fmt.Errorf("inspect image persistence before scaling: %w", err)
+			return s.preservePrimaryOnError(ctx, project, fmt.Errorf("inspect image persistence before scaling: %w", err))
 		}
-		if len(volumes) > 0 {
-			return fmt.Errorf("replica count %d rejected: image declares persistent VOLUME targets", desired)
+		if err := validatePersistentReplicaMode(desired, volumes); err != nil {
+			return s.preservePrimaryOnError(ctx, project, err)
 		}
 	}
 
 	existing, err := s.docker.ReplicaInfos(ctx, project.ID.String())
 	if err != nil {
-		return err
+		return s.preservePrimaryOnError(ctx, project, err)
 	}
-	stale := false
-	for _, item := range existing {
-		if item.Slot < 2 || item.Slot > desired || item.Image != image || !replicaUsable(item) {
-			stale = true
-			break
-		}
-	}
+	sortReplicaInfos(existing)
+	stale := replicaTopologyNeedsRefresh(existing, desired, image)
 	if shouldIsolatePrimaryBeforeReplicaChange(desired, stale) {
 		if err := s.routePrimary(ctx, project); err != nil {
 			return fmt.Errorf("isolate primary before replica change: %w", err)
@@ -189,9 +185,13 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 
 	bySlot := make(map[int]container.ReplicaInfo, len(existing))
 	for _, item := range existing {
-		if item.Slot < 2 || item.Slot > desired || item.Image != image || !replicaUsable(item) {
+		remove := item.Slot < 2 || item.Slot > desired || item.Image != image || !replicaUsable(item)
+		if !remove {
+			_, remove = bySlot[item.Slot]
+		}
+		if remove {
 			if err := s.docker.Remove(ctx, item.Name); err != nil {
-				return fmt.Errorf("remove stale replica %s: %w", item.Name, err)
+				return s.preservePrimaryOnError(ctx, project, fmt.Errorf("remove stale replica %s: %w", item.Name, err))
 			}
 			continue
 		}
@@ -199,18 +199,24 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 	}
 
 	if desired == 1 {
+		// Scale-down removes aliases that may still be present in the previous
+		// multi-upstream route. Rewrite the route only after cleanup so scale
+		// 2/3 -> 1 cannot leave Caddy pointing at removed secondary aliases.
+		if err := s.routePrimary(ctx, project); err != nil {
+			return fmt.Errorf("route primary after replica scale-down: %w", err)
+		}
 		s.setStatus(project.ID, Status{Desired: 1, Ready: 1, Image: image, ReconciledAt: time.Now()})
 		return nil
 	}
 
 	tempDir, err := os.MkdirTemp("", "mypaas-replica-env-")
 	if err != nil {
-		return err
+		return s.preservePrimaryOnError(ctx, project, err)
 	}
 	defer os.RemoveAll(tempDir)
 	envFile := filepath.Join(tempDir, ".env")
 	if err := envvar.WriteEnvFile(envFile, values); err != nil {
-		return fmt.Errorf("write replica environment: %w", err)
+		return s.preservePrimaryOnError(ctx, project, fmt.Errorf("write replica environment: %w", err))
 	}
 
 	for slot := 2; slot <= desired; slot++ {
@@ -220,7 +226,7 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 		name := replicaName(project.Name, slot)
 		alias := replicaAlias(project.ID, slot)
 		if err := s.docker.Remove(ctx, name); err != nil {
-			return err
+			return s.preservePrimaryOnError(ctx, project, err)
 		}
 		if err := s.docker.RunReplica(ctx, container.ReplicaRunOptions{
 			Name:           name,
@@ -236,34 +242,34 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 		}, func(line string) {
 			slog.Info("replica runtime", "project", project.Name, "slot", slot, "message", line)
 		}); err != nil {
-			return fmt.Errorf("start replica slot %d: %w", slot, err)
+			return s.preservePrimaryOnError(ctx, project, fmt.Errorf("start replica slot %d: %w", slot, err))
 		}
 		if err := s.waitReplicaReady(ctx, project.ID.String(), name, 60*time.Second); err != nil {
 			_ = s.docker.Remove(context.Background(), name)
-			return fmt.Errorf("replica slot %d readiness: %w", slot, err)
+			return s.preservePrimaryOnError(ctx, project, fmt.Errorf("replica slot %d readiness: %w", slot, err))
 		}
 	}
 
 	items, err := s.docker.ReplicaInfos(ctx, project.ID.String())
 	if err != nil {
-		return err
+		return s.preservePrimaryOnError(ctx, project, err)
 	}
-	upstreams := make([]caddy.ReplicaUpstream, 0, desired-1)
-	ready := 1
-	for _, item := range items {
-		if item.Slot >= 2 && item.Slot <= desired && item.Image == image && replicaUsable(item) {
-			upstreams = append(upstreams, caddy.ReplicaUpstream{Dial: replicaAlias(project.ID, item.Slot) + ":" + strconv.Itoa(int(project.AppPort))})
-			ready++
-		}
-	}
-	if ready != desired {
-		return fmt.Errorf("only %d/%d runtime replicas are ready", ready, desired)
+	upstreams, err := readyReplicaUpstreams(project.ID, items, desired, image, project.AppPort)
+	if err != nil {
+		return s.preservePrimaryOnError(ctx, project, err)
 	}
 	if err := s.routeReplicas(ctx, project, upstreams); err != nil {
 		return err
 	}
-	s.setStatus(project.ID, Status{Desired: desired, Ready: ready, Image: image, ReconciledAt: time.Now()})
+	s.setStatus(project.ID, Status{Desired: desired, Ready: desired, Image: image, ReconciledAt: time.Now()})
 	return nil
+}
+
+func (s *Service) preservePrimaryOnError(ctx context.Context, project db.Project, cause error) error {
+	if routeErr := s.routePrimary(ctx, project); routeErr != nil {
+		return fmt.Errorf("%w; also failed to preserve primary route: %v", cause, routeErr)
+	}
+	return cause
 }
 
 func (s *Service) waitReplicaReady(ctx context.Context, projectID, name string, timeout time.Duration) error {
@@ -279,7 +285,8 @@ func (s *Service) waitReplicaReady(ctx context.Context, projectID, name string, 
 				continue
 			}
 			found = true
-			if item.Health == "unhealthy" || !item.Running && item.Health != "starting" {
+			health := strings.ToLower(strings.TrimSpace(item.Health))
+			if health == "unhealthy" || (!item.Running && health != "starting") {
 				return fmt.Errorf("container is not healthy (running=%v health=%s)", item.Running, item.Health)
 			}
 			if replicaUsable(item) {
@@ -310,6 +317,65 @@ func replicaUsable(item container.ReplicaInfo) bool {
 
 func shouldIsolatePrimaryBeforeReplicaChange(desired int, stale bool) bool {
 	return desired > 1 && stale
+}
+
+func validatePersistentReplicaMode(desired int, volumes []string) error {
+	if desired > 1 && len(volumes) > 0 {
+		return fmt.Errorf("replica count %d rejected: image declares persistent VOLUME targets", desired)
+	}
+	return nil
+}
+
+func replicaTopologyNeedsRefresh(items []container.ReplicaInfo, desired int, image string) bool {
+	seen := make(map[int]struct{}, len(items))
+	for _, item := range items {
+		if item.Slot < 2 || item.Slot > desired || item.Image != image || !replicaUsable(item) {
+			return true
+		}
+		if _, exists := seen[item.Slot]; exists {
+			return true
+		}
+		seen[item.Slot] = struct{}{}
+	}
+	return false
+}
+
+func sortReplicaInfos(items []container.ReplicaInfo) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Slot == items[j].Slot {
+			return items[i].Name < items[j].Name
+		}
+		return items[i].Slot < items[j].Slot
+	})
+}
+
+func readyReplicaUpstreams(projectID uuid.UUID, items []container.ReplicaInfo, desired int, image string, appPort int32) ([]caddy.ReplicaUpstream, error) {
+	ordered := append([]container.ReplicaInfo(nil), items...)
+	sortReplicaInfos(ordered)
+	bySlot := make(map[int]container.ReplicaInfo, len(ordered))
+	for _, item := range ordered {
+		if item.Slot < 2 || item.Slot > desired || item.Image != image || !replicaUsable(item) {
+			return nil, fmt.Errorf("replica %s is not eligible for the active route", item.Name)
+		}
+		if _, exists := bySlot[item.Slot]; exists {
+			return nil, fmt.Errorf("duplicate ready replica slot %d", item.Slot)
+		}
+		bySlot[item.Slot] = item
+	}
+
+	upstreams := make([]caddy.ReplicaUpstream, 0, desired-1)
+	for slot := 2; slot <= desired; slot++ {
+		if _, ok := bySlot[slot]; !ok {
+			return nil, fmt.Errorf("only %d/%d runtime replicas are ready", len(bySlot)+1, desired)
+		}
+		upstreams = append(upstreams, caddy.ReplicaUpstream{
+			Dial: replicaAlias(projectID, slot) + ":" + strconv.Itoa(int(appPort)),
+		})
+	}
+	if len(bySlot) != desired-1 {
+		return nil, fmt.Errorf("unexpected ready replica topology: got %d secondaries, want %d", len(bySlot), desired-1)
+	}
+	return upstreams, nil
 }
 
 func DesiredCount(values map[string]string) (int, error) {
