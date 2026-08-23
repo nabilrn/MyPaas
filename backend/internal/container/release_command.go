@@ -10,8 +10,6 @@ import (
 	"mypaas/internal/envvar"
 )
 
-const releaseCommandLogMaxSize = "20m"
-
 // runReleaseCommandIfConfigured executes an opt-in one-off command from the
 // candidate image before the primary runtime is created. The command runs with
 // the same application env file and project network, but without persistent
@@ -53,7 +51,8 @@ func releaseCommandArgs(opts RunOptions, projectNetwork, command string) []strin
 		"--name", strings.TrimSpace(opts.Name) + "-release",
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
 		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
-		"--log-opt", "max-size=" + releaseCommandLogMaxSize,
+		"--log-driver", ManagedLogDriver,
+		"--log-opt", "max-size=" + ManagedLogMaxSize,
 	}
 	if strings.TrimSpace(projectNetwork) != "" {
 		args = append(args, "--network", strings.TrimSpace(projectNetwork))
