@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	
+
 	mpconfig "mypaas/internal/config"
 	"mypaas/internal/container"
 )
@@ -39,6 +40,13 @@ type Service struct {
 type Result struct {
 	DailyPath  string
 	WeeklyPath string
+}
+
+type backupManifest struct {
+	Version         int      `json:"version"`
+	CreatedAt       string   `json:"createdAt"`
+	ControlDatabase string   `json:"controlDatabase"`
+	SharedDatabases []string `json:"sharedDatabases"`
 }
 
 func NewService(cfg *mpconfig.Config, docker *container.DockerCLI) *Service {
@@ -155,46 +163,194 @@ func (s *Service) runScheduled(parent context.Context) {
 	}
 }
 
+// pgDump writes a backwards-compatible scheduled backup bundle. database.sql
+// and .env remain at the archive root for the legacy control-plane restore
+// path, while project-complete recovery data lives in databases/, roles.sql,
+// and manifest.json.
 func (s *Service) pgDump(ctx context.Context, outputPath string) error {
-	env, err := pgDumpEnv(s.cfg.DatabaseURL, os.Environ())
-	if err != nil {
-		return err
-	}
-	
 	tempDir, err := os.MkdirTemp("", "mypaas-backup-")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
-	
-	dbPath := filepath.Join(tempDir, "database.sql")
+
+	controlPath := filepath.Join(tempDir, "database.sql")
+	if err := dumpPlainDatabase(ctx, s.cfg.DatabaseURL, controlPath); err != nil {
+		return fmt.Errorf("dump control database: %w", err)
+	}
+
 	envPath := filepath.Join(tempDir, ".env")
-	
 	envData, err := os.ReadFile("/etc/mypaas/.env")
 	if err != nil {
-		slog.Warn("could not read /etc/mypaas/.env, falling back to os.Environ", "error", err)
-		envContent := strings.Join(os.Environ(), "\n")
-		envData = []byte(envContent)
+		slog.Warn("could not read /etc/mypaas/.env, falling back to process environment", "error", err)
+		envData = []byte(strings.Join(os.Environ(), "\n"))
 	}
-	
 	if err := os.WriteFile(envPath, envData, 0600); err != nil {
 		return fmt.Errorf("write .env: %w", err)
 	}
-	
-	cmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("pg_dump --no-owner --no-privileges > %s", dbPath))
+
+	sharedDBs, err := listSharedDatabases(ctx, s.cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	databaseDir := filepath.Join(tempDir, "databases")
+	if err := os.MkdirAll(databaseDir, 0700); err != nil {
+		return fmt.Errorf("create project database backup dir: %w", err)
+	}
+	for _, dbName := range sharedDBs {
+		dbURL, err := replaceDatabaseName(s.cfg.DatabaseURL, dbName)
+		if err != nil {
+			return err
+		}
+		output := filepath.Join(databaseDir, dbName+".dump")
+		if err := dumpCustomDatabase(ctx, dbURL, output); err != nil {
+			return fmt.Errorf("dump project database %s: %w", dbName, err)
+		}
+	}
+
+	if err := dumpRoles(ctx, s.cfg.DatabaseURL, filepath.Join(tempDir, "roles.sql")); err != nil {
+		return err
+	}
+	controlName, err := databaseNameFromURL(s.cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	manifest := backupManifest{
+		Version:         2,
+		CreatedAt:       s.now().UTC().Format(time.RFC3339),
+		ControlDatabase: controlName,
+		SharedDatabases: sharedDBs,
+	}
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode backup manifest: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "manifest.json"), manifestData, 0600); err != nil {
+		return fmt.Errorf("write backup manifest: %w", err)
+	}
+
+	tarCmd := exec.CommandContext(
+		ctx,
+		"tar", "-czf", outputPath,
+		"-C", tempDir,
+		"database.sql", ".env", "manifest.json", "roles.sql", "databases",
+	)
+	out, err := tarCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tar: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.Chmod(outputPath, 0600); err != nil {
+		return fmt.Errorf("protect backup archive: %w", err)
+	}
+	return nil
+}
+
+func dumpPlainDatabase(ctx context.Context, databaseURL, outputPath string) error {
+	env, err := pgDumpEnv(databaseURL, os.Environ())
+	if err != nil {
+		return err
+	}
+	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("create SQL dump: %w", err)
+	}
+	defer file.Close()
+
+	cmd := exec.CommandContext(ctx, "pg_dump", "--no-owner", "--no-privileges")
 	cmd.Env = env
+	cmd.Stdout = file
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pg_dump: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	
-	tarCmd := exec.CommandContext(ctx, "tar", "-czf", outputPath, "-C", tempDir, "database.sql", ".env")
-	out, err = tarCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("tar: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	
 	return nil
+}
+
+func dumpCustomDatabase(ctx context.Context, databaseURL, outputPath string) error {
+	env, err := pgDumpEnv(databaseURL, os.Environ())
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "pg_dump", "--format=custom", "--no-owner", "--no-privileges", "--file", outputPath)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pg_dump custom: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.Chmod(outputPath, 0600); err != nil {
+		return fmt.Errorf("protect database dump: %w", err)
+	}
+	return nil
+}
+
+func dumpRoles(ctx context.Context, databaseURL, outputPath string) error {
+	env, err := pgDumpEnv(databaseURL, os.Environ())
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "pg_dumpall", "--roles-only", "--file", outputPath)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pg_dumpall roles: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if err := os.Chmod(outputPath, 0600); err != nil {
+		return fmt.Errorf("protect roles dump: %w", err)
+	}
+	return nil
+}
+
+func listSharedDatabases(ctx context.Context, databaseURL string) ([]string, error) {
+	env, err := pgDumpEnv(databaseURL, os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, "psql", "-X", "-A", "-t", "-c", "SELECT datname FROM pg_database WHERE datname LIKE 'mypaas_p_%' ORDER BY datname")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("list shared project databases: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return parseDatabaseList(string(out)), nil
+}
+
+func parseDatabaseList(raw string) []string {
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	items := make([]string, 0, len(lines))
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name == "" || !strings.HasPrefix(name, "mypaas_p_") {
+			continue
+		}
+		items = append(items, name)
+	}
+	sort.Strings(items)
+	return items
+}
+
+func databaseNameFromURL(databaseURL string) (string, error) {
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse database url: %w", err)
+	}
+	name := strings.TrimPrefix(parsed.Path, "/")
+	if name == "" {
+		return "", fmt.Errorf("database url is missing database name")
+	}
+	return name, nil
+}
+
+func replaceDatabaseName(databaseURL, name string) (string, error) {
+	parsed, err := url.Parse(databaseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse database url: %w", err)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name, "/?#") {
+		return "", fmt.Errorf("invalid database name %q", name)
+	}
+	parsed.Path = "/" + name
+	return parsed.String(), nil
 }
 
 func pgDumpEnv(databaseURL string, base []string) ([]string, error) {
