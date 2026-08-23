@@ -107,6 +107,15 @@ func staticFileHandlers(root string) []map[string]any {
 		"/assets/*-*.*",
 	}
 
+	fileServer := map[string]any{
+		"handler":     "file_server",
+		"index_names": []string{"index.html"},
+		"precompressed": map[string]any{
+			"br":   map[string]any{},
+			"gzip": map[string]any{},
+		},
+	}
+
 	return []map[string]any{
 		{
 			"handler": "vars",
@@ -175,7 +184,7 @@ func staticFileHandlers(root string) []map[string]any {
 					"handle": []map[string]any{{
 						"handler": "rewrite",
 						"uri":     "{http.matchers.file.relative}",
-					}},
+					}, fileServer},
 					"terminal": true,
 				},
 				{
@@ -200,19 +209,12 @@ func staticFileHandlers(root string) []map[string]any {
 					"handle": []map[string]any{{
 						"handler": "rewrite",
 						"uri":     "/index.html",
-					}},
+					}, fileServer},
 					"terminal": true,
 				},
 			},
 		},
-		{
-			"handler":     "file_server",
-			"index_names": []string{"index.html"},
-			"precompressed": map[string]any{
-				"br":   map[string]any{},
-				"gzip": map[string]any{},
-			},
-		},
+		fileServer,
 	}
 }
 

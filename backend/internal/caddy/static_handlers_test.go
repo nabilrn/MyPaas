@@ -51,3 +51,28 @@ func TestStaticFileHandlersApplyProfileAwareCachingCompressionAndFallback(t *tes
 		}
 	}
 }
+
+func TestStaticRewriteRoutesServeFilesBeforeTerminating(t *testing.T) {
+	handlers := staticFileHandlers("/srv/site")
+	subroute, ok := handlers[3]["routes"].([]map[string]any)
+	if !ok {
+		t.Fatalf("static subroute routes are missing: %#v", handlers[3])
+	}
+
+	for _, index := range []int{2, 4} {
+		route := subroute[index]
+		if route["terminal"] != true {
+			t.Fatalf("route %d must remain terminal", index)
+		}
+		handle, ok := route["handle"].([]map[string]any)
+		if !ok || len(handle) != 2 {
+			t.Fatalf("route %d handle = %#v, want rewrite and file_server", index, route["handle"])
+		}
+		if handle[0]["handler"] != "rewrite" {
+			t.Fatalf("route %d first handler = %#v, want rewrite", index, handle[0])
+		}
+		if handle[1]["handler"] != "file_server" {
+			t.Fatalf("route %d second handler = %#v, want file_server", index, handle[1])
+		}
+	}
+}
