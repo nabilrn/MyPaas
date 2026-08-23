@@ -457,7 +457,7 @@ func applyRetention(dir, prefix string, keep int) error {
 		if err != nil {
 			return err
 		}
-		files = append(files, fileInfo{name: entry.Name(), modTime: info.ModTime())
+		files = append(files, fileInfo{name: entry.Name(), modTime: info.ModTime()})
 	}
 
 	sort.Slice(files, func(i, j int) bool {
