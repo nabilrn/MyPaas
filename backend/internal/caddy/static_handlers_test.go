@@ -22,7 +22,7 @@ func TestStaticFileHandlersApplySafeCachingCompressionAndHistoryFallback(t *test
 		`"/_astro/*"`,
 		`"/_nuxt/*"`,
 		`"/_app/immutable/*"`,
-		`"/assets/*"`,
+		`"/assets/*-*.*"`,
 		`"Cache-Control":["public, max-age=31536000, immutable"]`,
 		`"Cache-Control":["public, max-age=0, must-revalidate"]`,
 		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html","/index.html"]`,
@@ -35,7 +35,7 @@ func TestStaticFileHandlersApplySafeCachingCompressionAndHistoryFallback(t *test
 		}
 	}
 
-	for _, unsafe := range []string{`"/static/*"`, `"/*.js"`, `"/*.css"`, `"/*.svg"`} {
+	for _, unsafe := range []string{`"/static/*"`, `"/assets/*"`, `"/*.js"`, `"/*.css"`, `"/*.svg"`} {
 		if strings.Contains(body, unsafe) {
 			t.Fatalf("handlers must not mark generic unhashed path %s immutable: %s", unsafe, body)
 		}

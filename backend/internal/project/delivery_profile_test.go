@@ -41,8 +41,8 @@ func TestDetectDeliveryProfileStaticVite(t *testing.T) {
 	if got.Profile != deliverySPAStatic {
 		t.Fatalf("profile = %q, want %q", got.Profile, deliverySPAStatic)
 	}
-	if !warningsContain(got.Warnings, "/assets/*") {
-		t.Fatalf("warnings do not mention Vite immutable asset path: %#v", got.Warnings)
+	if !warningsContain(got.Warnings, "/assets/*-*.*") {
+		t.Fatalf("warnings do not mention Vite hash-named immutable asset shape: %#v", got.Warnings)
 	}
 }
 

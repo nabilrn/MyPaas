@@ -115,17 +115,16 @@ func staticFileHandlers(root string) []map[string]any {
 			"handler": "subroute",
 			"routes": []map[string]any{
 				{
-					// These namespaces are generated with content-hashed filenames by
-					// their respective production builders. User-controlled /static or
-					// arbitrary extension matches are intentionally excluded because an
-					// unhashed file must not become immutable by accident.
+					// The framework-owned namespaces are immutable by construction. Vite
+					// publicDir files can also live under /assets, so only the default
+					// generated [name]-[hash].[ext] shape is promoted to immutable.
 					"match": []map[string]any{{
 						"path": []string{
 							"/_next/static/*",
 							"/_astro/*",
 							"/_nuxt/*",
 							"/_app/immutable/*",
-							"/assets/*",
+							"/assets/*-*.*",
 						},
 					}},
 					"handle": []map[string]any{{
@@ -331,7 +330,7 @@ func routeMatchesHost(raw json.RawMessage, host string) bool {
 			if item == host {
 				return true
 			}
-		}
+	}
 	}
 	return false
 }

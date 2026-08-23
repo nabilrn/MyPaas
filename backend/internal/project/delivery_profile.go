@@ -79,7 +79,7 @@ func detectDeliveryProfile(workspace, deployMode string) deliveryProfileResult {
 func staticDeliveryWarning(framework string) string {
 	switch framework {
 	case frameworkVite:
-		return "Vite static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates unhashed files, and gives /assets/* immutable caching."
+		return "Vite static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates unhashed files, and gives default hash-named /assets/*-*.* build artifacts immutable caching."
 	case frameworkAstro:
 		return "Astro static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates HTML/unhashed files, and gives /_astro/* immutable caching."
 	case frameworkNuxt:
