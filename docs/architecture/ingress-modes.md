@@ -62,6 +62,8 @@ When leaving Tunnel mode, known `cloudflared` containers are removed so an old c
 
 `Caddyfile.prod.https` intentionally runs a single `:443` application server and disables automatic HTTP redirects. The current dynamic route writer targets Caddy server `srv0`; adding a second HTTP redirect server before that route writer becomes listener-aware would make the server identity ambiguous. HTTP redirect support should therefore be implemented together with server discovery, not guessed in this ingress change.
 
+CI validates both Caddy configs and performs an HTTPS smoke test that inserts a project hostname through the same Caddy Admin Unix-socket route surface used by MyPaaS, then verifies the dynamic project route is reachable with the wildcard certificate.
+
 ## Firewall boundary
 
 Recommended public exposure:
