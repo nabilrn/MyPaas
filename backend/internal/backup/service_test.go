@@ -3,6 +3,7 @@ package backup
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,31 @@ func TestPGDumpEnvUsesPGVariables(t *testing.T) {
 		if !containsEnv(env, key+"="+value) {
 			t.Fatalf("pgDumpEnv() missing %s=%s in %v", key, value, env)
 		}
+	}
+}
+
+func TestParseDatabaseListFiltersAndSortsManagedDatabases(t *testing.T) {
+	got := parseDatabaseList("postgres\nmypaas_p_bbb\n\nmypaas_p_aaa\ntemplate1\n")
+	want := []string{"mypaas_p_aaa", "mypaas_p_bbb"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseDatabaseList() = %v, want %v", got, want)
+	}
+}
+
+func TestReplaceDatabaseNamePreservesConnectionOptions(t *testing.T) {
+	got, err := replaceDatabaseName("postgres://user:secret@db:5432/control?sslmode=require", "mypaas_p_abc")
+	if err != nil {
+		t.Fatalf("replaceDatabaseName() error = %v", err)
+	}
+	want := "postgres://user:secret@db:5432/mypaas_p_abc?sslmode=require"
+	if got != want {
+		t.Fatalf("replaceDatabaseName() = %q, want %q", got, want)
+	}
+}
+
+func TestReplaceDatabaseNameRejectsPathInjection(t *testing.T) {
+	if _, err := replaceDatabaseName("postgres://user:secret@db/control", "../postgres"); err == nil {
+		t.Fatal("replaceDatabaseName() error = nil, want validation error")
 	}
 }
 
