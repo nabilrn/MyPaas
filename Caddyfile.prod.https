@@ -1,0 +1,64 @@
+# Caddyfile for direct HTTPS or Cloudflare-proxied HTTPS origin delivery.
+# A certificate covering both PUBLIC_DOMAIN and *.PUBLIC_DOMAIN must be mounted
+# at /etc/caddy/tls/cert.pem with the matching private key at key.pem.
+
+{
+	admin unix//run/mypaas/caddy-admin.sock
+
+	# Keep exactly one application HTTP server so the dynamic route writer can
+	# continue targeting srv0. HTTP->HTTPS redirect support can be added after the
+	# route writer discovers servers by listener instead of relying on srv0.
+	auto_https disable_redirects
+
+	metrics
+	servers :443 {
+		metrics
+	}
+
+	log default {
+		level info
+		format json
+		output file /var/log/caddy/access.log {
+			roll_size 100mb
+			roll_keep 10
+		}
+	}
+}
+
+https://{$PUBLIC_DOMAIN} {
+	tls /etc/caddy/tls/cert.pem /etc/caddy/tls/key.pem
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy api:8080 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+	}
+
+	handle /webhook/* {
+		reverse_proxy api:8080 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+	}
+
+	handle {
+		reverse_proxy dashboard:3000 {
+			header_up -User-Agent
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		X-XSS-Protection "1; mode=block"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+	}
+
+	log {
+		level info
+	}
+}

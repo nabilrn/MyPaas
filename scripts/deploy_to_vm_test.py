@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "deploy-to-vm.sh"
+COMPOSE_FILE = ROOT_DIR / "docker-compose.prod.yml"
 
 
 class DeployToVmTest(unittest.TestCase):
@@ -51,6 +52,30 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn("RESTORED_CONTROL_PLANE_DB=true", content)
         self.assertIn('if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then', content)
         self.assertIn('up -d --force-recreate api', content)
+
+    def test_public_delivery_mode_is_explicit_and_tunnel_is_default(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('PUBLIC_DELIVERY_MODE="${PUBLIC_DELIVERY_MODE:-tunnel}"', content)
+        self.assertIn('cloudflare-origin|direct)', content)
+        self.assertIn('CLOUDFLARE_TUNNEL_TOKEN is required when PUBLIC_DELIVERY_MODE=tunnel', content)
+        self.assertIn('CADDY_CONFIG_FILE="${CADDY_CONFIG_FILE:-./Caddyfile.prod.https}"', content)
+        self.assertIn('CADDY_HTTPS_PUBLISH="${CADDY_HTTPS_PUBLISH:-0.0.0.0:443}"', content)
+
+    def test_https_origin_requires_wildcard_compatible_tls_material(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('openssl x509 -in "$cert" -noout -checkhost "$PUBLIC_DOMAIN"', content)
+        self.assertIn('probe_host="mypaas-probe.$PUBLIC_DOMAIN"', content)
+        self.assertIn('Caddy TLS certificate and private key do not match.', content)
+
+    def test_cloudflared_is_profile_gated(self) -> None:
+        content = COMPOSE_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("  cloudflared:\n", content)
+        self.assertIn("      - tunnel\n", content)
+        self.assertIn('${CADDY_CONFIG_FILE:-./Caddyfile.prod}:/etc/caddy/Caddyfile:ro', content)
+        self.assertIn('${CADDY_HTTPS_PUBLISH:-127.0.0.1:443}:443', content)
 
 
 if __name__ == "__main__":

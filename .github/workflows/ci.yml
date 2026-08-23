@@ -73,11 +73,28 @@ jobs:
         run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
-      - name: Production Caddy config
+      - name: Production Caddy configs
         run: |
+          set -euo pipefail
+          tls_dir="$RUNNER_TEMP/mypaas-caddy-tls"
+          mkdir -p "$tls_dir"
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout "$tls_dir/key.pem" \
+            -out "$tls_dir/cert.pem" \
+            -days 1 \
+            -subj '/CN=example.com' \
+            -addext 'subjectAltName=DNS:example.com,DNS:*.example.com' >/dev/null 2>&1
+
           docker run --rm \
             -e PUBLIC_DOMAIN=example.com \
             -v "$PWD/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+          docker run --rm \
+            -e PUBLIC_DOMAIN=example.com \
+            -v "$PWD/Caddyfile.prod.https:/etc/caddy/Caddyfile:ro" \
+            -v "$tls_dir:/etc/caddy/tls:ro" \
             caddy:2-alpine \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 

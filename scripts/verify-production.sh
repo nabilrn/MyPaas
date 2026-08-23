@@ -24,8 +24,28 @@ set -a
 source "$ENV_FILE"
 set +a
 
-: "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
 : "${PUBLIC_DOMAIN:?PUBLIC_DOMAIN is required}"
+PUBLIC_DELIVERY_MODE="${PUBLIC_DELIVERY_MODE:-tunnel}"
+CADDY_TLS_DIR="${CADDY_TLS_DIR:-/etc/mypaas/tls}"
+case "$PUBLIC_DELIVERY_MODE" in
+  tunnel)
+    : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required when PUBLIC_DELIVERY_MODE=tunnel}"
+    ;;
+  cloudflare-origin|direct)
+    [[ -f "$CADDY_TLS_DIR/cert.pem" ]] || {
+      echo "Missing $CADDY_TLS_DIR/cert.pem for PUBLIC_DELIVERY_MODE=$PUBLIC_DELIVERY_MODE." >&2
+      exit 1
+    }
+    [[ -f "$CADDY_TLS_DIR/key.pem" ]] || {
+      echo "Missing $CADDY_TLS_DIR/key.pem for PUBLIC_DELIVERY_MODE=$PUBLIC_DELIVERY_MODE." >&2
+      exit 1
+    }
+    ;;
+  *)
+    echo "PUBLIC_DELIVERY_MODE must be tunnel, cloudflare-origin, or direct." >&2
+    exit 1
+    ;;
+esac
 
 CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
 PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
@@ -108,11 +128,20 @@ for host in hosts:
 ' "$domain"
 }
 
+caddy_request() {
+  local host="$1"
+  if [[ "$PUBLIC_DELIVERY_MODE" == "tunnel" ]]; then
+    curl -fsS -H "Host: $host" http://127.0.0.1/
+  else
+    curl -kfsS --resolve "$host:443:127.0.0.1" "https://$host/"
+  fi
+}
+
 echo "Checking production containers..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 
 echo "Checking control/project/routing network boundaries..."
-for container in mypaas-api mypaas-dashboard mypaas-cloudflared; do
+for container in mypaas-api mypaas-dashboard; do
   require_network "$container" "$CONTROL_NETWORK"
   forbid_network "$container" "$PROJECT_NETWORK"
   forbid_network "$container" "$ROUTING_NETWORK"
@@ -126,10 +155,31 @@ require_network mypaas-caddy-prod "$CONTROL_NETWORK"
 require_network mypaas-caddy-prod "$ROUTING_NETWORK"
 forbid_network mypaas-caddy-prod "$PROJECT_NETWORK"
 
-echo "Checking Cloudflare Tunnel container..."
-if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>/dev/null)" != "true" ]]; then
-  echo "Cloudflare Tunnel container is not running." >&2
-  exit 1
+if [[ "$PUBLIC_DELIVERY_MODE" == "tunnel" ]]; then
+  require_network mypaas-cloudflared "$CONTROL_NETWORK"
+  forbid_network mypaas-cloudflared "$PROJECT_NETWORK"
+  forbid_network mypaas-cloudflared "$ROUTING_NETWORK"
+  echo "Checking Cloudflare Tunnel container..."
+  if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>/dev/null)" != "true" ]]; then
+    echo "Cloudflare Tunnel container is not running." >&2
+    exit 1
+  fi
+else
+  echo "Checking direct HTTPS origin mode..."
+  for connector in mypaas-cloudflared mypaas-cloudflared-2 mypaas-cloudflared-3 mypaas-cloudflared-4; do
+    if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' "$connector" 2>/dev/null || true)" == "true" ]]; then
+      echo "$connector must not be running when PUBLIC_DELIVERY_MODE=$PUBLIC_DELIVERY_MODE." >&2
+      exit 1
+    fi
+  done
+  if ! $DOCKER_BIN port mypaas-caddy-prod 443/tcp 2>/dev/null | grep -q .; then
+    echo "Caddy HTTPS port 443 is not published." >&2
+    exit 1
+  fi
+  if ! caddy_request "$PUBLIC_DOMAIN" >/dev/null; then
+    echo "Caddy HTTPS origin is not serving the dashboard hostname locally." >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "${STATD_SOCKET:-}" ]]; then
@@ -213,8 +263,8 @@ fi
 echo "Checking an existing project route when available..."
 project_host="$(printf '%s' "$routes_json" | first_project_host "$PUBLIC_DOMAIN" || true)"
 if [[ -n "$project_host" ]]; then
-  curl -fsS -H "Host: $project_host" http://127.0.0.1/ >/dev/null
-  echo "Verified project route $project_host through local Caddy."
+  caddy_request "$project_host" >/dev/null
+  echo "Verified project route $project_host through local Caddy ($PUBLIC_DELIVERY_MODE)."
 elif [[ "$REQUIRE_PROJECT_ROUTE" == "true" ]]; then
   echo "No existing project route was found in Caddy while REQUIRE_PROJECT_ROUTE=true." >&2
   exit 1

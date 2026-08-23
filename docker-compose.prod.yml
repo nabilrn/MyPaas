@@ -105,9 +105,11 @@ services:
     container_name: mypaas-caddy-prod
     restart: always
     ports:
-      - "80:80"
+      - "${CADDY_HTTP_PUBLISH:-127.0.0.1:80}:80"
+      - "${CADDY_HTTPS_PUBLISH:-127.0.0.1:443}:443"
     volumes:
-      - ./Caddyfile.prod:/etc/caddy/Caddyfile
+      - "${CADDY_CONFIG_FILE:-./Caddyfile.prod}:/etc/caddy/Caddyfile:ro"
+      - "${CADDY_TLS_DIR:-/etc/mypaas/tls}:/etc/caddy/tls:ro"
       - /run/mypaas:/run/mypaas
       - /var/lib/mypaas/static:/var/lib/mypaas/static:ro
       - caddy_data:/data
@@ -127,6 +129,8 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: mypaas-cloudflared
     restart: always
+    profiles:
+      - tunnel
     command: tunnel --no-autoupdate --protocol ${CLOUDFLARE_TUNNEL_PROTOCOL:-auto} run --token ${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
       - caddy

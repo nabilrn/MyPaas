@@ -60,6 +60,19 @@ if [[ -n "$EXPLICIT_IMAGE_TAG_SET" ]]; then
   export MYPAAS_IMAGE_TAG
 fi
 
+SUDO=""
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  SUDO="sudo"
+fi
+
+run_privileged() {
+  if [[ -n "$SUDO" ]]; then
+    $SUDO "$@"
+  else
+    "$@"
+  fi
+}
+
 : "${POSTGRES_USER:?POSTGRES_USER is required}"
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 : "${POSTGRES_DB:?POSTGRES_DB is required}"
@@ -71,7 +84,70 @@ fi
 : "${JWT_SECRET:?JWT_SECRET is required}"
 : "${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}"
 : "${DOCKER_SOCKET:?DOCKER_SOCKET is required}"
-: "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required}"
+
+PUBLIC_DELIVERY_MODE="${PUBLIC_DELIVERY_MODE:-tunnel}"
+CADDY_TLS_DIR="${CADDY_TLS_DIR:-/etc/mypaas/tls}"
+
+validate_tls_material() {
+  local cert="$CADDY_TLS_DIR/cert.pem"
+  local key="$CADDY_TLS_DIR/key.pem"
+  local cert_pub key_pub probe_host
+
+  if ! run_privileged test -f "$cert"; then
+    echo "PUBLIC_DELIVERY_MODE=$PUBLIC_DELIVERY_MODE requires $cert." >&2
+    exit 2
+  fi
+  if ! run_privileged test -f "$key"; then
+    echo "PUBLIC_DELIVERY_MODE=$PUBLIC_DELIVERY_MODE requires $key." >&2
+    exit 2
+  fi
+  if ! run_privileged openssl x509 -in "$cert" -noout -checkend 0 >/dev/null 2>&1; then
+    echo "Caddy TLS certificate is invalid or expired: $cert" >&2
+    exit 2
+  fi
+  if ! run_privileged openssl x509 -in "$cert" -noout -checkhost "$PUBLIC_DOMAIN" >/dev/null 2>&1; then
+    echo "Caddy TLS certificate does not cover PUBLIC_DOMAIN=$PUBLIC_DOMAIN." >&2
+    exit 2
+  fi
+  probe_host="mypaas-probe.$PUBLIC_DOMAIN"
+  if ! run_privileged openssl x509 -in "$cert" -noout -checkhost "$probe_host" >/dev/null 2>&1; then
+    echo "Caddy TLS certificate must also cover project subdomains such as $probe_host (normally via *.$PUBLIC_DOMAIN)." >&2
+    exit 2
+  fi
+
+  cert_pub="$(run_privileged openssl x509 -in "$cert" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+  key_pub="$(run_privileged openssl pkey -in "$key" -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')"
+  if [[ -z "$cert_pub" || -z "$key_pub" || "$cert_pub" != "$key_pub" ]]; then
+    echo "Caddy TLS certificate and private key do not match." >&2
+    exit 2
+  fi
+}
+
+case "$PUBLIC_DELIVERY_MODE" in
+  tunnel)
+    : "${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is required when PUBLIC_DELIVERY_MODE=tunnel}"
+    CADDY_CONFIG_FILE="${CADDY_CONFIG_FILE:-./Caddyfile.prod}"
+    CADDY_HTTP_PUBLISH="${CADDY_HTTP_PUBLISH:-127.0.0.1:80}"
+    CADDY_HTTPS_PUBLISH="${CADDY_HTTPS_PUBLISH:-127.0.0.1:443}"
+    ;;
+  cloudflare-origin|direct)
+    CADDY_CONFIG_FILE="${CADDY_CONFIG_FILE:-./Caddyfile.prod.https}"
+    CADDY_HTTP_PUBLISH="${CADDY_HTTP_PUBLISH:-127.0.0.1:80}"
+    CADDY_HTTPS_PUBLISH="${CADDY_HTTPS_PUBLISH:-0.0.0.0:443}"
+    validate_tls_material
+    ;;
+  *)
+    echo "PUBLIC_DELIVERY_MODE must be tunnel, cloudflare-origin, or direct." >&2
+    exit 2
+    ;;
+esac
+
+if [[ ! -f "$CADDY_CONFIG_FILE" ]]; then
+  echo "CADDY_CONFIG_FILE does not exist: $CADDY_CONFIG_FILE" >&2
+  exit 2
+fi
+
+export PUBLIC_DELIVERY_MODE CADDY_TLS_DIR CADDY_CONFIG_FILE CADDY_HTTP_PUBLISH CADDY_HTTPS_PUBLISH
 
 CLOUDFLARE_TUNNEL_PROTOCOL="${CLOUDFLARE_TUNNEL_PROTOCOL:-auto}"
 case "$CLOUDFLARE_TUNNEL_PROTOCOL" in
@@ -85,21 +161,25 @@ case "$CLOUDFLARE_TUNNEL_PROTOCOL" in
 esac
 
 CLOUDFLARE_TUNNEL_CONNECTORS="${CLOUDFLARE_TUNNEL_CONNECTORS:-1}"
-case "$CLOUDFLARE_TUNNEL_CONNECTORS" in
-  1)
-    COMPOSE_PROFILE_ARGS=()
-    ;;
-  2)
-    COMPOSE_PROFILE_ARGS=(--profile tunnel-2)
-    ;;
-  4)
-    COMPOSE_PROFILE_ARGS=(--profile tunnel-2 --profile tunnel-4)
-    ;;
-  *)
-    echo "CLOUDFLARE_TUNNEL_CONNECTORS must be 1, 2, or 4." >&2
-    exit 2
-    ;;
-esac
+if [[ "$PUBLIC_DELIVERY_MODE" == "tunnel" ]]; then
+  case "$CLOUDFLARE_TUNNEL_CONNECTORS" in
+    1)
+      COMPOSE_PROFILE_ARGS=(--profile tunnel)
+      ;;
+    2)
+      COMPOSE_PROFILE_ARGS=(--profile tunnel --profile tunnel-2)
+      ;;
+    4)
+      COMPOSE_PROFILE_ARGS=(--profile tunnel --profile tunnel-2 --profile tunnel-4)
+      ;;
+    *)
+      echo "CLOUDFLARE_TUNNEL_CONNECTORS must be 1, 2, or 4." >&2
+      exit 2
+      ;;
+  esac
+else
+  COMPOSE_PROFILE_ARGS=()
+fi
 
 is_valid_public_domain() {
   local value="$1"
@@ -118,11 +198,6 @@ if [[ "$SKIP_IMAGE_PULL" != "true" && "$SKIP_IMAGE_PULL" != "false" ]]; then
   exit 2
 fi
 
-SUDO=""
-if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-  SUDO="sudo"
-fi
-
 for dir in \
   /var/lib/mypaas/volumes \
   /var/lib/mypaas/compose \
@@ -132,6 +207,10 @@ for dir in \
 do
   $SUDO mkdir -p "$dir"
 done
+
+if [[ "$PUBLIC_DELIVERY_MODE" == "tunnel" ]]; then
+  $SUDO mkdir -p "$CADDY_TLS_DIR"
+fi
 
 CONTROL_NETWORK="${CONTROL_NETWORK:-mypaas-control}"
 PROJECT_NETWORK="${PROJECT_NETWORK:-mypaas-projects}"
@@ -214,11 +293,21 @@ $DOCKER_BIN run --rm \
   -database "$MIGRATE_DATABASE_URL" \
   up
 
-echo "Starting MyPaas..."
+echo "Starting MyPaas with public delivery mode: $PUBLIC_DELIVERY_MODE"
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
   $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 fi
 $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+
+if [[ "$PUBLIC_DELIVERY_MODE" != "tunnel" ]]; then
+  # Profile-disabled services from a previous tunnel deployment are not
+  # guaranteed to be removed by `compose up`, so remove the known connector
+  # containers explicitly when the operator moves the hot path to HTTPS origin.
+  for connector in mypaas-cloudflared mypaas-cloudflared-2 mypaas-cloudflared-3 mypaas-cloudflared-4; do
+    $DOCKER_BIN rm -f "$connector" >/dev/null 2>&1 || true
+  done
+fi
+
 if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
   echo "Recreating API after database restore to trigger runtime reconciliation..."
   $COMPOSE_BIN "${COMPOSE_PROFILE_ARGS[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate api
