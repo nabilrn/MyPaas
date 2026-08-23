@@ -98,6 +98,65 @@ jobs:
             caddy:2-alpine \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
+      - name: HTTPS dynamic project route smoke
+        run: |
+          set -euo pipefail
+          tls_dir="$RUNNER_TEMP/mypaas-caddy-tls-smoke"
+          run_dir="$RUNNER_TEMP/mypaas-caddy-run"
+          mkdir -p "$tls_dir" "$run_dir"
+          chmod 0777 "$run_dir"
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout "$tls_dir/key.pem" \
+            -out "$tls_dir/cert.pem" \
+            -days 1 \
+            -subj '/CN=example.com' \
+            -addext 'subjectAltName=DNS:example.com,DNS:*.example.com' >/dev/null 2>&1
+
+          cleanup() {
+            docker rm -f mypaas-caddy-https-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d \
+            --name mypaas-caddy-https-ci \
+            -p 127.0.0.1:18443:443 \
+            -e PUBLIC_DOMAIN=example.com \
+            -v "$PWD/Caddyfile.prod.https:/etc/caddy/Caddyfile:ro" \
+            -v "$tls_dir:/etc/caddy/tls:ro" \
+            -v "$run_dir:/run/mypaas" \
+            caddy:2-alpine >/dev/null
+
+          ready=false
+          for _ in $(seq 1 40); do
+            if [[ -S "$run_dir/caddy-admin.sock" ]]; then
+              ready=true
+              break
+            fi
+            sleep 0.25
+          done
+          if [[ "$ready" != "true" ]]; then
+            docker logs mypaas-caddy-https-ci
+            exit 1
+          fi
+
+          docker run --rm --user 0:0 \
+            -v "$run_dir:/run/mypaas" \
+            curlimages/curl:8.16.0 \
+            -fsS --unix-socket /run/mypaas/caddy-admin.sock \
+            -H 'Content-Type: application/json' \
+            -d '{"match":[{"host":["foo.example.com"]}],"handle":[{"handler":"static_response","body":"project-ok"}],"terminal":true}' \
+            http://localhost/config/apps/http/servers/srv0/routes >/dev/null
+
+          body="$(curl -fsS \
+            --cacert "$tls_dir/cert.pem" \
+            --resolve foo.example.com:18443:127.0.0.1 \
+            https://foo.example.com:18443/)"
+          [[ "$body" == "project-ok" ]] || {
+            echo "Unexpected project route response: $body" >&2
+            docker logs mypaas-caddy-https-ci
+            exit 1
+          }
+
   podman:
     name: Podman compatibility gate
     runs-on: ubuntu-latest
