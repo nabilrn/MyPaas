@@ -12,7 +12,6 @@ const (
 	ReplicaProjectLabel = "mypaas.replica.project"
 	ReplicaSlotLabel    = "mypaas.replica.slot"
 	ReplicaImageLabel   = "mypaas.replica.image"
-	ReplicaLogMaxSize   = "20m"
 )
 
 type ReplicaRunOptions struct {
@@ -74,7 +73,8 @@ func (d *DockerCLI) RunReplica(ctx context.Context, opts ReplicaRunOptions, log 
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
 		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
 		"--restart", "unless-stopped",
-		"--log-opt", "max-size=" + ReplicaLogMaxSize,
+		"--log-driver", ManagedLogDriver,
+		"--log-opt", "max-size=" + ManagedLogMaxSize,
 		"--network", d.projectNetwork,
 	}
 	if opts.EnvFile != "" {
