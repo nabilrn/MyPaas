@@ -117,7 +117,7 @@ func (h *Handler) Rollback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
-	h.lifecycle(w, r, h.service.Start)
+	h.lifecycle(w, r, h.service.StartWithReplicaCleanup)
 }
 
 func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
