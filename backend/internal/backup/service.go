@@ -163,10 +163,10 @@ func (s *Service) runScheduled(parent context.Context) {
 	}
 }
 
-// pgDump writes a backwards-compatible scheduled backup bundle. database.sql
-// and .env remain at the archive root for the legacy control-plane restore
-// path, while project-complete recovery data lives in databases/, roles.sql,
-// and manifest.json.
+// pgDump writes a project-complete database backup while preserving the two
+// root files consumed by the legacy restore path. The databases/ + dot-env
+// layout intentionally matches scripts/migrate-import.sh so the same archive
+// can restore the control DB, project roles, and every managed project DB.
 func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 	tempDir, err := os.MkdirTemp("", "mypaas-backup-")
 	if err != nil {
@@ -179,14 +179,16 @@ func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 		return fmt.Errorf("dump control database: %w", err)
 	}
 
-	envPath := filepath.Join(tempDir, ".env")
 	envData, err := os.ReadFile("/etc/mypaas/.env")
 	if err != nil {
 		slog.Warn("could not read /etc/mypaas/.env, falling back to process environment", "error", err)
 		envData = []byte(strings.Join(os.Environ(), "\n"))
 	}
-	if err := os.WriteFile(envPath, envData, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(tempDir, ".env"), envData, 0600); err != nil {
 		return fmt.Errorf("write .env: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "dot-env"), envData, 0600); err != nil {
+		return fmt.Errorf("write migration-compatible dot-env: %w", err)
 	}
 
 	sharedDBs, err := listSharedDatabases(ctx, s.cfg.DatabaseURL)
@@ -196,6 +198,12 @@ func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 	databaseDir := filepath.Join(tempDir, "databases")
 	if err := os.MkdirAll(databaseDir, 0700); err != nil {
 		return fmt.Errorf("create project database backup dir: %w", err)
+	}
+	if err := dumpCustomDatabase(ctx, s.cfg.DatabaseURL, filepath.Join(databaseDir, "system.dump")); err != nil {
+		return fmt.Errorf("dump migration-compatible control database: %w", err)
+	}
+	if err := dumpRoles(ctx, s.cfg.DatabaseURL, filepath.Join(databaseDir, "roles.sql")); err != nil {
+		return err
 	}
 	for _, dbName := range sharedDBs {
 		dbURL, err := replaceDatabaseName(s.cfg.DatabaseURL, dbName)
@@ -208,15 +216,12 @@ func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 		}
 	}
 
-	if err := dumpRoles(ctx, s.cfg.DatabaseURL, filepath.Join(tempDir, "roles.sql")); err != nil {
-		return err
-	}
 	controlName, err := databaseNameFromURL(s.cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	manifest := backupManifest{
-		Version:         2,
+		Version:         3,
 		CreatedAt:       s.now().UTC().Format(time.RFC3339),
 		ControlDatabase: controlName,
 		SharedDatabases: sharedDBs,
@@ -233,7 +238,7 @@ func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 		ctx,
 		"tar", "-czf", outputPath,
 		"-C", tempDir,
-		"database.sql", ".env", "manifest.json", "roles.sql", "databases",
+		"database.sql", ".env", "dot-env", "manifest.json", "databases",
 	)
 	out, err := tarCmd.CombinedOutput()
 	if err != nil {
