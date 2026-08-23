@@ -34,6 +34,14 @@ func normalizeRuntimeVolumeTarget(target string) (string, error) {
 }
 
 func (d *DockerCLI) persistentVolumesForRun(ctx context.Context, opts RunOptions) ([]VolumeMount, error) {
+	// DockerCLI.Run always passes through this preparation step before creating
+	// a primary single-container runtime. Execute the opt-in release command
+	// here so a failed migration/schema step cannot become publicly routable.
+	// Secondary replicas use RunReplica and therefore never execute it.
+	if err := d.runReleaseCommandIfConfigured(ctx, opts); err != nil {
+		return nil, err
+	}
+
 	targets, err := d.ImageVolumeTargets(ctx, opts.Image)
 	if err != nil {
 		return nil, err
