@@ -21,6 +21,19 @@ func TestProjectHasContainerRuntimeSkipsStaticProjects(t *testing.T) {
 	}
 }
 
+func TestReplicaReconcilerOwnsSingleContainerRuntimeRoutes(t *testing.T) {
+	for _, mode := range []string{"dockerfile", "image"} {
+		if !routeOwnedByReplicaReconciler(db.Project{DeployMode: mode}) {
+			t.Fatalf("%s route must be owned by replica reconciler to avoid primary-only route flapping", mode)
+		}
+	}
+	for _, mode := range []string{"static", "compose"} {
+		if routeOwnedByReplicaReconciler(db.Project{DeployMode: mode}) {
+			t.Fatalf("%s route must stay with canonical reconciler", mode)
+		}
+	}
+}
+
 func TestRuntimeStackNameMatchesDeploymentNaming(t *testing.T) {
 	project := db.Project{ID: uuid.New(), Name: "demo"}
 	if got := runtimeStackName(project); got != "mypaas-demo" {
