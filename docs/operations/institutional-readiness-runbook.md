@@ -97,10 +97,11 @@ scaled:
 - images declaring persistent `VOLUME` targets are rejected for multi-replica mode;
 - aggregate replica reservations remain within the user RAM/CPU quota.
 
-The route reconciler and replica reconciler run as one ordered control loop:
-canonical primary/static routes are repaired first, then replica topology is the
-final route writer. This prevents periodic route repair from collapsing a
-multi-upstream route back to the primary only.
+Route ownership is deliberately disjoint. Static and Compose routes are repaired
+by the canonical route reconciler. Dockerfile/image routes are owned exclusively
+by replica reconciliation for both desired count 1 and desired count greater
+than 1. This prevents a periodic canonical repair pass from briefly replacing a
+healthy multi-upstream route with a primary-only route.
 
 ### Gate 6: Backup and database isolation
 
@@ -113,6 +114,38 @@ For shared PostgreSQL projects, verify that the managed project role has a
 connection ceiling and that `PUBLIC` cannot connect directly to the project
 database. Do not raise PostgreSQL global connection limits merely to mask a
 pooling problem.
+
+#### Role-aware disposable restore drill
+
+Qualification must restore into an isolated disposable PostgreSQL target; never
+overwrite the live control or project databases. Use a PostgreSQL major version
+compatible with the source backup and keep the extracted archive and
+`databases/roles.sql` owner-readable only because role dumps may contain password
+verifiers.
+
+For a clean isolated restore target:
+
+1. Extract the backup to a private temporary directory and confirm the selected
+   project dump is listed in `manifest.json`.
+2. As the disposable cluster superuser, restore `databases/roles.sql` before the
+   project database dump. If those role names already exist, use a clean
+   disposable cluster rather than mutating production roles to make the test
+   pass.
+3. Create a disposable database for the selected managed project and make the
+   corresponding managed project role its owner.
+4. Restore the custom project dump with `pg_restore --no-owner --no-privileges`.
+   The backup intentionally excludes object ownership/privileges from the dump,
+   so cluster/database access policy must be re-established explicitly.
+5. Reapply the managed database connection boundary: revoke `CONNECT` from
+   `PUBLIC`, then grant `CONNECT` to the matching managed project role.
+6. Verify expected schema/data as a privileged verifier, then verify the managed
+   project role itself can connect and read the restored fixture data.
+7. Destroy the disposable database/cluster after evidence is recorded.
+
+Do not restore the archived `.env`/`dot-env` into the disposable target unless a
+specific recovery test requires it. Never commit role dumps, database dumps,
+credentials, or extracted backup contents as qualification evidence; record only
+sanitized commands, manifest inventory, and PASS/FAIL results.
 
 ### Gate 7: Application class
 
