@@ -47,6 +47,16 @@ import (
 
 var processStartedAt = time.Now()
 
+const (
+	apiRequestTimeout = 60 * time.Second
+	// Lifecycle calls can legitimately spend up to 30s in docker stop and
+	// Compose/runtime readiness can approach the request timeout. Keep the
+	// server write deadline outside the middleware deadline so handlers can
+	// return a clean JSON success/error instead of having the socket closed
+	// before the response is written.
+	apiWriteTimeout = 75 * time.Second
+)
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", "error", err)
@@ -146,7 +156,7 @@ func run() error {
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient),
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: apiWriteTimeout,
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -225,7 +235,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware(cfg))
-	r.Use(timeoutExceptStreams(60 * time.Second))
+	r.Use(timeoutExceptStreams(apiRequestTimeout))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
 	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler)
@@ -257,10 +267,11 @@ func startRoutingReconciler(ctx context.Context, routeService *deployment.Servic
 			reconcileCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
 
-			// Rebuild the canonical primary/static routes first. Replica
-			// reconciliation is deliberately the final writer so a periodic route
-			// repair cannot accidentally collapse a healthy multi-upstream route.
-			if err := routeService.ReconcileRoutes(reconcileCtx); err != nil {
+			// Static/Compose routes are repaired by the canonical reconciler.
+			// Dockerfile/image routes are exclusively owned by the replica
+			// reconciler for both desired=1 and desired>1, avoiding the previous
+			// primary-only write window on every periodic reconciliation.
+			if err := routeService.ReconcileCanonicalRoutes(reconcileCtx); err != nil {
 				slog.Warn("caddy route reconciliation incomplete", "error", err)
 			}
 			if err := replicaService.Reconcile(reconcileCtx); err != nil {
