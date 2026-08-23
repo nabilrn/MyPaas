@@ -38,6 +38,7 @@ import (
 	"mypaas/internal/port"
 	"mypaas/internal/project"
 	"mypaas/internal/quota"
+	"mypaas/internal/replica"
 	"mypaas/internal/settings"
 	"mypaas/internal/sharedpostgres"
 	"mypaas/internal/user"
@@ -131,8 +132,15 @@ func run() error {
 
 	dockerClient := container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)
 	backupService := backup.NewService(cfg, dockerClient)
+	replicaService := replica.NewService(
+		cfg,
+		queries,
+		envvar.NewService(queries, cipher),
+		dockerClient,
+		caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost),
+	)
 
-	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
+	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler, replicaService)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -228,28 +236,38 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	return r
 }
 
-func startBackgroundJobs(ctx context.Context, backupService *backup.Service, routeReconciler *deployment.Service) <-chan struct{} {
+func startBackgroundJobs(ctx context.Context, backupService *backup.Service, routeReconciler *deployment.Service, replicaService *replica.Service) <-chan struct{} {
 	done := make(chan struct{})
 	backupDone := backupService.Start(ctx)
-	routeDone := startRouteReconciler(ctx, routeReconciler, 30*time.Second)
+	routingDone := startRoutingReconciler(ctx, routeReconciler, replicaService, 15*time.Second)
 
 	go func() {
 		defer close(done)
 		<-backupDone
-		<-routeDone
+		<-routingDone
 	}()
 	return done
 }
 
-func startRouteReconciler(ctx context.Context, service *deployment.Service, interval time.Duration) <-chan struct{} {
+func startRoutingReconciler(ctx context.Context, routeService *deployment.Service, replicaService *replica.Service, interval time.Duration) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		run := func() {
-			reconcileCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			reconcileCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
-			if err := service.ReconcileRoutes(reconcileCtx); err != nil {
+
+			// Rebuild the canonical primary/static routes first. Replica
+			// reconciliation is deliberately the final writer so a periodic route
+			// repair cannot accidentally collapse a healthy multi-upstream route.
+			if err := routeService.ReconcileRoutes(reconcileCtx); err != nil {
 				slog.Warn("caddy route reconciliation incomplete", "error", err)
+			}
+			if err := replicaService.Reconcile(reconcileCtx); err != nil {
+				slog.Warn("runtime replica reconciliation incomplete", "error", err)
+			}
+			if err := replicaService.CleanupInactive(reconcileCtx); err != nil {
+				slog.Warn("inactive replica cleanup incomplete", "error", err)
 			}
 		}
 
