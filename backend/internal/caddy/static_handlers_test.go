@@ -27,7 +27,9 @@ func TestStaticFileHandlersApplyProfileAwareCachingCompressionAndFallback(t *tes
 		`"Cache-Control":["public, max-age=0, must-revalidate"]`,
 		`"path":["/.mypaas-*"]`,
 		`"handler":"static_response","status_code":404`,
+		`"file":{"try_files":["{http.request.uri.path}"]}`,
 		`"try_files":["{http.request.uri.path}","{http.request.uri.path}/index.html"]`,
+		`"path":["/_next/static/*","/_astro/*","/_nuxt/*","/_app/*","/assets/*","/static/*"]`,
 		`"try_files":["/.mypaas-spa-fallback"]`,
 		`"handler":"rewrite","uri":"/index.html"`,
 		`"handler":"file_server"`,
@@ -39,8 +41,6 @@ func TestStaticFileHandlersApplyProfileAwareCachingCompressionAndFallback(t *tes
 	}
 
 	for _, unsafe := range []string{
-		`"/static/*"`,
-		`"/assets/*"`,
 		`"/*.js"`,
 		`"/*.css"`,
 		`"/*.svg"`,

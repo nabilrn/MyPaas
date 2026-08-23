@@ -91,6 +91,22 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 }
 
 func staticFileHandlers(root string) []map[string]any {
+	assetNamespaces := []string{
+		"/_next/static/*",
+		"/_astro/*",
+		"/_nuxt/*",
+		"/_app/*",
+		"/assets/*",
+		"/static/*",
+	}
+	immutablePaths := []string{
+		"/_next/static/*",
+		"/_astro/*",
+		"/_nuxt/*",
+		"/_app/immutable/*",
+		"/assets/*-*.*",
+	}
+
 	return []map[string]any{
 		{
 			"handler": "vars",
@@ -126,16 +142,13 @@ func staticFileHandlers(root string) []map[string]any {
 					"terminal": true,
 				},
 				{
-					// The framework-owned namespaces are immutable by construction. Vite
-					// publicDir files can also live under /assets, so only the default
-					// generated [name]-[hash].[ext] shape is promoted to immutable.
+					// Apply immutable caching only when the requested fingerprinted asset
+					// actually exists. A missing hashed asset must not turn into a cached
+					// SPA shell or immutable 404.
 					"match": []map[string]any{{
-						"path": []string{
-							"/_next/static/*",
-							"/_astro/*",
-							"/_nuxt/*",
-							"/_app/immutable/*",
-							"/assets/*-*.*",
+						"path": immutablePaths,
+						"file": map[string]any{
+							"try_files": []string{"{http.request.uri.path}"},
 						},
 					}},
 					"handle": []map[string]any{{
@@ -162,6 +175,16 @@ func staticFileHandlers(root string) []map[string]any {
 					"handle": []map[string]any{{
 						"handler": "rewrite",
 						"uri":     "{http.matchers.file.relative}",
+					}},
+					"terminal": true,
+				},
+				{
+					// Missing files in known static namespaces are always genuine misses;
+					// never satisfy them with an SPA shell.
+					"match": []map[string]any{{"path": assetNamespaces}},
+					"handle": []map[string]any{{
+						"handler":     "static_response",
+						"status_code": 404,
 					}},
 					"terminal": true,
 				},
@@ -359,7 +382,7 @@ func routeMatchesHost(raw json.RawMessage, host string) bool {
 			if item == host {
 				return true
 			}
-		}
+	}
 	}
 	return false
 }
