@@ -181,7 +181,7 @@ func (s *Service) reconcileProject(ctx context.Context, project db.Project) erro
 			break
 		}
 	}
-	if stale || desired == 1 {
+	if shouldIsolatePrimaryBeforeReplicaChange(desired, stale) {
 		if err := s.routePrimary(ctx, project); err != nil {
 			return fmt.Errorf("isolate primary before replica change: %w", err)
 		}
@@ -306,6 +306,10 @@ func replicaUsable(item container.ReplicaInfo) bool {
 	}
 	health := strings.ToLower(strings.TrimSpace(item.Health))
 	return health == "" || health == "healthy"
+}
+
+func shouldIsolatePrimaryBeforeReplicaChange(desired int, stale bool) bool {
+	return desired > 1 && stale
 }
 
 func DesiredCount(values map[string]string) (int, error) {

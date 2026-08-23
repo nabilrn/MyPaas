@@ -265,6 +265,9 @@ func (s *Service) Stop(ctx context.Context, projectID uuid.UUID) error {
 		}
 		return s.queries.UpdateProjectStatus(ctx, db.UpdateProjectStatusParams{ID: project.ID, Status: "stopped"})
 	}
+	if err := s.docker.RemoveReplicas(ctx, project.ID.String()); err != nil {
+		return err
+	}
 	if err := s.docker.Stop(ctx, containerName(project.Name)); err != nil {
 		return err
 	}
@@ -478,8 +481,13 @@ func (s *Service) CleanupProject(ctx context.Context, projectID uuid.UUID) error
 		if err := s.docker.RemoveComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
-	} else if err := s.docker.Remove(ctx, containerName(project.Name)); err != nil {
-		return err
+	} else {
+		if err := s.docker.RemoveReplicas(ctx, project.ID.String()); err != nil {
+			return err
+		}
+		if err := s.docker.Remove(ctx, containerName(project.Name)); err != nil {
+			return err
+		}
 	}
 	if err := s.caddy.RemoveRoute(ctx, s.host(project)); err != nil {
 		slog.Warn("remove caddy route", "projectId", project.ID, "error", err)
