@@ -37,21 +37,7 @@ func (d *DockerCLI) runReleaseCommandIfConfigured(ctx context.Context, opts RunO
 	if err := d.Remove(ctx, name); err != nil {
 		return fmt.Errorf("remove stale release command container: %w", err)
 	}
-	args := []string{
-		"run", "--rm",
-		"--name", name,
-		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
-		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
-		"--log-opt", "max-size=" + releaseCommandLogMaxSize,
-	}
-	if d.projectNetwork != "" {
-		args = append(args, "--network", d.projectNetwork)
-	} else {
-		args = append(args, "--add-host", "host.docker.internal:host-gateway")
-	}
-	args = append(args, "--env-file", opts.EnvFile, opts.Image, "sh", "-lc", command)
-
-	cmd := commandContext(ctx, "docker", args...)
+	cmd := commandContext(ctx, "docker", releaseCommandArgs(opts, d.projectNetwork, command)...)
 	if err := cmd.Run(); err != nil {
 		// Deliberately do not include stdout/stderr in the returned error: release
 		// commands frequently invoke migration tooling whose output may contain
@@ -59,4 +45,20 @@ func (d *DockerCLI) runReleaseCommandIfConfigured(ctx context.Context, opts RunO
 		return fmt.Errorf("release command failed: %w", err)
 	}
 	return nil
+}
+
+func releaseCommandArgs(opts RunOptions, projectNetwork, command string) []string {
+	args := []string{
+		"run", "--rm",
+		"--name", strings.TrimSpace(opts.Name) + "-release",
+		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
+		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
+		"--log-opt", "max-size=" + releaseCommandLogMaxSize,
+	}
+	if strings.TrimSpace(projectNetwork) != "" {
+		args = append(args, "--network", strings.TrimSpace(projectNetwork))
+	} else {
+		args = append(args, "--add-host", "host.docker.internal:host-gateway")
+	}
+	return append(args, "--env-file", opts.EnvFile, opts.Image, "sh", "-lc", command)
 }
