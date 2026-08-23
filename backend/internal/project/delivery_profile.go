@@ -42,34 +42,53 @@ func detectDeliveryProfile(workspace, deployMode string) deliveryProfileResult {
 	switch deployMode {
 	case "compose":
 		result.Profile = deliveryCompose
-		result.Warnings = append(result.Warnings, "Compose detected. MyPaaS routes the selected main service; per-service framework optimization is not inferred yet.")
+		result.Warnings = append(result.Warnings, "Compose detected. MyPaaS routes the selected main service and compresses proxied responses; per-service static artifact extraction is not inferred.")
 	case "static":
 		switch framework {
 		case frameworkVite:
 			result.Profile = deliverySPAStatic
-		case frameworkAstro, frameworkSvelteKit, frameworkUnknown:
-			result.Profile = deliveryStaticSite
 		default:
 			result.Profile = deliveryStaticSite
 		}
-		result.Warnings = append(result.Warnings, "Static delivery detected. Immutable asset caching, compression, and SPA/history fallback are applied by Caddy.")
+		result.Warnings = append(result.Warnings, staticDeliveryWarning(framework))
 	case "dockerfile", "image":
 		switch framework {
 		case frameworkNextJS:
 			result.Profile = deliveryNextStandalone
-			result.Warnings = append(result.Warnings, "Next.js runtime detected. Keep /api/* non-cacheable and offload /_next/static/* through Caddy or an upstream CDN.")
+			result.Warnings = append(result.Warnings, "Next.js runtime detected. Caddy compresses proxied responses; preserve Next cache semantics and treat /_next/static/* as immutable only when those build artifacts are explicitly published outside the image.")
+		case frameworkNuxt:
+			result.Profile = deliveryGenericContainer
+			result.Warnings = append(result.Warnings, "Nuxt SSR detected. Caddy compresses proxied responses; /_nuxt/* is the framework-owned static namespace, but direct Caddy file delivery requires an explicit published artifact rather than guessing inside the image.")
+		case frameworkSvelteKit:
+			result.Profile = deliveryGenericContainer
+			result.Warnings = append(result.Warnings, "SvelteKit Node runtime detected. Caddy handles proxy compression; existing .br/.gz sidecars are preserved when static output is published, and /_app/immutable/* is safe for immutable caching only in a published static tree.")
 		case frameworkNestJS, frameworkNodeAPI:
 			result.Profile = deliveryAPIOnly
-			result.Warnings = append(result.Warnings, "API runtime detected. Latency depends mostly on application handlers, database calls, and upstream proxy path.")
+			result.Warnings = append(result.Warnings, "API runtime detected. Caddy compresses eligible responses; API caching remains application-controlled and database/handler latency is not masked by a generic cache rule.")
 		default:
 			result.Profile = deliveryGenericContainer
-			result.Warnings = append(result.Warnings, "No framework-specific delivery profile detected; using generic container routing.")
+			result.Warnings = append(result.Warnings, "No framework-specific delivery profile detected. Caddy provides reverse-proxy compression without inventing cache semantics for the application.")
 		}
 	default:
 		result.Warnings = append(result.Warnings, "Unknown deploy mode; using generic delivery guidance.")
 	}
 
 	return result
+}
+
+func staticDeliveryWarning(framework string) string {
+	switch framework {
+	case frameworkVite:
+		return "Vite static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates unhashed files, and gives /assets/* immutable caching."
+	case frameworkAstro:
+		return "Astro static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates HTML/unhashed files, and gives /_astro/* immutable caching."
+	case frameworkNuxt:
+		return "Nuxt static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates HTML/unhashed files, and gives /_nuxt/* immutable caching."
+	case frameworkSvelteKit:
+		return "SvelteKit static delivery detected. MyPaaS serves the generated tree directly with Caddy, revalidates HTML/unhashed files, gives /_app/immutable/* immutable caching, and can serve existing Brotli/gzip sidecars."
+	default:
+		return "Static delivery detected. MyPaaS serves files directly with Caddy, revalidates unhashed content, and only applies immutable caching to known fingerprinted framework asset namespaces."
+	}
 }
 
 func detectFramework(workspace string) string {
@@ -103,6 +122,9 @@ func detectFramework(workspace string) string {
 		normalized := strings.ToLower(script)
 		if strings.Contains(normalized, "next ") {
 			return frameworkNextJS
+		}
+		if strings.Contains(normalized, "nuxt") {
+			return frameworkNuxt
 		}
 		if strings.Contains(normalized, "vite") {
 			return frameworkVite

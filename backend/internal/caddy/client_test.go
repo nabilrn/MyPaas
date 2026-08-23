@@ -43,11 +43,17 @@ func TestAddRoutePostsNewRoute(t *testing.T) {
 	if postedMethod != http.MethodPost {
 		t.Fatalf("method = %q, want POST", postedMethod)
 	}
-	if !strings.Contains(postedBody, `"new.localhost"`) {
-		t.Fatalf("posted body does not contain new host: %s", postedBody)
-	}
-	if !strings.Contains(postedBody, `"host.docker.internal:3456"`) {
-		t.Fatalf("posted body does not contain configured upstream: %s", postedBody)
+	for _, want := range []string{
+		`"new.localhost"`,
+		`"host.docker.internal:3456"`,
+		`"handler":"encode"`,
+		`"gzip":{}`,
+		`"zstd":{}`,
+		`"handler":"reverse_proxy"`,
+	} {
+		if !strings.Contains(postedBody, want) {
+			t.Fatalf("posted body does not contain %s: %s", want, postedBody)
+		}
 	}
 }
 
@@ -86,6 +92,9 @@ func TestAddRoutePatchesExistingRouteByIndex(t *testing.T) {
 	if !strings.Contains(patchedBody, `"app.localhost"`) {
 		t.Fatalf("patched body does not contain host: %s", patchedBody)
 	}
+	if !strings.Contains(patchedBody, `"handler":"encode"`) {
+		t.Fatalf("patched runtime route must preserve proxy compression: %s", patchedBody)
+	}
 }
 
 func TestAddFileServerRoutePatchesStaticRoot(t *testing.T) {
@@ -115,9 +124,55 @@ func TestAddFileServerRoutePatchesStaticRoot(t *testing.T) {
 		t.Fatalf("AddFileServerRoute returned error: %v", err)
 	}
 
-	for _, want := range []string{`"static.localhost"`, `"/var/lib/mypaas/static/project-id"`, `"handler":"file_server"`} {
+	for _, want := range []string{
+		`"static.localhost"`,
+		`"/var/lib/mypaas/static/project-id"`,
+		`"handler":"file_server"`,
+		`"Cache-Control":["public, max-age=0, must-revalidate"]`,
+		`"precompressed":{"br":{},"gzip":{}}`,
+	} {
 		if !strings.Contains(postedBody, want) {
 			t.Fatalf("posted body does not contain %s: %s", want, postedBody)
+		}
+	}
+}
+
+func TestAddHybridRouteCompressesAPIResponses(t *testing.T) {
+	const routesPath = "/config/apps/http/servers/srv0/routes"
+
+	var postedBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == routesPath:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		case r.Method == http.MethodPost && r.URL.Path == routesPath:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read post body: %v", err)
+			}
+			postedBody = string(body)
+			w.WriteHeader(http.StatusOK)
+		default:
+			t.Fatalf("unexpected caddy request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "host.docker.internal")
+	if err := client.AddHybridRoute(context.Background(), "hybrid.localhost", "/var/lib/mypaas/static/project-id", 4567); err != nil {
+		t.Fatalf("AddHybridRoute returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`"/api/*"`,
+		`"host.docker.internal:4567"`,
+		`"handler":"encode"`,
+		`"handler":"reverse_proxy"`,
+		`"handler":"file_server"`,
+	} {
+		if !strings.Contains(postedBody, want) {
+			t.Fatalf("hybrid route does not contain %s: %s", want, postedBody)
 		}
 	}
 }

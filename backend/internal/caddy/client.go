@@ -50,14 +50,16 @@ func NewClient(adminAddress, upstreamHost string) *Client {
 	}
 }
 
-func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
-	dial, err := c.upstreamDial(ctx, port)
-	if err != nil {
-		return err
-	}
-	route, err := json.Marshal(map[string]any{
-		"match": []map[string]any{{"host": []string{host}}},
-		"handle": []map[string]any{{
+func reverseProxyHandlers(dial string) []map[string]any {
+	return []map[string]any{
+		{
+			"handler": "encode",
+			"encodings": map[string]any{
+				"gzip": map[string]any{},
+				"zstd": map[string]any{},
+			},
+		},
+		{
 			"handler": "reverse_proxy",
 			"upstreams": []map[string]any{{
 				"dial": dial,
@@ -66,7 +68,18 @@ func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
 				"try_duration": "10s",
 				"try_interval": "250ms",
 			},
-		}},
+		},
+	}
+}
+
+func (c *Client) AddRoute(ctx context.Context, host string, port int32) error {
+	dial, err := c.upstreamDial(ctx, port)
+	if err != nil {
+		return err
+	}
+	route, err := json.Marshal(map[string]any{
+		"match":    []map[string]any{{"host": []string{host}}},
+		"handle":   reverseProxyHandlers(dial),
 		"terminal": true,
 	})
 	if err != nil {
@@ -82,6 +95,16 @@ func staticFileHandlers(root string) []map[string]any {
 			"root":    root,
 		},
 		{
+			// Static responses are revalidated by default. Only framework-owned,
+			// fingerprinted asset namespaces below receive an immutable lifetime.
+			"handler": "headers",
+			"response": map[string]any{
+				"set": map[string][]string{
+					"Cache-Control": {"public, max-age=0, must-revalidate"},
+				},
+			},
+		},
+		{
 			"handler": "encode",
 			"encodings": map[string]any{
 				"gzip": map[string]any{},
@@ -92,22 +115,17 @@ func staticFileHandlers(root string) []map[string]any {
 			"handler": "subroute",
 			"routes": []map[string]any{
 				{
+					// These namespaces are generated with content-hashed filenames by
+					// their respective production builders. User-controlled /static or
+					// arbitrary extension matches are intentionally excluded because an
+					// unhashed file must not become immutable by accident.
 					"match": []map[string]any{{
 						"path": []string{
 							"/_next/static/*",
+							"/_astro/*",
+							"/_nuxt/*",
+							"/_app/immutable/*",
 							"/assets/*",
-							"/static/*",
-							"/*.css",
-							"/*.js",
-							"/*.mjs",
-							"/*.woff",
-							"/*.woff2",
-							"/*.png",
-							"/*.jpg",
-							"/*.jpeg",
-							"/*.webp",
-							"/*.svg",
-							"/*.ico",
 						},
 					}},
 					"handle": []map[string]any{{
@@ -115,17 +133,6 @@ func staticFileHandlers(root string) []map[string]any {
 						"response": map[string]any{
 							"set": map[string][]string{
 								"Cache-Control": {"public, max-age=31536000, immutable"},
-							},
-						},
-					}},
-				},
-				{
-					"match": []map[string]any{{"path": []string{"/index.html", "/"}}},
-					"handle": []map[string]any{{
-						"handler": "headers",
-						"response": map[string]any{
-							"set": map[string][]string{
-								"Cache-Control": {"no-cache"},
 							},
 						},
 					}},
@@ -151,6 +158,7 @@ func staticFileHandlers(root string) []map[string]any {
 			"handler":     "file_server",
 			"index_names": []string{"index.html"},
 			"precompressed": map[string]any{
+				"br":   map[string]any{},
 				"gzip": map[string]any{},
 			},
 		},
@@ -181,13 +189,8 @@ func (c *Client) AddHybridRoute(ctx context.Context, host, root string, port int
 				"handler": "subroute",
 				"routes": []map[string]any{
 					{
-						"match": []map[string]any{{"path": []string{"/api/*"}}},
-						"handle": []map[string]any{{
-							"handler": "reverse_proxy",
-							"upstreams": []map[string]any{{
-								"dial": dial,
-							}},
-						}},
+						"match":  []map[string]any{{"path": []string{"/api/*"}}},
+						"handle": reverseProxyHandlers(dial),
 					},
 					{
 						"handle": staticFileHandlers(root),
