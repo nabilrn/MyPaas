@@ -5,6 +5,70 @@ import (
 	"testing"
 )
 
+func TestEvaluateRuntimeReadiness(t *testing.T) {
+	tests := []struct {
+		name    string
+		state   runtimeContainerState
+		ready   bool
+		wantErr string
+	}{
+		{
+			name:  "running without healthcheck",
+			state: runtimeContainerState{Status: "running", Running: true},
+			ready: true,
+		},
+		{
+			name: "healthy",
+			state: runtimeContainerState{
+				Status:  "running",
+				Running: true,
+				Health:  &runtimeHealthState{Status: "healthy"},
+			},
+			ready: true,
+		},
+		{
+			name: "healthcheck starting",
+			state: runtimeContainerState{
+				Status:  "running",
+				Running: true,
+				Health:  &runtimeHealthState{Status: "starting"},
+			},
+		},
+		{
+			name: "unhealthy",
+			state: runtimeContainerState{
+				Status:  "running",
+				Running: true,
+				Health:  &runtimeHealthState{Status: "unhealthy"},
+			},
+			wantErr: "health status=unhealthy",
+		},
+		{
+			name:    "exited",
+			state:   runtimeContainerState{Status: "exited", Running: false},
+			wantErr: "status=exited",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ready, err := evaluateRuntimeReadiness(tt.state)
+			if ready != tt.ready {
+				t.Fatalf("ready = %v, want %v", ready, tt.ready)
+			}
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestRuntimeTargetFromInspectResolvesProjectRuntime(t *testing.T) {
 	alias := runtimeRouteAlias(3456)
 	raw := []byte(`[
