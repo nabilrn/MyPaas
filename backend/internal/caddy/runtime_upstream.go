@@ -3,11 +3,13 @@ package caddy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const runtimeUpstreamMode = "runtime"
@@ -36,8 +38,100 @@ type runtimeRouteTarget struct {
 	RoutingAliasPresent bool
 }
 
+type runtimeHealthState struct {
+	Status string `json:"Status"`
+}
+
+type runtimeContainerState struct {
+	Status  string              `json:"Status"`
+	Running bool                `json:"Running"`
+	Health  *runtimeHealthState `json:"Health"`
+}
+
 func runtimeRouteAlias(hostPort int32) string {
 	return fmt.Sprintf("mypaas-port-%d", hostPort)
+}
+
+func evaluateRuntimeReadiness(state runtimeContainerState) (bool, error) {
+	status := strings.ToLower(strings.TrimSpace(state.Status))
+	if !state.Running {
+		switch status {
+		case "exited", "dead", "removing":
+			return false, fmt.Errorf("runtime container status=%s", status)
+		default:
+			return false, nil
+		}
+	}
+
+	healthStatus := ""
+	if state.Health != nil {
+		healthStatus = strings.ToLower(strings.TrimSpace(state.Health.Status))
+	}
+	if healthStatus == "" {
+		return true, nil
+	}
+
+	switch healthStatus {
+	case "healthy":
+		return true, nil
+	case "unhealthy":
+		return false, fmt.Errorf("runtime container health status=unhealthy")
+	default:
+		return false, nil
+	}
+}
+
+func runtimeState(ctx context.Context, containerID string) (runtimeContainerState, error) {
+	out, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{json .State}}", containerID).CombinedOutput()
+	if err != nil {
+		return runtimeContainerState{}, fmt.Errorf("inspect runtime readiness: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	var state runtimeContainerState
+	if err := json.Unmarshal(out, &state); err != nil {
+		return runtimeContainerState{}, fmt.Errorf("decode runtime readiness: %w", err)
+	}
+	return state, nil
+}
+
+func waitRuntimeReady(ctx context.Context, containerID string, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var last runtimeContainerState
+	for {
+		state, err := runtimeState(waitCtx, containerID)
+		if err == nil {
+			last = state
+			ready, readinessErr := evaluateRuntimeReadiness(state)
+			if readinessErr != nil {
+				return readinessErr
+			}
+			if ready {
+				return nil
+			}
+		} else if waitCtx.Err() == nil {
+			return err
+		}
+
+		select {
+		case <-waitCtx.Done():
+			if errors.Is(waitCtx.Err(), context.DeadlineExceeded) {
+				health := "none"
+				if last.Health != nil && strings.TrimSpace(last.Health.Status) != "" {
+					health = last.Health.Status
+				}
+				return fmt.Errorf("runtime readiness timeout after %s (status=%s health=%s)", timeout, last.Status, health)
+			}
+			return waitCtx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // upstreamDial keeps the existing fixed-host behavior for development and
@@ -81,6 +175,14 @@ func (c *Client) upstreamDial(ctx context.Context, hostPort int32) (string, erro
 	target, err := runtimeTargetFromInspect(inspectRaw, projectNetwork, routingNetwork, alias, hostPort)
 	if err != nil {
 		return "", err
+	}
+
+	// Route activation is the cutover boundary for Dockerfile/image runtimes.
+	// Respect an image-defined HEALTHCHECK when present; without one, a running
+	// container keeps the existing generic readiness semantics. This mirrors the
+	// Compose path and avoids guessing application-specific HTTP health routes.
+	if err := waitRuntimeReady(ctx, target.ContainerID, 60*time.Second); err != nil {
+		return "", fmt.Errorf("runtime for host port %d is not ready: %w", hostPort, err)
 	}
 
 	if target.RoutingAttached && !target.RoutingAliasPresent {
