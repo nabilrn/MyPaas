@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -45,6 +46,10 @@ func (s *Service) Provision(ctx context.Context, project db.Project) error {
 		return err
 	}
 	if err := s.ensureDatabase(ctx, name, role); err != nil {
+		_ = s.Cleanup(context.Background(), project.ID)
+		return err
+	}
+	if err := s.hardenDatabaseAccess(ctx, name, role); err != nil {
 		_ = s.Cleanup(context.Background(), project.ID)
 		return err
 	}
@@ -91,13 +96,14 @@ func (s *Service) ensureRole(ctx context.Context, role, password string) error {
 		return fmt.Errorf("check shared postgres role: %w", err)
 	}
 	quotedRole := pgx.Identifier{role}.Sanitize()
+	limit := strconv.Itoa(s.projectConnectionLimit())
 	if exists {
-		if _, err := s.pool.Exec(ctx, "ALTER ROLE "+quotedRole+" LOGIN PASSWORD "+quoteLiteral(password)); err != nil {
+		if _, err := s.pool.Exec(ctx, "ALTER ROLE "+quotedRole+" LOGIN PASSWORD "+quoteLiteral(password)+" CONNECTION LIMIT "+limit); err != nil {
 			return fmt.Errorf("alter shared postgres role: %w", err)
 		}
 		return nil
 	}
-	if _, err := s.pool.Exec(ctx, "CREATE ROLE "+quotedRole+" LOGIN PASSWORD "+quoteLiteral(password)); err != nil {
+	if _, err := s.pool.Exec(ctx, "CREATE ROLE "+quotedRole+" LOGIN PASSWORD "+quoteLiteral(password)+" CONNECTION LIMIT "+limit); err != nil {
 		return fmt.Errorf("create shared postgres role: %w", err)
 	}
 	return nil
@@ -117,6 +123,25 @@ func (s *Service) ensureDatabase(ctx context.Context, name, owner string) error 
 		return fmt.Errorf("create shared postgres database: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) hardenDatabaseAccess(ctx context.Context, name, role string) error {
+	quotedName := pgx.Identifier{name}.Sanitize()
+	quotedRole := pgx.Identifier{role}.Sanitize()
+	if _, err := s.pool.Exec(ctx, "REVOKE CONNECT ON DATABASE "+quotedName+" FROM PUBLIC"); err != nil {
+		return fmt.Errorf("revoke public database access: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, "GRANT CONNECT ON DATABASE "+quotedName+" TO "+quotedRole); err != nil {
+		return fmt.Errorf("grant project database access: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) projectConnectionLimit() int {
+	if s.cfg != nil && s.cfg.SharedPostgresProjectConnectionLimit > 0 {
+		return s.cfg.SharedPostgresProjectConnectionLimit
+	}
+	return 10
 }
 
 func (s *Service) databaseURL(name, user, password string) string {
