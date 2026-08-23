@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	"mypaas/internal/db"
 )
 
@@ -41,6 +43,23 @@ func (s *Service) ReconcileMissingRuntimes(ctx context.Context) error {
 		go s.runRecoveryDeployment(project.ID, deployment.ID)
 	}
 	return nil
+}
+
+// StartWithReplicaCleanup guarantees a stopped Dockerfile/image project cannot
+// inherit stale secondary containers from an interrupted earlier lifecycle
+// operation. The normal replica reconciler recreates the requested topology
+// after the primary has started and the project is routable again.
+func (s *Service) StartWithReplicaCleanup(ctx context.Context, projectID uuid.UUID) error {
+	project, err := s.project(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if routeOwnedByReplicaReconciler(project) {
+		if err := s.docker.RemoveReplicas(ctx, project.ID.String()); err != nil {
+			return err
+		}
+	}
+	return s.Start(ctx, projectID)
 }
 
 // ReconcileCanonicalRoutes repairs routes that have exactly one route owner.
