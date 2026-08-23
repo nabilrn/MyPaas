@@ -1,6 +1,7 @@
 package staticdeploy
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"io/fs"
@@ -12,6 +13,8 @@ import (
 )
 
 var candidateDirs = []string{"dist", "build", "out", "public", ".output/public", "_site", "site", "www", "."}
+
+const precompressMinBytes = 1024
 
 func FindSiteRoot(workspace string) (string, string, error) {
 	workspace = filepath.Clean(workspace)
@@ -48,7 +51,10 @@ func CopyDir(src, dst string) error {
 		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
-		return copyFile(path, target)
+		if err := copyFile(path, target); err != nil {
+			return err
+		}
+		return precompressFile(target)
 	})
 }
 
@@ -85,4 +91,73 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Close()
+}
+
+func precompressFile(path string) error {
+	if !shouldPrecompress(path) {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.Size() < precompressMinBytes {
+		return nil
+	}
+	target := path + ".gz"
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	in, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
+	if err != nil {
+		return err
+	}
+	gw, err := gzip.NewWriterLevel(out, gzip.BestCompression)
+	if err != nil {
+		_ = out.Close()
+		return err
+	}
+	if _, err := io.Copy(gw, in); err != nil {
+		_ = gw.Close()
+		_ = out.Close()
+		return err
+	}
+	if err := gw.Close(); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+func shouldPrecompress(path string) bool {
+	lower := strings.ToLower(path)
+	if strings.HasSuffix(lower, ".gz") || strings.HasSuffix(lower, ".br") || strings.HasSuffix(lower, ".zst") {
+		return false
+	}
+	for _, ext := range []string{
+		".html",
+		".css",
+		".js",
+		".mjs",
+		".json",
+		".xml",
+		".svg",
+		".txt",
+		".wasm",
+		".map",
+	} {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
 }

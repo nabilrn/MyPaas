@@ -1,8 +1,12 @@
 package staticdeploy
 
 import (
+	"bytes"
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +95,48 @@ func TestCopyDirSkipsGitAndNodeModules(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dst, "node_modules", "pkg", "index.js")); !os.IsNotExist(err) {
 		t.Fatalf("node_modules should not be copied")
+	}
+}
+
+func TestCopyDirPrecompressesLargeTextAssets(t *testing.T) {
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "out")
+	if err := os.MkdirAll(filepath.Join(src, "assets"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	js := strings.Repeat("const value = 'benchmark';\n", 200)
+	if err := os.WriteFile(filepath.Join(src, "assets", "app.js"), []byte(js), 0640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "assets", "image.png"), bytes.Repeat([]byte{1, 2, 3, 4}, 400), 0640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CopyDir(src, dst); err != nil {
+		t.Fatalf("CopyDir returned error: %v", err)
+	}
+
+	gzPath := filepath.Join(dst, "assets", "app.js.gz")
+	file, err := os.Open(gzPath)
+	if err != nil {
+		t.Fatalf("precompressed app.js.gz was not created: %v", err)
+	}
+	defer file.Close()
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatalf("open gzip: %v", err)
+	}
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read gzip: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	if string(body) != js {
+		t.Fatalf("precompressed content mismatch")
+	}
+	if _, err := os.Stat(filepath.Join(dst, "assets", "image.png.gz")); !os.IsNotExist(err) {
+		t.Fatalf("binary image should not be precompressed")
 	}
 }

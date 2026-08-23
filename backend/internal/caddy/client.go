@@ -150,6 +150,9 @@ func staticFileHandlers(root string) []map[string]any {
 		{
 			"handler":     "file_server",
 			"index_names": []string{"index.html"},
+			"precompressed": map[string]any{
+				"gzip": map[string]any{},
+			},
 		},
 	}
 }
