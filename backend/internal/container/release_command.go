@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"mypaas/internal/envvar"
 )
+
+const releaseCommandFileSuffix = ".mypaas-release-command"
 
 // runReleaseCommandIfConfigured executes an opt-in one-off command from the
 // candidate image before the primary runtime is created. The command runs with
@@ -18,7 +18,7 @@ func (d *DockerCLI) runReleaseCommandIfConfigured(ctx context.Context, opts RunO
 	if strings.TrimSpace(opts.EnvFile) == "" {
 		return nil
 	}
-	commandPath := opts.EnvFile + envvar.ReleaseCommandFileSuffix
+	commandPath := opts.EnvFile + releaseCommandFileSuffix
 	raw, err := os.ReadFile(commandPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
