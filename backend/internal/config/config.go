@@ -58,10 +58,11 @@ type Config struct {
 	BackupKeepWeekly     int
 	BackupWeeklyDay      time.Weekday
 
-	SharedPostgresEnabled bool
-	SharedPostgresHost    string
-	SharedPostgresPort    int
-	SharedPostgresSSLMode string
+	SharedPostgresEnabled                bool
+	SharedPostgresHost                   string
+	SharedPostgresPort                   int
+	SharedPostgresSSLMode                string
+	SharedPostgresProjectConnectionLimit int
 
 	ImageCleanupEnabled bool
 	ImageCleanupUntil   string
@@ -142,6 +143,13 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("SHARED_POSTGRES_PORT: %w", err)
 	}
+	sharedPostgresProjectConnectionLimit, err := envInt("SHARED_POSTGRES_PROJECT_CONNECTION_LIMIT", 10)
+	if err != nil {
+		return nil, fmt.Errorf("SHARED_POSTGRES_PROJECT_CONNECTION_LIMIT: %w", err)
+	}
+	if sharedPostgresProjectConnectionLimit < 1 {
+		return nil, fmt.Errorf("SHARED_POSTGRES_PROJECT_CONNECTION_LIMIT must be at least 1")
+	}
 	imageCleanupEnabled, err := envBool("IMAGE_CLEANUP_ENABLED", true)
 	if err != nil {
 		return nil, fmt.Errorf("IMAGE_CLEANUP_ENABLED: %w", err)
@@ -204,10 +212,11 @@ func Load() (*Config, error) {
 		BackupKeepWeekly:     backupKeepWeekly,
 		BackupWeeklyDay:      backupWeeklyDay,
 
-		SharedPostgresEnabled: sharedPostgresEnabled,
-		SharedPostgresHost:    envStr("SHARED_POSTGRES_HOST", sharedPostgresHostDefault),
-		SharedPostgresPort:    sharedPostgresPort,
-		SharedPostgresSSLMode: envStr("SHARED_POSTGRES_SSLMODE", "disable"),
+		SharedPostgresEnabled:                sharedPostgresEnabled,
+		SharedPostgresHost:                   envStr("SHARED_POSTGRES_HOST", sharedPostgresHostDefault),
+		SharedPostgresPort:                   sharedPostgresPort,
+		SharedPostgresSSLMode:                envStr("SHARED_POSTGRES_SSLMODE", "disable"),
+		SharedPostgresProjectConnectionLimit: sharedPostgresProjectConnectionLimit,
 
 		ImageCleanupEnabled: imageCleanupEnabled,
 		ImageCleanupUntil:   envStr("IMAGE_CLEANUP_UNTIL", "168h"),
