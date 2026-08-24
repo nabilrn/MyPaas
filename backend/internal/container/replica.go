@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -167,5 +168,33 @@ func (d *DockerCLI) RemoveReplicas(ctx context.Context, projectID string) error 
 			return err
 		}
 	}
-	return nil
+	return d.waitReplicasRemoved(ctx, projectID)
+}
+
+// Docker may report a forced removal before the container disappears from
+// the engine's listing. Lifecycle callers need a deterministic postcondition
+// before they rewrite routes or return success to the API client.
+func (d *DockerCLI) waitReplicasRemoved(ctx context.Context, projectID string) error {
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		items, err := d.ReplicaInfos(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return fmt.Errorf("replicas remain after removal: %d", len(items))
+		case <-ticker.C:
+		}
+	}
 }
