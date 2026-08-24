@@ -95,7 +95,7 @@ SELECT id, project_id, commit_sha, commit_message, status, build_log, error_msg,
        triggered_by, triggered_by_user_id, started_at, finished_at
 FROM deployments
 WHERE project_id = $1 AND status = 'running'
-ORDER BY started_at DESC
+ORDER BY started_at DESC, id DESC
 LIMIT 1;
 
 -- name: GetRollbackTarget :one
