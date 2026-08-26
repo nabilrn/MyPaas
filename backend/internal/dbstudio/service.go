@@ -62,6 +62,12 @@ func (s *Service) Columns(ctx context.Context, projectID uuid.UUID, schema, tabl
 	})
 }
 
+func (s *Service) TableDetails(ctx context.Context, projectID uuid.UUID, schema, table string) (TableDetails, error) {
+	return withResult(ctx, s, projectID, func(handle *dbHandle) (TableDetails, error) {
+		return handle.adapter.TableDetails(ctx, handle.conn, schema, table)
+	})
+}
+
 func (s *Service) Rows(ctx context.Context, projectID uuid.UUID, query RowQuery) (RowPage, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) (RowPage, error) {
 		return handle.adapter.Rows(ctx, handle.conn, query)
