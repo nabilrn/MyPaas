@@ -8,6 +8,7 @@ import (
 
 	"mypaas/internal/db"
 	"mypaas/internal/errs"
+	"mypaas/internal/quota"
 )
 
 func (s *Service) createProjectRecord(ctx context.Context, input CreateInput, name, secret string) (db.Project, error) {
@@ -53,8 +54,18 @@ func (s *Service) createProjectRecord(ctx context.Context, input CreateInput, na
 		return create(s.queries)
 	}
 
+	declaredMemory, declaredCPU, err := quota.DeclaredResources(
+		input.MemoryLimitMb,
+		input.CPULimit,
+		valueOrEmpty(input.MainService),
+		input.ServiceResources,
+	)
+	if err != nil {
+		return db.Project{}, err
+	}
+
 	var project db.Project
-	err := s.quota.WithinCreateQuota(ctx, input.UserID, input.MemoryLimitMb, input.CPULimit, func(queries *db.Queries) error {
+	err = s.quota.WithinCreateQuota(ctx, input.UserID, declaredMemory, declaredCPU, func(queries *db.Queries) error {
 		var err error
 		project, err = create(queries)
 		return err
@@ -85,7 +96,16 @@ func (s *Service) updateProjectRecord(
 	if s.quota == nil {
 		err = update(s.queries)
 	} else {
-		err = s.quota.WithinUpdateQuota(ctx, existing, input.MemoryLimitMb, input.CPULimit, update)
+		declaredMemory, declaredCPU, resourceErr := quota.DeclaredResources(
+			input.MemoryLimitMb,
+			input.CPULimit,
+			valueOrEmpty(params.MainService),
+			params.ServiceResources,
+		)
+		if resourceErr != nil {
+			return db.Project{}, resourceErr
+		}
+		err = s.quota.WithinUpdateQuota(ctx, existing, declaredMemory, declaredCPU, update)
 	}
 	if err != nil {
 		return db.Project{}, err
