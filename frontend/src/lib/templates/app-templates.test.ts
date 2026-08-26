@@ -9,6 +9,8 @@ describe('app templates', () => {
 			expect(template.appPort).toBeGreaterThan(0);
 			expect(template.memoryLimitMb).toBeGreaterThan(0);
 			expect(template.cpuLimit).toBeGreaterThan(0);
+			expect(template.compatibility.catalogId).toBe(template.id);
+			expect(template.compatibility.status).toBe('catalogued-pattern');
 			if (template.source.type === 'compose') {
 				expect(template.source.baseDirectory).toMatch(/^templates\/manifests\//);
 				expect(template.source.mainService.length).toBeGreaterThan(0);
