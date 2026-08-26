@@ -4,6 +4,7 @@ export type AppTemplateSource =
 
 export type AppTemplateEnvKind = 'text' | 'secret' | 'public-url';
 export type AppTemplateSecretFormat = 'hex' | 'base64url';
+export type AppTemplateCompatibilityStatus = 'catalogued-pattern';
 
 export interface AppTemplateEnvField {
 	key: string;
@@ -13,6 +14,11 @@ export interface AppTemplateEnvField {
 	defaultValue?: string;
 	bytes?: number;
 	format?: AppTemplateSecretFormat;
+}
+
+export interface AppTemplateCompatibility {
+	catalogId: string;
+	status: AppTemplateCompatibilityStatus;
 }
 
 export interface AppTemplate {
@@ -27,6 +33,7 @@ export interface AppTemplate {
 	env: AppTemplateEnvField[];
 	persistent: boolean;
 	limitations: string[];
+	compatibility: AppTemplateCompatibility;
 }
 
 const templateRepo = 'https://github.com/nabilrn/MyPaas.git';
@@ -48,7 +55,8 @@ export const appTemplates: AppTemplate[] = [
 		source: { type: 'registry', imageRef: 'excalidraw/excalidraw:latest' },
 		env: [],
 		persistent: false,
-		limitations: ['The official self-hosted client does not include Excalidraw sharing/collaboration services.']
+		limitations: ['The official self-hosted client does not include Excalidraw sharing/collaboration services.'],
+		compatibility: { catalogId: 'excalidraw', status: 'catalogued-pattern' }
 	},
 	{
 		id: 'uptime-kuma',
@@ -61,7 +69,8 @@ export const appTemplates: AppTemplate[] = [
 		source: { type: 'compose', baseDirectory: 'templates/manifests/uptime-kuma', composeFilePath: 'compose.yml', mainService: 'uptime-kuma' },
 		env: [],
 		persistent: true,
-		limitations: []
+		limitations: [],
+		compatibility: { catalogId: 'uptime-kuma', status: 'catalogued-pattern' }
 	},
 	{
 		id: 'n8n',
@@ -78,7 +87,8 @@ export const appTemplates: AppTemplate[] = [
 			{ key: 'TZ', label: 'Container timezone', kind: 'text', defaultValue: 'Asia/Jakarta', description: 'Container timezone.' }
 		],
 		persistent: true,
-		limitations: ['Docker-in-Docker / sandbox stacks are outside the current MyPaas security boundary.']
+		limitations: ['Docker-in-Docker / sandbox stacks are outside the current MyPaas security boundary.'],
+		compatibility: { catalogId: 'n8n', status: 'catalogued-pattern' }
 	},
 	{
 		id: 'umami',
@@ -95,7 +105,8 @@ export const appTemplates: AppTemplate[] = [
 			{ key: 'TWO_FACTOR_ENCRYPTION_KEY', label: '2FA encryption key', kind: 'secret', bytes: 32, format: 'hex', description: 'Generated 64-character encryption key.' }
 		],
 		persistent: true,
-		limitations: []
+		limitations: [],
+		compatibility: { catalogId: 'umami', status: 'catalogued-pattern' }
 	},
 	{
 		id: 'ghost',
@@ -112,7 +123,8 @@ export const appTemplates: AppTemplate[] = [
 			{ key: 'GHOST_DB_ROOT_PASSWORD', label: 'MySQL root password', kind: 'secret', bytes: 24, format: 'hex', description: 'Root credential for the project-local MySQL service.' }
 		],
 		persistent: true,
-		limitations: ['This template covers the Ghost + MySQL baseline, not optional auxiliary services.']
+		limitations: ['This template covers the Ghost + MySQL baseline, not optional auxiliary services.'],
+		compatibility: { catalogId: 'ghost', status: 'catalogued-pattern' }
 	},
 	{
 		id: 'nocodb',
@@ -127,7 +139,8 @@ export const appTemplates: AppTemplate[] = [
 			{ key: 'NOCODB_DB_PASSWORD', label: 'Database password', kind: 'secret', bytes: 24, format: 'hex', description: 'Credential shared by NocoDB and its project-local PostgreSQL service.' }
 		],
 		persistent: true,
-		limitations: []
+		limitations: [],
+		compatibility: { catalogId: 'nocodb', status: 'catalogued-pattern' }
 	}
 ];
 
