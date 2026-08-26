@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -78,5 +79,43 @@ func TestCheckUsage(t *testing.T) {
 				t.Fatalf("expected nil error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestDeclaredResources(t *testing.T) {
+	raw := json.RawMessage(`{
+		"app": {"memoryLimitMb": 9999, "cpuLimit": 9},
+		"worker": {"memoryLimitMb": 768, "cpuLimit": 0.75},
+		"db": {"memoryLimitMb": 768, "cpuLimit": 0.5},
+		"redis": {"memoryLimitMb": 256, "cpuLimit": 0.25}
+	}`)
+	memory, cpu, err := DeclaredResources(1536, 1.25, "app", raw)
+	if err != nil {
+		t.Fatalf("DeclaredResources returned error: %v", err)
+	}
+	if memory != 3328 {
+		t.Fatalf("memory = %d, want 3328", memory)
+	}
+	if cpu != 2.75 {
+		t.Fatalf("cpu = %.2f, want 2.75", cpu)
+	}
+}
+
+func TestDeclaredResourcesUsesDeploymentDefaultsForSecondaryServices(t *testing.T) {
+	memory, cpu, err := DeclaredResources(512, 0.5, "app", json.RawMessage(`{"worker": {}}`))
+	if err != nil {
+		t.Fatalf("DeclaredResources returned error: %v", err)
+	}
+	if memory != 768 {
+		t.Fatalf("memory = %d, want 768", memory)
+	}
+	if cpu != 0.75 {
+		t.Fatalf("cpu = %.2f, want 0.75", cpu)
+	}
+}
+
+func TestDeclaredResourcesRejectsMalformedJSON(t *testing.T) {
+	if _, _, err := DeclaredResources(512, 0.5, "app", json.RawMessage(`{"worker":`)); err == nil {
+		t.Fatal("expected malformed service resources to fail")
 	}
 }

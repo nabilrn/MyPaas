@@ -19,6 +19,14 @@ describe('app templates', () => {
 				expect(template.source.repoUrl).toMatch(/^https:\/\/github\.com\//);
 				expect(template.source.branch.length).toBeGreaterThan(0);
 			}
+			for (const [service, resource] of Object.entries(template.serviceResources ?? {})) {
+				expect(service.length).toBeGreaterThan(0);
+				expect(resource.memoryLimitMb).toBeGreaterThan(0);
+				expect(resource.cpuLimit).toBeGreaterThan(0);
+				if (template.source.type === 'compose') {
+					expect(service).not.toBe(template.source.mainService);
+				}
+			}
 		}
 	});
 
@@ -26,6 +34,17 @@ describe('app templates', () => {
 		for (const id of ['drawdb', 'meilisearch', 'directus']) {
 			expect(appTemplates.some((template) => template.id === id)).toBe(true);
 		}
+	});
+
+	it('carries catalogued secondary service guards for multi-service templates', () => {
+		const nocodb = appTemplates.find((template) => template.id === 'nocodb');
+		expect(nocodb?.serviceResources).toEqual({
+			worker: { memoryLimitMb: 768, cpuLimit: 0.75 },
+			db: { memoryLimitMb: 768, cpuLimit: 0.5 },
+			redis: { memoryLimitMb: 256, cpuLimit: 0.25 }
+		});
+		expect(appTemplates.find((template) => template.id === 'umami')?.serviceResources?.db).toEqual({ memoryLimitMb: 512, cpuLimit: 0.5 });
+		expect(appTemplates.find((template) => template.id === 'ghost')?.serviceResources?.db).toEqual({ memoryLimitMb: 768, cpuLimit: 0.5 });
 	});
 
 	it('does not ship fixed values for secret fields', () => {

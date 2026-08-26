@@ -23,6 +23,11 @@ export interface AppTemplateCompatibility {
 	status: AppTemplateCompatibilityStatus;
 }
 
+export interface AppTemplateServiceResource {
+	memoryLimitMb: number;
+	cpuLimit: number;
+}
+
 export interface AppTemplate {
 	id: string;
 	name: string;
@@ -31,6 +36,7 @@ export interface AppTemplate {
 	appPort: number;
 	memoryLimitMb: number;
 	cpuLimit: number;
+	serviceResources?: Record<string, AppTemplateServiceResource>;
 	source: AppTemplateSource;
 	env: AppTemplateEnvField[];
 	persistent: boolean;
@@ -148,6 +154,9 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 3000,
 		memoryLimitMb: 1024,
 		cpuLimit: 1,
+		serviceResources: {
+			db: { memoryLimitMb: 512, cpuLimit: 0.5 }
+		},
 		source: { type: 'compose', baseDirectory: 'templates/manifests/umami', composeFilePath: 'compose.yml', mainService: 'umami' },
 		env: [
 			{ key: 'UMAMI_DB_PASSWORD', label: 'Database password', kind: 'secret', bytes: 24, format: 'hex', required: true, description: 'Shared by the Umami service and its project-local PostgreSQL service.' },
@@ -166,6 +175,9 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 2368,
 		memoryLimitMb: 1024,
 		cpuLimit: 1,
+		serviceResources: {
+			db: { memoryLimitMb: 768, cpuLimit: 0.5 }
+		},
 		source: { type: 'compose', baseDirectory: 'templates/manifests/ghost', composeFilePath: 'compose.yml', mainService: 'ghost' },
 		env: [
 			{ key: 'GHOST_URL', label: 'Public URL', kind: 'public-url', required: true, description: 'Generated from the MyPaas project hostname.' },
@@ -184,6 +196,11 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 8080,
 		memoryLimitMb: 1536,
 		cpuLimit: 1.25,
+		serviceResources: {
+			worker: { memoryLimitMb: 768, cpuLimit: 0.75 },
+			db: { memoryLimitMb: 768, cpuLimit: 0.5 },
+			redis: { memoryLimitMb: 256, cpuLimit: 0.25 }
+		},
 		source: { type: 'compose', baseDirectory: 'templates/manifests/nocodb', composeFilePath: 'compose.yml', mainService: 'nocodb' },
 		env: [
 			{ key: 'NOCODB_DB_PASSWORD', label: 'Database password', kind: 'secret', bytes: 24, format: 'hex', required: true, description: 'Credential shared by NocoDB and its project-local PostgreSQL service.' }

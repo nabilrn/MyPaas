@@ -73,26 +73,27 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name                 string         `json:"name"`
-		SourceType           string         `json:"sourceType"`
-		RepoURL              string         `json:"repoUrl"`
-		ImageRef             *string        `json:"imageRef"`
-		Branch               string         `json:"branch"`
-		DeployMode           string         `json:"deployMode"`
-		ResourceProfile      string         `json:"resourceProfile"`
-		MainService          *string        `json:"mainService"`
-		AppPort              int32          `json:"appPort"`
-		MemoryLimitMb        int32          `json:"memoryLimitMb"`
-		MemoryMb             int32          `json:"memoryMb"`
-		CPULimit             float64        `json:"cpuLimit"`
-		SharedPostgres       bool           `json:"sharedPostgres"`
-		EnvVars              []envvar.Value `json:"envVars"`
-		ComposeFilePath      *string        `json:"composeFilePath"`
-		ComposeOverridePaths []string       `json:"composeOverridePaths"`
-		ComposeProfiles      []string       `json:"composeProfiles"`
-		ComposeWorkdir       *string        `json:"composeWorkdir"`
-		StaticFrontendPath   *string        `json:"staticFrontendPath"`
-		BaseDirectory        *string        `json:"baseDirectory"`
+		Name                 string          `json:"name"`
+		SourceType           string          `json:"sourceType"`
+		RepoURL              string          `json:"repoUrl"`
+		ImageRef             *string         `json:"imageRef"`
+		Branch               string          `json:"branch"`
+		DeployMode           string          `json:"deployMode"`
+		ResourceProfile      string          `json:"resourceProfile"`
+		MainService          *string         `json:"mainService"`
+		AppPort              int32           `json:"appPort"`
+		MemoryLimitMb        int32           `json:"memoryLimitMb"`
+		MemoryMb             int32           `json:"memoryMb"`
+		CPULimit             float64         `json:"cpuLimit"`
+		SharedPostgres       bool            `json:"sharedPostgres"`
+		EnvVars              []envvar.Value  `json:"envVars"`
+		ComposeFilePath      *string         `json:"composeFilePath"`
+		ComposeOverridePaths []string        `json:"composeOverridePaths"`
+		ComposeProfiles      []string        `json:"composeProfiles"`
+		ComposeWorkdir       *string         `json:"composeWorkdir"`
+		ServiceResources     json.RawMessage `json:"serviceResources"`
+		StaticFrontendPath   *string         `json:"staticFrontendPath"`
+		BaseDirectory        *string         `json:"baseDirectory"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
@@ -132,6 +133,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			ComposeOverridePaths: req.ComposeOverridePaths,
 			ComposeProfiles:      req.ComposeProfiles,
 			ComposeWorkdir:       req.ComposeWorkdir,
+			ServiceResources:     req.ServiceResources,
 			StaticFrontendPath:   req.StaticFrontendPath,
 			BaseDirectory:        req.BaseDirectory,
 		},

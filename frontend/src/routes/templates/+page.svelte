@@ -20,6 +20,7 @@
 	$: publicURL = projectURL(projectName || selected.id, $page.url.protocol, $page.url.hostname);
 	$: generatedSecretCount = selected.env.filter((field) => field.kind === 'secret').length;
 	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL);
+	$: secondaryResourceEntries = Object.entries(selected.serviceResources ?? {});
 
 	function chooseTemplate(template: AppTemplate) {
 		selected = template;
@@ -92,6 +93,7 @@
 				appPort: selected.appPort,
 				memoryLimitMb: selected.memoryLimitMb,
 				cpuLimit: selected.cpuLimit,
+				serviceResources: selected.serviceResources ?? {},
 				sharedPostgres: false,
 				envVars: environmentPayload(),
 				composeOverridePaths: [] as string[],
@@ -234,7 +236,15 @@
 				<div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
 					<div class="flex gap-2"><Package class="mt-0.5 h-4 w-4 shrink-0" /><span>{sourceDescription(selected)}</span></div>
 					<div class="flex gap-2"><Database class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.persistent ? 'Persistent Docker-managed storage is expected.' : 'No persistent storage is required by the baseline template.'}</span></div>
-					<div class="flex gap-2"><ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.memoryLimitMb} MB memory · {selected.cpuLimit} CPU project guardrail.</span></div>
+					<div class="flex gap-2"><ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.memoryLimitMb} MB memory · {selected.cpuLimit} CPU main-service guardrail.</span></div>
+					{#if secondaryResourceEntries.length > 0}
+						<div class="border-t border-gray-100 pt-3 dark:border-neutral-800">
+							<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Secondary service guardrails</p>
+							{#each secondaryResourceEntries as [service, resource]}
+								<p class="mt-1 font-mono text-[11px] text-gray-500 dark:text-gray-400">{service}: {resource.memoryLimitMb} MB · {resource.cpuLimit} CPU</p>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</SectionPanel>
 
