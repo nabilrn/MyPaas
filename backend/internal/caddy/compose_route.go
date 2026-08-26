@@ -21,19 +21,19 @@ type composeRouteInspectRow struct {
 	} `json:"NetworkSettings"`
 }
 
-func composeRouteAlias(projectName, routeName string) string {
-	sum := sha256.Sum256([]byte(projectName + ":" + routeName))
-	return "mypaas-http-" + routeName + "-" + hex.EncodeToString(sum[:4])
+func composeRouteAlias(projectName, service string) string {
+	sum := sha256.Sum256([]byte(projectName + ":" + service))
+	return "mypaas-http-" + hex.EncodeToString(sum[:6])
 }
 
-func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service, routeName string, containerPort int32) error {
+func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service string, containerPort int32) error {
 	if strings.TrimSpace(c.upstreamHost) != runtimeUpstreamMode {
 		return fmt.Errorf("additional compose HTTP routes require CADDY_UPSTREAM_HOST=runtime")
 	}
 	if containerPort < 1 || containerPort > 65535 {
 		return fmt.Errorf("invalid compose route container port %d", containerPort)
 	}
-	dial, err := composeRouteDial(ctx, projectName, service, routeName, containerPort)
+	dial, err := composeRouteDial(ctx, projectName, service, containerPort)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service
 	return c.replaceHostRoute(ctx, host, route)
 }
 
-func composeRouteDial(ctx context.Context, projectName, service, routeName string, containerPort int32) (string, error) {
+func composeRouteDial(ctx context.Context, projectName, service string, containerPort int32) (string, error) {
 	projectName = strings.TrimSpace(projectName)
 	service = strings.TrimSpace(service)
 	if projectName == "" || service == "" {
@@ -104,7 +104,7 @@ func composeRouteDial(ctx context.Context, projectName, service, routeName strin
 		return "", fmt.Errorf("compose route service %q is not attached to project network %q", service, projectNetwork)
 	}
 
-	alias := composeRouteAlias(projectName, routeName)
+	alias := composeRouteAlias(projectName, service)
 	routing, attached := row.NetworkSettings.Networks[routingNetwork]
 	aliasPresent := attached && stringSliceContains(routing.Aliases, alias)
 	if attached && !aliasPresent {
