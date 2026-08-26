@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appTemplates, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv } from './app-templates';
+import { appTemplates, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv, templateEnvValue } from './app-templates';
 
 describe('app templates', () => {
 	it('keeps template ids unique and source contracts explicit', () => {
@@ -30,8 +30,8 @@ describe('app templates', () => {
 		}
 	});
 
-	it('includes catalogued templates for the new real application patterns', () => {
-		for (const id of ['drawdb', 'meilisearch', 'directus']) {
+	it('includes catalogued templates for the real application patterns added through phase 7', () => {
+		for (const id of ['drawdb', 'meilisearch', 'directus', 'forgejo', 'paperless-ngx', 'openclaw']) {
 			expect(appTemplates.some((template) => template.id === id)).toBe(true);
 		}
 	});
@@ -45,6 +45,10 @@ describe('app templates', () => {
 		});
 		expect(appTemplates.find((template) => template.id === 'umami')?.serviceResources?.db).toEqual({ memoryLimitMb: 512, cpuLimit: 0.5 });
 		expect(appTemplates.find((template) => template.id === 'ghost')?.serviceResources?.db).toEqual({ memoryLimitMb: 768, cpuLimit: 0.5 });
+		expect(appTemplates.find((template) => template.id === 'paperless-ngx')?.serviceResources).toEqual({
+			db: { memoryLimitMb: 768, cpuLimit: 0.5 },
+			broker: { memoryLimitMb: 256, cpuLimit: 0.25 }
+		});
 	});
 
 	it('does not ship fixed values for secret fields', () => {
@@ -71,7 +75,7 @@ describe('app templates', () => {
 		expect(value).toMatch(/^[a-f0-9]{32}$/);
 	});
 
-	it('blocks templates only when required values are actually missing', () => {
+	it('blocks templates only when required user values are actually missing', () => {
 		const directus = appTemplates.find((template) => template.id === 'directus');
 		expect(directus).toBeTruthy();
 		if (!directus) return;
@@ -80,5 +84,33 @@ describe('app templates', () => {
 		expect(missingRequiredTemplateEnv(directus, values)).toEqual(['ADMIN_EMAIL']);
 		values.ADMIN_EMAIL = 'owner@example.com';
 		expect(missingRequiredTemplateEnv(directus, values)).toEqual([]);
+	});
+
+	it('resolves managed public host and URL fields without user input', () => {
+		const forgejo = appTemplates.find((template) => template.id === 'forgejo');
+		expect(forgejo).toBeTruthy();
+		if (!forgejo) return;
+
+		const values = initialTemplateEnv(forgejo);
+		const host = 'forgejo.mypaas.example';
+		const url = `https://${host}`;
+		expect(missingRequiredTemplateEnv(forgejo, values, url, host)).toEqual([]);
+
+		const domainField = forgejo.env.find((field) => field.key === 'FORGEJO_DOMAIN');
+		const rootURLField = forgejo.env.find((field) => field.key === 'FORGEJO_ROOT_URL');
+		expect(domainField && templateEnvValue(domainField, values, url, host)).toBe(host);
+		expect(rootURLField && templateEnvValue(rootURLField, values, url, host)).toBe(url);
+	});
+
+	it('generates secrets for Paperless-ngx and OpenClaw', () => {
+		for (const id of ['paperless-ngx', 'openclaw']) {
+			const template = appTemplates.find((item) => item.id === id);
+			expect(template).toBeTruthy();
+			if (!template) continue;
+			const values = initialTemplateEnv(template);
+			for (const field of template.env.filter((item) => item.kind === 'secret')) {
+				expect(values[field.key].length).toBeGreaterThan(20);
+			}
+		}
 	});
 });
