@@ -6,8 +6,8 @@
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { projectNameValidationMessage } from '$lib/validation/project';
-	import { projectURL } from '$lib/utils/urls';
-	import { appTemplates, appTemplateRepository, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv, type AppTemplate } from '$lib/templates/app-templates';
+	import { projectHost, projectURL } from '$lib/utils/urls';
+	import { appTemplates, appTemplateRepository, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv, templateEnvValue, type AppTemplate, type AppTemplateEnvField } from '$lib/templates/app-templates';
 	import { toast } from '$stores/toast';
 
 	let selected: AppTemplate = appTemplates[0];
@@ -17,9 +17,10 @@
 	let error = '';
 
 	$: nameError = projectNameValidationMessage(projectName);
+	$: publicHost = projectHost(projectName || selected.id, $page.url.hostname);
 	$: publicURL = projectURL(projectName || selected.id, $page.url.protocol, $page.url.hostname);
 	$: generatedSecretCount = selected.env.filter((field) => field.kind === 'secret').length;
-	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL);
+	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL, publicHost);
 	$: secondaryResourceEntries = Object.entries(selected.serviceResources ?? {});
 
 	function chooseTemplate(template: AppTemplate) {
@@ -45,8 +46,12 @@
 		}
 	}
 
-	function fieldValue(key: string, kind: string) {
-		return kind === 'public-url' ? publicURL : (envValues[key] ?? '');
+	function fieldValue(field: AppTemplateEnvField) {
+		return templateEnvValue(field, envValues, publicURL, publicHost);
+	}
+
+	function isManagedField(field: AppTemplateEnvField) {
+		return field.kind === 'public-url' || field.kind === 'public-host';
 	}
 
 	function setEnvValue(key: string, value: string) {
@@ -70,7 +75,7 @@
 
 	function environmentPayload() {
 		return selected.env
-			.map((field) => ({ key: field.key, value: field.kind === 'public-url' ? publicURL : (envValues[field.key] ?? '') }))
+			.map((field) => ({ key: field.key, value: templateEnvValue(field, envValues, publicURL, publicHost) }))
 			.filter((item) => item.value.length > 0);
 	}
 
@@ -203,8 +208,8 @@
 							{#each selected.env as field}
 								<div class="grid gap-2 py-3 lg:grid-cols-[minmax(10rem,0.8fr)_minmax(14rem,1.5fr)_auto] lg:items-center">
 									<div><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">{field.key}</p><p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{field.label}{field.required ? ' · required' : ''}</p></div>
-									<input class="field w-full font-mono" type={field.kind === 'secret' ? 'password' : 'text'} value={fieldValue(field.key, field.kind)} disabled={field.kind === 'public-url'} aria-invalid={field.required && missingRequiredEnv.includes(field.key) ? 'true' : undefined} on:input={(event) => setEnvValue(field.key, (event.currentTarget as HTMLInputElement).value)} />
-									{#if field.kind === 'secret'}<ActionButton type="button" variant="secondary" size="xs" on:click={() => regenerateSecret(field.key)}>Generate</ActionButton>{:else}<span class="text-xs text-gray-500 dark:text-gray-400">{field.kind === 'public-url' ? 'Managed' : field.required ? 'Required' : 'Optional'}</span>{/if}
+									<input class="field w-full font-mono" type={field.kind === 'secret' ? 'password' : 'text'} value={fieldValue(field)} disabled={isManagedField(field)} aria-invalid={field.required && missingRequiredEnv.includes(field.key) ? 'true' : undefined} on:input={(event) => setEnvValue(field.key, (event.currentTarget as HTMLInputElement).value)} />
+									{#if field.kind === 'secret'}<ActionButton type="button" variant="secondary" size="xs" on:click={() => regenerateSecret(field.key)}>Generate</ActionButton>{:else}<span class="text-xs text-gray-500 dark:text-gray-400">{isManagedField(field) ? 'Managed' : field.required ? 'Required' : 'Optional'}</span>{/if}
 									<p class="text-xs leading-5 text-gray-500 dark:text-gray-400 lg:col-start-2 lg:col-span-2">{field.description}</p>
 								</div>
 							{/each}
