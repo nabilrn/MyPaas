@@ -3,7 +3,7 @@ export type AppTemplateSource =
 	| { type: 'dockerfile'; repoUrl: string; branch: string; baseDirectory?: string }
 	| { type: 'compose'; baseDirectory: string; composeFilePath: string; mainService: string };
 
-export type AppTemplateEnvKind = 'text' | 'secret' | 'public-url';
+export type AppTemplateEnvKind = 'text' | 'secret' | 'public-url' | 'public-host';
 export type AppTemplateSecretFormat = 'hex' | 'base64url';
 export type AppTemplateCompatibilityStatus = 'catalogued-pattern';
 
@@ -208,6 +208,63 @@ export const appTemplates: AppTemplate[] = [
 		persistent: true,
 		limitations: [],
 		compatibility: { catalogId: 'nocodb', status: 'catalogued-pattern' }
+	},
+	{
+		id: 'forgejo',
+		name: 'Forgejo',
+		description: 'Self-hosted Git forge with persistent repository data and HTTP Git access.',
+		category: 'Developer platform',
+		appPort: 3000,
+		memoryLimitMb: 1024,
+		cpuLimit: 1,
+		source: { type: 'compose', baseDirectory: 'templates/manifests/forgejo', composeFilePath: 'compose.yml', mainService: 'forgejo' },
+		env: [
+			{ key: 'FORGEJO_DOMAIN', label: 'Public host', kind: 'public-host', required: true, description: 'Managed from the MyPaas project hostname and used by Forgejo for generated HTTP clone URLs.' },
+			{ key: 'FORGEJO_ROOT_URL', label: 'Public URL', kind: 'public-url', required: true, description: 'Managed from the MyPaas project URL.' }
+		],
+		persistent: true,
+		limitations: ['HTTP UI and HTTP Git are covered. Forgejo SSH is disabled because MyPaas currently routes one public application port per project.'],
+		compatibility: { catalogId: 'forgejo', status: 'catalogued-pattern' }
+	},
+	{
+		id: 'paperless-ngx',
+		name: 'Paperless-ngx',
+		description: 'Document management platform with PostgreSQL, Redis, durable document storage, and generated credentials.',
+		category: 'Document platform',
+		appPort: 8000,
+		memoryLimitMb: 1536,
+		cpuLimit: 1,
+		serviceResources: {
+			db: { memoryLimitMb: 768, cpuLimit: 0.5 },
+			broker: { memoryLimitMb: 256, cpuLimit: 0.25 }
+		},
+		source: { type: 'compose', baseDirectory: 'templates/manifests/paperless-ngx', composeFilePath: 'compose.yml', mainService: 'webserver' },
+		env: [
+			{ key: 'PAPERLESS_DB_PASSWORD', label: 'Database password', kind: 'secret', bytes: 24, format: 'hex', required: true, description: 'Credential shared by Paperless-ngx and its project-local PostgreSQL service.' },
+			{ key: 'PAPERLESS_SECRET_KEY', label: 'Application secret', kind: 'secret', bytes: 32, format: 'base64url', required: true, description: 'Generated Paperless-ngx application secret.' },
+			{ key: 'PAPERLESS_URL', label: 'Public URL', kind: 'public-url', required: true, description: 'Managed from the MyPaas project URL.' },
+			{ key: 'PAPERLESS_TIME_ZONE', label: 'Timezone', kind: 'text', defaultValue: 'Asia/Jakarta', description: 'Timezone used by Paperless-ngx.' }
+		],
+		persistent: true,
+		limitations: ['Optional Tika/Gotenberg document-conversion services are not included in this baseline template.'],
+		compatibility: { catalogId: 'paperless-ngx', status: 'catalogued-pattern' }
+	},
+	{
+		id: 'openclaw',
+		name: 'OpenClaw',
+		description: 'Pre-built OpenClaw gateway with persistent state and a generated gateway token.',
+		category: 'Agent gateway',
+		appPort: 18789,
+		memoryLimitMb: 1536,
+		cpuLimit: 1,
+		source: { type: 'compose', baseDirectory: 'templates/manifests/openclaw', composeFilePath: 'compose.yml', mainService: 'openclaw-gateway' },
+		env: [
+			{ key: 'OPENCLAW_GATEWAY_TOKEN', label: 'Gateway token', kind: 'secret', bytes: 32, format: 'base64url', required: true, description: 'Generated token protecting access to the OpenClaw gateway.' },
+			{ key: 'TZ', label: 'Container timezone', kind: 'text', defaultValue: 'Asia/Jakarta', description: 'Container timezone.' }
+		],
+		persistent: true,
+		limitations: ['Uses the pre-built gateway image only. CLI network sharing, host bind mounts, extra gateway ports, and Docker-socket sandboxing remain outside the current MyPaas safety boundary.'],
+		compatibility: { catalogId: 'openclaw', status: 'catalogued-pattern' }
 	}
 ];
 
@@ -243,12 +300,24 @@ export function initialTemplateEnv(template: AppTemplate): Record<string, string
 	]));
 }
 
-export function missingRequiredTemplateEnv(template: AppTemplate, values: Record<string, string>, publicURL = ''): string[] {
+export function templateEnvValue(
+	field: AppTemplateEnvField,
+	values: Record<string, string>,
+	publicURL = '',
+	publicHost = ''
+): string {
+	if (field.kind === 'public-url') return publicURL;
+	if (field.kind === 'public-host') return publicHost;
+	return values[field.key] ?? '';
+}
+
+export function missingRequiredTemplateEnv(
+	template: AppTemplate,
+	values: Record<string, string>,
+	publicURL = '',
+	publicHost = ''
+): string[] {
 	return template.env
-		.filter((field) => {
-			if (!field.required) return false;
-			const value = field.kind === 'public-url' ? publicURL : (values[field.key] ?? '');
-			return value.trim().length === 0;
-		})
+		.filter((field) => field.required && templateEnvValue(field, values, publicURL, publicHost).trim().length === 0)
 		.map((field) => field.key);
 }
