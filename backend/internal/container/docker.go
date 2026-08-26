@@ -87,7 +87,7 @@ func (d *DockerCLI) Pull(ctx context.Context, image string, log func(string)) er
 	if image == "" {
 		return fmt.Errorf("container image is required")
 	}
-	return runLogged(ctx, "", log, "docker", "pull", image)
+	return d.pullImage(ctx, image, log)
 }
 
 func (d *DockerCLI) RepoDigest(ctx context.Context, image string) (string, error) {
