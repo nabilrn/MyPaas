@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appTemplates, generateTemplateSecret, initialTemplateEnv } from './app-templates';
+import { appTemplates, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv } from './app-templates';
 
 describe('app templates', () => {
 	it('keeps template ids unique and source contracts explicit', () => {
@@ -15,6 +15,16 @@ describe('app templates', () => {
 				expect(template.source.baseDirectory).toMatch(/^templates\/manifests\//);
 				expect(template.source.mainService.length).toBeGreaterThan(0);
 			}
+			if (template.source.type === 'dockerfile') {
+				expect(template.source.repoUrl).toMatch(/^https:\/\/github\.com\//);
+				expect(template.source.branch.length).toBeGreaterThan(0);
+			}
+		}
+	});
+
+	it('includes catalogued templates for the new real application patterns', () => {
+		for (const id of ['drawdb', 'meilisearch', 'directus']) {
+			expect(appTemplates.some((template) => template.id === id)).toBe(true);
 		}
 	});
 
@@ -40,5 +50,16 @@ describe('app templates', () => {
 			format: 'hex'
 		});
 		expect(value).toMatch(/^[a-f0-9]{32}$/);
+	});
+
+	it('blocks templates only when required values are actually missing', () => {
+		const directus = appTemplates.find((template) => template.id === 'directus');
+		expect(directus).toBeTruthy();
+		if (!directus) return;
+
+		const values = initialTemplateEnv(directus);
+		expect(missingRequiredTemplateEnv(directus, values)).toEqual(['ADMIN_EMAIL']);
+		values.ADMIN_EMAIL = 'owner@example.com';
+		expect(missingRequiredTemplateEnv(directus, values)).toEqual([]);
 	});
 });
