@@ -2,10 +2,8 @@ package container
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -164,6 +162,3 @@ func firstRegistryErrorLine(output []byte) string {
 	}
 	return ""
 }
-
-var _ = errors.Is
-var _ *exec.Cmd
