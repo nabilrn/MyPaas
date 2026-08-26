@@ -58,21 +58,17 @@ MyPaaS can authenticate OCI-image pulls to one configured registry without modif
 
 The implementation intentionally does not add a registry proxy, pull-through cache, or credential inheritance into project Compose environments.
 
+### Compatibility status in product UX
+
+Delivered on `main`.
+
+Installable templates now expose a stable `Catalogued pattern` status linked to their compatibility catalog identity. The dashboard surfaces the deployment pattern, persistent-storage expectation, resource guidance, setup requirements, and known platform boundaries without fabricating a current live PASS result.
+
+This status is intentionally not a throughput, concurrent-user, hardware-capacity, or production-readiness claim. Live compatibility evidence remains in the compatibility catalog and its run artifacts.
+
 ## IMPLEMENT NEXT
 
-### 1. Compatibility status in product UX
-
-Surface curated compatibility information in the dashboard/template experience:
-
-- supported deployment pattern;
-- known platform boundary;
-- expected persistent storage;
-- declared resource guidance;
-- important setup requirements.
-
-A compatibility result must never become a throughput, user-count, or hardware-capacity claim.
-
-### 2. Template/env improvements driven by real applications
+### Template/env improvements driven by real applications
 
 Extend templates only when an application requires a reusable platform primitive, for example:
 
@@ -82,7 +78,7 @@ Extend templates only when an application requires a reusable platform primitive
 - explicit resource warnings;
 - documented persistent-storage requirements.
 
-Do not add template-specific application code patches.
+Do not add template-specific application code patches. New primitives should come from an actual application onboarding problem or compatibility failure, not from speculative framework support.
 
 ## DEFER
 
