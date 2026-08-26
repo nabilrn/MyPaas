@@ -8,6 +8,7 @@ Technical documentation for the current single-host MyPaaS beta.
 | --- | --- |
 | [Repository README](../README.md) | Product scope and current capabilities |
 | [Product scope](../PRODUCT.md) | Target users, boundaries, and non-goals |
+| [Product roadmap](../ROADMAP.md) | Current feature priorities, deferrals, and explicit non-targets |
 | [Architecture](ARCHITECTURE.md) | System architecture |
 | [Architecture overview](architecture/overview.md) | Control-plane components and request paths |
 | [Deployment architecture](architecture/deployment.md) | Dockerfile, Compose, static, and OCI image deployment |
