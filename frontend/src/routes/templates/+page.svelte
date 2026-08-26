@@ -136,7 +136,8 @@
 				</div>
 				<p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{template.description}</p>
 				<div class="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-					<span>{template.source.type === 'registry' ? 'OCI image' : 'Compose'}</span>
+					<span class="font-medium text-gray-700 dark:text-gray-300">Catalogued pattern</span>
+					<span>·</span><span>{template.source.type === 'registry' ? 'OCI image' : 'Compose'}</span>
 					<span>·</span><span>:{template.appPort}</span>
 					{#if template.persistent}<span>·</span><span>Persistent</span>{/if}
 				</div>
@@ -181,6 +182,17 @@
 		</SectionPanel>
 
 		<div class="space-y-4">
+			<SectionPanel title="Compatibility status" description="Curated platform metadata, not a capacity or production-readiness claim.">
+				<div class="flex gap-2">
+					<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" />
+					<div>
+						<p class="text-sm font-medium text-gray-950 dark:text-white">Catalogued pattern</p>
+						<p class="mt-1 font-mono text-[11px] text-gray-500 dark:text-gray-400">compatibility/{selected.compatibility.catalogId}</p>
+					</div>
+				</div>
+				<p class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">This template maps to a declared MyPaas compatibility workload pattern. Live PASS/FAIL evidence belongs to compatibility runs; the dashboard does not invent a throughput, user-count, or hardware-capacity result.</p>
+			</SectionPanel>
+
 			<SectionPanel title="Deployment contract" description="What this template asks MyPaas to own.">
 				<div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
 					<div class="flex gap-2"><Package class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.source.type === 'registry' ? selected.source.imageRef : `${selected.source.mainService} via Docker Compose`}</span></div>
