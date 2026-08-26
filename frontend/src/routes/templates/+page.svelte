@@ -7,7 +7,7 @@
 	import { api } from '$api';
 	import { projectNameValidationMessage } from '$lib/validation/project';
 	import { projectURL } from '$lib/utils/urls';
-	import { appTemplates, appTemplateRepository, generateTemplateSecret, initialTemplateEnv, type AppTemplate } from '$lib/templates/app-templates';
+	import { appTemplates, appTemplateRepository, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv, type AppTemplate } from '$lib/templates/app-templates';
 	import { toast } from '$stores/toast';
 
 	let selected: AppTemplate = appTemplates[0];
@@ -19,12 +19,29 @@
 	$: nameError = projectNameValidationMessage(projectName);
 	$: publicURL = projectURL(projectName || selected.id, $page.url.protocol, $page.url.hostname);
 	$: generatedSecretCount = selected.env.filter((field) => field.kind === 'secret').length;
+	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL);
 
 	function chooseTemplate(template: AppTemplate) {
 		selected = template;
 		projectName = template.id;
 		envValues = initialTemplateEnv(template);
 		error = '';
+	}
+
+	function sourceLabel(template: AppTemplate) {
+		switch (template.source.type) {
+			case 'registry': return 'OCI image';
+			case 'dockerfile': return 'Dockerfile';
+			case 'compose': return 'Compose';
+		}
+	}
+
+	function sourceDescription(template: AppTemplate) {
+		switch (template.source.type) {
+			case 'registry': return template.source.imageRef;
+			case 'dockerfile': return `${template.source.repoUrl} · Dockerfile`;
+			case 'compose': return `${template.source.mainService} via Docker Compose`;
+		}
 	}
 
 	function fieldValue(key: string, kind: string) {
@@ -62,6 +79,10 @@
 			error = nameError;
 			return;
 		}
+		if (missingRequiredEnv.length > 0) {
+			error = `Fill required environment values: ${missingRequiredEnv.join(', ')}`;
+			return;
+		}
 		creating = true;
 		error = '';
 		try {
@@ -79,8 +100,9 @@
 				staticFrontendPath: null as string | null
 			};
 
-			const project = selected.source.type === 'registry'
-				? await api.projects.create({
+			let project;
+			if (selected.source.type === 'registry') {
+				project = await api.projects.create({
 					...common,
 					sourceType: 'registry',
 					repoUrl: '',
@@ -90,8 +112,21 @@
 					mainService: null,
 					composeFilePath: null,
 					baseDirectory: null
-				})
-				: await api.projects.create({
+				});
+			} else if (selected.source.type === 'dockerfile') {
+				project = await api.projects.create({
+					...common,
+					sourceType: 'git',
+					repoUrl: selected.source.repoUrl,
+					imageRef: null,
+					branch: selected.source.branch,
+					deployMode: 'dockerfile',
+					mainService: null,
+					composeFilePath: null,
+					baseDirectory: selected.source.baseDirectory ?? null
+				});
+			} else {
+				project = await api.projects.create({
 					...common,
 					sourceType: 'git',
 					repoUrl: appTemplateRepository.repoUrl,
@@ -102,6 +137,7 @@
 					composeFilePath: selected.source.composeFilePath,
 					baseDirectory: selected.source.baseDirectory
 				});
+			}
 
 			toast.success(`${selected.name} project created`);
 			await goto(`/projects/${project.id}`);
@@ -137,7 +173,7 @@
 				<p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{template.description}</p>
 				<div class="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-500 dark:text-gray-400">
 					<span class="font-medium text-gray-700 dark:text-gray-300">Catalogued pattern</span>
-					<span>·</span><span>{template.source.type === 'registry' ? 'OCI image' : 'Compose'}</span>
+					<span>·</span><span>{sourceLabel(template)}</span>
 					<span>·</span><span>:{template.appPort}</span>
 					{#if template.persistent}<span>·</span><span>Persistent</span>{/if}
 				</div>
@@ -158,23 +194,24 @@
 				{#if selected.env.length > 0}
 					<div>
 						<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-							<div><p class="text-sm font-medium text-gray-950 dark:text-white">Environment</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Secrets are generated locally and then stored through MyPaas encrypted env storage.</p></div>
+							<div><p class="text-sm font-medium text-gray-950 dark:text-white">Environment</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Secrets are generated locally and then stored through MyPaas encrypted env storage. Required values must be present before project creation.</p></div>
 							{#if generatedSecretCount > 0}<ActionButton type="button" variant="secondary" size="xs" on:click={regenerateAllSecrets}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Regenerate secrets</ActionButton>{/if}
 						</div>
 						<div class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
 							{#each selected.env as field}
 								<div class="grid gap-2 py-3 lg:grid-cols-[minmax(10rem,0.8fr)_minmax(14rem,1.5fr)_auto] lg:items-center">
-									<div><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">{field.key}</p><p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{field.label}</p></div>
-									<input class="field w-full font-mono" type={field.kind === 'secret' ? 'password' : 'text'} value={fieldValue(field.key, field.kind)} disabled={field.kind === 'public-url'} on:input={(event) => setEnvValue(field.key, (event.currentTarget as HTMLInputElement).value)} />
-									{#if field.kind === 'secret'}<ActionButton type="button" variant="secondary" size="xs" on:click={() => regenerateSecret(field.key)}>Generate</ActionButton>{:else}<span class="text-xs text-gray-500 dark:text-gray-400">Managed</span>{/if}
+									<div><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">{field.key}</p><p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{field.label}{field.required ? ' · required' : ''}</p></div>
+									<input class="field w-full font-mono" type={field.kind === 'secret' ? 'password' : 'text'} value={fieldValue(field.key, field.kind)} disabled={field.kind === 'public-url'} aria-invalid={field.required && missingRequiredEnv.includes(field.key) ? 'true' : undefined} on:input={(event) => setEnvValue(field.key, (event.currentTarget as HTMLInputElement).value)} />
+									{#if field.kind === 'secret'}<ActionButton type="button" variant="secondary" size="xs" on:click={() => regenerateSecret(field.key)}>Generate</ActionButton>{:else}<span class="text-xs text-gray-500 dark:text-gray-400">{field.kind === 'public-url' ? 'Managed' : field.required ? 'Required' : 'Optional'}</span>{/if}
 									<p class="text-xs leading-5 text-gray-500 dark:text-gray-400 lg:col-start-2 lg:col-span-2">{field.description}</p>
 								</div>
 							{/each}
 						</div>
+						{#if missingRequiredEnv.length > 0}<p class="mt-2 text-xs text-red-600 dark:text-red-300">Required before create: {missingRequiredEnv.join(', ')}</p>{/if}
 					</div>
 				{/if}
 
-				<ActionButton variant="primary" loading={creating} loadingLabel="Creating" disabled={Boolean(nameError)} on:click={createTemplateProject}>
+				<ActionButton variant="primary" loading={creating} loadingLabel="Creating" disabled={Boolean(nameError) || missingRequiredEnv.length > 0} on:click={createTemplateProject}>
 					<Package slot="icon" class="h-4 w-4" />
 					Create {selected.name}
 				</ActionButton>
@@ -195,7 +232,7 @@
 
 			<SectionPanel title="Deployment contract" description="What this template asks MyPaas to own.">
 				<div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-					<div class="flex gap-2"><Package class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.source.type === 'registry' ? selected.source.imageRef : `${selected.source.mainService} via Docker Compose`}</span></div>
+					<div class="flex gap-2"><Package class="mt-0.5 h-4 w-4 shrink-0" /><span>{sourceDescription(selected)}</span></div>
 					<div class="flex gap-2"><Database class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.persistent ? 'Persistent Docker-managed storage is expected.' : 'No persistent storage is required by the baseline template.'}</span></div>
 					<div class="flex gap-2"><ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.memoryLimitMb} MB memory · {selected.cpuLimit} CPU project guardrail.</span></div>
 				</div>
