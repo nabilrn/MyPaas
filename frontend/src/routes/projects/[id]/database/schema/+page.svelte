@@ -22,7 +22,6 @@
 
 	$: graph = layoutERD(details);
 	$: selectedDetails = details.find((item) => item.name === selectedTable && item.schema === selectedSchema) ?? details[0] ?? null;
-	$: if (selectedDetails && (!selectedTable || selectedTable !== selectedDetails.name)) selectedTable = selectedDetails.name;
 
 	onMount(() => {
 		void load();
