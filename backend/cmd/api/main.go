@@ -248,7 +248,7 @@ func startRouteReconciler(ctx context.Context, service *deployment.Service, inte
 		run := func() {
 			reconcileCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			if err := service.ReconcileRoutes(reconcileCtx); err != nil {
+			if err := service.ReconcileAllRoutes(reconcileCtx); err != nil {
 				slog.Warn("caddy route reconciliation incomplete", "error", err)
 			}
 		}
@@ -311,6 +311,8 @@ func registerRoutes(
 			r.Post("/detect-mode", projectHandler.DetectMode)
 			r.Post("/detect-compose", projectHandler.DetectCompose)
 			r.Get("/{id}", projectHandler.Get)
+			r.Get("/{id}/routes", projectHandler.Routes)
+			r.Put("/{id}/routes", projectHandler.SetRoutes)
 			r.Patch("/{id}", projectHandler.Update)
 			r.Delete("/{id}", projectHandler.Delete)
 			r.Post("/{id}/deploy", deploymentHandler.Trigger)
