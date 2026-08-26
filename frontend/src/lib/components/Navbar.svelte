@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, ClipboardList, Database, FolderKanban, LogOut, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bot, ClipboardList, Database, FolderKanban, LogOut, Moon, Package, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -16,6 +16,7 @@
 
 	const navItems = [
 		{ href: '/projects', label: 'Projects', icon: FolderKanban },
+		{ href: '/templates', label: 'Templates', icon: Package },
 		{ href: '/admin/users', label: 'Users', icon: Users },
 		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
 		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
