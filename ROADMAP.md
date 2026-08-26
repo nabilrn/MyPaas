@@ -23,7 +23,7 @@ These are established product capabilities and should be maintained rather than 
 - project create, update, delete, redeploy, start, stop, restart, and rollback boundaries;
 - Dockerfile deployment;
 - Docker Compose deployment, including multi-service inspection and main-service selection;
-- public OCI image deployment;
+- OCI image deployment, including bounded private-registry authentication for the configured registry;
 - static deployment through Caddy;
 - public routing through the configured Caddy / Cloudflare delivery path;
 - encrypted project environment variables and repository environment discovery;
@@ -50,20 +50,17 @@ Delivered on `main`.
 
 DB Studio now extends beyond row browsing with schema metadata useful for understanding relationships while remaining intentionally smaller and safer than a full SQL IDE.
 
+### Private registry authentication and pull diagnostics
+
+Delivered on `main`.
+
+MyPaaS can authenticate OCI-image pulls to one configured registry without modifying the operator's persistent Docker credential store. Credentials are scoped by registry host and an isolated temporary Docker configuration is used for login/pull. Pull failures distinguish authentication, permission, rate-limit, and missing-image cases where the registry output supports that classification.
+
+The implementation intentionally does not add a registry proxy, pull-through cache, or credential inheritance into project Compose environments.
+
 ## IMPLEMENT NEXT
 
-### 1. Private registry authentication and pull diagnostics
-
-Support authenticated OCI image pulls with narrowly scoped credentials and actionable failures for authentication, permission, rate-limit, and missing-image cases.
-
-Boundaries:
-
-- no registry proxy;
-- no pull-through cache in the first implementation;
-- no credential leakage into project Compose environments;
-- no persistent modification of an operator's normal Docker credential store.
-
-### 2. Compatibility status in product UX
+### 1. Compatibility status in product UX
 
 Surface curated compatibility information in the dashboard/template experience:
 
@@ -75,7 +72,7 @@ Surface curated compatibility information in the dashboard/template experience:
 
 A compatibility result must never become a throughput, user-count, or hardware-capacity claim.
 
-### 3. Template/env improvements driven by real applications
+### 2. Template/env improvements driven by real applications
 
 Extend templates only when an application requires a reusable platform primitive, for example:
 
