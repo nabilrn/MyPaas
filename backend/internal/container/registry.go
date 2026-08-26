@@ -72,7 +72,10 @@ func registryCredentialsForImage(image string) (registryCredentials, bool, error
 
 func registryHost(image string) string {
 	image = strings.TrimSpace(image)
-	first, _, _ := strings.Cut(image, "/")
+	first, _, hasSlash := strings.Cut(image, "/")
+	if !hasSlash {
+		return "docker.io"
+	}
 	first = strings.ToLower(strings.TrimSpace(first))
 	if first == "" || (!strings.Contains(first, ".") && !strings.Contains(first, ":") && first != "localhost") {
 		return "docker.io"
