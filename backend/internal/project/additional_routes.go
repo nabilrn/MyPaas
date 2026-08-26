@@ -79,7 +79,8 @@ func decodeAdditionalRoutes(raw json.RawMessage) ([]AdditionalRoute, error) {
 }
 
 func (s *Service) AdditionalRoutes(ctx context.Context, projectID uuid.UUID) ([]AdditionalRoute, error) {
-	if _, err := s.Get(ctx, projectID); err != nil {
+	project, err := s.Get(ctx, projectID)
+	if err != nil {
 		return nil, err
 	}
 	raw, err := s.queries.GetProjectAdditionalRoutes(ctx, projectID)
@@ -90,5 +91,35 @@ func (s *Service) AdditionalRoutes(ctx context.Context, projectID uuid.UUID) ([]
 	if err != nil {
 		return nil, err
 	}
-	return normalizeAdditionalRoutes("compose", routes)
+	return normalizeAdditionalRoutes(project.DeployMode, routes)
+}
+
+func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, routes []AdditionalRoute) ([]AdditionalRoute, error) {
+	project, err := s.Get(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if project.DeployMode != "compose" {
+		return nil, fmt.Errorf("%w: additional HTTP routes are only supported for compose projects", errs.ErrValidation)
+	}
+	if project.ActiveDeploymentID.Valid || project.Status == "running" || project.Status == "building" {
+		return nil, fmt.Errorf("%w: additional HTTP routes are immutable after the first deployment; recreate the project to change the route contract", errs.ErrValidation)
+	}
+	normalized, err := normalizeAdditionalRoutes(project.DeployMode, routes)
+	if err != nil {
+		return nil, err
+	}
+	for _, route := range normalized {
+		if project.MainService != nil && route.Service == strings.TrimSpace(*project.MainService) && route.ContainerPort == project.AppPort {
+			return nil, fmt.Errorf("%w: route %q duplicates the primary project route", errs.ErrValidation, route.Name)
+		}
+	}
+	raw, err := encodeAdditionalRoutes(normalized)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.queries.SetProjectAdditionalRoutes(ctx, projectID, raw); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
