@@ -36,7 +36,7 @@ When documentation disagrees, use this order:
 
 - MyPaaS is a single-host platform for an owner developer or small trusted team.
 - Fresh supported hosts are Podman-first; Docker Engine remains an explicit compatibility mode.
-- Public OCI images are supported; do not claim private-registry authentication unless implemented.
+- OCI image deployment supports anonymous pulls and one bounded configured private-registry credential; do not claim registry proxy/cache behavior.
 - Do not claim multi-node HA, Kubernetes-style scheduling, or hostile multi-tenant isolation.
 - Do not turn a test fixture count, VM shape, RPS result, or concurrent-user run into a product-capacity promise.
 - Application capacity depends on the application and on available CPU, memory, storage, network, database behavior, and build requirements.
