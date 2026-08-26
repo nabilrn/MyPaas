@@ -142,10 +142,10 @@ export interface ComposePlan {
 
 export interface ContainerMetrics {
 	service:        string;
-	cpu:            number;   // percent
+	cpu:            number;
 	memoryMb:       number;
 	memoryLimitMb:  number;
-	uptime:         string;   // e.g. "2h 14m"
+	uptime:         string;
 }
 
 export interface TimeseriesDataPoint {
@@ -230,6 +230,41 @@ export interface DBStudioColumn {
 	enumValues?: string[];
 }
 
+export interface DBStudioForeignKey {
+	name: string;
+	column: string;
+	referencedSchema: string;
+	referencedTable: string;
+	referencedColumn: string;
+	onUpdate: string;
+	onDelete: string;
+}
+
+export interface DBStudioIndex {
+	name: string;
+	columns: string[];
+	unique: boolean;
+	primary: boolean;
+	method: string;
+	definition?: string;
+}
+
+export interface DBStudioConstraint {
+	name: string;
+	type: string;
+	columns: string[];
+	definition?: string;
+}
+
+export interface DBStudioTableDetails {
+	schema: string;
+	name: string;
+	columns: DBStudioColumn[];
+	foreignKeys: DBStudioForeignKey[];
+	indexes: DBStudioIndex[];
+	constraints: DBStudioConstraint[];
+}
+
 export interface DBStudioRowFilters {
 	search?: string;
 	enumFilters?: Record<string, string>;
@@ -291,8 +326,6 @@ export interface AuditLog {
 	userAgent: string | null;
 	createdAt: string;
 }
-
-// ─── API response wrappers ────────────────────────────────────────────────────
 
 export interface ApiSuccess<T> {
 	data: T;

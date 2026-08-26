@@ -96,7 +96,14 @@ func (h *Handler) Columns(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	out, err := h.service.Columns(r.Context(), projectID, r.URL.Query().Get("schema"), r.URL.Query().Get("table"))
+	schema := r.URL.Query().Get("schema")
+	table := r.URL.Query().Get("table")
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("details")), "true") {
+		out, err := h.service.TableDetails(r.Context(), projectID, schema, table)
+		writeResult(w, out, err)
+		return
+	}
+	out, err := h.service.Columns(r.Context(), projectID, schema, table)
 	writeResult(w, out, err)
 }
 

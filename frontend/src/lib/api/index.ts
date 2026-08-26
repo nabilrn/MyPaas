@@ -16,6 +16,7 @@ import type {
 	DBStudioSchema,
 	DBStudioStatus,
 	DBStudioTable,
+	DBStudioTableDetails,
 	DBStudioRowFilters,
 	DBStudioWriteSession,
 	LogsResponse,
@@ -190,6 +191,8 @@ export const api = {
 			request(`/projects/${projectId}/db/tables?schema=${encodeURIComponent(schema)}`),
 		columns: (projectId: string, schema: string, table: string): Promise<DBStudioColumn[]> =>
 			request(`/projects/${projectId}/db/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`),
+		tableDetails: (projectId: string, schema: string, table: string): Promise<DBStudioTableDetails> =>
+			request(`/projects/${projectId}/db/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&details=true`),
 		rows: (projectId: string, schema: string, table: string, limit = 100, offset = 0, filters: DBStudioRowFilters = {}): Promise<DBStudioRowPage> => {
 			const params = new URLSearchParams({
 				schema,

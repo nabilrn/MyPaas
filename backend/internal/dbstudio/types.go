@@ -58,6 +58,41 @@ type Column struct {
 	EnumValues    []string `json:"enumValues,omitempty"`
 }
 
+type ForeignKey struct {
+	Name             string `json:"name"`
+	Column           string `json:"column"`
+	ReferencedSchema string `json:"referencedSchema"`
+	ReferencedTable  string `json:"referencedTable"`
+	ReferencedColumn string `json:"referencedColumn"`
+	OnUpdate         string `json:"onUpdate"`
+	OnDelete         string `json:"onDelete"`
+}
+
+type Index struct {
+	Name       string   `json:"name"`
+	Columns    []string `json:"columns"`
+	Unique     bool     `json:"unique"`
+	Primary    bool     `json:"primary"`
+	Method     string   `json:"method"`
+	Definition string   `json:"definition,omitempty"`
+}
+
+type Constraint struct {
+	Name       string   `json:"name"`
+	Type       string   `json:"type"`
+	Columns    []string `json:"columns"`
+	Definition string   `json:"definition,omitempty"`
+}
+
+type TableDetails struct {
+	Schema      string       `json:"schema"`
+	Name        string       `json:"name"`
+	Columns     []Column     `json:"columns"`
+	ForeignKeys []ForeignKey `json:"foreignKeys"`
+	Indexes     []Index      `json:"indexes"`
+	Constraints []Constraint `json:"constraints"`
+}
+
 type RowPage struct {
 	Columns []Column         `json:"columns"`
 	Rows    []map[string]any `json:"rows"`
@@ -86,6 +121,7 @@ type Adapter interface {
 	Schemas(context.Context, *sql.DB) ([]Schema, error)
 	Tables(context.Context, *sql.DB, string) ([]Table, error)
 	Columns(context.Context, *sql.DB, string, string) ([]Column, error)
+	TableDetails(context.Context, *sql.DB, string, string) (TableDetails, error)
 	Rows(context.Context, *sql.DB, RowQuery) (RowPage, error)
 	Insert(context.Context, *sql.DB, Mutation) error
 	Update(context.Context, *sql.DB, Mutation) error
