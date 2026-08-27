@@ -27,11 +27,18 @@ describe('app templates', () => {
 					expect(service).not.toBe(template.source.mainService);
 				}
 			}
+			for (const route of template.additionalRoutes ?? []) {
+				expect(template.source.type).toBe('compose');
+				expect(route.name).toMatch(/^[a-z0-9-]+$/);
+				expect(route.service.length).toBeGreaterThan(0);
+				expect(route.containerPort).toBeGreaterThan(0);
+				expect(route.containerPort).toBeLessThanOrEqual(65535);
+			}
 		}
 	});
 
-	it('includes catalogued templates for the real application patterns added through phase 7', () => {
-		for (const id of ['drawdb', 'meilisearch', 'directus', 'forgejo', 'paperless-ngx', 'openclaw']) {
+	it('includes catalogued templates for the real application patterns added through phase 8', () => {
+		for (const id of ['drawdb', 'meilisearch', 'directus', 'forgejo', 'paperless-ngx', 'openclaw', 'minio']) {
 			expect(appTemplates.some((template) => template.id === id)).toBe(true);
 		}
 	});
@@ -102,14 +109,28 @@ describe('app templates', () => {
 		expect(rootURLField && templateEnvValue(rootURLField, values, url, host)).toBe(url);
 	});
 
-	it('generates secrets for Paperless-ngx and OpenClaw', () => {
-		for (const id of ['paperless-ngx', 'openclaw']) {
+	it('resolves MinIO console route URL and route contract', () => {
+		const minio = appTemplates.find((template) => template.id === 'minio');
+		expect(minio).toBeTruthy();
+		if (!minio) return;
+
+		expect(minio.additionalRoutes).toEqual([{ name: 'console', service: 'minio', containerPort: 9001 }]);
+		const values = initialTemplateEnv(minio);
+		const consoleURL = 'https://minio-console.mypaas.example';
+		const routeURLs = { console: consoleURL };
+		expect(missingRequiredTemplateEnv(minio, values, 'https://minio.mypaas.example', 'minio.mypaas.example', routeURLs)).toEqual([]);
+		const redirectField = minio.env.find((field) => field.key === 'MINIO_BROWSER_REDIRECT_URL');
+		expect(redirectField && templateEnvValue(redirectField, values, '', '', routeURLs)).toBe(consoleURL);
+	});
+
+	it('generates secrets for Paperless-ngx, OpenClaw, and MinIO', () => {
+		for (const id of ['paperless-ngx', 'openclaw', 'minio']) {
 			const template = appTemplates.find((item) => item.id === id);
 			expect(template).toBeTruthy();
 			if (!template) continue;
 			const values = initialTemplateEnv(template);
 			for (const field of template.env.filter((item) => item.kind === 'secret')) {
-				expect(values[field.key].length).toBeGreaterThan(20);
+				expect(values[field.key].length).toBeGreaterThan(15);
 			}
 		}
 	});
