@@ -6,7 +6,7 @@
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { projectNameValidationMessage } from '$lib/validation/project';
-	import { projectHost, projectURL } from '$lib/utils/urls';
+	import { projectHost, projectRouteURL, projectURL } from '$lib/utils/urls';
 	import { appTemplates, appTemplateRepository, generateTemplateSecret, initialTemplateEnv, missingRequiredTemplateEnv, templateEnvValue, type AppTemplate, type AppTemplateEnvField } from '$lib/templates/app-templates';
 	import { toast } from '$stores/toast';
 
@@ -19,8 +19,12 @@
 	$: nameError = projectNameValidationMessage(projectName);
 	$: publicHost = projectHost(projectName || selected.id, $page.url.hostname);
 	$: publicURL = projectURL(projectName || selected.id, $page.url.protocol, $page.url.hostname);
+	$: routeURLs = Object.fromEntries((selected.additionalRoutes ?? []).map((route) => [
+		route.name,
+		projectRouteURL(projectName || selected.id, route.name, $page.url.protocol, $page.url.hostname)
+	]));
 	$: generatedSecretCount = selected.env.filter((field) => field.kind === 'secret').length;
-	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL, publicHost);
+	$: missingRequiredEnv = missingRequiredTemplateEnv(selected, envValues, publicURL, publicHost, routeURLs);
 	$: secondaryResourceEntries = Object.entries(selected.serviceResources ?? {});
 
 	function chooseTemplate(template: AppTemplate) {
@@ -47,11 +51,11 @@
 	}
 
 	function fieldValue(field: AppTemplateEnvField) {
-		return templateEnvValue(field, envValues, publicURL, publicHost);
+		return templateEnvValue(field, envValues, publicURL, publicHost, routeURLs);
 	}
 
 	function isManagedField(field: AppTemplateEnvField) {
-		return field.kind === 'public-url' || field.kind === 'public-host';
+		return field.kind === 'public-url' || field.kind === 'public-host' || field.kind === 'route-url';
 	}
 
 	function setEnvValue(key: string, value: string) {
@@ -75,8 +79,24 @@
 
 	function environmentPayload() {
 		return selected.env
-			.map((field) => ({ key: field.key, value: templateEnvValue(field, envValues, publicURL, publicHost) }))
+			.map((field) => ({ key: field.key, value: templateEnvValue(field, envValues, publicURL, publicHost, routeURLs) }))
 			.filter((item) => item.value.length > 0);
+	}
+
+	async function cleanupFailedTemplateProject(projectId: string) {
+		try {
+			const vars = await api.env.list(projectId);
+			for (const item of vars) {
+				await api.env.delete(projectId, item.key);
+			}
+		} catch {
+			// Project deletion remains the authoritative lifecycle cleanup below.
+		}
+		try {
+			await api.projects.delete(projectId);
+		} catch {
+			// Preserve the original route-configuration error for the user.
+		}
 	}
 
 	async function createTemplateProject() {
@@ -146,6 +166,16 @@
 				});
 			}
 
+			if ((selected.additionalRoutes?.length ?? 0) > 0) {
+				try {
+					await api.projects.setRoutes(project.id, selected.additionalRoutes ?? []);
+				} catch (routeError) {
+					await cleanupFailedTemplateProject(project.id);
+					const detail = routeError instanceof Error ? routeError.message : 'route validation failed';
+					throw new Error(`Could not configure template HTTP routes: ${detail}`);
+				}
+			}
+
 			toast.success(`${selected.name} project created`);
 			await goto(`/projects/${project.id}`);
 		} catch (err) {
@@ -182,6 +212,7 @@
 					<span class="font-medium text-gray-700 dark:text-gray-300">Catalogued pattern</span>
 					<span>·</span><span>{sourceLabel(template)}</span>
 					<span>·</span><span>:{template.appPort}</span>
+					{#if (template.additionalRoutes?.length ?? 0) > 0}<span>·</span><span>{1 + (template.additionalRoutes?.length ?? 0)} HTTP routes</span>{/if}
 					{#if template.persistent}<span>·</span><span>Persistent</span>{/if}
 				</div>
 			</button>
@@ -242,6 +273,14 @@
 					<div class="flex gap-2"><Package class="mt-0.5 h-4 w-4 shrink-0" /><span>{sourceDescription(selected)}</span></div>
 					<div class="flex gap-2"><Database class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.persistent ? 'Persistent Docker-managed storage is expected.' : 'No persistent storage is required by the baseline template.'}</span></div>
 					<div class="flex gap-2"><ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" /><span>{selected.memoryLimitMb} MB memory · {selected.cpuLimit} CPU main-service guardrail.</span></div>
+					{#if (selected.additionalRoutes?.length ?? 0) > 0}
+						<div class="border-t border-gray-100 pt-3 dark:border-neutral-800">
+							<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Additional HTTP routes</p>
+							{#each selected.additionalRoutes ?? [] as route}
+								<p class="mt-1 font-mono text-[11px] text-gray-500 dark:text-gray-400">{routeURLs[route.name]} → {route.service}:{route.containerPort}</p>
+							{/each}
+						</div>
+					{/if}
 					{#if secondaryResourceEntries.length > 0}
 						<div class="border-t border-gray-100 pt-3 dark:border-neutral-800">
 							<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Secondary service guardrails</p>
