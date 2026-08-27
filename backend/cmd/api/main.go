@@ -2,18 +2,25 @@ package main
 
 import (
 	"context"
-	"errors"
+	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 
 	"mypaas/internal/audit"
 	"mypaas/internal/auth"
@@ -26,150 +33,178 @@ import (
 	"mypaas/internal/dbstudio"
 	"mypaas/internal/deployment"
 	"mypaas/internal/envvar"
-	"mypaas/internal/host"
 	"mypaas/internal/logger"
 	"mypaas/internal/migration"
-	"mypaas/internal/monitoring"
 	"mypaas/internal/port"
 	"mypaas/internal/project"
 	"mypaas/internal/quota"
 	"mypaas/internal/settings"
 	"mypaas/internal/sharedpostgres"
-	"mypaas/internal/statd"
 	"mypaas/internal/user"
 	"mypaas/internal/webhook"
 )
 
-var processStartedAt = time.Now().UTC()
+var processStartedAt = time.Now()
 
 func main() {
-	cfg := config.Load()
-	if err := cfg.ValidateRuntime(); err != nil {
-		slog.Error("invalid runtime configuration", "error", err)
+	if err := run(); err != nil {
+		slog.Error("fatal", "error", err)
 		os.Exit(1)
 	}
-	log := logger.New(cfg.LogLevel)
-	slog.SetDefault(log)
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+func run() error {
+	// Load .env if present; not fatal if missing (production uses real env vars).
+	for _, path := range []string{".env", "../.env", "../../.env", "../../../.env"} {
+		if err := godotenv.Load(path); err == nil {
+			if abs, err := filepath.Abs(path); err == nil {
+				_ = os.Setenv("MYPAAS_CONFIG_DIR", filepath.Dir(abs))
+			}
+			break
+		}
+	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	logger.Setup(os.Getenv("LOG_LEVEL"))
+
+	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("connect database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("config: %w", err)
+	}
+
+	pool, err := db.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
-		slog.Error("ping database", "error", err)
-		os.Exit(1)
-	}
 
-	queries := db.New(pool)
-	if err := recoverInterruptedDeployments(ctx, queries); err != nil {
-		slog.Error("recover interrupted deployments", "error", err)
-		os.Exit(1)
-	}
-
-	enc, err := crypto.NewEncryptor(cfg.EnvEncryptionKey)
+	tokenService, err := auth.NewTokenService(cfg.JWTSecret)
 	if err != nil {
-		slog.Error("init encryption", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("jwt: %w", err)
 	}
-	envService := envvar.NewService(queries, enc)
-	quotaService := quota.NewService(queries, cfg.MaxProjectsPerUser, cfg.MaxUserRAMMB, cfg.MaxUserCPU)
-	projectService := project.NewService(queries, cfg.PublicDomain, quotaService)
-	containerClient := container.NewDockerClient(cfg.ProjectNetwork, cfg.RoutingNetwork)
-	portAllocator := port.NewAllocator(queries, cfg.PortRangeStart, cfg.PortRangeEnd)
-	caddyClient := caddy.NewClient(cfg.CaddyAdminAddress, cfg.CaddyUpstreamHost)
-	deploymentService := deployment.NewService(queries, projectService, envService, containerClient, portAllocator, caddyClient, cfg)
-	sharedPostgresService := sharedpostgres.NewService(queries, envService, cfg)
-	dbStudioService := dbstudio.NewService(queries, envService, containerClient, cfg)
+	cipher, err := crypto.NewAESGCM(cfg.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("crypto: %w", err)
+	}
+	queries := db.New(pool)
 
-	statCollector := statd.NewCollector(cfg.StatdSocketPath)
-	monitoringService := monitoring.NewService(queries, containerClient, statCollector, cfg)
-	backupService := backup.NewService(queries, envService, cfg)
-	go backupService.CleanupBuildCache(ctx)
-
-	if cfg.ProductionMode() {
-		if err := containerClient.EnsureExternalNetwork(ctx, cfg.ProjectNetwork); err != nil {
-			slog.Error("ensure project network", "network", cfg.ProjectNetwork, "error", err)
-			os.Exit(1)
-		}
-		if err := containerClient.EnsureExternalNetwork(ctx, cfg.RoutingNetwork); err != nil {
-			slog.Error("ensure routing network", "network", cfg.RoutingNetwork, "error", err)
-			os.Exit(1)
+	// Load dynamic API tokens from database
+	if settingsRows, err := queries.GetAllSettings(context.Background()); err == nil {
+		for _, row := range settingsRows {
+			var strVal string
+			if err := json.Unmarshal(row.Value, &strVal); err == nil {
+				switch row.Key {
+				case "mypaas_api_token":
+					cfg.ApiToken = strVal
+				case "cloudflare_api_token":
+					cfg.CloudflareAPIToken = strVal
+				case "cloudflare_zone_id":
+					cfg.CloudflareZoneID = strVal
+				}
+			}
 		}
 	}
 
-	authService := auth.NewService(queries, cfg)
-	authHandler := auth.NewHandler(authService, cfg)
-	authMiddleware := auth.Middleware(authService, cfg)
-	auditMiddleware := audit.Middleware(queries)
+	if err := seedOwner(context.Background(), queries, cfg.OwnerEmail); err != nil {
+		return fmt.Errorf("seed owner: %w", err)
+	}
+	if err := recoverInterruptedDeployments(context.Background(), queries); err != nil {
+		return fmt.Errorf("recover interrupted deployments: %w", err)
+	}
+
+	routeReconciler := deployment.NewService(
+		cfg,
+		queries,
+		envvar.NewService(queries, cipher),
+		port.NewService(pool),
+		caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost),
+		container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+	)
+
+	// Recover missing container-backed runtimes. Static projects have no Docker
+	// stack and are recovered by Caddy route reconciliation instead.
+	if err := routeReconciler.ReconcileMissingRuntimes(context.Background()); err != nil {
+		slog.Warn("failed to reconcile missing runtimes", "error", err)
+	}
+
+	appCtx, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	
+	dockerClient := container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)
+	backupService := backup.NewService(cfg, dockerClient)
+	
+	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
+
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Port),
+		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		slog.Info("server started", "addr", srv.Addr, "env", cfg.Environment)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case err := <-errCh:
+		return fmt.Errorf("server: %w", err)
+	case sig := <-quit:
+		slog.Info("shutting down", "signal", sig)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stopBackground()
+	select {
+	case <-backgroundDone:
+	case <-time.After(5 * time.Second):
+		slog.Warn("background jobs did not stop before shutdown timeout")
+	}
+
+	if err := srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("graceful shutdown: %w", err)
+	}
+
+	slog.Info("server stopped cleanly")
+	return nil
+}
+
+func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.TokenService, cipher *crypto.AESGCM, backupService *backup.Service, dockerClient *container.DockerCLI) http.Handler {
+	queries := db.New(pool)
+	authHandler := auth.NewHandler(cfg, queries, tokenService)
+	authMiddleware := auth.Middleware(tokenService, queries, cfg)
+	auditService := audit.NewService(queries)
+	auditHandler := audit.NewHandler(auditService)
+	auditMiddleware := audit.Middleware(auditService)
+	envService := envvar.NewService(queries, cipher)
+	portService := port.NewService(pool)
+	quotaService := quota.NewService(queries, cfg, dockerClient)
+	sharedPostgresService := sharedpostgres.NewService(pool, cfg, envService)
+	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost), dockerClient)
+	dbStudioHandler := dbstudio.NewHandler(dbstudio.NewService(queries, envService, auditService))
 	projectHandler := project.NewHandler(
-		projectService,
-		func(r *http.Request, id interface{ String() string }) error { return nil },
-		nil,
-		nil,
+		project.NewService(queries, cfg.PublicDomain, quotaService),
+		func(r *http.Request, id uuid.UUID) error {
+			if err := deploymentService.CleanupProject(r.Context(), id); err != nil {
+				return err
+			}
+			return sharedPostgresService.Cleanup(r.Context(), id)
+		},
+		deploymentService.UpdateProjectRoute,
+		sharedPostgresService.Provision,
 		envService,
 	)
-	_ = projectHandler
-
-	projectHandler = project.NewHandler(
-		projectService,
-		func(r *http.Request, idUUID interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
-	_ = projectHandler
-
-	projectHandler = project.NewHandler(
-		projectService,
-		func(r *http.Request, id interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
-	_ = projectHandler
-
-	projectHandler = project.NewHandler(
-		projectService,
-		func(r *http.Request, id interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
-	_ = projectHandler
-
-	projectHandler = project.NewHandler(
-		projectService,
-		func(r *http.Request, id interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
-	_ = projectHandler
-
-	// Recreate the project handler with real lifecycle dependencies. The
-	// callback shape uses uuid.UUID in the package constructor; keeping the
-	// wiring here makes project deletion, route updates and shared DB cleanup
-	// remain platform-owned.
-	projectHandler = project.NewHandler(
-		projectService,
-		func(r *http.Request, idUUID interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
-	_ = projectHandler
-
-	// The actual typed handler is built below through a small helper to keep
-	// main wiring readable.
-	projectHandler = buildProjectHandler(projectService, deploymentService, sharedPostgresService, envService)
 	deploymentHandler := deployment.NewHandler(deploymentService)
 	envHandler := envvar.NewHandler(envService)
-	dbStudioHandler := dbstudio.NewHandler(dbStudioService)
 	quotaHandler := quota.NewHandler(quotaService)
 	userHandler := user.NewHandler(queries)
 	webhookHandler := webhook.NewHandler(queries, deploymentService)
@@ -185,49 +220,12 @@ func main() {
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, audit.NewHandler(queries), settingsHandler, migrationHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, audit.NewHandler(queries), settingsHandler, migrationHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler)
 	})
 
-	server := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           r,
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
-	backgroundDone := startBackgroundJobs(ctx, backupService, deploymentService)
-	go func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			slog.Error("http shutdown", "error", err)
-		}
-	}()
-
-	slog.Info("mypaas api listening", "addr", server.Addr)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("http server", "error", err)
-		os.Exit(1)
-	}
-	<-backgroundDone
-}
-
-func buildProjectHandler(
-	projectService *project.Service,
-	deploymentService *deployment.Service,
-	sharedPostgresService *sharedpostgres.Service,
-	envService *envvar.Service,
-) *project.Handler {
-	return project.NewHandler(
-		projectService,
-		func(r *http.Request, idUUID interface{ String() string }) error { return nil },
-		nil,
-		nil,
-		envService,
-	)
+	return r
 }
 
 func startBackgroundJobs(ctx context.Context, backupService *backup.Service, routeReconciler *deployment.Service) <-chan struct{} {
@@ -347,9 +345,10 @@ func registerRoutes(
 			r.Get("/{id}/compose-resources", deploymentHandler.ComposeResources)
 			r.Post("/{id}/compose-resources/reset", deploymentHandler.ResetComposeResources)
 		})
-		r.Get("/deployments/{id}", deploymentHandler.Get)
-		r.Post("/deployments/{id}/rollback", deploymentHandler.Rollback)
-
+		r.Route("/deployments", func(r chi.Router) {
+			r.Get("/{id}", deploymentHandler.Get)
+			r.Post("/{id}/rollback", deploymentHandler.Rollback)
+		})
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(auth.RequireOwner)
 			r.Get("/users", userHandler.List)
@@ -357,49 +356,38 @@ func registerRoutes(
 			r.Delete("/users/{id}", userHandler.Remove)
 			r.Get("/audit-logs", auditHandler.List)
 			r.Get("/settings", settingsHandler.Get)
+			r.Get("/host-stats", settingsHandler.HostStats)
 			r.Put("/settings", settingsHandler.Update)
-			r.Post("/settings/cloudflare", settingsHandler.UpdateCloudflare)
-			r.Post("/settings/s3", settingsHandler.UpdateS3)
+			r.Post("/settings/cloudflare", settingsHandler.UpdateCloudflareConfig)
+			r.Post("/settings/s3", settingsHandler.UpdateS3Config)
 			r.Post("/settings/mcp-token/regenerate", settingsHandler.RegenerateMCPToken)
-			r.Post("/backup", settingsHandler.TriggerBackup)
-			r.Post("/update", settingsHandler.TriggerUpdate)
 			r.Post("/migrate/prepare", migrationHandler.Prepare)
 			r.Get("/migrate/{id}/status", migrationHandler.Status)
-			r.Get("/host-stats", host.NewHandler(cfg).Stats)
+			r.Post("/update", settingsHandler.UpdateSystem)
+			r.Post("/backup", settingsHandler.TriggerBackup)
+			r.Get("/backup/download", settingsHandler.DownloadBackup)
 		})
 	})
 }
 
-func handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
-}
-
-func handleReady(pool *pgxpool.Pool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := pool.Ping(ctx); err != nil {
-			http.Error(w, "not ready", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ready"}`))
-	}
-}
-
-func corsMiddleware(cfg config.Config) func(http.Handler) http.Handler {
+func corsMiddleware(cfg *config.Config) func(http.Handler) http.Handler {
+	allowed := allowedOrigins(cfg)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-			if origin != "" && origin == cfg.DashboardURL {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Vary", "Origin")
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+			if origin != "" {
+				if _, ok := allowed[origin]; !ok {
+					if r.Method == http.MethodOptions {
+						http.Error(w, "CORS origin is not allowed", http.StatusForbidden)
+						return
+					}
+				} else {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+					w.Header().Add("Vary", "Origin")
+				}
 			}
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
@@ -410,25 +398,125 @@ func corsMiddleware(cfg config.Config) func(http.Handler) http.Handler {
 	}
 }
 
+func allowedOrigins(cfg *config.Config) map[string]struct{} {
+	origins := make(map[string]struct{})
+	addOrigin := func(origin string) {
+		origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+		if origin != "" {
+			origins[origin] = struct{}{}
+		}
+	}
+	addOrigin(cfg.FrontendURL)
+	if cfg.PublicDomain != "" && cfg.PublicDomain != "localhost" {
+		addOrigin("https://" + cfg.PublicDomain)
+		addOrigin("https://dashboard." + cfg.PublicDomain)
+	}
+	if cfg.IsDevelopment() {
+		addOrigin("http://localhost:3000")
+		addOrigin("http://localhost:5173")
+	}
+	return origins
+}
+
 func timeoutExceptStreams(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
+		wrapped := middleware.Timeout(timeout)(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasSuffix(r.URL.Path, "/stream") {
 				next.ServeHTTP(w, r)
 				return
 			}
-			ctx, cancel := context.WithTimeout(r.Context(), timeout)
-			defer cancel()
-			next.ServeHTTP(w, r.WithContext(ctx))
+			wrapped.ServeHTTP(w, r)
 		})
 	}
 }
 
-func recoverInterruptedDeployments(ctx context.Context, queries *db.Queries) error {
-	if err := queries.FailInterruptedDeployments(ctx); err != nil {
+func handleMetrics(cfg *config.Config, startedAt time.Time) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !metricsAuthConfigured(cfg) && !cfg.IsDevelopment() {
+			http.Error(w, "metrics basic auth is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		if metricsAuthConfigured(cfg) && !metricsAuthOK(cfg, r) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="mypaas metrics"`)
+			http.Error(w, "metrics authentication required", http.StatusUnauthorized)
+			return
+		}
+
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		uptime := time.Since(startedAt).Seconds()
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_api_up Whether the MyPaas API process is serving requests.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_api_up gauge\nmypaas_api_up 1\n")
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_api_uptime_seconds Seconds since the API process started.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_api_uptime_seconds counter\nmypaas_api_uptime_seconds %.0f\n", uptime)
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_go_goroutines Current goroutine count.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_goroutines gauge\nmypaas_go_goroutines %d\n", runtime.NumGoroutine())
+		_, _ = fmt.Fprintf(w, "# HELP mypaas_go_heap_alloc_bytes Current heap allocation in bytes.\n")
+		_, _ = fmt.Fprintf(w, "# TYPE mypaas_go_heap_alloc_bytes gauge\nmypaas_go_heap_alloc_bytes %d\n", mem.HeapAlloc)
+		writeStatdMetrics(w)
+	}
+}
+
+func metricsAuthConfigured(cfg *config.Config) bool {
+	return cfg.MetricsUsername != "" && cfg.MetricsPassword != ""
+}
+
+func metricsAuthOK(cfg *config.Config, r *http.Request) bool {
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	userOK := subtle.ConstantTimeCompare([]byte(user), []byte(cfg.MetricsUsername)) == 1
+	passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.MetricsPassword)) == 1
+	return userOK && passOK
+}
+
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+func handleReady(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := pool.Ping(r.Context()); err != nil {
+			slog.Warn("readiness check failed", "error", err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"not_ready","reason":"database unreachable"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+	}
+}
+
+func seedOwner(ctx context.Context, queries *db.Queries, email string) error {
+	if email == "" {
+		return nil
+	}
+	if _, err := queries.GetUserByEmail(ctx, email); err == nil {
+		return nil
+	} else if err != pgx.ErrNoRows {
 		return err
 	}
-	if err := queries.RecoverBuildingProjects(ctx); err != nil {
+	_, err := queries.CreateUser(ctx, db.CreateUserParams{
+		Email: email,
+		Role:  "owner",
+	})
+	return err
+}
+
+func recoverInterruptedDeployments(ctx context.Context, queries *db.Queries) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	msg := "deployment interrupted by API restart"
+	if err := queries.FailInterruptedDeployments(ctx, &msg); err != nil {
+		return err
+	}
+	if err := queries.ResetBuildingProjects(ctx); err != nil {
 		return err
 	}
 	return nil
