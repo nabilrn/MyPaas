@@ -59,7 +59,7 @@ func (s *Service) reconcileAdditionalRouteConfig(ctx context.Context, config db.
 			}
 			continue
 		}
-		if err := s.caddy.AddComposeRoute(ctx, host, composeProjectName(config.Name), route.Service, route.ContainerPort); err != nil && firstErr == nil {
+		if err := s.caddy.AddComposeRoute(ctx, host, composeProjectName(config.Name), route.Service, route.Name, route.ContainerPort); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
