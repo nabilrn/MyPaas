@@ -23,10 +23,10 @@ type composeRouteInspectRow struct {
 
 func composeRouteAlias(projectName, service string) string {
 	sum := sha256.Sum256([]byte(projectName + ":" + service))
-	return "mypaas-http-" + hex.EncodeToString(sum[:6])
+	return "mypaas-http-" + hex.EncodeToString(sum[:5])
 }
 
-func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service string, containerPort int32) error {
+func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service, routeName string, containerPort int32) error {
 	if strings.TrimSpace(c.upstreamHost) != runtimeUpstreamMode {
 		return fmt.Errorf("additional compose HTTP routes require CADDY_UPSTREAM_HOST=runtime")
 	}
@@ -35,7 +35,7 @@ func (c *Client) AddComposeRoute(ctx context.Context, host, projectName, service
 	}
 	dial, err := composeRouteDial(ctx, projectName, service, containerPort)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve additional route %q: %w", routeName, err)
 	}
 	route, err := json.Marshal(map[string]any{
 		"match": []map[string]any{{"host": []string{host}}},
@@ -104,22 +104,27 @@ func composeRouteDial(ctx context.Context, projectName, service string, containe
 		return "", fmt.Errorf("compose route service %q is not attached to project network %q", service, projectNetwork)
 	}
 
-	alias := composeRouteAlias(projectName, service)
-	routing, attached := row.NetworkSettings.Networks[routingNetwork]
-	aliasPresent := attached && stringSliceContains(routing.Aliases, alias)
-	if attached && !aliasPresent {
-		out, disconnectErr := exec.CommandContext(ctx, "docker", "network", "disconnect", routingNetwork, row.ID).CombinedOutput()
-		if disconnectErr != nil {
-			return "", fmt.Errorf("refresh compose route alias: disconnect: %w: %s", disconnectErr, strings.TrimSpace(string(out)))
+	if routing, attached := row.NetworkSettings.Networks[routingNetwork]; attached {
+		if alias := existingManagedRoutingAlias(routing.Aliases); alias != "" {
+			return alias + ":" + strconv.Itoa(int(containerPort)), nil
 		}
-		attached = false
-	}
-	if !attached {
-		out, connectErr := exec.CommandContext(ctx, "docker", "network", "connect", "--alias", alias, routingNetwork, row.ID).CombinedOutput()
-		if connectErr != nil {
-			return "", fmt.Errorf("attach compose route service to routing network: %w: %s", connectErr, strings.TrimSpace(string(out)))
-		}
+		return "", fmt.Errorf("compose route service %q is attached to routing network %q without a MyPaaS-managed alias", service, routingNetwork)
 	}
 
+	alias := composeRouteAlias(projectName, service)
+	out, connectErr := exec.CommandContext(ctx, "docker", "network", "connect", "--alias", alias, routingNetwork, row.ID).CombinedOutput()
+	if connectErr != nil {
+		return "", fmt.Errorf("attach compose route service to routing network: %w: %s", connectErr, strings.TrimSpace(string(out)))
+	}
 	return alias + ":" + strconv.Itoa(int(containerPort)), nil
+}
+
+func existingManagedRoutingAlias(aliases []string) string {
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if strings.HasPrefix(alias, "mypaas-port-") || strings.HasPrefix(alias, "mypaas-http-") {
+			return alias
+		}
+	}
+	return ""
 }
