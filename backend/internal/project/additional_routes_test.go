@@ -1,9 +1,11 @@
 package project
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
+	"mypaas/internal/db"
 	"mypaas/internal/errs"
 )
 
@@ -53,5 +55,30 @@ func TestAdditionalRoutesRoundTrip(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("round trip mismatch: got %#v want %#v", got, want)
+	}
+}
+
+func TestValidateAdditionalRouteTargetsRequiresDeclaredComposePort(t *testing.T) {
+	main := "minio"
+	project := db.Project{DeployMode: "compose", MainService: &main, AppPort: 9000}
+	doc := composeConfigDoc{Services: map[string]composeServiceConfig{
+		"minio": {
+			Ports:  json.RawMessage(`[{"target":9000,"published":"9000","protocol":"tcp"}]`),
+			Expose: json.RawMessage(`["9001"]`),
+		},
+	}}
+
+	if err := validateAdditionalRouteTargets(project, doc, []AdditionalRoute{{Name: "console", Service: "minio", ContainerPort: 9001}}); err != nil {
+		t.Fatalf("expected declared console port to pass: %v", err)
+	}
+
+	for _, route := range []AdditionalRoute{
+		{Name: "missing-service", Service: "console", ContainerPort: 9001},
+		{Name: "undeclared", Service: "minio", ContainerPort: 9443},
+		{Name: "primary", Service: "minio", ContainerPort: 9000},
+	} {
+		if err := validateAdditionalRouteTargets(project, doc, []AdditionalRoute{route}); !errors.Is(err, errs.ErrValidation) {
+			t.Fatalf("expected validation error for %#v, got %v", route, err)
+		}
 	}
 }
