@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-25",
+  "generatedAt": "2026-08-27",
   "purpose": "Real-world self-hosted application compatibility; not performance or capacity benchmarking.",
   "defaults": {
     "repoUrl": "https://github.com/nabilrn/MyPaas.git",
@@ -160,7 +160,7 @@
         "smokePath": "/",
         "expectedStatus": [200, 302]
       },
-      "limitations": ["This entry verifies the HTTP UI and HTTP Git path only; MyPaaS currently routes one public application port, so Forgejo SSH on port 22 is not qualified."]
+      "limitations": ["This entry verifies the HTTP UI and HTTP Git path only. Additional MyPaaS routes are HTTP-only, so Forgejo SSH on port 22 remains outside the qualified boundary."]
     },
     {
       "id": "nocodb",
@@ -364,12 +364,12 @@
     {
       "id": "minio",
       "name": "MinIO",
-      "class": "multi-port-storage",
+      "class": "multi-route-storage",
       "resourceTier": "moderate",
       "upstream": "https://github.com/minio/minio",
-      "evidence": "MinIO uses separate S3 API and console ports in normal container deployments.",
+      "evidence": "MinIO uses separate S3 API and Console HTTP ports in normal container deployments.",
       "execution": {
-        "enabled": false,
+        "enabled": true,
         "sourceType": "git",
         "deployMode": "compose",
         "baseDirectory": "compatibility/manifests/minio",
@@ -378,10 +378,16 @@
         "appPort": 9000,
         "memoryLimitMb": 1024,
         "cpuLimit": 1.0,
+        "additionalRoutes": [
+          {"name": "console", "service": "minio", "containerPort": 9001}
+        ],
         "smokePath": "/minio/health/live",
-        "expectedStatus": [200]
+        "expectedStatus": [200],
+        "routeSmoke": [
+          {"route": "console", "path": "/", "expectedStatus": [200, 301, 302, 307]}
+        ]
       },
-      "limitations": ["Full MinIO usability normally needs both S3 API 9000 and console 9001. Current MyPaaS exposes one routed application port per project, so this is intentionally catalogued as a capability gap instead of a PASS candidate."]
+      "limitations": ["This entry qualifies the S3 API route and the separately routed HTTP Console. Raw TCP exposure and arbitrary host-port publishing remain outside the MyPaaS route model."]
     }
   ]
 }
