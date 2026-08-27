@@ -3,7 +3,7 @@ export type AppTemplateSource =
 	| { type: 'dockerfile'; repoUrl: string; branch: string; baseDirectory?: string }
 	| { type: 'compose'; baseDirectory: string; composeFilePath: string; mainService: string };
 
-export type AppTemplateEnvKind = 'text' | 'secret' | 'public-url' | 'public-host';
+export type AppTemplateEnvKind = 'text' | 'secret' | 'public-url' | 'public-host' | 'route-url';
 export type AppTemplateSecretFormat = 'hex' | 'base64url';
 export type AppTemplateCompatibilityStatus = 'catalogued-pattern';
 
@@ -16,6 +16,7 @@ export interface AppTemplateEnvField {
 	bytes?: number;
 	format?: AppTemplateSecretFormat;
 	required?: boolean;
+	routeName?: string;
 }
 
 export interface AppTemplateCompatibility {
@@ -28,6 +29,12 @@ export interface AppTemplateServiceResource {
 	cpuLimit: number;
 }
 
+export interface AppTemplateRoute {
+	name: string;
+	service: string;
+	containerPort: number;
+}
+
 export interface AppTemplate {
 	id: string;
 	name: string;
@@ -37,6 +44,7 @@ export interface AppTemplate {
 	memoryLimitMb: number;
 	cpuLimit: number;
 	serviceResources?: Record<string, AppTemplateServiceResource>;
+	additionalRoutes?: AppTemplateRoute[];
 	source: AppTemplateSource;
 	env: AppTemplateEnvField[];
 	persistent: boolean;
@@ -154,9 +162,7 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 3000,
 		memoryLimitMb: 1024,
 		cpuLimit: 1,
-		serviceResources: {
-			db: { memoryLimitMb: 512, cpuLimit: 0.5 }
-		},
+		serviceResources: { db: { memoryLimitMb: 512, cpuLimit: 0.5 } },
 		source: { type: 'compose', baseDirectory: 'templates/manifests/umami', composeFilePath: 'compose.yml', mainService: 'umami' },
 		env: [
 			{ key: 'UMAMI_DB_PASSWORD', label: 'Database password', kind: 'secret', bytes: 24, format: 'hex', required: true, description: 'Shared by the Umami service and its project-local PostgreSQL service.' },
@@ -175,9 +181,7 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 2368,
 		memoryLimitMb: 1024,
 		cpuLimit: 1,
-		serviceResources: {
-			db: { memoryLimitMb: 768, cpuLimit: 0.5 }
-		},
+		serviceResources: { db: { memoryLimitMb: 768, cpuLimit: 0.5 } },
 		source: { type: 'compose', baseDirectory: 'templates/manifests/ghost', composeFilePath: 'compose.yml', mainService: 'ghost' },
 		env: [
 			{ key: 'GHOST_URL', label: 'Public URL', kind: 'public-url', required: true, description: 'Generated from the MyPaas project hostname.' },
@@ -223,7 +227,7 @@ export const appTemplates: AppTemplate[] = [
 			{ key: 'FORGEJO_ROOT_URL', label: 'Public URL', kind: 'public-url', required: true, description: 'Managed from the MyPaas project URL.' }
 		],
 		persistent: true,
-		limitations: ['HTTP UI and HTTP Git are covered. Forgejo SSH is disabled because MyPaas currently routes one public application port per project.'],
+		limitations: ['HTTP UI and HTTP Git are covered. Forgejo SSH is disabled; MyPaas additional routes are HTTP-only.'],
 		compatibility: { catalogId: 'forgejo', status: 'catalogued-pattern' }
 	},
 	{
@@ -265,6 +269,27 @@ export const appTemplates: AppTemplate[] = [
 		persistent: true,
 		limitations: ['Uses the pre-built gateway image only. CLI network sharing, host bind mounts, extra gateway ports, and Docker-socket sandboxing remain outside the current MyPaas safety boundary.'],
 		compatibility: { catalogId: 'openclaw', status: 'catalogued-pattern' }
+	},
+	{
+		id: 'minio',
+		name: 'MinIO',
+		description: 'S3-compatible object storage with persistent data plus a separately routed web console.',
+		category: 'Object storage',
+		appPort: 9000,
+		memoryLimitMb: 1024,
+		cpuLimit: 1,
+		additionalRoutes: [
+			{ name: 'console', service: 'minio', containerPort: 9001 }
+		],
+		source: { type: 'compose', baseDirectory: 'templates/manifests/minio', composeFilePath: 'compose.yml', mainService: 'minio' },
+		env: [
+			{ key: 'MINIO_ROOT_USER', label: 'Root user', kind: 'secret', bytes: 12, format: 'base64url', required: true, description: 'Generated MinIO root username. Save it before first login.' },
+			{ key: 'MINIO_ROOT_PASSWORD', label: 'Root password', kind: 'secret', bytes: 32, format: 'base64url', required: true, description: 'Generated MinIO root password.' },
+			{ key: 'MINIO_BROWSER_REDIRECT_URL', label: 'Console URL', kind: 'route-url', routeName: 'console', required: true, description: 'Managed from the additional MyPaas console route used by MinIO behind the reverse proxy.' }
+		],
+		persistent: true,
+		limitations: ['The template exposes only HTTP(S) S3 API and Console routes. Raw TCP protocols and arbitrary host-port publishing remain out of scope.'],
+		compatibility: { catalogId: 'minio', status: 'catalogued-pattern' }
 	}
 ];
 
@@ -304,10 +329,12 @@ export function templateEnvValue(
 	field: AppTemplateEnvField,
 	values: Record<string, string>,
 	publicURL = '',
-	publicHost = ''
+	publicHost = '',
+	routeURLs: Record<string, string> = {}
 ): string {
 	if (field.kind === 'public-url') return publicURL;
 	if (field.kind === 'public-host') return publicHost;
+	if (field.kind === 'route-url') return field.routeName ? routeURLs[field.routeName] ?? '' : '';
 	return values[field.key] ?? '';
 }
 
@@ -315,9 +342,10 @@ export function missingRequiredTemplateEnv(
 	template: AppTemplate,
 	values: Record<string, string>,
 	publicURL = '',
-	publicHost = ''
+	publicHost = '',
+	routeURLs: Record<string, string> = {}
 ): string[] {
 	return template.env
-		.filter((field) => field.required && templateEnvValue(field, values, publicURL, publicHost).trim().length === 0)
+		.filter((field) => field.required && templateEnvValue(field, values, publicURL, publicHost, routeURLs).trim().length === 0)
 		.map((field) => field.key);
 }
