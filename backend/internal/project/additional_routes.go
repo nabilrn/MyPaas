@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
+	"mypaas/internal/compose"
+	"mypaas/internal/db"
+	"mypaas/internal/envdiscover"
 	"mypaas/internal/errs"
 )
 
@@ -114,6 +119,9 @@ func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, 
 			return nil, fmt.Errorf("%w: route %q duplicates the primary project route", errs.ErrValidation, route.Name)
 		}
 	}
+	if err := validateAdditionalRoutesForProjectSource(ctx, project, normalized); err != nil {
+		return nil, err
+	}
 	raw, err := encodeAdditionalRoutes(normalized)
 	if err != nil {
 		return nil, err
@@ -122,4 +130,84 @@ func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, 
 		return nil, err
 	}
 	return normalized, nil
+}
+
+func validateAdditionalRoutesForProjectSource(ctx context.Context, project db.Project, routes []AdditionalRoute) error {
+	if len(routes) == 0 {
+		return nil
+	}
+	validateCtx, cancel := context.WithTimeout(ctx, 55*time.Second)
+	defer cancel()
+
+	root, err := os.MkdirTemp("", "mypaas-route-preflight-*")
+	if err != nil {
+		return fmt.Errorf("create route preflight workspace: %w", err)
+	}
+	defer os.RemoveAll(root)
+
+	if err := cloneForDetect(validateCtx, root, project.RepoUrl, project.Branch); err != nil {
+		return err
+	}
+	workspace, err := resolveLifecycleDirectory(root, valueOrEmpty(project.BaseDirectory), "base directory")
+	if err != nil {
+		return err
+	}
+	composeFile := strings.TrimSpace(valueOrEmpty(project.ComposeFilePath))
+	if composeFile == "" {
+		candidates, discoverErr := compose.Discover(workspace)
+		if discoverErr != nil {
+			return discoverErr
+		}
+		if len(candidates) == 0 {
+			return fmt.Errorf("%w: compose file was not found for additional route validation", errs.ErrValidation)
+		}
+		composeFile = candidates[0].Path
+	}
+
+	envVars, err := envdiscover.Discover(workspace, composeFile)
+	if err != nil {
+		return fmt.Errorf("discover compose env for additional routes: %w", err)
+	}
+	if err := prepareComposePreviewEnv(workspace, composeFile, envVars); err != nil {
+		return err
+	}
+	rawConfig, err := composeConfigJSON(validateCtx, workspace, composeFile)
+	if err != nil {
+		return err
+	}
+	var doc composeConfigDoc
+	if err := json.Unmarshal(rawConfig, &doc); err != nil {
+		return fmt.Errorf("%w: parse compose config for additional routes: %v", errs.ErrValidation, err)
+	}
+	return validateAdditionalRouteTargets(project, doc, routes)
+}
+
+func validateAdditionalRouteTargets(project db.Project, doc composeConfigDoc, routes []AdditionalRoute) error {
+	for _, route := range routes {
+		spec, ok := doc.Services[route.Service]
+		if !ok {
+			return fmt.Errorf("%w: route %q targets compose service %q which does not exist", errs.ErrValidation, route.Name, route.Service)
+		}
+		if project.MainService != nil && strings.TrimSpace(*project.MainService) == route.Service && project.AppPort == route.ContainerPort {
+			return fmt.Errorf("%w: route %q duplicates the primary project route", errs.ErrValidation, route.Name)
+		}
+		if !composeServiceDeclaresTCPPort(spec, route.ContainerPort) {
+			return fmt.Errorf("%w: route %q targets %s:%d but that TCP port is not declared by the compose service via ports or expose", errs.ErrValidation, route.Name, route.Service, route.ContainerPort)
+		}
+	}
+	return nil
+}
+
+func composeServiceDeclaresTCPPort(spec composeServiceConfig, wanted int32) bool {
+	for _, port := range composePortPlans(spec.Ports) {
+		if port.Target == wanted && (port.Protocol == "" || strings.EqualFold(port.Protocol, "tcp")) {
+			return true
+		}
+	}
+	for _, port := range composeExposePorts(spec.Expose) {
+		if port == wanted {
+			return true
+		}
+	}
+	return false
 }
