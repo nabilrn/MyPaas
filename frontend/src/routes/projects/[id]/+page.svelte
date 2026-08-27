@@ -47,7 +47,7 @@
 	$: additionalEndpoints = project
 		? httpRoutes.map((route) => ({
 			...route,
-			url: projectRouteURL(project.subdomain || project.name, route.name, $page.url.protocol, $page.url.hostname)
+			url: projectRouteURL(project!.subdomain || project!.name, route.name, $page.url.protocol, $page.url.hostname)
 		}))
 		: [];
 
