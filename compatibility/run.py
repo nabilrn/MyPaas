@@ -35,6 +35,9 @@ VALID_RESULTS = {
     "blocked",
 }
 PROJECT_NAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$")
+ROUTE_NAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$")
+MAX_ADDITIONAL_ROUTES = 4
+CORE_REPO_SUFFIX = "/nabilrn/MyPaas.git"
 
 
 class SuiteError(RuntimeError):
@@ -114,12 +117,67 @@ def validate_catalog(catalog: dict[str, Any], compose: bool = False) -> list[str
                     errors.append(f"{app_id}: manifest not found: {path.relative_to(ROOT)}")
                 elif compose:
                     errors.extend(validate_compose_file(app_id, path))
+        errors.extend(validate_route_contract(app_id, execution, deploy_mode))
         smoke_path = execution.get("smokePath")
         if not isinstance(smoke_path, str) or not smoke_path.startswith("/"):
             errors.append(f"{app_id}: smokePath must start with /")
         statuses = execution.get("expectedStatus")
         if not isinstance(statuses, list) or not statuses or not all(isinstance(s, int) for s in statuses):
             errors.append(f"{app_id}: expectedStatus must be a non-empty integer array")
+    return errors
+
+
+def validate_route_contract(app_id: str, execution: dict[str, Any], deploy_mode: Any) -> list[str]:
+    errors: list[str] = []
+    routes = execution.get("additionalRoutes", [])
+    if routes is None:
+        routes = []
+    if not isinstance(routes, list):
+        return [f"{app_id}: additionalRoutes must be an array"]
+    if routes and deploy_mode != "compose":
+        errors.append(f"{app_id}: additionalRoutes are only valid for compose entries")
+    if len(routes) > MAX_ADDITIONAL_ROUTES:
+        errors.append(f"{app_id}: additionalRoutes may contain at most {MAX_ADDITIONAL_ROUTES} routes")
+
+    route_names: set[str] = set()
+    for index, route in enumerate(routes):
+        prefix = f"{app_id}: additionalRoutes[{index}]"
+        if not isinstance(route, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        name = route.get("name")
+        service = route.get("service")
+        port = route.get("containerPort")
+        if not isinstance(name, str) or not ROUTE_NAME_RE.fullmatch(name):
+            errors.append(f"{prefix}.name is invalid")
+        elif name in route_names:
+            errors.append(f"{app_id}: duplicate additional route name: {name}")
+        else:
+            route_names.add(name)
+        if not isinstance(service, str) or not service.strip():
+            errors.append(f"{prefix}.service is required")
+        if not isinstance(port, int) or not 1 <= port <= 65535:
+            errors.append(f"{prefix}.containerPort must be 1..65535")
+
+    route_smoke = execution.get("routeSmoke", [])
+    if route_smoke is None:
+        route_smoke = []
+    if not isinstance(route_smoke, list):
+        return errors + [f"{app_id}: routeSmoke must be an array"]
+    for index, check in enumerate(route_smoke):
+        prefix = f"{app_id}: routeSmoke[{index}]"
+        if not isinstance(check, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+        route = check.get("route")
+        path = check.get("path")
+        statuses = check.get("expectedStatus")
+        if route not in route_names:
+            errors.append(f"{prefix}.route must reference an additional route")
+        if not isinstance(path, str) or not path.startswith("/"):
+            errors.append(f"{prefix}.path must start with /")
+        if not isinstance(statuses, list) or not statuses or not all(isinstance(status, int) for status in statuses):
+            errors.append(f"{prefix}.expectedStatus must be a non-empty integer array")
     return errors
 
 
@@ -194,12 +252,23 @@ class Client:
         return decoded.get("data", decoded)
 
 
-def project_payload(catalog: dict[str, Any], app: dict[str, Any], name: str) -> dict[str, Any]:
+def project_payload(
+    catalog: dict[str, Any],
+    app: dict[str, Any],
+    name: str,
+    core_repo_branch: str = "",
+) -> dict[str, Any]:
     execution = merged_execution(catalog, app)
+    branch = execution.get("branch", "main")
+    repo_url = execution.get("repoUrl", "")
+    if execution["sourceType"] == "git" and not repo_url:
+        repo_url = catalog.get("defaults", {}).get("repoUrl", "")
+    if core_repo_branch and repo_url.endswith(CORE_REPO_SUFFIX):
+        branch = core_repo_branch
     payload: dict[str, Any] = {
         "name": name,
         "sourceType": execution["sourceType"],
-        "branch": execution.get("branch", "main"),
+        "branch": branch,
         "deployMode": execution["deployMode"],
         "resourceProfile": execution.get("resourceProfile", "custom"),
         "appPort": execution["appPort"],
@@ -212,7 +281,7 @@ def project_payload(catalog: dict[str, Any], app: dict[str, Any], name: str) -> 
         payload["repoUrl"] = ""
         payload["imageRef"] = execution["imageRef"]
     else:
-        payload["repoUrl"] = execution["repoUrl"]
+        payload["repoUrl"] = repo_url
     for key in ("mainService", "composeFilePath", "composeOverridePaths", "composeProfiles", "composeWorkdir", "staticFrontendPath", "baseDirectory"):
         if key in execution:
             payload[key] = execution[key]
@@ -248,6 +317,39 @@ def smoke(url: str, expected: list[int], timeout: float = 30.0) -> tuple[int, st
     return status, final_url
 
 
+def smoke_retry(url: str, expected: list[int], ready_timeout: float = 45.0) -> tuple[int, str]:
+    deadline = time.monotonic() + max(0.0, ready_timeout)
+    last_error: Exception | None = None
+    while True:
+        try:
+            return smoke(url, expected)
+        except SuiteError as exc:
+            last_error = exc
+            if time.monotonic() >= deadline:
+                raise last_error
+            time.sleep(2)
+
+
+def smoke_checks(execution: dict[str, Any], name: str, public_domain: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    domain = public_domain.strip(".")
+    primary_url = f"https://{name}.{domain}{execution['smokePath']}"
+    status, final_url = smoke_retry(primary_url, execution["expectedStatus"])
+    primary = {"url": primary_url, "finalUrl": final_url, "status": status}
+
+    route_results: list[dict[str, Any]] = []
+    for check in execution.get("routeSmoke", []):
+        route_name = check["route"]
+        url = f"https://{name}-{route_name}.{domain}{check['path']}"
+        status, final_url = smoke_retry(url, check["expectedStatus"])
+        route_results.append({
+            "route": route_name,
+            "url": url,
+            "finalUrl": final_url,
+            "status": status,
+        })
+    return primary, route_results
+
+
 def likely_blocked(exc: Exception) -> bool:
     text = str(exc).lower()
     markers = ("unsupported", "unsafe", "host bind", "external network", "external volume", "privileged", "socket mount")
@@ -268,13 +370,23 @@ def run_one(client: Client, catalog: dict[str, Any], app: dict[str, Any], public
     }
     project_id: str | None = None
     try:
-        project = client.request("POST", "/projects/", project_payload(catalog, app, name))
+        core_branch = os.environ.get("MYPAAS_COMPAT_REPO_BRANCH", "").strip()
+        project = client.request("POST", "/projects/", project_payload(catalog, app, name, core_branch))
         project_id = project["id"]
         result["projectId"] = project_id
+        if core_branch and project.get("repoUrl", "").endswith(CORE_REPO_SUFFIX):
+            result["sourceBranch"] = core_branch
+
         service_resources = execution.get("serviceResources")
         if service_resources:
             result["phase"] = "resource-config"
             client.request("PATCH", f"/projects/{project_id}", {"serviceResources": service_resources})
+
+        additional_routes = execution.get("additionalRoutes", [])
+        if additional_routes:
+            result["phase"] = "route-config"
+            client.request("PUT", f"/projects/{project_id}/routes", {"routes": additional_routes})
+            result["additionalRoutes"] = additional_routes
 
         result["phase"] = "deploy"
         deployment = client.request("POST", f"/projects/{project_id}/deploy")
@@ -286,16 +398,19 @@ def run_one(client: Client, catalog: dict[str, Any], app: dict[str, Any], public
             return result
 
         result["phase"] = "smoke"
-        smoke_url = f"https://{name}.{public_domain.strip('.')}{execution['smokePath']}"
-        status, final_url = smoke(smoke_url, execution["expectedStatus"])
-        result["smoke"] = {"url": smoke_url, "finalUrl": final_url, "status": status}
+        primary, route_results = smoke_checks(execution, name, public_domain)
+        result["smoke"] = primary
+        if route_results:
+            result["routeSmoke"] = route_results
 
         if lifecycle:
             result["phase"] = "restart"
             client.request("POST", f"/projects/{project_id}/restart")
             time.sleep(3)
-            status, final_url = smoke(smoke_url, execution["expectedStatus"])
-            result["restartSmoke"] = {"finalUrl": final_url, "status": status}
+            primary, route_results = smoke_checks(execution, name, public_domain)
+            result["restartSmoke"] = primary
+            if route_results:
+                result["restartRouteSmoke"] = route_results
 
         result["phase"] = "complete"
         result["result"] = "pass"
@@ -337,6 +452,7 @@ def command_plan(catalog: dict[str, Any], args: argparse.Namespace) -> int:
             "sourceType": execution["sourceType"],
             "deployMode": execution["deployMode"],
             "appPort": execution["appPort"],
+            "additionalRoutes": execution.get("additionalRoutes", []),
             "defaultRun": execution.get("enabled", True) and execution.get("defaultRun", True),
             "limitations": app.get("limitations", []),
         })
@@ -387,7 +503,7 @@ def parser() -> argparse.ArgumentParser:
         if name == "run":
             command.add_argument("--timeout", type=float, default=1200)
             command.add_argument("--keep", action="store_true", help="keep created MyPaaS projects instead of deleting them")
-            command.add_argument("--lifecycle", action="store_true", help="restart the project and repeat its smoke check")
+            command.add_argument("--lifecycle", action="store_true", help="restart the project and repeat primary/additional route smoke checks")
             command.add_argument("--stop-on-failure", action="store_true")
             command.add_argument("--output", help="optional JSON result path; do not commit live results as capacity evidence")
     return root
