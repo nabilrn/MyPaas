@@ -8,8 +8,9 @@ services:
     expose:
       - "9001"
     environment:
-      MINIO_ROOT_USER: compatibility-admin
-      MINIO_ROOT_PASSWORD: compatibility-password-change-me
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:?MINIO_BROWSER_REDIRECT_URL is required}
     volumes:
       - minio-data:/data
 

@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowRight, Database, History, KeyRound, Settings2 } from '@lucide/svelte';
+	import { ArrowRight, Database, ExternalLink, History, KeyRound, Settings2 } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
-	import { api } from '$api';
+	import { api, type ProjectHTTPRoute } from '$api';
+	import { projectRouteURL, projectURL } from '$lib/utils/urls';
 	import type { DBStudioStatus, Deployment, Project } from '$types';
 
 	let project: Project | null = null;
 	let deployments: Deployment[] = [];
 	let envCount: number | null = null;
 	let dbStatus: DBStudioStatus | null = null;
+	let httpRoutes: ProjectHTTPRoute[] = [];
 	let supportingSummaryLoaded = false;
 	let loading = true;
 	let overviewInFlight = false;
@@ -39,6 +41,15 @@
 		: supportingSummaryLoaded
 			? 'Not configured'
 			: 'Checking…';
+	$: primaryEndpoint = project
+		? projectURL(project.subdomain || project.name, $page.url.protocol, $page.url.hostname)
+		: '';
+	$: additionalEndpoints = project
+		? httpRoutes.map((route) => ({
+			...route,
+			url: projectRouteURL(project!.subdomain || project!.name, route.name, $page.url.protocol, $page.url.hostname)
+		}))
+		: [];
 
 	onMount(() => {
 		void loadOverview();
@@ -70,16 +81,17 @@
 		}
 	}
 
-
 	async function loadSupportingSummary() {
 		const projectId = $page.params.id ?? '';
-		const [envResult, databaseResult] = await Promise.allSettled([
+		const [envResult, databaseResult, routeResult] = await Promise.allSettled([
 			api.env.list(projectId),
-			api.dbStudio.status(projectId)
+			api.dbStudio.status(projectId),
+			api.projects.routes(projectId)
 		]);
 
 		envCount = envResult.status === 'fulfilled' ? envResult.value.length : null;
 		dbStatus = databaseResult.status === 'fulfilled' ? databaseResult.value : null;
+		httpRoutes = routeResult.status === 'fulfilled' ? routeResult.value : [];
 		supportingSummaryLoaded = true;
 	}
 
@@ -178,7 +190,6 @@
 
 		<ProjectObservability {project} />
 
-
 		<div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
 			<section class="surface overflow-hidden">
 				<div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
@@ -219,10 +230,26 @@
 			<section class="surface overflow-hidden">
 				<div class="border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Project essentials</h2>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Open configuration only when you need to change it.</p>
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current public endpoints and configuration entry points.</p>
 				</div>
 
 				<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+					<div class="px-5 py-4">
+						<div class="flex items-start gap-3">
+							<ExternalLink class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+							<div class="min-w-0 flex-1">
+								<p class="text-sm font-medium text-gray-950 dark:text-white">Public endpoints</p>
+								<a href={primaryEndpoint} target="_blank" rel="noreferrer" class="mt-1 block truncate font-mono text-[11px] text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{primaryEndpoint}</a>
+								{#each additionalEndpoints as endpoint}
+									<div class="mt-2">
+										<a href={endpoint.url} target="_blank" rel="noreferrer" class="block truncate font-mono text-[11px] text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{endpoint.url}</a>
+										<p class="mt-0.5 font-mono text-[10px] text-gray-400 dark:text-gray-500">{endpoint.service}:{endpoint.containerPort} · HTTP route {endpoint.name}</p>
+									</div>
+								{/each}
+							</div>
+						</div>
+					</div>
+
 					<a href={`${base}/env`} class="group flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50/70 dark:hover:bg-neutral-900/60">
 						<div class="flex min-w-0 items-center gap-3">
 							<KeyRound class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />

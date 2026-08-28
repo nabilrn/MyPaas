@@ -23,6 +23,12 @@ import type {
 	CloudflareAnalytics
 } from '$types';
 
+export interface ProjectHTTPRoute {
+	name: string;
+	service: string;
+	containerPort: number;
+}
+
 export interface HostMemoryStats {
 	total_bytes: number;
 	available_bytes: number;
@@ -160,6 +166,9 @@ export const api = {
 		start:  (id: string):          Promise<void>       => request(`/projects/${id}/start`,    { method: 'POST' }),
 		stop:   (id: string):          Promise<void>       => request(`/projects/${id}/stop`,     { method: 'POST' }),
 		restart:(id: string):          Promise<void>       => request(`/projects/${id}/restart`,  { method: 'POST' }),
+		routes: (id: string):          Promise<ProjectHTTPRoute[]> => request(`/projects/${id}/routes`),
+		setRoutes: (id: string, routes: ProjectHTTPRoute[]): Promise<ProjectHTTPRoute[]> =>
+			request(`/projects/${id}/routes`, { method: 'PUT', body: JSON.stringify({ routes }) }),
 		composeResources: (id: string): Promise<ComposeResourceSummary> => request(`/projects/${id}/compose-resources`),
 		resetComposeResources: (id: string): Promise<void> => request(`/projects/${id}/compose-resources/reset`, { method: 'POST' }),
 		regenerateWebhookSecret: (id: string): Promise<{ webhookSecret: string }> =>

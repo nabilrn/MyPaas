@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEPLOY_SCRIPT = ROOT_DIR / "scripts" / "deploy-to-vm.sh"
+PROD_COMPOSE = ROOT_DIR / "docker-compose.prod.yml"
 
 
 class DeployToVmTest(unittest.TestCase):
@@ -35,6 +36,16 @@ class DeployToVmTest(unittest.TestCase):
 
         self.assertNotIn('export DOCKER_BIND_HOST="$control_gateway"', content)
         self.assertNotIn('export CADDY_UPSTREAM_HOST="$DOCKER_BIND_HOST"', content)
+
+    def test_deploy_recovers_live_podman_socket(self) -> None:
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        compose = PROD_COMPOSE.read_text(encoding="utf-8")
+
+        self.assertIn('if [[ -S /run/podman/podman.sock ]]; then', script)
+        self.assertIn('DOCKER_HOST="unix://$DOCKER_SOCKET"', script)
+        self.assertIn('export DOCKER_SOCKET DOCKER_HOST', script)
+        self.assertIn('${DOCKER_SOCKET}:/var/run/docker.sock', compose)
+        self.assertIn('DOCKER_SOCKET: /var/run/docker.sock', compose)
 
     def test_deploy_uses_checkout_sha_image_tag_by_default(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")

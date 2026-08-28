@@ -18,13 +18,13 @@ class CompatibilitySuiteTests(unittest.TestCase):
         self.assertEqual([], runner.validate_catalog(catalog, compose=False))
         self.assertGreaterEqual(len(catalog["applications"]), 10)
 
-    def test_default_selection_excludes_heavy_and_blocked_entries(self):
+    def test_default_selection_excludes_heavy_but_includes_minio_route_candidate(self):
         catalog = runner.load_catalog()
         selected = runner.selected_apps(catalog, [], include_heavy=False, include_blocked=False)
         ids = {app["id"] for app in selected}
         self.assertNotIn("immich", ids)
         self.assertNotIn("appsmith", ids)
-        self.assertNotIn("minio", ids)
+        self.assertIn("minio", ids)
         self.assertIn("excalidraw", ids)
         self.assertIn("n8n", ids)
 
@@ -45,7 +45,17 @@ class CompatibilitySuiteTests(unittest.TestCase):
         self.assertEqual("git", payload["sourceType"])
         self.assertEqual("compose", payload["deployMode"])
         self.assertEqual("https://github.com/nabilrn/MyPaas.git", payload["repoUrl"])
+        self.assertEqual("main", payload["branch"])
         self.assertEqual("compatibility/manifests/n8n", payload["baseDirectory"])
+
+    def test_project_payload_can_qualify_core_repo_candidate_branch(self):
+        catalog = runner.load_catalog()
+        app = next(item for item in catalog["applications"] if item["id"] == "minio")
+        payload = runner.project_payload(catalog, app, "compat-minio-test", "core/compose-http-routes")
+        self.assertEqual("core/compose-http-routes", payload["branch"])
+        external = next(item for item in catalog["applications"] if item["id"] == "drawdb")
+        external_payload = runner.project_payload(catalog, external, "compat-drawdb-test", "core/compose-http-routes")
+        self.assertEqual("main", external_payload["branch"])
 
     def test_registry_payload_does_not_require_repository(self):
         catalog = runner.load_catalog()
@@ -55,6 +65,30 @@ class CompatibilitySuiteTests(unittest.TestCase):
         self.assertEqual("", payload["repoUrl"])
         self.assertEqual("image", payload["deployMode"])
         self.assertTrue(payload["imageRef"])
+
+    def test_minio_declares_console_route_and_route_smoke(self):
+        catalog = runner.load_catalog()
+        app = next(item for item in catalog["applications"] if item["id"] == "minio")
+        execution = runner.merged_execution(catalog, app)
+        self.assertEqual(
+            [{"name": "console", "service": "minio", "containerPort": 9001}],
+            execution["additionalRoutes"],
+        )
+        self.assertEqual("console", execution["routeSmoke"][0]["route"])
+        self.assertEqual("/", execution["routeSmoke"][0]["path"])
+
+    def test_invalid_route_contract_is_reported(self):
+        catalog = runner.load_catalog()
+        clone = json.loads(json.dumps(catalog))
+        minio = next(item for item in clone["applications"] if item["id"] == "minio")
+        minio["execution"]["additionalRoutes"] = [
+            {"name": "Console UI", "service": "minio", "containerPort": 9001},
+            {"name": "console", "service": "", "containerPort": 70000},
+        ]
+        errors = runner.validate_catalog(clone)
+        self.assertTrue(any("additionalRoutes[0].name is invalid" in error for error in errors))
+        self.assertTrue(any("additionalRoutes[1].service is required" in error for error in errors))
+        self.assertTrue(any("additionalRoutes[1].containerPort must be 1..65535" in error for error in errors))
 
     def test_invalid_duplicate_catalog_is_reported(self):
         catalog = runner.load_catalog()

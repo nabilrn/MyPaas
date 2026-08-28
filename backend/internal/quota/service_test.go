@@ -54,6 +54,16 @@ func TestCheckUsage(t *testing.T) {
 			wantErr:  true,
 		},
 		{
+			name: "allows cpu floating point boundary noise",
+			usage: Usage{
+				MemoryLimitMb: 6144,
+				CPULimit:      3,
+				CPUUsed:       2.0000000000000004,
+				ProjectLimit:  20,
+			},
+			addedCPU: 1,
+		},
+		{
 			name: "exceeds project count",
 			usage: Usage{
 				MemoryLimitMb: 6144,

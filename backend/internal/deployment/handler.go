@@ -104,6 +104,10 @@ func (h *Handler) Rollback(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
+	if err := h.service.ReconcileProjectAdditionalRoutes(r.Context(), deployment.ProjectID); err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 	httpx.JSON(w, http.StatusOK, ResponseFromDB(deployment))
 }
 
@@ -202,6 +206,10 @@ func (h *Handler) ResetComposeResources(w http.ResponseWriter, r *http.Request) 
 		httpx.DomainError(w, err)
 		return
 	}
+	if err := h.service.ReconcileProjectAdditionalRoutes(r.Context(), id); err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -273,6 +281,10 @@ func (h *Handler) lifecycle(w http.ResponseWriter, r *http.Request, fn func(cont
 	}
 	h.statdCache.invalidate(id)
 	if err := fn(r.Context(), id); err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	if err := h.service.ReconcileProjectAdditionalRoutes(r.Context(), id); err != nil {
 		httpx.DomainError(w, err)
 		return
 	}

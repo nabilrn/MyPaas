@@ -1051,6 +1051,10 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	}); err != nil {
 		return err
 	}
+	log("Updating additional HTTP routes")
+	if err := s.ReconcileProjectAdditionalRoutes(ctx, project.ID); err != nil {
+		return err
+	}
 	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deploymentID, Status: "running"}); err != nil {
 		return err
 	}

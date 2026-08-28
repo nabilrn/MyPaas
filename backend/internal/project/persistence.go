@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"mypaas/internal/db"
@@ -13,6 +14,13 @@ import (
 
 func (s *Service) createProjectRecord(ctx context.Context, input CreateInput, name, secret string) (db.Project, error) {
 	create := func(queries *db.Queries) (db.Project, error) {
+		inUse, err := queries.ProjectHTTPHostLabelInUse(ctx, name, uuid.Nil)
+		if err != nil {
+			return db.Project{}, err
+		}
+		if inUse {
+			return db.Project{}, errs.ErrProjectNameTaken
+		}
 		if _, err := queries.GetProjectByName(ctx, name); err == nil {
 			return db.Project{}, errs.ErrProjectNameTaken
 		} else if err != pgx.ErrNoRows {
