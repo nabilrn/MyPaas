@@ -66,6 +66,23 @@ class CompatibilitySuiteTests(unittest.TestCase):
         self.assertEqual("image", payload["deployMode"])
         self.assertTrue(payload["imageRef"])
 
+    def test_repaired_template_smoke_contracts_are_explicit(self):
+        catalog = runner.load_catalog()
+        by_id = {app["id"]: app for app in catalog["applications"]}
+        self.assertEqual("/server/ping", by_id["directus"]["execution"]["smokePath"])
+        self.assertEqual("/healthz", by_id["n8n"]["execution"]["smokePath"])
+        self.assertEqual("/ghost/", by_id["ghost"]["execution"]["smokePath"])
+        self.assertEqual("/", by_id["paperless-ngx"]["execution"]["smokePath"])
+        self.assertEqual("/", by_id["openclaw"]["execution"]["smokePath"])
+
+    def test_openclaw_bootstrap_resource_is_declared(self):
+        catalog = runner.load_catalog()
+        app = next(item for item in catalog["applications"] if item["id"] == "openclaw")
+        self.assertEqual(
+            {"memoryLimitMb": 512, "cpuLimit": 0.5},
+            app["execution"]["serviceResources"]["openclaw-bootstrap"],
+        )
+
     def test_minio_declares_console_route_and_route_smoke(self):
         catalog = runner.load_catalog()
         app = next(item for item in catalog["applications"] if item["id"] == "minio")
