@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -194,10 +195,10 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	projectHandler := project.NewHandler(
 		project.NewService(queries, cfg.PublicDomain, quotaService),
 		func(r *http.Request, id uuid.UUID) error {
-			if err := deploymentService.CleanupProjectWithRoutes(r.Context(), id); err != nil {
-				return err
-			}
-			return sharedPostgresService.Cleanup(r.Context(), id)
+			return errors.Join(
+				deploymentService.CleanupProjectWithRoutes(r.Context(), id),
+				sharedPostgresService.Cleanup(r.Context(), id),
+			)
 		},
 		deploymentService.UpdateProjectRoute,
 		sharedPostgresService.Provision,
