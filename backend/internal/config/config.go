@@ -65,11 +65,12 @@ type Config struct {
 	ImageCleanupUntil   string
 	ImageCleanupWeekday time.Weekday
 
-	MaxConcurrentDeploys int
-	BuildTimeoutMinutes  int
-	UserRAMQuotaMB       int32
-	UserCPUQuota         float64
-	MaxProjects          int32
+	MaxConcurrentDeploys           int
+	BuildTimeoutMinutes            int
+	ComposeReadinessTimeoutMinutes int
+	UserRAMQuotaMB                 int32
+	UserCPUQuota                   float64
+	MaxProjects                    int32
 }
 
 func Load() (*Config, error) {
@@ -94,6 +95,13 @@ func Load() (*Config, error) {
 	buildTimeout, err := envInt("BUILD_TIMEOUT_MINUTES", 15)
 	if err != nil {
 		return nil, fmt.Errorf("BUILD_TIMEOUT_MINUTES: %w", err)
+	}
+	composeReadinessTimeout, err := envInt("COMPOSE_READINESS_TIMEOUT_MINUTES", 5)
+	if err != nil {
+		return nil, fmt.Errorf("COMPOSE_READINESS_TIMEOUT_MINUTES: %w", err)
+	}
+	if composeReadinessTimeout <= 0 {
+		return nil, fmt.Errorf("COMPOSE_READINESS_TIMEOUT_MINUTES must be greater than zero")
 	}
 	ramQuotaGB, err := envFloat("USER_RAM_QUOTA_GB", 6)
 	if err != nil {
@@ -205,11 +213,12 @@ func Load() (*Config, error) {
 		ImageCleanupUntil:   envStr("IMAGE_CLEANUP_UNTIL", "168h"),
 		ImageCleanupWeekday: imageCleanupWeekday,
 
-		MaxConcurrentDeploys: maxDeploys,
-		BuildTimeoutMinutes:  buildTimeout,
-		UserRAMQuotaMB:       int32(ramQuotaGB * 1024),
-		UserCPUQuota:         cpuQuota,
-		MaxProjects:          int32(maxProjects),
+		MaxConcurrentDeploys:           maxDeploys,
+		BuildTimeoutMinutes:            buildTimeout,
+		ComposeReadinessTimeoutMinutes: composeReadinessTimeout,
+		UserRAMQuotaMB:                 int32(ramQuotaGB * 1024),
+		UserCPUQuota:                   cpuQuota,
+		MaxProjects:                    int32(maxProjects),
 	}
 
 	if len(missing) > 0 {
