@@ -159,7 +159,7 @@ class InstallConfigTest(unittest.TestCase):
 
         self.assertIn("security_opt:\n      - no-new-privileges:true", api)
         self.assertIn("cap_drop:\n      - ALL", api)
-        self.assertIn("${DOCKER_SOCKET}:${DOCKER_SOCKET}", api)
+        self.assertIn("${DOCKER_SOCKET}:/var/run/docker.sock", api)
 
     def test_caddy_access_logs_are_persistent(self) -> None:
         compose = (ROOT_DIR / "docker-compose.prod.yml").read_text(encoding="utf-8")
