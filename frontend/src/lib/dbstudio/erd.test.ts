@@ -26,11 +26,35 @@ const tables: DBStudioTableDetails[] = [
 
 describe('layoutERD', () => {
 	it('connects foreign keys to matching table nodes', () => {
-		const graph = layoutERD(tables, 2);
+		const graph = layoutERD(tables);
 		expect(graph.nodes).toHaveLength(2);
 		expect(graph.edges).toHaveLength(1);
 		expect(graph.edges[0].from.id).toBe('public.posts');
 		expect(graph.edges[0].to.id).toBe('public.users');
+	});
+
+	it('places a dependent table after its referenced table in LR layout', () => {
+		const graph = layoutERD(tables, { direction: 'LR' });
+		const users = graph.nodes.find((node) => node.id === 'public.users');
+		const posts = graph.nodes.find((node) => node.id === 'public.posts');
+		expect(users).toBeDefined();
+		expect(posts).toBeDefined();
+		expect(posts!.x).toBeGreaterThan(users!.x);
+	});
+
+	it('places a dependent table below its referenced table in TB layout', () => {
+		const graph = layoutERD(tables, { direction: 'TB' });
+		const users = graph.nodes.find((node) => node.id === 'public.users');
+		const posts = graph.nodes.find((node) => node.id === 'public.posts');
+		expect(posts!.y).toBeGreaterThan(users!.y);
+	});
+
+	it('keeps disconnected tables in separate visual groups', () => {
+		const copy = structuredClone(tables);
+		copy.push({ schema: 'public', name: 'settings', columns: [], foreignKeys: [], indexes: [], constraints: [] });
+		const graph = layoutERD(copy);
+		expect(graph.groups).toBe(2);
+		expect(graph.nodes.find((node) => node.id === 'public.settings')?.group).not.toBe(graph.nodes.find((node) => node.id === 'public.users')?.group);
 	});
 
 	it('ignores references outside the loaded schema graph', () => {
