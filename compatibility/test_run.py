@@ -78,7 +78,7 @@ class CompatibilitySuiteTests(unittest.TestCase):
     def test_repaired_product_and_qualification_manifests_lock_same_runtime_contracts(self):
         expected_snippets = {
             "directus": ["/server/ping", "start_period: 20s"],
-            "n8n": ["docker.io/n8nio/n8n:2.36.7", "/healthz", "start_period: 20s"],
+            "n8n": ["docker.n8n.io/n8nio/n8n:2.36.7", "/healthz", "start_period: 20s"],
             "ghost": ["ghost:6-alpine", "mysql:8.0.44", "/ghost/", "start_period: 30s"],
             "paperless-ngx": [
                 "PAPERLESS_DBENGINE: postgresql",
