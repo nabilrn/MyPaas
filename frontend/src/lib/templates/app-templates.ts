@@ -261,13 +261,17 @@ export const appTemplates: AppTemplate[] = [
 		appPort: 18789,
 		memoryLimitMb: 1536,
 		cpuLimit: 1,
+		serviceResources: { 'openclaw-bootstrap': { memoryLimitMb: 512, cpuLimit: 0.5 } },
 		source: { type: 'compose', baseDirectory: 'templates/manifests/openclaw', composeFilePath: 'compose.yml', mainService: 'openclaw-gateway' },
 		env: [
 			{ key: 'OPENCLAW_GATEWAY_TOKEN', label: 'Gateway token', kind: 'secret', bytes: 32, format: 'base64url', required: true, description: 'Generated token protecting access to the OpenClaw gateway.' },
 			{ key: 'TZ', label: 'Container timezone', kind: 'text', defaultValue: 'Asia/Jakarta', description: 'Container timezone.' }
 		],
 		persistent: true,
-		limitations: ['Uses the pre-built gateway image only. CLI network sharing, host bind mounts, extra gateway ports, and Docker-socket sandboxing remain outside the current MyPaas safety boundary.'],
+		limitations: [
+			'Uses the pre-built gateway image only. CLI network sharing, host bind mounts, extra gateway ports, and Docker-socket sandboxing remain outside the current MyPaas safety boundary.',
+			'Initial remote Control UI access can require OpenClaw device pairing approval; that application-level approval is not bypassed by MyPaas.'
+		],
 		compatibility: { catalogId: 'openclaw', status: 'catalogued-pattern' }
 	},
 	{
