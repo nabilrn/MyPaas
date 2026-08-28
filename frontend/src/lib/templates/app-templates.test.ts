@@ -56,6 +56,9 @@ describe('app templates', () => {
 			db: { memoryLimitMb: 768, cpuLimit: 0.5 },
 			broker: { memoryLimitMb: 256, cpuLimit: 0.25 }
 		});
+		expect(appTemplates.find((template) => template.id === 'openclaw')?.serviceResources).toEqual({
+			'openclaw-bootstrap': { memoryLimitMb: 512, cpuLimit: 0.5 }
+		});
 	});
 
 	it('does not ship fixed values for secret fields', () => {
