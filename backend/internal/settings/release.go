@@ -97,14 +97,21 @@ func releaseStatus(ctx context.Context, currentBuildSHA string) (ReleaseStatus, 
 	status.ReleaseURL = latest.HTMLURL
 	status.PublishedAt = latest.PublishedAt
 
+	if currentBuildSHA == "" || !fullGitSHA.MatchString(currentBuildSHA) {
+		status.State = "unknown"
+		return status, nil
+	}
+
 	for _, release := range releases {
-		if currentBuildSHA != "" && strings.EqualFold(strings.TrimSpace(release.TargetCommitish), currentBuildSHA) {
+		if strings.EqualFold(strings.TrimSpace(release.TargetCommitish), currentBuildSHA) {
 			status.CurrentTag = release.TagName
 			break
 		}
 	}
-
-	if currentBuildSHA == "" || !fullGitSHA.MatchString(currentBuildSHA) {
+	if status.CurrentTag == "" {
+		// A release-channel installation should be running a known published
+		// release. An unreleased/newer build must never be offered a blind
+		// "update" that could actually downgrade it to the latest release.
 		status.State = "unknown"
 		return status, nil
 	}
@@ -157,7 +164,7 @@ func fetchPublishedReleases(ctx context.Context) ([]githubRelease, error) {
 		left, leftErr := time.Parse(time.RFC3339, published[i].PublishedAt)
 		right, rightErr := time.Parse(time.RFC3339, published[j].PublishedAt)
 		if leftErr != nil || rightErr != nil {
-			return i < j
+			return false
 		}
 		return left.After(right)
 	})
