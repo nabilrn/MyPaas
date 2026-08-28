@@ -29,6 +29,43 @@ WHERE id = $1 AND deleted_at IS NULL
 	return routes, nil
 }
 
+func (q *Queries) GetProjectAdditionalRouteConfig(ctx context.Context, projectID uuid.UUID) (ProjectAdditionalRouteConfig, error) {
+	row := q.db.QueryRow(ctx, `
+SELECT id, name, status, deploy_mode, additional_routes, deleted_at IS NOT NULL
+FROM projects
+WHERE id = $1
+`, projectID)
+	var item ProjectAdditionalRouteConfig
+	if err := row.Scan(&item.ID, &item.Name, &item.Status, &item.DeployMode, &item.Routes, &item.Deleted); err != nil {
+		return ProjectAdditionalRouteConfig{}, err
+	}
+	return item, nil
+}
+
+func (q *Queries) ProjectHTTPHostLabelInUse(ctx context.Context, label string, excludeProjectID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, `
+SELECT EXISTS (
+    SELECT 1
+    FROM projects AS p
+    WHERE p.deleted_at IS NULL
+      AND p.id <> $2
+      AND (
+          p.name = $1
+          OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(p.additional_routes) AS route
+              WHERE p.name || '-' || (route ->> 'name') = $1
+          )
+      )
+)
+`, label, excludeProjectID)
+	var inUse bool
+	if err := row.Scan(&inUse); err != nil {
+		return false, err
+	}
+	return inUse, nil
+}
+
 func (q *Queries) SetProjectAdditionalRoutes(ctx context.Context, projectID uuid.UUID, routes json.RawMessage) error {
 	_, err := q.db.Exec(ctx, `
 UPDATE projects
