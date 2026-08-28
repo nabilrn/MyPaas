@@ -68,7 +68,17 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	res["mcp_api_token"] = h.cfg.ApiToken
 	res["cloudflare_configured"] = h.cfg.CloudflareAPIToken != "" && h.cfg.CloudflareZoneID != ""
 	res["s3_configured"] = h.cfg.S3Endpoint != "" && h.cfg.S3Bucket != "" && h.cfg.S3AccessKey != "" && h.cfg.S3SecretKey != ""
-	res["build_sha"] = strings.TrimSpace(os.Getenv("MYPAAS_BUILD_SHA"))
+
+	buildSHA := strings.TrimSpace(os.Getenv("MYPAAS_BUILD_SHA"))
+	res["build_sha"] = buildSHA
+	status, statusErr := releaseStatus(r.Context(), buildSHA)
+	if statusErr != nil {
+		// Release discovery is external context. Settings remain usable when the
+		// check is unavailable, but blind dashboard updates stay disabled.
+		status.State = "unavailable"
+		status.UpdateAvailable = false
+	}
+	res["update_status"] = status
 
 	httpx.JSON(w, http.StatusOK, res)
 }
@@ -176,14 +186,9 @@ func (h *Handler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusServiceUnavailable, "BACKUP_NOT_CONFIGURED", "Backup service is not available", nil)
 		return
 	}
-	
-	// Run in background to avoid blocking the HTTP response
+
 	go func() {
-		// Use a detached context for the background operation
-		_, err := h.backupService.Run(context.Background())
-		if err != nil {
-			// Just log the error, the backup service handles its own logging mostly
-		}
+		_, _ = h.backupService.Run(context.Background())
 	}()
 
 	httpx.JSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
@@ -207,11 +212,27 @@ func (h *Handler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateSystem(w http.ResponseWriter, r *http.Request) {
+	if configuredUpdateChannel() != "release" {
+		httpx.Error(w, http.StatusConflict, "RELEASE_UPDATE_DISABLED", "Dashboard updates are disabled while this installation tracks a development ref", nil)
+		return
+	}
+
+	buildSHA := strings.TrimSpace(os.Getenv("MYPAAS_BUILD_SHA"))
+	status, err := releaseStatus(r.Context(), buildSHA)
+	if err != nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "RELEASE_CHECK_FAILED", "Could not verify the latest published MyPaas release", nil)
+		return
+	}
+	if !status.UpdateAvailable || status.LatestTag == "" {
+		httpx.Error(w, http.StatusConflict, "NO_RELEASE_UPDATE", "This MyPaas installation is already on the latest published release", nil)
+		return
+	}
+
 	installDir := os.Getenv("MYPAAS_INSTALL_DIR")
 	if installDir == "" {
 		installDir = "/root/MyPaas"
 	}
-	
+
 	scriptPath := installDir + "/scripts/update-vm.sh"
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		httpx.Error(w, http.StatusInternalServerError, "SCRIPT_NOT_FOUND", "Update script not found at "+scriptPath, nil)
@@ -219,20 +240,23 @@ func (h *Handler) UpdateSystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmd := exec.Command("bash", scriptPath)
+	// Pin the update request to the exact published release tag. update-vm.sh
+	// resolves that tag to its immutable source SHA and waits for matching images.
+	cmd.Env = append(os.Environ(), "MYPAAS_REF="+status.LatestTag)
 	cmd.SysProcAttr = nil
-	
-	// Start in background
 	if err := cmd.Start(); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "CMD_START_FAILED", "Failed to start update script", nil)
 		return
 	}
-	
-	// Detach the process by not calling Wait in this goroutine
+
 	go func() {
 		_ = cmd.Wait()
 	}()
 
-	httpx.JSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+	httpx.JSON(w, http.StatusAccepted, map[string]string{
+		"status": "accepted",
+		"target": status.LatestTag,
+	})
 }
 
 // Update upserts one or more platform settings and applies the supported
