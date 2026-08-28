@@ -194,7 +194,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	projectHandler := project.NewHandler(
 		project.NewService(queries, cfg.PublicDomain, quotaService),
 		func(r *http.Request, id uuid.UUID) error {
-			if err := deploymentService.CleanupProject(r.Context(), id); err != nil {
+			if err := deploymentService.CleanupProjectWithRoutes(r.Context(), id); err != nil {
 				return err
 			}
 			return sharedPostgresService.Cleanup(r.Context(), id)
