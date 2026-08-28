@@ -8,6 +8,20 @@
 
 	type SettingKey = 'user_ram_quota_gb' | 'user_cpu_quota' | 'max_projects' | 'build_timeout_minutes';
 	type NumericSettings = Record<SettingKey, number>;
+	type UpdateState = 'available' | 'current' | 'unavailable' | 'unknown' | 'tracking_ref';
+
+	interface UpdateStatus {
+		state: UpdateState;
+		channel: string;
+		current_build_sha?: string;
+		current_tag?: string;
+		latest_tag?: string;
+		latest_sha?: string;
+		release_url?: string;
+		published_at?: string;
+		tracking_ref?: string;
+		update_available: boolean;
+	}
 
 	const defaultSettings: NumericSettings = {
 		user_ram_quota_gb: 0,
@@ -24,6 +38,7 @@
 	let triggeringUpdate = false;
 	let updateOverlayOpen = false;
 	let currentBuildSha = '';
+	let updateStatus: UpdateStatus | null = null;
 
 	$: settingsChanged = (Object.keys(defaultSettings) as SettingKey[]).some((key) => settings[key] !== savedSettings[key]);
 	$: validationErrors = {
@@ -54,7 +69,9 @@
 				max_projects: numericValue(data.max_projects),
 				build_timeout_minutes: numericValue(data.build_timeout_minutes)
 			};
-			currentBuildSha = ((data as any).build_sha as string) || '';
+			const raw = data as unknown as Record<string, unknown>;
+			currentBuildSha = stringValue(raw.build_sha);
+			updateStatus = parseUpdateStatus(raw.update_status);
 			savedSettings = { ...settings };
 			hostStats = capacity;
 		} catch (error) {
@@ -87,6 +104,7 @@
 	}
 
 	async function triggerUpdate() {
+		if (!updateStatus?.update_available || triggeringUpdate) return;
 		triggeringUpdate = true;
 		try {
 			await api.admin.triggerUpdate();
@@ -125,6 +143,29 @@
 
 	function numericValue(value: unknown, fallback = 0) {
 		return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+	}
+
+	function stringValue(value: unknown) {
+		return typeof value === 'string' ? value : '';
+	}
+
+	function parseUpdateStatus(value: unknown): UpdateStatus | null {
+		if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+		const raw = value as Record<string, unknown>;
+		const state = stringValue(raw.state) as UpdateState;
+		if (!['available', 'current', 'unavailable', 'unknown', 'tracking_ref'].includes(state)) return null;
+		return {
+			state,
+			channel: stringValue(raw.channel),
+			current_build_sha: stringValue(raw.current_build_sha) || undefined,
+			current_tag: stringValue(raw.current_tag) || undefined,
+			latest_tag: stringValue(raw.latest_tag) || undefined,
+			latest_sha: stringValue(raw.latest_sha) || undefined,
+			release_url: stringValue(raw.release_url) || undefined,
+			published_at: stringValue(raw.published_at) || undefined,
+			tracking_ref: stringValue(raw.tracking_ref) || undefined,
+			update_available: raw.update_available === true
+		};
 	}
 
 	function numberError(value: number, min: number, max: number, integer: boolean, message: string) {
@@ -237,11 +278,33 @@
 
 		<SectionPanel title="System update">
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Build</p>
-					<p class="mt-0.5 font-mono text-sm text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						{#if updateStatus?.state === 'available'}
+							<span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-amber-500"></span>Update available</span>
+						{:else if updateStatus?.state === 'current'}
+							<span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-emerald-500"></span>Up to date</span>
+						{:else if updateStatus?.state === 'tracking_ref'}
+							<span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-sky-500"></span>Tracking ref</span>
+						{:else}
+							<span class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-gray-400"></span>Release check unavailable</span>
+						{/if}
+					</div>
+					{#if updateStatus?.state === 'available'}
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400"><span class="font-mono">{updateStatus.current_tag ?? currentBuildSha.substring(0, 12) || 'unknown'}</span> → <span class="font-mono text-gray-800 dark:text-gray-200">{updateStatus.latest_tag}</span></p>
+					{:else if updateStatus?.state === 'current'}
+						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.current_tag ?? updateStatus.latest_tag ?? currentBuildSha.substring(0, 12)}</p>
+					{:else if updateStatus?.state === 'tracking_ref'}
+						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.tracking_ref ?? 'main'}</p>
+					{:else}
+						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown build'}</p>
+					{/if}
 				</div>
-				<ActionButton variant="primary" size="sm" loading={triggeringUpdate} on:click={triggerUpdate}>Update MyPaas</ActionButton>
+				{#if updateStatus?.state === 'available'}
+					<ActionButton variant="primary" size="sm" loading={triggeringUpdate} on:click={triggerUpdate}>Update to {updateStatus.latest_tag}</ActionButton>
+				{:else}
+					<ActionButton variant="secondary" size="sm" on:click={() => void loadSettings()} disabled={loadingSettings}>Check release</ActionButton>
+				{/if}
 			</div>
 		</SectionPanel>
 
