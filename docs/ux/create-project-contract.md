@@ -1,49 +1,85 @@
 # Create Project UX Contract
 
-This is the audit source of truth for the MyPaaS Create Project flow. The Playwright audit harness should compare the rendered UI against this contract and collect evidence only. It must not redesign or fix the Create Project page.
+**Status:** Current UX behavior contract for the Create Project surface.  
+**Overall product source of truth:** current code/tests, `README.md`, `PRODUCT.md`, architecture docs, and accepted ADRs.
+
+This document defines the intended interaction contract for Create Project. It is not a separate deployment engine specification and must not override current backend validation.
 
 ## Intent
 
 Create Project is a single-page, source-first flow:
 
-1. The user provides a deploy source.
-2. MyPaaS inspects the source automatically.
-3. MyPaaS detects the runtime and deployment shape.
-4. Required configuration is shown before optional configuration.
-5. The user creates the project only after the current analysis is complete and valid.
+1. the user chooses or provides a deploy source;
+2. MyPaaS inspects the source when inspection applies;
+3. MyPaaS resolves the deployment shape;
+4. required configuration appears before optional configuration;
+5. the project can be created only after current analysis/configuration is complete and valid.
 
-Do not introduce a wizard. Keep the existing single-page flow.
+Do not introduce a wizard without a demonstrated UX need. Keep the existing single-page control-plane flow.
 
-## Required Behavior
+## Supported source paths
 
-- The Git repository input automatically starts repository inspection.
-- Runtime and deployment type are detected, not asked initially.
-- The project name may be auto-suggested from the repository or image reference until the user edits it.
-- Deployment Type remains visible in the normal flow.
-- Environment detection remains visible in the normal flow.
+The current product supports:
+
+- Git repository -> Dockerfile;
+- Git repository -> Docker Compose;
+- Git repository -> static deployment;
+- OCI registry -> image deployment.
+
+Installable OSS templates feed these same deployment primitives. Templates must not become a second deployment engine.
+
+## Required behavior
+
+- Git repository input starts/feeds repository inspection.
+- Runtime/deployment type is detected or resolved from the selected source rather than hidden behind framework marketing labels.
+- Project name may be suggested from repository/image/template context until the user edits it.
+- Deployment type remains visible in the normal flow.
+- Environment detection remains visible when relevant.
 - Required configuration appears before optional configuration.
 - Advanced settings are discoverable but secondary.
-- Base Directory normally remains Advanced unless root detection fails or the user needs a manual override.
-- Create cannot become ready while analysis is stale, incomplete, scheduled, or in flight.
+- Base Directory normally remains advanced unless root detection fails or the user needs a manual override.
+- Create cannot become ready while required analysis is stale, incomplete, scheduled, or in flight.
 - Re-analysis invalidates stale repository/runtime/environment results.
-- Re-analysis must not leave a previous ready state available while new analysis is pending.
 - Blocking Compose Doctor findings prevent readiness and surface an actionable message.
 - Required environment values block readiness until provided or satisfied by a managed capability.
-- Registry/image flows must expose the required container port when it cannot be inferred.
+- OCI image flows expose a required container port when it cannot be inferred.
 
-## Audit Expectations
+## Current bounded feature contracts
 
-The production audit answers: "What does the real deployed UI behave and look like?"
+### Registry image authentication
 
-The mocked audit answers: "Does every important state behave correctly and reproducibly?"
+ADR-022 provides one optional **installation-level** credential for a configured registry host.
 
-Production audits are non-destructive by default. They may paste repository URLs, trigger repository inspection, trigger runtime detection, expand Advanced settings, use Re-analyze, and collect screenshots, console, network, ARIA, text, controls, timing, and geometry evidence. They must not create real projects, deploy applications, delete resources, or mutate production resources.
+Create Project must not present this as arbitrary per-project/multi-registry credential management. Anonymous image pulls remain valid when no matching configured credential is required.
 
-Mocked audits may simulate edge states that are unsafe or difficult to reproduce in production, including slow inspection, backend failures, timeouts, static detection, Dockerfile detection, Compose detection, missing required env values, Compose Doctor blockers, missing ports, nested base-directory cases, stale re-analysis results, and project creation failure.
+### Compose additional HTTP routes
 
-## Evidence Checkpoints
+ADR-023 provides up to four bounded additional HTTP routes for Compose projects.
 
-Use stable checkpoint names where applicable:
+When a template/application uses this primitive, the UI may surface the derived endpoints/setup requirements, but backend validation remains authoritative:
+
+- target must be an existing Compose service;
+- target port must be declared by `ports` or `expose`;
+- hostname is platform-derived;
+- no additional host port is published;
+- no raw TCP/SSH/UDP routing;
+- current route contract is immutable after first deployment.
+
+## Audit expectations
+
+Use audits only when the Create Project behavior itself changes materially or a concrete UX defect needs evidence.
+
+A production audit answers: "What does the deployed UI actually do?"
+
+A mocked audit answers: "Does a difficult/unsafe state behave correctly?"
+
+Production audits should be non-destructive by default. Mocked audits may simulate failures/timeouts/stale analysis, missing env/ports, Compose blockers, static detection, source-mode differences, and project-creation failure.
+
+Do not repeat broad audit matrices after unrelated runtime, routing, observability, compatibility, or documentation changes.
+
+## Evidence checkpoints
+
+When a controlled audit is justified, stable checkpoint names may include:
 
 - `00-initial`
 - `01-source-entered`
@@ -54,45 +90,6 @@ Use stable checkpoint names where applicable:
 - `06-submitting`
 - `07-created`
 
-Non-destructive production audits normally omit submitting/created checkpoints.
+Collect only evidence needed to prove the targeted behavior: screenshot/ARIA state, visible controls/text, readiness state, relevant console/network failures, and geometry when layout is the issue.
 
-At each useful checkpoint collect:
-
-- screenshot
-- current URL
-- accessibility/ARIA representation
-- important visible text
-- visible controls
-- Create button enabled or disabled state
-- currently focused element
-- console errors and warnings
-- failed or relevant API requests
-- important element geometry and bounding boxes
-
-## Geometry Checks
-
-Capture bounding boxes for:
-
-- main page container
-- Create Project form
-- source selector
-- repository input
-- project name
-- analysis timeline
-- deployment type
-- environment section
-- Advanced trigger
-- Advanced content
-- Create Project CTA
-
-Flag simple DOM geometry issues only:
-
-- excessive horizontal whitespace
-- inconsistent left alignment
-- elements outside the viewport
-- horizontal overflow
-- overlapping controls
-- tiny controls
-- strange layout shifts
-
-This is not a computer-vision system. Browser DOM geometry is sufficient.
+Generated audit evidence is not permanent product documentation and must not contain credentials, decrypted env values, cookies, OAuth tokens, or registry passwords.
