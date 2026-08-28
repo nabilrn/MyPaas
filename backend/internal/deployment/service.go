@@ -343,8 +343,6 @@ func (s *Service) ContainerLogLines(ctx context.Context, projectID uuid.UUID, ta
 	service := "app"
 	if project.MainService != nil && strings.TrimSpace(*project.MainService) != "" {
 		service = strings.TrimSpace(*project.MainService)
-	} else {
-		service = "app"
 	}
 	items := make([]container.ComposeLogLine, 0, len(lines))
 	for _, line := range lines {
