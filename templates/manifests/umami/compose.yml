@@ -1,6 +1,6 @@
 services:
   umami:
-    image: ghcr.io/umami-software/umami:latest
+    image: ghcr.io/umami-software/umami:3.3.1
     restart: unless-stopped
     init: true
     ports:
@@ -17,6 +17,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
   db:
     image: postgres:15-alpine
     restart: unless-stopped
