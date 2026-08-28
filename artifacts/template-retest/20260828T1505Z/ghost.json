@@ -1,0 +1,16 @@
+{
+  "template": "ghost",
+  "projectName": "qual-ghost-145807",
+  "deploymentResult": {
+    "status": "running",
+    "id": "ffaea440-1b07-4268-826f-890c5c4862f1",
+    "error": null
+  },
+  "primaryRouteResult": {},
+  "additionalRouteResults": [],
+  "classification": "FAIL_TEMPLATE",
+  "notes": [],
+  "projectId": "3b1e9f12-79df-4749-8570-9ae4c7bc543f",
+  "error": "smoke timeout https://qual-ghost-145807.malala.tech/: {'status': 503, 'url': 'https://qual-ghost-145807.malala.tech/'}",
+  "cleanupResult": "delete requested; resources verified by API lifecycle"
+}

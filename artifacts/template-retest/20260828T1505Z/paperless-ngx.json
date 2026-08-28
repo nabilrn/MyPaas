@@ -1,0 +1,16 @@
+{
+  "template": "paperless-ngx",
+  "projectName": "qual-paperless-ngx-150031",
+  "deploymentResult": {
+    "status": "running",
+    "id": "2125f975-0cd0-42fc-b1a4-90b2cfc297dd",
+    "error": null
+  },
+  "primaryRouteResult": {},
+  "additionalRouteResults": [],
+  "classification": "FAIL_MYPAAS_PLATFORM",
+  "notes": [],
+  "projectId": "0f5d62b4-5ac1-458d-9d25-bb52d826c71f",
+  "error": "smoke timeout https://qual-paperless-ngx-150031.malala.tech/: {'status': 502, 'url': 'https://qual-paperless-ngx-150031.malala.tech/'}",
+  "cleanupResult": "delete requested; resources verified by API lifecycle"
+}

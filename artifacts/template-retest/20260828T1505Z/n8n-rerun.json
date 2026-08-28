@@ -1,0 +1,16 @@
+{
+  "template": "n8n",
+  "projectName": "qual-n8n-150614",
+  "deploymentResult": {
+    "status": "failed",
+    "id": "3b943dbc-daf2-49ca-a2de-bc0cec68ecb0",
+    "error": "/usr/bin/docker compose --env-file /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/.env -p mypaas-qual-n8n-150614 -f /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/docker-compose.mypaas.sanitized.json -f /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/docker-compose.mypaas.override.yml pull --ignore-buildable: exit status 18"
+  },
+  "primaryRouteResult": {},
+  "additionalRouteResults": [],
+  "classification": "FAIL_TEMPLATE",
+  "notes": [],
+  "projectId": "0569e492-1a67-4bb5-98e8-28abea5d76bb",
+  "error": "deployment failed: /usr/bin/docker compose --env-file /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/.env -p mypaas-qual-n8n-150614 -f /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/docker-compose.mypaas.sanitized.json -f /tmp/mypaas/builds/3b943dbc-daf2-49ca-a2de-bc0cec68ecb0/templates/manifests/n8n/docker-compose.mypaas.override.yml pull --ignore-buildable: exit status 18",
+  "cleanupResult": "delete requested; resources verified by API lifecycle"
+}

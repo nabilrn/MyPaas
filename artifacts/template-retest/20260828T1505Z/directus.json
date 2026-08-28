@@ -1,0 +1,36 @@
+{
+  "template": "directus",
+  "projectName": "qual-directus-145312",
+  "deploymentResult": {
+    "status": "running",
+    "id": "f73b3e97-9398-4583-bd00-727accdc6dc3",
+    "error": null
+  },
+  "primaryRouteResult": {
+    "status": 200,
+    "url": "https://qual-directus-145312.malala.tech/server/ping"
+  },
+  "additionalRouteResults": [],
+  "classification": "PASS_USABLE",
+  "notes": [],
+  "projectId": "5c1c1e05-90e5-473b-a2da-ab5f5523b530",
+  "primary_route_502": false,
+  "restartResult": {
+    "status": 200,
+    "url": "https://qual-directus-145312.malala.tech/server/ping"
+  },
+  "redeployResult": {
+    "status": "running"
+  },
+  "redeployRoute": {
+    "status": 200,
+    "url": "https://qual-directus-145312.malala.tech/server/ping"
+  },
+  "stop_start_result": {
+    "status": 200,
+    "url": "https://qual-directus-145312.malala.tech/server/ping"
+  },
+  "functionalResult": "baseline public endpoint and lifecycle checks passed",
+  "persistenceResult": "lifecycle smoke passed; application sentinel not attempted",
+  "cleanupResult": "delete requested; resources verified by API lifecycle"
+}
