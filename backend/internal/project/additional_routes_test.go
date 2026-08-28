@@ -9,6 +9,12 @@ import (
 	"mypaas/internal/errs"
 )
 
+func TestAdditionalRouteHostLabel(t *testing.T) {
+	if got := additionalRouteHostLabel("minio-prod", "console"); got != "minio-prod-console" {
+		t.Fatalf("additionalRouteHostLabel() = %q", got)
+	}
+}
+
 func TestNormalizeAdditionalRoutes(t *testing.T) {
 	routes, err := normalizeAdditionalRoutes("compose", []AdditionalRoute{
 		{Name: " Console ", Service: "minio", ContainerPort: 9001},
