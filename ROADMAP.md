@@ -2,7 +2,7 @@
 
 MyPaaS is a simple single-host PaaS for an owner developer or small trusted team. The roadmap optimizes for real application deployment and operation, not benchmark breadth or distributed orchestration.
 
-Current code, tests, and accepted ADRs remain the source of truth for implemented behavior. This file only defines product direction.
+Current code, tests, accepted ADRs, and real-VM qualification remain the source of truth for implemented behavior. This file defines product direction only.
 
 ## Product rule
 
@@ -12,7 +12,8 @@ Prioritize work that is:
 - useful for real application deployment or operation;
 - reversible and understandable on one host;
 - compatible with the existing Docker/Compose/static/OCI deployment engine;
-- directly visible as better deployment, database, compatibility, or dashboard UX.
+- directly visible as better deployment, database, compatibility, or dashboard UX;
+- justified by a real application onboarding problem or concrete product defect.
 
 Do not add architecture merely to create a future scaling story.
 
@@ -23,17 +24,19 @@ These are established product capabilities and should be maintained rather than 
 - project create, update, delete, redeploy, start, stop, restart, and rollback boundaries;
 - Dockerfile deployment;
 - Docker Compose deployment, including multi-service inspection and main-service selection;
-- OCI image deployment, including bounded private-registry authentication for the configured registry;
 - static deployment through Caddy;
+- OCI image deployment with anonymous pulls and one bounded configured registry credential for image mode;
 - public routing through the configured Caddy / Cloudflare delivery path;
+- bounded Compose additional HTTP routes with derived hostnames and no extra host-port publication;
 - encrypted project environment variables and repository environment discovery;
 - project-scoped persistent storage and owned-resource cleanup;
 - deployment status, history, logs, metrics, and bounded deployment concurrency;
 - project/user resource guardrails;
 - shared PostgreSQL provisioning with generated credentials;
-- DB Studio safe row browsing/editing for PostgreSQL, MySQL, and MariaDB;
+- DB Studio safe row browsing/editing and schema metadata for PostgreSQL, MySQL, and MariaDB;
 - backup, restore-drill, and migration tooling within documented boundaries;
 - the real-world compatibility catalog and runner;
+- catalog-backed OSS application templates;
 - the existing dashboard information architecture.
 
 ## DELIVERED PRODUCTIZATION
@@ -42,35 +45,59 @@ These are established product capabilities and should be maintained rather than 
 
 Delivered on `main`.
 
-The template catalog turns qualified deployment patterns into a user-facing install path without creating a second deployment engine. Initial templates cover representative image, stateful, database-backed, and multi-service applications.
+The template catalog turns catalogued deployment patterns into a user-facing install path without creating a second deployment engine. Initial templates cover representative image, stateful, database-backed, multi-service, and multi-route applications. Live compatibility status remains evidence-specific and must not be inferred merely because a template exists.
 
 ### DB Studio schema metadata and ERD
 
 Delivered on `main`.
 
-DB Studio now extends beyond row browsing with schema metadata useful for understanding relationships while remaining intentionally smaller and safer than a full SQL IDE.
+DB Studio extends beyond row browsing with schema metadata useful for understanding relationships while remaining intentionally smaller and safer than a full SQL IDE.
 
-### Private registry authentication and pull diagnostics
+### Bounded private-registry authentication
 
 Delivered on `main`.
 
-MyPaaS can authenticate OCI-image pulls to one configured registry without modifying the operator's persistent Docker credential store. Credentials are scoped by registry host and an isolated temporary Docker configuration is used for login/pull. Pull failures distinguish authentication, permission, rate-limit, and missing-image cases where the registry output supports that classification.
+MyPaaS can authenticate OCI image-mode pulls to one configured registry without modifying the operator's persistent Docker credential store. Credentials are scoped by registry host and an isolated temporary Docker configuration is used for login/pull. Pull failures distinguish authentication, permission, rate-limit, and missing-image cases where registry output supports that classification.
 
-The implementation intentionally does not add a registry proxy, pull-through cache, or credential inheritance into project Compose environments.
+The implementation intentionally does not add a registry proxy, pull-through cache, or credential inheritance into project Compose environments. See ADR-022.
 
 ### Compatibility status in product UX
 
 Delivered on `main`.
 
-Installable templates now expose a stable `Catalogued pattern` status linked to their compatibility catalog identity. The dashboard surfaces the deployment pattern, persistent-storage expectation, resource guidance, setup requirements, and known platform boundaries without fabricating a current live PASS result.
+Installable templates expose a stable catalog identity and deployment-pattern guidance without fabricating a live compatibility result. The dashboard can surface persistent-storage expectations, resource guidance, setup requirements, and known platform boundaries.
 
-This status is intentionally not a throughput, concurrent-user, hardware-capacity, or production-readiness claim. Live compatibility evidence remains in the compatibility catalog and its run artifacts.
+Compatibility status is not a throughput, concurrent-user, hardware-capacity, or production-readiness claim. Live evidence remains in compatibility run artifacts, issues, or pull requests.
+
+### Bounded Compose additional HTTP routes
+
+Delivered on `main` by PR #157 and real-VM-qualified on exact head `b35176fd0156c8128e988a2ce3a46693a150c61d` before merge.
+
+The primitive supports up to four additional HTTP routes for Compose projects. Routes use platform-derived hostnames, target declared Compose service ports, reuse the routing-network data plane, and do not expose additional host ports.
+
+MinIO is the first qualified application using this capability:
+
+- primary project route -> MinIO S3 API on `9000`;
+- derived `console` route -> MinIO Console on `9001`;
+- restart/redeploy preserved both routes;
+- reconciliation recreated a deliberately removed Console route;
+- stop/delete removed public routes and owned runtime resources.
+
+This feature intentionally does not provide raw TCP, SSH, UDP, arbitrary route hostnames, or generic public port forwarding. See ADR-023.
 
 ## IMPLEMENT NEXT
 
-### Template/env improvements driven by real applications
+There is no broad feature program required before the current beta can be evaluated as a product.
 
-Extend templates only when an application requires a reusable platform primitive, for example:
+The next work should be **compatibility-driven only**:
+
+- deploy representative real OSS applications from the compatibility catalog;
+- classify failures before changing MyPaaS;
+- fix only reusable platform-owned gaps or real correctness defects;
+- extend templates/env generation only when an application requires a reusable primitive;
+- keep documentation and landing-page claims aligned with verified behavior.
+
+Examples of valid template/env improvements when demonstrated by a real app:
 
 - generated secrets;
 - generated public URL/host values;
@@ -78,15 +105,11 @@ Extend templates only when an application requires a reusable platform primitive
 - explicit resource warnings;
 - documented persistent-storage requirements.
 
-Do not add template-specific application code patches. New primitives should come from an actual application onboarding problem or compatibility failure, not from speculative framework support.
+Do not add template-specific application code patches.
 
 ## DEFER
 
-Keep these as valid future product ideas, but do not keep active implementation programs for them until a real application demonstrates the need.
-
-### Multiple public routes / ports per project
-
-Useful for applications such as a web UI plus an additional public protocol or endpoint. Implement only with an explicit route model and clear security ownership; do not bolt arbitrary host-port exposure onto the current single-route model.
+These remain possible future product ideas, but are not active implementation targets without a concrete application requirement.
 
 ### Static asset cache policy
 
@@ -94,7 +117,7 @@ Potentially useful for known immutable build assets, but incorrect caching is a 
 
 ### Registry pull cache / mirror
 
-Authentication and clear rate-limit diagnostics come first. A registry cache introduces storage, garbage-collection, and freshness responsibilities that are not justified by the current product scope.
+Current bounded authentication and diagnostics are sufficient. A registry cache introduces storage, garbage-collection, and freshness responsibilities that are not justified by the current product scope.
 
 ### Caddy-specific delivery telemetry
 
@@ -106,7 +129,7 @@ The destructive recovery path should remain operator-oriented until the existing
 
 ### Multi-database DB Studio selector
 
-Useful for Compose projects that intentionally contain multiple SQL databases. Keep the first implementation project-local and bounded to PostgreSQL/MySQL/MariaDB; do not turn it into a global DBA connection manager.
+Useful for Compose projects that intentionally contain multiple SQL databases. Keep any future implementation project-local and bounded to PostgreSQL/MySQL/MariaDB; do not turn it into a global DBA connection manager.
 
 ## OUT OF TARGET FEATURE SCOPE
 
@@ -121,15 +144,16 @@ The following are not active MyPaaS product targets:
 - vague `production ready` milestones that cannot be tested as a specific capability;
 - Kubernetes, Nomad, Swarm, service mesh, distributed scheduler, or multi-node orchestration plans;
 - hostile multi-tenant isolation claims;
+- generic raw TCP/SSH/UDP routing or arbitrary public port forwarding;
 - user-count, RPS, or hardware-capacity promises derived from compatibility fixtures.
 
-Historical experiments may remain in Git history, closed pull requests, or archived evidence. They must not be presented as current product direction.
+Historical experiments may remain in Git history, closed pull requests, historical PRD/release notes, or archived evidence. They must not be presented as current product direction.
 
 ## DB Studio boundary
 
 DB Studio should remain a focused application-data tool.
 
-Keep improving:
+Keep improving only when a real project requires it:
 
 - table/column detail;
 - foreign-key relationships;
@@ -152,6 +176,6 @@ Keep out of scope unless the product direction changes:
 
 The compatibility suite answers one question: **can MyPaaS correctly host this declared application pattern within its documented boundary?**
 
-A PASS means the declared deployment and smoke checks worked on the tested host. It does not establish throughput, concurrent-user capacity, enterprise readiness, or a minimum universal hardware specification.
+A `PASS` means the declared deployment and smoke/lifecycle checks worked on the tested host. It does not establish throughput, concurrent-user capacity, enterprise readiness, or a minimum universal hardware specification.
 
 Use compatibility failures to discover product gaps. Fix a gap only when the capability is platform-owned, reusable, and appropriate for a single-host PaaS.

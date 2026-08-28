@@ -1,18 +1,18 @@
 # Branching Guidelines
 
-MyPaas branch names must make the work domain obvious. Avoid broad bot-generated branch names such as `agent/...` for durable work.
+MyPaaS branch names should make the work domain and outcome obvious. Avoid broad bot-generated branch names such as `agent/...` for durable work.
 
 ## Domain prefixes
 
 Use one of these prefixes:
 
-- `core/` — product-critical platform behavior: updates, backups, deployment, runtime, ports, DB Studio, auth, migrations.
-- `infra/` — VM, Docker, GHCR, Caddy, Cloudflare, statd, host cleanup, installer, systemd.
-- `ux/` — dashboard, Create Project, project detail, settings, visual consistency, accessibility.
-- `test/` — performance, benchmarks, resilience, e2e, Playwright audits, load and concurrency tests.
-- `docs/` — ADRs, runbooks, architecture, beta readiness, operational documentation.
+- `core/` — product-critical platform behavior: deployment, runtime, routing, persistence, DB Studio, auth, migrations, recovery.
+- `infra/` — VM/runtime integration, GHCR, Caddy, Cloudflare, statd, host cleanup, installer, systemd.
+- `ux/` — dashboard, Create Project, project detail, settings, templates, accessibility.
+- `test/` — targeted regression, compatibility, resilience, or e2e work tied to a concrete behavior.
+- `docs/` — ADRs, architecture, compatibility records, runbooks, operational documentation.
 - `chore/` — repository hygiene, dependency maintenance, mechanical cleanup.
-- `fix/` — narrow urgent bugfixes when the domain is unclear or intentionally cross-cutting.
+- `fix/` — narrow urgent bugfixes when the domain is intentionally cross-cutting or unclear.
 
 ## Naming pattern
 
@@ -25,46 +25,59 @@ Use:
 Examples:
 
 ```text
-core/update-release-safety
-core/backup-restore-drill
-core/dbstudio-compose-env-detection
-infra/docker-cache-retention
-infra/ghcr-sha-publish-guard
-test/perf-many-projects
-test/resilience-concurrent-deploys
-ux/create-project-source-flow
-docs/beta-readiness-gates
+core/compose-http-routes
+core/backup-restore-safety
+infra/podman-socket-recovery
+ux/template-env-guidance
+test/minio-route-regression
+docs/sync-post-pr157
 chore/repo-branch-cleanup
 ```
+
+Do not create broad branch programs merely to repeat performance matrices or historical qualification phases.
 
 ## PR titles
 
 Use the same domain language in PR titles:
 
 ```text
-core: harden VM update release flow
-core: add backup restore validation
-infra: prune Docker build cache safely
-test: add many-project performance harness
-docs: define beta readiness gates
+core: harden Compose route lifecycle
+infra: fix Podman socket resolution
+ux: clarify template environment setup
+test: cover MinIO route reconciliation
+docs: sync current product documentation
 ```
 
 ## Cleanup rules
 
-- Delete merged branches immediately.
+- Delete merged branches when practical.
 - Delete closed/unmerged experiment branches unless the owner explicitly keeps them.
 - Rename surviving long-lived work to a domain prefix before continuing it.
-- Do not create new `agent/*` branches for normal repo work.
-- One branch should have one clear outcome. Split unrelated fixes into separate branches.
+- Do not create new `agent/*` branches for normal repository work.
+- One branch should represent one domain + one outcome.
+- Split unrelated product/runtime changes rather than hiding them inside a qualification branch.
 
-## Beta readiness workstreams
+## Testing branches
 
-Use `docs/engineering/beta-readiness-master-plan.md` as the source of truth for pre-beta sequencing.
+A `test/` branch must answer a concrete product question or protect a known behavior.
 
-Use these branch families for pre-beta core work:
+Good examples:
 
-- `core/update-*` for self-update, rollback, release image consistency, and update verification.
-- `core/backup-*` for backup scheduling, restore, disaster recovery, and backup integrity checks.
-- `test/perf-*` for many-project benchmarks, resource pressure, and throughput.
-- `test/resilience-*` for concurrent deploy/redeploy/delete, failure injection, and recovery drills.
-- `infra/docker-*` for image/cache retention and disk pressure controls.
+- compatibility qualification for a real OSS workload;
+- regression coverage for a confirmed defect;
+- targeted lifecycle/recovery verification after a runtime change;
+- e2e coverage for a user-visible workflow.
+
+Do not maintain active branch families for generic throughput, many-project, direct-vs-tunnel, kernel, or resource-pressure benchmarking unless a specific product defect requires that measurement.
+
+## Source of truth
+
+For current product direction and qualification policy, use:
+
+- [`AGENTS.md`](../../AGENTS.md)
+- [`PRODUCT.md`](../../PRODUCT.md)
+- [`ROADMAP.md`](../../ROADMAP.md)
+- [`beta-readiness-gates.md`](beta-readiness-gates.md)
+- [`../../compatibility/CATALOG.md`](../../compatibility/CATALOG.md)
+
+Historical planning documents are not current branching programs.

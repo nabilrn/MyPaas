@@ -3,9 +3,9 @@
 > System context and major responsibilities for the current MyPaaS control plane.
 
 **Status:** Current  
-**Applies to:** `main` and the `v0.5.0-beta.1` release line  
-**Last verified:** 2026-08-16  
-**Verified against runtime candidate:** `ddc26c9a0f877fc5dd4133d6559c5f36123d6a31`
+**Applies to:** `main`  
+**Last verified:** 2026-08-28  
+**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
 
 ---
 
@@ -17,7 +17,7 @@ flowchart LR
     GitHub["GitHub"] --> Webhook["Webhook"]
     Automation["CLI / MCP"] --> API["Go API"]
 
-    Browser --> Edge["Cloudflare Tunnel"]
+    Browser --> Edge["Configured public delivery path"]
     Webhook --> Edge
     Edge --> Caddy["Caddy"]
     Caddy --> Dashboard["SvelteKit dashboard"]
@@ -33,7 +33,7 @@ flowchart LR
     Caddy --> Static["Static releases"]
 ```
 
-The public path terminates at Cloudflare and reaches Caddy through the tunnel. Caddy is the front door for the dashboard, `/api/*`, `/webhook/*`, static projects, and dynamically managed project routes.
+Caddy is the front door for dashboard/API/webhook traffic, static projects, primary project routes, and bounded additional Compose HTTP routes.
 
 ## Control-plane responsibilities
 
@@ -44,11 +44,13 @@ The API is the orchestration authority. Its responsibilities include:
 - GitHub OAuth and authorization;
 - project configuration and deployment state;
 - repository inspection;
-- Dockerfile, Compose, static, and public registry-image deployments;
+- Dockerfile, Compose, static, and OCI image deployments;
+- bounded private-registry authentication for image-mode pulls;
 - lifecycle actions and rollback;
-- environment-variable encryption and management;
+- encrypted environment-variable management;
 - resource quotas and settings;
-- Caddy route reconciliation;
+- primary and additional Caddy route reconciliation;
+- project-scoped persistent-storage management;
 - backups and VM migration;
 - DB Studio and optional shared PostgreSQL provisioning;
 - CLI/MCP endpoints;
@@ -62,7 +64,7 @@ The SvelteKit dashboard is an operator UI over the API. It does not directly orc
 
 ### PostgreSQL
 
-PostgreSQL stores control-plane state. It is also optionally used to provision project-specific shared databases and users. That feature is why PostgreSQL intentionally participates in both control and project networks.
+PostgreSQL stores control-plane state. It is also optionally used to provision project-specific shared databases and users, so it intentionally participates in both control and project networks.
 
 ### Caddy
 
@@ -71,15 +73,17 @@ Caddy has two distinct roles:
 1. stable ingress for dashboard/API/webhook traffic;
 2. data-plane routing and static-file serving for projects.
 
-Its production Admin API is reachable only over `/run/mypaas/caddy-admin.sock`, shared with the API container through `/run/mypaas`.
+Project routing includes the primary project hostname and, for eligible Compose projects, up to four additional platform-derived HTTP hostnames. Additional routes never grant access to the Caddy Admin socket.
+
+The production Admin API is reachable only over `/run/mypaas/caddy-admin.sock`, shared with the API container through `/run/mypaas`.
 
 ### cloudflared
 
-`cloudflared` is an outbound tunnel client. It joins the control network and sends incoming tunnel traffic to Caddy.
+`cloudflared` is the default production outbound tunnel client. It joins the control network and sends incoming tunnel traffic to Caddy. The product model remains a configured public delivery path; Cloudflare-specific provider behavior is not treated as application capacity.
 
 ### mypaas-statd
 
-`mypaas-statd` is an optional host-native systemd daemon. It reads host cgroup v2 data and exposes bounded snapshots over `/run/mypaas/statd.sock`. It is not a privileged sidecar container and does not expand the API container with host `/proc` or cgroup mounts. Runtime metrics fall back to the Docker-compatible engine path when statd is disabled or unavailable.
+`mypaas-statd` is an optional host-native systemd daemon. It reads bounded host/cgroup telemetry and exposes snapshots over `/run/mypaas/statd.sock`. Runtime metrics fall back to the Docker-compatible engine path when statd is disabled or unavailable.
 
 ## Request paths
 
@@ -88,13 +92,13 @@ Its production Admin API is reachable only over `/run/mypaas/caddy-admin.sock`, 
 ```mermaid
 sequenceDiagram
     actor User
-    participant CF as Cloudflare Tunnel
+    participant Edge as Public delivery path
     participant Caddy
     participant UI as SvelteKit dashboard
     participant API as Go API
 
-    User->>CF: HTTPS request
-    CF->>Caddy: Tunnel traffic
+    User->>Edge: HTTPS request
+    Edge->>Caddy: Request
     alt dashboard route
         Caddy->>UI: Proxy request
         UI-->>Caddy: HTML / app response
@@ -102,8 +106,8 @@ sequenceDiagram
         Caddy->>API: Proxy request
         API-->>Caddy: API response
     end
-    Caddy-->>CF: Response
-    CF-->>User: HTTPS response
+    Caddy-->>Edge: Response
+    Edge-->>User: HTTPS response
 ```
 
 ### Container-backed project
@@ -111,78 +115,63 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor Client
-    participant CF as Cloudflare Tunnel
+    participant Edge as Public delivery path
     participant Caddy
-    participant App as Routed runtime
+    participant App as Routed runtime/service
 
-    Client->>CF: Project request
-    CF->>Caddy: Tunnel traffic
+    Client->>Edge: Project hostname request
+    Edge->>Caddy: Request
     Caddy->>App: ROUTING_NETWORK alias + internal port
     App-->>Caddy: Application response
-    Caddy-->>CF: Response
-    CF-->>Client: HTTPS response
+    Caddy-->>Edge: Response
+    Edge-->>Client: HTTPS response
 ```
 
-Caddy does not normally hairpin project traffic through the allocated host port in production. The allocated host port is used to locate the intended runtime; the data plane uses a managed routing-network alias.
+Primary routes and additional Compose HTTP routes use the same bounded routing-network data plane. Additional routes may target another port on the same container or a different declared Compose service without publishing another host port.
 
 ### Static project
 
 ```mermaid
 sequenceDiagram
     actor Client
-    participant CF as Cloudflare Tunnel
+    participant Edge as Public delivery path
     participant Caddy
     participant Files as Static release directory
 
-    Client->>CF: Project request
-    CF->>Caddy: Tunnel traffic
+    Client->>Edge: Project request
+    Edge->>Caddy: Request
     Caddy->>Files: Read active static release
     Files-->>Caddy: File content
-    Caddy-->>CF: Response
-    CF-->>Client: HTTPS response
+    Caddy-->>Edge: Response
+    Edge-->>Client: HTTPS response
 ```
 
-Static projects have no persistent application container and therefore do not use runtime statd metrics.
-
-## Control plane versus workload plane
-
-```mermaid
-flowchart TB
-    subgraph Control["Control plane"]
-        API["API"]
-        Dashboard["Dashboard"]
-        DB[("PostgreSQL")]
-        CaddyControl["Caddy control path"]
-    end
-
-    subgraph Workload["Workload plane"]
-        Runtime["Project runtime"]
-        Static["Static release"]
-    end
-
-    API --> Runtime
-    CaddyControl --> Runtime
-    CaddyControl --> Static
-    Runtime -. "optional shared DB" .-> DB
-```
-
-The separation is deliberate but not absolute multi-tenant isolation. The API is privileged through engine authority, and shared PostgreSQL is intentionally reachable from workloads when that platform feature is used.
+Static projects have no persistent application container and therefore do not use runtime container metrics.
 
 ## Engine portability
 
-MyPaaS does not branch its orchestration logic into Docker-specific and Podman-specific implementations. The supported portability model is:
+MyPaaS does not maintain separate Docker-specific and Podman-specific orchestration implementations.
 
 ```mermaid
 flowchart LR
     Backend["MyPaaS backend"] --> DockerCmd["docker / docker compose command surface"]
     DockerCmd --> Compat["Docker-compatible socket"]
-    Compat --> Podman["Rootful Podman\ndefault / recommended"]
-    Compat --> DockerEngine["Docker Engine\nexplicit compatibility mode"]
+    Compat --> Podman["Rootful Podman\ndefault"]
+    Compat --> DockerEngine["Docker Engine\ncompatibility mode"]
 ```
 
-Fresh supported Ubuntu/Debian installations default to rootful Podman. The installer enables `podman.socket` and exposes the expected Docker-compatible socket path, so the backend continues to use the same command contract.
+Fresh supported installations default to rootful Podman. Production normalizes the selected host engine socket into `/var/run/docker.sock` inside the API container so the orchestration command contract remains stable.
 
-Docker Engine remains supported for existing or intentionally Docker-based installations by selecting `USE_PODMAN=false`. This keeps the runtime abstraction small while making Podman the product default rather than presenting both engines as equivalent fresh-install choices.
+## Registry boundary
+
+OCI image-mode projects support:
+
+- anonymous pulls from compatible registries;
+- one optional installation-level credential scoped to a configured registry host.
+
+The authenticated pull uses an isolated temporary Docker configuration and does not modify the host user's persistent Docker credentials. Compose image pulls do not inherit this credential automatically.
+
+No registry proxy, mirror, pull-through cache, generic credential broker, or multi-registry credential UI is provided.
 
 ## Scope
 
@@ -191,8 +180,10 @@ The current architecture intentionally does not provide:
 - Kubernetes scheduling;
 - multi-node placement or HA control-plane failover;
 - automatic horizontal autoscaling;
-- private-registry credential management;
-- VM/microVM isolation between arbitrary hostile tenants;
+- hostile-tenant VM/microVM isolation;
+- generic raw TCP, SSH, or UDP public routing;
+- arbitrary per-route custom domains;
+- registry proxy/cache/mirror behavior;
 - a second native Podman orchestration backend.
 
 Those are product/architecture changes, not hidden assumptions of the current implementation.
@@ -204,3 +195,5 @@ Those are product/architecture changes, not hidden assumptions of the current im
 - [Observability architecture](observability.md)
 - [Security boundaries](../SECURITY_BOUNDARIES.md)
 - [mypaas-statd integration](../STATD.md)
+- [ADR-022: bounded private-registry authentication](../adr/ADR-022-private-registry-auth.md)
+- [ADR-023: bounded additional Compose HTTP routes](../adr/ADR-023-compose-additional-http-routes.md)

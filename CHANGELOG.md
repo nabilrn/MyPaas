@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Bounded additional HTTP routes for Docker Compose projects, with platform-derived hostnames, service/port validation against the resolved Compose contract, route ownership checks, a four-route maximum, lifecycle reconciliation, and no additional host-port publication. MinIO is the first real-VM-qualified multi-route template. See ADR-023 and PR #157.
+- Bounded private-registry authentication for OCI image-mode deployments using one configured registry credential, isolated temporary Docker configuration, registry-host scoping, and actionable pull diagnostics. See ADR-022.
+- Real-world OSS compatibility catalog/runner and installable application templates for representative image, Dockerfile, stateful, database-backed, multi-service, and multi-route workloads.
+- DB Studio schema metadata and ERD support while retaining the bounded PostgreSQL/MySQL/MariaDB project-data-tool scope.
 - Opt-in host-side automatic MyPaas updates with a systemd timer, revision-pinned GHCR artifacts, health verification, best-effort runtime rollback, and force-push-safe bootstrap checkout synchronization. See ADR-018.
 - Public container registry deployment source for pre-built OCI images (Docker Hub, GHCR, and compatible public registries), including source-aware project UI, image pull/digest tracking, normal env/resource/Caddy runtime controls, and rollback by recorded image reference. See ADR-017.
 - Cloudflare Analytics integration in Project Metrics with global setup form, GraphQL API backend, and automatic subdomain-level filtering (Total Requests, Bandwidth, Edge Errors).
@@ -68,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
+- Production deployment now resolves a live configured/Podman/Docker engine socket on the host and maps it into the API at the stable in-container `/var/run/docker.sock` path.
+- Initial Compose deployment now reconciles declared additional HTTP routes synchronously before the deployment is marked running; lifecycle and periodic reconciliation remain recovery/maintenance paths.
 - Compose repository deployments now inject MyPaas project env vars into the public service, refresh remote image-only services before normal deploys, and wait for the main service to be running/healthy before routing traffic or marking the deployment running. Rollbacks keep their recorded image behavior.
 - Compose file discovery moved to a shared `internal/compose/` package. `project/` and `deployment/` no longer duplicate candidate lists; both use `compose.Discover` / `compose.ResolveLayout`. Compose Doctor now resolves `build.context` against the compose file's directory (matching docker compose semantics) instead of the repository root, so subdirectory compose files get accurate build-context existence checks.
 - `container.ComposeUpOptions` adds `ComposeFiles []string` and `Profiles []string`. The sanitized compose JSON is now rendered from all user `-f` files merged via `docker compose config --format json`, so user overrides are baked in and the MyPaas port-binding override always wins.
@@ -114,6 +120,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 ### Fixed
+- Rootful Podman production deployment no longer depends on a stale `/var/run/docker.sock` host configuration; the deploy path resolves the live engine socket and normalizes the API mount.
+- A successful initial Compose deployment no longer completes before declared secondary HTTP routes are synchronously reconciled into Caddy.
 - Install wizard success-page JavaScript is escaped correctly inside the Python f-string, with regression coverage for rendered auto-close behavior.
 - GHCR API/dashboard images are published only after the exact `main` commit passes the consolidated CI gate, including Python syntax and Podman compatibility checks.
 - Image-mode persistence now recognizes the optional `io.mypaas.persistent-volumes` image label and reuses the existing deterministic Docker-managed volume identity without requiring Docker `VOLUME` semantics.

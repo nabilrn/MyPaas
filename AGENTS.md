@@ -1,435 +1,270 @@
-# AGENTS.md — MyPaas
+# AGENTS.md — MyPaaS
 
-Konteks persistent untuk Codex di project ini. File ini **dibaca setiap session** — jaga agar tetap concise, actionable, dan up-to-date.
+Persistent engineering context for agents working in this repository. Keep this file concise, implementation-grounded, and consistent with current `main`.
 
----
+## Product identity
 
-## Project overview
+MyPaaS is a **single-host self-hosted PaaS** for an owner developer or a small trusted team.
 
-**MyPaas** adalah self-hosted personal deployment platform untuk satu user (owner) + beberapa collaborator whitelisted. Mengganti kebiasaan deploy manual via GitHub Actions untuk project personal, termasuk project yang butuh multi-service (app + cache + database + message broker).
+Current deployment sources/modes:
 
-**Scope ringkas:**
-- Owner connect Git repository atau public OCI image → MyPaas resolve Compose/Dockerfile/static/image mode → deploy → accessible via subdomain melalui Cloudflare + Caddy
-- Push ke GitHub → otomatis redeploy via webhook
-- Support rollback ke deployment sukses sebelumnya
-- Dashboard ala Vercel/Railway — clean, realtime metrics & logs, multi-service aware
+- Git repository -> Dockerfile;
+- Git repository -> Docker Compose;
+- Git repository -> static deployment;
+- OCI registry -> image deployment.
 
-**Detail lengkap:** baca `docs/PRD.md`. Kalau ada konflik antara AGENTS.md dan PRD, **PRD yang menang** — minta konfirmasi ke owner sebelum ambil keputusan.
+Current platform capabilities include:
 
----
+- repository inspection, base-directory/monorepo configuration, and Compose Doctor;
+- encrypted project environment variables and resource settings;
+- lifecycle actions, deployment history, logs, metrics, rollback, and cleanup;
+- Caddy routing and route reconciliation;
+- project-scoped persistent storage;
+- optional shared PostgreSQL and DB Studio Lite for PostgreSQL/MySQL/MariaDB;
+- backup/restore/migration tooling;
+- CLI, REST API, webhooks, audit logs, and optional local MCP bridge;
+- OSS templates + compatibility catalog;
+- optional `mypaas-statd` telemetry;
+- rootful Podman by default on fresh supported Linux hosts, with Docker Engine as compatibility mode.
 
-## Tech stack (locked)
+## Source of truth
 
-**Backend:**
-- Go 1.22+
-- Chi v5 (HTTP router, stdlib-compatible)
-- pgx v5 (PostgreSQL driver)
-- sqlc (type-safe SQL query generator)
-- golang-migrate (database migration)
-- golang-jwt/jwt v5 (JWT)
-- golang.org/x/oauth2 (OAuth2 client)
-- docker/docker (official Docker client)
-- go-git/go-git v5 (Git operations)
-- slog (structured logging, stdlib Go 1.21+)
-- joho/godotenv (load .env)
-- robfig/cron v3 (scheduler)
-- google/uuid (UUID generation)
+When files disagree, use this order:
 
-**Frontend:**
-- SvelteKit (latest stable)
-- TypeScript (strict mode)
-- Tailwind CSS
-- pnpm (bukan npm / yarn)
-- Chart.js (untuk metrics graph)
+1. current code, database schema/migrations, tests, installers, and production configuration;
+2. `README.md`, `PRODUCT.md`, and current files under `docs/architecture/` / `docs/SECURITY_BOUNDARIES.md`;
+3. accepted ADRs;
+4. `ROADMAP.md`;
+5. historical requirements/release notes.
 
-**Infrastructure:**
-- PostgreSQL 16
-- Docker + Docker Compose (plugin, bukan docker-compose v1)
-- Caddy 2 (internal reverse proxy, managed via Admin API)
-- Cloudflare Zero Trust Tunnel (public exposure, wildcard subdomain)
+`docs/PRD.md` is a **historical baseline**. It is not the current runtime source of truth.
 
-**Tidak dipakai (jangan suggest):**
-- Spring Boot, Kotlin, JVM-based stack (terlalu berat untuk VM 8GB)
-- Gin, Echo, Fiber (pakai Chi — stdlib compatible)
-- GORM, sqlx (pakai sqlc — type-safe, zero overhead)
-- Kubernetes, Nomad, Docker Swarm
-- Buildpack sebagai deployment mode. Nixpacks hanya inspection signal; backend/SSR tetap wajib punya Compose atau production Dockerfile
-- WebSocket untuk project telemetry/event streaming (pakai shared SSE stream)
-- React, Vue, Next.js untuk frontend (pakai SvelteKit)
-- npm/yarn (selalu pnpm)
-- Redis, RabbitMQ untuk job queue internal MyPaas (pakai in-memory queue + DB untuk scope awal)
+Files under `docs/releases/` describe their named historical release and must not override current `main` behavior.
 
----
+## Product boundaries
 
-## Repository structure
+Do not introduce or claim these without an explicit product-direction change:
 
-```mermaid
-flowchart TB
-    Root["MyPaas repository"]
-    Root --> Docs["docs/ — current architecture, ADRs, audits, historical requirements"]
-    Root --> Backend["backend/ — Go API, workers, CLI, MCP, migrations"]
-    Backend --> Cmd["cmd/api · cmd/cli · cmd/mcp"]
-    Backend --> Internal["internal/ — auth, project, deployment, container, caddy, monitoring, storage"]
-    Root --> Frontend["frontend/ — SvelteKit dashboard"]
-    Frontend --> Routes["src/routes — projects, admin, login, docs"]
-    Frontend --> Lib["src/lib — API, components, stores, types, utils"]
-    Root --> Scripts["scripts/ — bootstrap, install, verify, migration, recovery"]
-    Root --> Infra["docker-compose.* · Caddyfile.* · .env.example"]
+- Kubernetes, Nomad, Swarm, service mesh, distributed scheduling, or multi-node orchestration;
+- control-plane HA;
+- automatic horizontal scaling;
+- hostile multi-tenant isolation;
+- generic raw TCP/SSH/UDP routing;
+- arbitrary public host-port forwarding;
+- universal project-count, concurrent-user, RPS, or VM-size capacity guarantees;
+- broad kernel/sysctl/NIC tuning programs;
+- repeated throughput/k6 matrices without a concrete product defect;
+- speculative framework/platform support that is not driven by a real application gap.
+
+Compatibility work answers: **can MyPaaS correctly host this declared application pattern within the documented single-host boundary?** It is not a capacity benchmark.
+
+## Container runtime contract
+
+Fresh supported Linux installs are Podman-first.
+
+The backend intentionally keeps a Docker-compatible orchestration surface:
+
+```text
+MyPaaS backend
+  -> docker / docker compose command contract
+  -> Docker-compatible socket
+  -> rootful Podman (default) or Docker Engine (compatibility)
 ```
 
-**Aturan:**
-- Backend pakai **package-by-feature**, bukan package-by-layer
-- `internal/` untuk semua code yang tidak boleh di-import dari luar module
-- sqlc-generated code di `internal/db/`, query SQL di `query/`, migration di `migrations/`
+Production maps the selected host engine socket into the API container at the stable path:
 
----
-
-## Branching discipline
-
-Gunakan domain branch naming di `docs/engineering/branching.md`.
-
-**Wajib:**
-- Branch durable harus pakai domain prefix: `core/`, `infra/`, `ux/`, `test/`, `docs/`, `chore/`, atau narrow `fix/`.
-- Jangan bikin branch `agent/*` untuk normal repo work.
-- Satu branch = satu domain + satu outcome.
-- Delete branch setelah PR merged.
-
-**Contoh:**
-- `core/update-release-safety`
-- `core/backup-restore-drill`
-- `test/perf-many-projects`
-- `test/resilience-concurrent-deploys`
-- `infra/docker-cache-retention`
-- `docs/beta-readiness-gates`
-
----
-
-## Coding standards
-
-### Naming conventions
-
-**Go:**
-- Package: `lowercase` satu kata — `deployment`, `container`
-- Exported type: `PascalCase` — `Project`, `DeploymentStatus`
-- Exported function: `PascalCase` — `DeployProject()`
-- Unexported: `camelCase`
-- Interface: suffix `-er` untuk single-method, descriptive name untuk multi-method
-- Error variable: prefix `Err` — `ErrDockerfileNotFound`
-
-**TypeScript/Svelte:**
-- Component: `PascalCase.svelte`
-- Function: `camelCase`
-- Type/interface: `PascalCase`
-- Constant: `SCREAMING_SNAKE_CASE`
-
-**Database:**
-- Table: `snake_case` plural
-- Column: `snake_case`
-- FK: `{table_singular}_id`
-- Index: `idx_{table}_{columns}`
-
-### Error handling
-
-**Go — sentinel errors untuk domain, wrapped errors untuk context:**
-
-```go
-// internal/errs/errs.go
-var (
-    ErrDockerfileNotFound     = errors.New("dockerfile not found")
-    ErrComposeFileNotFound    = errors.New("compose file not found")
-    ErrNoDeployConfig         = errors.New("no deploy config found")
-    ErrPortPoolExhausted      = errors.New("port pool exhausted")
-    ErrProjectNameTaken       = errors.New("project name already taken")
-    ErrEmailNotWhitelisted    = errors.New("email not in whitelist")
-    ErrQuotaExceeded          = errors.New("resource quota exceeded")
-)
-
-// Wrap dengan konteks
-if err := gitClient.Clone(ctx, url, path); err != nil {
-    return fmt.Errorf("git clone %s: %w", url, err)
-}
-
-// Check sentinel dengan errors.Is
-if errors.Is(err, errs.ErrDockerfileNotFound) {
-    return httpx.Error(w, 400, "DOCKERFILE_NOT_FOUND", "...")
-}
+```text
+/var/run/docker.sock
 ```
 
-**HTTP layer:** translate domain error ke HTTP response. Jangan expose internal error.
+Do not create separate Docker and Podman orchestration backends unless a demonstrated incompatibility requires it.
 
-**Frontend:** error sebagai data, bukan exception. API client return `{ data, error }`.
+Treat engine-socket access as host authority.
 
-### Logging
+## Network and routing contract
 
-**Format:** structured JSON via `slog`.
+Production uses three distinct networks:
 
-```go
-logger.Info("deployment started",
-    "projectId", project.ID,
-    "deploymentId", deployment.ID,
-    "commitSha", commit)
+- `CONTROL_NETWORK` — API/dashboard/cloudflared/PostgreSQL/Caddy;
+- `PROJECT_NETWORK` — project workloads + optional shared PostgreSQL;
+- `ROUTING_NETWORK` — Caddy + explicitly routed workloads/services.
+
+Security invariants:
+
+- API is not a project/routing-network member;
+- Caddy is not a general project-network member;
+- project workloads never receive the engine socket;
+- project workloads never receive the Caddy Admin Unix socket;
+- production Caddy Admin uses `/run/mypaas/caddy-admin.sock`, not published TCP `2019`;
+- route resolution fails closed.
+
+### Primary routes
+
+A normal container-backed project uses its allocated host port as a runtime lookup/identity key. Production Caddy traffic uses a managed `ROUTING_NETWORK` alias + internal container port.
+
+### Additional Compose HTTP routes
+
+ADR-023 is delivered and real-VM-qualified.
+
+A Compose project may declare up to four additional routes:
+
+```text
+<project>-<route>.<PUBLIC_DOMAIN>
 ```
 
-**Level:**
-- `DEBUG` — internal detail
-- `INFO` — lifecycle event
-- `WARN` — recoverable issue
-- `ERROR` — needs attention
+Rules:
 
-**Wajib include:** `projectId`, `deploymentId`, `userId` untuk traceability.
+- Compose only;
+- HTTP(S) through Caddy only;
+- target must be an existing Compose service and a TCP port declared by `ports` or `expose`;
+- no additional host-port allocation/publication;
+- no arbitrary route hostname;
+- no raw TCP/SSH/UDP;
+- route contract immutable after first deployment;
+- additional routes must be synchronously reconciled before initial Compose deployment is marked successful;
+- lifecycle and periodic reconciliation must preserve/remove routes according to project state.
 
-**Jangan log:** webhook secrets, JWT, env var values, password, OAuth token.
+MinIO `9000` primary + `9001` Console is the first qualified pattern.
 
-### API conventions
+## Registry contract
 
-**Response format:**
+OCI image-mode deployment supports:
 
-Success: `{ "data": { ... } }`
-Error: `{ "error": { "code": "...", "message": "...", "details": { ... } } }`
+- anonymous registry pulls;
+- one optional installation-level credential for a configured registry host (ADR-022).
 
-**Status code:**
-- `200/201/202/204` — success variants
-- `400` validation, `401` unauth, `403` forbidden, `404` not found
-- `409` conflict, `429` rate limit, `500` server error
+Authenticated pulls use an isolated temporary Docker configuration and must not modify the operator's persistent Docker credentials.
 
-### Testing
+Do not claim or silently implement:
 
-**Go:**
-- Unit test untuk domain logic
-- Integration test untuk repository pakai Testcontainers
-- Handler test pakai `httptest`
-- Table-driven untuk variasi input
-- Target: >70% di `deployment/`, `auth/`, `container/`, `port/`
+- general per-project/per-registry credential management;
+- credential inheritance into Compose services;
+- registry proxy/cache/mirror behavior.
 
-**Frontend:**
-- Component test pakai Vitest
-- E2E happy path pakai Playwright (Day 15)
+## Compose trust boundary
 
----
+Repository Compose is untrusted input. Preserve the existing render/sanitize/validate path.
+
+Known rejected host-bypass classes include:
+
+- privileged mode;
+- host/container namespace sharing;
+- engine socket mounts;
+- host bind mounts;
+- devices/GPUs;
+- added Linux capabilities;
+- custom runtimes;
+- external networks/volumes;
+- unsafe build entitlements;
+- build SSH/secrets;
+- privileged lifecycle hooks.
+
+Safe engine-managed named volumes are allowed where current sanitization permits them.
+
+Do not pass arbitrary control-plane environment variables into Compose subprocesses.
+
+## Static deployment
+
+Static deployment is a first-class mode. Static projects are published atomically and served directly by Caddy without a persistent application container.
+
+Do not force static sites into Node/Nginx containers merely to match a container-centric pattern.
+
+## Persistence and cleanup
+
+Important host state includes:
+
+```text
+/var/lib/mypaas/volumes
+/var/lib/mypaas/compose
+/var/lib/mypaas/static
+/var/lib/mypaas/backups
+```
+
+Project deletion/cleanup must remove only owned resources and preserve documented recovery boundaries.
+
+Do not assume engine-managed volume state is portable between Docker and Podman; migration preflight owns that decision.
+
+## Development discipline
+
+- Read the existing implementation before proposing architecture.
+- Prefer small reusable platform primitives over application-specific patches.
+- Fix real defects narrowly.
+- Do not redesign unrelated UI while fixing backend/runtime behavior.
+- Do not create a second deployment engine for templates/compatibility fixtures.
+- Keep functions/components consistent with existing package/component conventions.
+- Do not introduce a new dependency without a clear need.
+- Never log secrets, JWTs, OAuth tokens, registry passwords, webhook secrets, or decrypted environment values.
+- Keep errors explicit and wrapped with operational context.
+- Preserve context cancellation on I/O and subprocess paths.
+
+## Testing rule
+
+Run tests proportional to the change.
+
+For source changes, use the relevant backend/frontend/script/Compose/Podman gates already present in the repository. Re-run a real VM qualification only when the change materially touches the behavior that qualification covers.
+
+Do **not** repeat unrelated runtime matrices merely to preserve a historical gate count.
+
+When an OSS compatibility run fails:
+
+1. classify the failure;
+2. determine whether it is a MyPaaS defect, application/config issue, host-resource limit, or intentional boundary;
+3. fix only platform-owned reusable defects/gaps;
+4. rerun the affected path.
+
+## Branching
+
+Use narrow domain branches:
+
+- `core/`
+- `infra/`
+- `ux/`
+- `test/`
+- `docs/`
+- `chore/`
+- narrow `fix/`
+
+One branch should represent one domain + one outcome. Delete merged branches when practical.
 
 ## Common commands
 
-### Backend
-
 ```bash
+# backend
 cd backend
+go test ./...
+go test -race ./...
+go build ./cmd/api
 
-go run ./cmd/api                  # Run dev
-go run ./backend/cmd/api          # Run dev from repo root (requires go.work)
-air                               # Live reload
-go test ./...                     # Tests
-go test -cover ./...              # Coverage
-golangci-lint run                 # Lint
-sqlc generate                     # Generate query code
-migrate -path migrations -database "$DATABASE_URL" up       # Migrate
-migrate create -ext sql -dir migrations -seq name           # New migration
-go build -o bin/mypaas-api ./cmd/api                        # Build
-```
-
-### Frontend
-
-```bash
+# frontend
 cd frontend
 pnpm install
-pnpm dev
 pnpm check
 pnpm test
 pnpm build
+
+# repository
+make test
+make build
 ```
 
-### Infrastructure
+Use the repository's existing scripts/workflows for production Compose validation, compatibility checks, and Podman compatibility rather than inventing parallel harnesses.
 
-```bash
-docker compose -f docker-compose.dev.yml up -d
-docker compose -f docker-compose.dev.yml down
-docker compose -f docker-compose.dev.yml down -v   # Reset DB
-```
+## Documentation rule
 
-### Makefile
+When a feature changes current product behavior, update the smallest relevant set of:
 
-```bash
-make dev              # Start dev dependencies
-make test             # Run all tests
-make lint             # Lint everything
-make build            # Build binary + frontend
-make migrate-up       # Run migrations
-make sqlc             # Generate sqlc code
-```
+- `README.md`;
+- `PRODUCT.md`;
+- `ROADMAP.md` when product direction/delivery state changes;
+- current architecture/security docs;
+- the accepted ADR;
+- compatibility docs when the capability affects workload support;
+- `CHANGELOG.md`.
 
----
+Do not rewrite historical PRD/release records to pretend they were always current.
 
-## Do & don't
+## Current direction
 
-### Do
+The core beta feature target is implemented. New work should primarily come from real OSS application qualification, actual user/operator friction, or reproducible defects.
 
-✅ **Ask before large changes.** 5+ file atau refactor module besar → plan dulu, konfirmasi owner.
-
-✅ **Read existing code first.** Cek utility di `internal/httpx/`, `internal/errs/` dulu.
-
-✅ **Keep functions small.** Max 40 baris, max 5 parameter.
-
-✅ **Handle context cancellation.** I/O operation wajib terima `context.Context`.
-
-✅ **Close resources dengan defer.** Langsung setelah open.
-
-✅ **Use sqlc untuk semua query.** Jangan raw SQL di handler/service.
-
-✅ **Follow security checklist** saat handle credentials atau user input.
-
-✅ **Update CHANGELOG.md** setiap feature selesai.
-
-✅ **Write ADR** untuk architectural decision.
-
-### Don't
-
-❌ **Jangan pakai ORM.** Sudah commit ke sqlc.
-
-❌ **Jangan install library baru tanpa konfirmasi.**
-
-❌ **Jangan ignore error dengan `_`** tanpa alasan documented.
-
-❌ **Jangan pakai `panic()` di business logic.** Hanya untuk unrecoverable startup state.
-
-❌ **Jangan hardcode secret.** Via env var + `.env.example` entry.
-
-❌ **Jangan commit secret.** `.env` di `.gitignore`.
-
-❌ **Jangan pakai `any`/`interface{}`.** Pakai concrete type atau generic.
-
-❌ **Jangan generate buildpack logic.** Dockerfile + Compose only.
-
-❌ **Jangan pakai WebSocket.** Semua streaming SSE.
-
-❌ **Jangan global state.** Dependency injection via constructor.
-
-❌ **Jangan test framework behavior.** Test domain & integration.
-
----
-
-## Security checklist
-
-- [ ] Secret via env var, bukan hardcode
-- [ ] Env var user encrypted AES-256-GCM
-- [ ] Webhook signature verify dengan `hmac.Equal` (constant-time)
-- [ ] JWT secret min 256-bit
-- [ ] SQL via sqlc (parameterized)
-- [ ] Docker socket mount hanya ke MyPaas, jangan ke container user
-- [ ] Port bind ke `127.0.0.1`, bukan `0.0.0.0`
-- [ ] Container user run dengan `--user` non-root
-- [ ] Git credential encrypted, jangan masuk build log
-- [ ] Log sanitization aktif (no secret/token/password)
-- [ ] CORS strict ke origin dashboard
-- [ ] Rate limit di login, webhook
-
----
-
-## Constraints yang sering dilupakan
-
-**Cloudflare Tunnel wildcard:**
-- Domain `nabilrizkinavisa.me` sudah pakai Cloudflare nameserver
-- Wildcard hostname `*.nabilrizkinavisa.me` → Caddy (`localhost:80`)
-- SSL di-handle Cloudflare, jangan Let's Encrypt di Caddy
-
-**Port pool:**
-- Range: `3001-9999`
-- Reserved: `80, 443, 8080, 5432, 22, 3000, 2019`
-- Registry di PostgreSQL `port_registry`
-- Allocate pakai `FOR UPDATE SKIP LOCKED`
-
-**Docker daemon access:**
-- MyPaas mount `/var/run/docker.sock`
-- Compose: exec ke CLI `docker compose` (jangan reimplement)
-- Docker client Go untuk single container
-
-**Async deployment:**
-- Trigger return 202 + deploymentId
-- Queue in-memory + state di DB
-- Serialize per project
-- Global max 2 concurrent deploy
-
-**Filesystem paths:**
-- Build workspace: `/tmp/mypaas/builds/{deploymentId}` (cleanup after)
-- Project volume: `/var/lib/mypaas/volumes/{projectId}` (persistent)
-- Compose workspace: `/var/lib/mypaas/compose/{projectId}` (persistent untuk logs)
-- Backup: `/var/lib/mypaas/backups/`
-
-**Deploy mode detection:**
-- Priority: `docker-compose.yml` atau `compose.yml` > `Dockerfile`
-- Keduanya ada → Compose mode
-- Tidak ada → error
-- Compose file discovery: recursive walk (depth ≤ 4) via `internal/compose.Discover`. Root prod-variants rank highest, then root base names, then subdirectory matches. `node_modules`, `vendor`, `.git`, `.next`, `dist`, `build` skipped. See ADR-016.
-- Compose file path, override paths, profiles, and workdir are persisted on `projects` (`compose_file_path`, `compose_override_paths`, `compose_profiles`, `compose_workdir`). NULL fields trigger the discovery fallback so existing projects keep working.
-- User-supplied paths must be repo-relative, forward-slash only, no `..` segments. Validated at DB CHECK constraint, `compose.ValidateUserPath`, and `compose.ResolveLayout`.
-
-**Resource limits default:**
-- Per project main: 512MB RAM, 0.5 CPU (customizable)
-- Compose non-main services: 256MB RAM, 0.25 CPU
-- Per-user quota: 6GB RAM, 3 CPU (via .env)
-
-**Static Frontend / Vite Deployments:**
-- **Zero-Container Strategy:** Jika user memiliki frontend statis (contoh: Vite, React, Svelte SPA) dan meminta bantuan setup deployment, **jangan** buatkan container Node.js / Nginx untuk frontend tersebut.
-- Arahkan user untuk menggunakan fitur **Static Deployment** MyPaas: build akan dilakukan sekali, dan folder `dist` akan di-serve langsung oleh Caddy (Zero RAM).
-- Untuk multi-service compose yang punya Vite frontend, buatkan container hanya untuk API/DB. Beritahu user bahwa frontend statisnya akan di-handle Caddy secara otomatis dan fitur statis ini bisa di *toggle* ON/OFF di MyPaas.
-
----
-
-## Reference documents
-
-- `docs/PRD.md` — source of truth scope & requirement
-- `docs/ARCHITECTURE.md` — detail teknis, diagram
-- `docs/adr/` — architecture decision records
-- `.env.example` — template env variables
-
----
-
-## Decision log (quick reference)
-
-Detail di `docs/adr/`.
-
-- **ADR-001:** Backend = Go + Chi. RAM efisien untuk VM 8GB.
-- **ADR-002:** Support Dockerfile + Docker Compose. Project real sering multi-service.
-- **ADR-003:** Frontend = SvelteKit. Bundle kecil, realtime bagus.
-- **ADR-004:** Semua streaming pakai SSE. One-way, simpler, auto-reconnect.
-- **ADR-005:** Unified SSE stream per project. Satu connection lebih efisien.
-- **ADR-006:** Caddy untuk reverse proxy. Admin API untuk dynamic reload.
-- **ADR-007:** Cloudflare Tunnel wildcard. No manual DNS, no SSL management.
-- **ADR-008:** Auth = GitHub OAuth + DB whitelist. No password management.
-- **ADR-009:** Compose via exec CLI (`docker compose`). Simpler, battle-tested.
-- **ADR-010:** sqlc untuk query, bukan ORM. Type-safe, zero overhead.
-- **ADR-011:** In-memory queue + DB state. Single-node, cukup untuk personal.
-- **ADR-016:** Flexible Compose configuration. Compose file anywhere in repo, user-chained overrides, profiles, workdir override. Single source of truth in `internal/compose/`.
-
----
-
-## How to work with me (Codex)
-
-**Prefer iteration:**
-- Small chunk → review → adjust → next
-- Jangan 10 file sekaligus tanpa konfirmasi
-
-**Ask saat ambigu:**
-- Jangan asumsi, tanya owner
-- Multiple valid approach → present trade-off
-
-**Use TodoWrite:**
-- Task 3+ langkah → todo list dulu
-- Update status saat progress
-
-**Respect existing pattern:**
-- Cek 2-3 file existing sebelum bikin baru
-- Follow naming, structure, error handling yang ada
-
-**Flag trade-off:**
-- Decision signifikan → surface ke owner
-- Jangan silent pick
-
-**Generate idiomatic Go:**
-- Accept interface, return struct
-- Error sebagai nilai
-- Context first parameter untuk I/O
-- Goroutine saat genuinely concurrent
-
----
-
-*Last updated: 2026-07-19*
-*Maintainer: Nabil Rizki Navisa*
+Do not create new roadmap work just to keep development active.

@@ -1,13 +1,14 @@
 # ADR-023: Bounded additional HTTP routes for Compose projects
 
-**Status:** Accepted candidate; requires VM qualification before merge  
-**Date:** 2026-08-27
+**Status:** Accepted and qualified  
+**Date:** 2026-08-27  
+**Qualified:** 2026-08-28
 
 ## Context
 
-Some self-hosted applications expose more than one HTTP surface. MinIO is the first catalogued workload that makes the gap concrete: the S3 API normally listens on port `9000` while the web Console listens on `9001`.
+Some self-hosted applications expose more than one HTTP surface. MinIO makes the gap concrete: the S3 API normally listens on port `9000` while the web Console listens on `9001`.
 
-MyPaaS currently gives each project one primary public hostname and one selected application port. Solving the MinIO case with arbitrary host-port publishing would weaken the existing Caddy ownership and routing-network boundary. A generic TCP proxy would also create a much larger security and lifecycle contract than the product currently needs.
+MyPaaS historically gave each project one primary public hostname and one selected application port. Solving the MinIO case with arbitrary host-port publishing would weaken the existing routing and ownership model. A generic TCP proxy would also create a much larger security/lifecycle contract than the product needs.
 
 ## Decision
 
@@ -46,32 +47,34 @@ Additional routes have these hard boundaries:
 
 ## Route validation
 
-Before persisting the contract, MyPaaS re-reads the project's persisted repository, branch, base directory, and Compose file. The resolved Compose configuration must prove that:
+Before persisting the contract, MyPaaS re-reads the project's persisted repository, branch, base directory, and Compose configuration. The resolved Compose model must prove that:
 
 1. the requested service exists;
 2. the target port is explicitly declared by that service through `ports` or `expose`;
 3. the route does not duplicate the primary `mainService:appPort` target.
 
-Client-side template metadata is therefore not trusted as runtime authority.
+Client-side template metadata is not trusted as runtime authority.
 
 ## Data plane
 
 Additional routes do not allocate extra host ports.
 
-Caddy continues to reach workloads through `ROUTING_NETWORK`. If the target Compose container already has a MyPaaS-managed routing alias, the additional route reuses it. This is required for applications such as MinIO where both public HTTP surfaces terminate on the same container: adding the Console route must not disconnect or replace the primary S3 API alias.
+Caddy reaches workloads through `ROUTING_NETWORK` and internal container ports. If the target Compose container already has a usable MyPaaS-managed routing attachment, the additional route reuses it. This is required for applications such as MinIO where both public HTTP surfaces terminate on the same container.
 
-If a non-primary Compose service is not yet attached to `ROUTING_NETWORK`, MyPaaS attaches that single service with a deterministic `mypaas-http-*` alias. A container that is already attached without any MyPaaS-managed alias fails closed rather than being disconnected and rewritten.
+If another eligible Compose service is not yet attached to `ROUTING_NETWORK`, MyPaaS attaches that service with a deterministic managed HTTP-route alias. A target that cannot be safely resolved or attached fails closed.
 
 ## Lifecycle
 
-Additional routes are reconciled from persisted project state alongside the primary Caddy route reconciliation loop.
+Additional routes are reconciled from persisted project state alongside the primary route lifecycle.
 
-- `running` Compose project: declared additional routes are present;
-- stopped/non-running project: declared additional routes are removed from Caddy;
-- API/Caddy restart: reconciliation recreates missing routes from persisted state;
-- deleted project: routes are removed and the persisted route list is cleared after cleanup.
+- initial Compose deployment reconciles required additional routes **before** the deployment is marked successful;
+- start/restart/redeploy reconcile declared routes synchronously;
+- running Compose projects should have all declared additional routes present;
+- stopped/non-running projects should not retain active public routes;
+- API/Caddy interruption can be repaired by periodic reconciliation;
+- project deletion removes additional routes and persisted route configuration after cleanup.
 
-The first version intentionally keeps the route contract immutable after first deploy. Mutable routing can be added later only if a real workload requires it and lifecycle rollback semantics are explicit.
+The first version intentionally keeps the route contract immutable after first deployment. Mutable route contracts require explicit rollback/lifecycle semantics and should be added only if a real application demonstrates the need.
 
 ## Product integration
 
@@ -82,8 +85,51 @@ The first product template using this primitive is MinIO:
 - `MINIO_BROWSER_REDIRECT_URL` is derived from the managed Console hostname;
 - root credentials are generated through the existing template secret flow.
 
+## Real-VM qualification
+
+The candidate was qualified on VM `172.104.61.180` using exact head:
+
+```text
+b35176fd0156c8128e988a2ce3a46693a150c61d
+```
+
+All required gates passed before PR #157 merged:
+
+- production deployment automatically used the host Podman socket through the stable in-container `/var/run/docker.sock` mount;
+- primary MinIO health returned HTTP `200`;
+- Console returned HTTP `200` and its hostname was present in Caddy configuration;
+- Console port `9001` was not published as an additional host port;
+- restart preserved primary and Console routes;
+- redeploy preserved primary and Console routes;
+- deleting the Console Caddy route followed by reconciliation recreated it;
+- stop removed both public routes;
+- delete removed routes, container, volume, and network cleanly.
+
+Qualification evidence was recorded as:
+
+```text
+artifacts/pr157-minio-qualification-090944.json
+```
+
+The evidence was attached to the PR conversation; generated VM evidence is not required to remain committed in the source tree.
+
+PR #157 then merged to `main` as merge commit:
+
+```text
+e12f47dd3249e2fdd69df352852ff3c9c3489245
+```
+
 ## Consequences
 
-This solves multi-HTTP-surface applications without creating a generic port-forwarding product. It deliberately does not solve Forgejo SSH, databases exposed directly to the Internet, game-server UDP, arbitrary TCP services, or custom per-route domains.
+This solves multi-HTTP-surface applications without creating a generic port-forwarding product.
 
-A code-side pass is insufficient to declare the feature qualified. A real VM must still prove primary/additional routing, lifecycle reconciliation, absence of extra host-port exposure, and cleanup before this ADR loses its candidate qualifier.
+It deliberately does **not** solve:
+
+- Forgejo SSH on port `22`;
+- databases exposed directly to the Internet;
+- game-server UDP;
+- arbitrary TCP services;
+- arbitrary custom route domains;
+- generic public host-port exposure.
+
+Those remain outside the current MyPaaS routing contract.
