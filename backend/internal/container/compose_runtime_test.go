@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
@@ -24,6 +25,27 @@ func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
 	}
 	if strings.Join(got, "|") != strings.Join(wantParts, "|") {
 		t.Fatalf("composePullArgs() = %v, want %v", got, wantParts)
+	}
+}
+
+func TestEffectiveComposeReadinessTimeoutUsesPlatformFloor(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Duration
+		want time.Duration
+	}{
+		{name: "zero", in: 0, want: minimumComposeReadinessTimeout},
+		{name: "legacy one minute", in: time.Minute, want: minimumComposeReadinessTimeout},
+		{name: "exact floor", in: minimumComposeReadinessTimeout, want: minimumComposeReadinessTimeout},
+		{name: "longer caller timeout", in: 8 * time.Minute, want: 8 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := effectiveComposeReadinessTimeout(tt.in); got != tt.want {
+				t.Fatalf("effectiveComposeReadinessTimeout(%s) = %s, want %s", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 
