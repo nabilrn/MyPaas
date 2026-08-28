@@ -46,8 +46,6 @@ services:
       ENABLE_METRICS: ${ENABLE_METRICS:-true}
       METRICS_USERNAME: ${METRICS_USERNAME:-}
       METRICS_PASSWORD: ${METRICS_PASSWORD:-}
-      # The host socket can be Docker or Podman. Keep the in-container path
-      # stable so every docker CLI invocation uses the same endpoint.
       DOCKER_SOCKET: /var/run/docker.sock
       DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
       MYPAAS_REGISTRY_HOST: ${MYPAAS_REGISTRY_HOST:-}

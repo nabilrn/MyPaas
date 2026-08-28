@@ -221,7 +221,7 @@ func (s *Service) Start(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.StartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
-		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), 60*time.Second); err != nil {
+		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), time.Duration(s.cfg.ComposeReadinessTimeoutMinutes)*time.Minute); err != nil {
 			return err
 		}
 		if err := s.addRuntimeRoute(ctx, project); err != nil {
@@ -282,7 +282,7 @@ func (s *Service) Restart(ctx context.Context, projectID uuid.UUID) error {
 		if err := s.docker.RestartComposeProject(ctx, composeProjectName(project.Name)); err != nil {
 			return err
 		}
-		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), 60*time.Second); err != nil {
+		if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), mainService(project), time.Duration(s.cfg.ComposeReadinessTimeoutMinutes)*time.Minute); err != nil {
 			return err
 		}
 		if err := s.addRuntimeRoute(ctx, project); err != nil {
@@ -1032,7 +1032,7 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		return err
 	}
 	log("Waiting for compose main service " + main + " to become ready")
-	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, 60*time.Second); err != nil {
+	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, time.Duration(s.cfg.ComposeReadinessTimeoutMinutes)*time.Minute); err != nil {
 		return err
 	}
 
@@ -1049,10 +1049,6 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 		ActiveDeploymentID: pgUUID(deploymentID),
 		Status:             "running",
 	}); err != nil {
-		return err
-	}
-	log("Updating additional HTTP routes")
-	if err := s.ReconcileProjectAdditionalRoutes(ctx, project.ID); err != nil {
 		return err
 	}
 	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deploymentID, Status: "running"}); err != nil {
@@ -1245,7 +1241,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		return err
 	}
 	log("Waiting for compose main service " + main + " to become ready")
-	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, 60*time.Second); err != nil {
+	if err := s.docker.WaitComposeServiceReady(ctx, composeProjectName(project.Name), main, time.Duration(s.cfg.ComposeReadinessTimeoutMinutes)*time.Minute); err != nil {
 		return err
 	}
 
