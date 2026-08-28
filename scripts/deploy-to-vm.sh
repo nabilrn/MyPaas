@@ -55,6 +55,34 @@ set -a
 source "$ENV_FILE"
 set +a
 
+resolve_runtime_socket() {
+  local configured="${DOCKER_SOCKET:-}"
+  if [[ -n "$configured" && -S "$configured" ]]; then
+    printf '%s' "$configured"
+    return
+  fi
+  if [[ -S /run/podman/podman.sock ]]; then
+    printf '%s' /run/podman/podman.sock
+    return
+  fi
+  if [[ -S /var/run/docker.sock ]]; then
+    printf '%s' /var/run/docker.sock
+    return
+  fi
+  return 1
+}
+
+if ! RESOLVED_DOCKER_SOCKET="$(resolve_runtime_socket)"; then
+  echo "No live Docker-compatible runtime socket found. Expected configured DOCKER_SOCKET, /run/podman/podman.sock, or /var/run/docker.sock." >&2
+  exit 1
+fi
+if [[ "${DOCKER_SOCKET:-}" != "$RESOLVED_DOCKER_SOCKET" ]]; then
+  echo "Using live container runtime socket $RESOLVED_DOCKER_SOCKET instead of configured ${DOCKER_SOCKET:-<empty>}."
+fi
+DOCKER_SOCKET="$RESOLVED_DOCKER_SOCKET"
+DOCKER_HOST="unix://$DOCKER_SOCKET"
+export DOCKER_SOCKET DOCKER_HOST
+
 if [[ -n "$EXPLICIT_IMAGE_TAG_SET" ]]; then
   MYPAAS_IMAGE_TAG="$EXPLICIT_IMAGE_TAG"
   export MYPAAS_IMAGE_TAG
