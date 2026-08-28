@@ -1,34 +1,54 @@
 # MyPaaS
 
-MyPaaS is a self-hosted deployment platform for running Git repositories and public OCI images on a Linux server.
+MyPaaS is a self-hosted **single-host PaaS** for deploying and operating applications on a Linux server you control.
 
 **Status:** Beta
 
-It is intentionally a **single-host** platform for an owner developer or a small trusted team. MyPaaS manages deployment and operations; it does not make an application scale beyond the CPU, memory, storage, network, database, or application design available to it.
+It is built for an owner developer or a small trusted team. MyPaaS manages deployment, routing, lifecycle, persistence, and common operations without pretending one server has unlimited capacity or multi-tenant isolation.
 
-## What it does
+## Current capabilities
 
-- deploy Git repositories with Dockerfile, Docker Compose, or static output;
-- deploy public OCI images from compatible registries;
+- deploy Git repositories with **Dockerfile**, **Docker Compose**, or **static output**;
+- deploy OCI images with anonymous pulls from public registries or one bounded installation-level credential for a configured private registry;
 - inspect repositories and support base-directory / monorepo deployments;
-- manage environment variables, deployment history, logs, metrics, restart, redeploy, and rollback;
-- route projects through Caddy;
-- provide optional PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
+- manage encrypted environment variables, resource settings, deployment history, logs, metrics, restart, redeploy, and rollback;
+- route applications through Caddy with derived project hostnames;
+- provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
+- provide project-scoped persistent storage and safe owned-resource cleanup;
+- provide optional shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
 - provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and an optional local MCP bridge;
+- expose qualified OSS application templates and a real-world compatibility catalog;
 - use rootful Podman by default on fresh supported hosts, with Docker Engine as a compatibility mode.
 
-Static projects are served directly by Caddy. Container-backed projects run through the configured container engine.
+Static projects are served directly by Caddy. Container-backed projects run through the configured Docker-compatible engine contract.
 
 ## Deployment modes
 
-| Source | Mode |
-| --- | --- |
-| Git repository | Dockerfile |
-| Git repository | Docker Compose |
-| Git repository | Static |
-| Public registry | OCI image |
+| Source | Mode | Notes |
+| --- | --- | --- |
+| Git repository | Dockerfile | Build and run a single managed application runtime |
+| Git repository | Docker Compose | Multi-service deployment with one primary public route and optional bounded additional HTTP routes |
+| Git repository | Static | Build/publish static files and serve them directly with Caddy |
+| OCI registry | Image | Anonymous pull or one configured authenticated registry for image-mode deployments |
 
-Dockerfile and Compose are the explicit escape hatches for applications that do not fit automatic repository inspection.
+Dockerfile and Compose remain the explicit escape hatches for applications that do not fit repository inspection.
+
+## Compose additional HTTP routes
+
+Compose projects may declare up to four additional HTTP routes when an application has multiple HTTP surfaces, for example MinIO's S3 API and web Console.
+
+The contract is intentionally narrow:
+
+- Compose only;
+- HTTP(S) through Caddy only;
+- derived hostname `<project>-<route>.<public-domain>`;
+- target must be an existing Compose service and a TCP port declared by `ports` or `expose`;
+- no extra host-port publication for the secondary route;
+- no arbitrary custom hostname;
+- no raw TCP, SSH, or UDP forwarding;
+- route contract is immutable after first deployment.
+
+MinIO is the first real-VM-qualified application using this primitive. See [`docs/adr/ADR-023-compose-additional-http-routes.md`](docs/adr/ADR-023-compose-additional-http-routes.md) and [`compatibility/CATALOG.md`](compatibility/CATALOG.md).
 
 ## Operating boundary
 
@@ -36,31 +56,24 @@ MyPaaS currently assumes:
 
 - one Linux host;
 - an owner or small trusted team;
-- public OCI registries;
 - no Kubernetes or multi-node scheduler;
+- no control-plane high availability;
 - no hostile multi-tenant isolation guarantee;
+- no automatic horizontal application scaling;
+- no registry proxy, mirror, or pull-through cache;
 - no universal application-capacity guarantee.
 
-Application capacity is workload-specific. A small static site, a Go service, a large SSR application, a database-heavy service, and a memory-intensive build can have completely different resource requirements on the same host. Project count, concurrent users, RPS, or a specific VM size are therefore **not product capabilities claimed by MyPaaS**.
+Application capacity is workload-specific. A static site, Go API, SSR application, database-heavy service, and memory-intensive build can have very different resource requirements on the same host. Project count, concurrent users, RPS, and a particular VM size are therefore **not fixed product capabilities claimed by MyPaaS**.
 
-On a single-host installation, builds, the MyPaaS control plane, databases, and running applications may compete for the same host resources. Operators should size the host for their workloads and lower deployment concurrency when resource pressure requires it.
+On a single-host installation, builds, the MyPaaS control plane, databases, and running applications share host resources. Operators remain responsible for sizing the host for their workloads.
 
-See [`PRODUCT.md`](PRODUCT.md) and [`docs/SECURITY_BOUNDARIES.md`](docs/SECURITY_BOUNDARIES.md) for the current product and security boundaries.
+## Verification and compatibility
 
-## Verification
+Repository CI and controlled runtime checks cover platform behavior such as deployment safety, rollback, backup/restore, cleanup, routing reconciliation, Create Project behavior, DB Studio, and Docker/Podman compatibility.
 
-Repository CI and controlled runtime regression tests cover platform behavior such as:
+The compatibility suite separately asks whether MyPaaS can correctly host representative real-world OSS application patterns. A compatibility `PASS` means the declared deployment and smoke/lifecycle checks succeeded on the tested host. It is **not** a throughput, concurrency, or hardware-capacity certification.
 
-- update and rollback safety;
-- backup and restore;
-- concurrent deployment state and failure isolation;
-- image/cache retention;
-- Create Project behavior;
-- DB Studio connectivity and access controls.
-
-These checks verify MyPaaS behavior. They are **not a benchmark or certification of how much application traffic a particular server can handle**.
-
-See [`docs/engineering/beta-readiness-gates.md`](docs/engineering/beta-readiness-gates.md) for the retained runtime verification record.
+See [`docs/engineering/beta-readiness-gates.md`](docs/engineering/beta-readiness-gates.md) and [`compatibility/CATALOG.md`](compatibility/CATALOG.md).
 
 ## Architecture
 
@@ -79,11 +92,13 @@ flowchart TB
 
 ## Documentation
 
-- [`docs/README.md`](docs/README.md) — documentation index
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture
+- [`PRODUCT.md`](PRODUCT.md) — current product scope and non-goals
+- [`ROADMAP.md`](ROADMAP.md) — current product direction
+- [`docs/README.md`](docs/README.md) — documentation index and source-of-truth rules
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — canonical architecture
 - [`docs/SECURITY_BOUNDARIES.md`](docs/SECURITY_BOUNDARIES.md) — trust and isolation boundaries
+- [`compatibility/CATALOG.md`](compatibility/CATALOG.md) — real-world application compatibility
 - [`docs/STATD.md`](docs/STATD.md) — optional native telemetry integration
-- [`PRODUCT.md`](PRODUCT.md) — product scope and non-goals
 
 ## Development
 
