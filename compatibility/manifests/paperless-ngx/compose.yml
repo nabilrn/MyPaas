@@ -30,6 +30,7 @@ services:
       - "8000:8000"
     environment:
       PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBENGINE: postgresql
       PAPERLESS_DBHOST: db
       PAPERLESS_DBNAME: paperless
       PAPERLESS_DBUSER: paperless
@@ -37,11 +38,18 @@ services:
       PAPERLESS_SECRET_KEY: compatibility-only-paperless-secret-change-me
       PAPERLESS_URL: http://localhost:8000
       PAPERLESS_TIME_ZONE: Asia/Jakarta
+      PAPERLESS_BIND_ADDR: 0.0.0.0
     volumes:
       - paperless-data:/usr/src/paperless/data
       - paperless-media:/usr/src/paperless/media
       - paperless-export:/usr/src/paperless/export
       - paperless-consume:/usr/src/paperless/consume
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=3).read(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
 
 volumes:
   paperless-redis:
