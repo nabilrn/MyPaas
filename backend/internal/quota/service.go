@@ -24,6 +24,7 @@ const runtimeUsageTimeout = 10000 * time.Millisecond
 const (
 	defaultSecondaryMemoryMB = int32(256)
 	defaultSecondaryCPU      = 0.25
+	cpuQuotaEpsilon          = 1e-9
 )
 
 type Service struct {
@@ -195,7 +196,7 @@ func checkUsage(usage Usage, addedMemoryMb int32, addedCPU float64, addedProject
 	if usage.MemoryLimitMb > 0 && usage.MemoryUsedMb+addedMemoryMb > usage.MemoryLimitMb {
 		return fmt.Errorf("%w: memory %dMB would exceed limit %dMB", errs.ErrQuotaExceeded, usage.MemoryUsedMb+addedMemoryMb, usage.MemoryLimitMb)
 	}
-	if usage.CPULimit > 0 && usage.CPUUsed+addedCPU > usage.CPULimit {
+	if usage.CPULimit > 0 && usage.CPUUsed+addedCPU > usage.CPULimit+cpuQuotaEpsilon {
 		return fmt.Errorf("%w: CPU %.2f would exceed limit %.2f", errs.ErrQuotaExceeded, usage.CPUUsed+addedCPU, usage.CPULimit)
 	}
 	return nil
