@@ -36,7 +36,7 @@ These are established product capabilities and should be maintained rather than 
 - DB Studio safe row browsing/editing and schema metadata for PostgreSQL, MySQL, and MariaDB;
 - backup, restore-drill, and migration tooling within documented boundaries;
 - the real-world compatibility catalog and runner;
-- qualified OSS application templates;
+- catalog-backed OSS application templates;
 - the existing dashboard information architecture.
 
 ## DELIVERED PRODUCTIZATION
@@ -45,7 +45,7 @@ These are established product capabilities and should be maintained rather than 
 
 Delivered on `main`.
 
-The template catalog turns qualified deployment patterns into a user-facing install path without creating a second deployment engine. Initial templates cover representative image, stateful, database-backed, multi-service, and multi-route applications.
+The template catalog turns catalogued deployment patterns into a user-facing install path without creating a second deployment engine. Initial templates cover representative image, stateful, database-backed, multi-service, and multi-route applications. Live compatibility status remains evidence-specific and must not be inferred merely because a template exists.
 
 ### DB Studio schema metadata and ERD
 
