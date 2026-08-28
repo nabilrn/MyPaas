@@ -1051,6 +1051,10 @@ func (s *Service) runComposeFromWorkspace(ctx context.Context, project db.Projec
 	}); err != nil {
 		return err
 	}
+	log("Updating additional HTTP routes")
+	if err := s.ReconcileProjectAdditionalRoutes(ctx, project.ID); err != nil {
+		return err
+	}
 	if err := s.queries.FinishDeployment(ctx, db.FinishDeploymentParams{ID: deploymentID, Status: "running"}); err != nil {
 		return err
 	}
@@ -1178,7 +1182,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 		return err
 	}
 	if !containsString(services, main) {
-		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation, main)
+		return fmt.Errorf("%w: compose service %q was not found", errs.ErrValidation)
 	}
 	overrideImageTag := ""
 	buildServices, err := s.docker.ComposeBuildServices(ctx, layout.WorkDir, layout.EnvFile, layout.UserFiles...)
@@ -1214,7 +1218,7 @@ func (s *Service) switchComposeRelease(ctx context.Context, project db.Project, 
 			slog.Warn("release compose rollback port after failed deploy", "projectId", project.ID, "port", port, "error", err)
 		}
 		if err := s.queries.SetProjectAllocatedPort(context.Background(), db.SetProjectAllocatedPortParams{ID: project.ID}); err != nil {
-			slog.Warn("clear compose rollback allocated port after failed deploy", "projectId", project.ID, "port", port, "error", err)
+			slog.Warn("clear compose allocated port after failed deploy", "projectId", project.ID, "port", port, "error", err)
 		}
 	}()
 
