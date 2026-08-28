@@ -12,6 +12,8 @@ import (
 
 var ErrComposeServiceUnhealthy = errors.New("compose service unhealthy")
 
+const minimumComposeReadinessTimeout = 5 * time.Minute
+
 type composeHealthState struct {
 	Status string `json:"Status"`
 }
@@ -79,6 +81,18 @@ func evaluateComposeReadiness(state composeContainerState) (bool, error) {
 	}
 }
 
+func effectiveComposeReadinessTimeout(timeout time.Duration) time.Duration {
+	// Compose healthchecks commonly use start_period plus multiple retry
+	// intervals. A one-minute caller timeout can therefore reject a service
+	// while its declared health contract is still legitimately in "starting".
+	// Keep a bounded platform floor while still allowing callers to request a
+	// longer timeout when needed.
+	if timeout < minimumComposeReadinessTimeout {
+		return minimumComposeReadinessTimeout
+	}
+	return timeout
+}
+
 func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, service string) (composeContainerState, error) {
 	id, err := d.composeServiceContainer(ctx, projectName, service)
 	if err != nil {
@@ -104,9 +118,7 @@ func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, servic
 // service is actually usable. Containers without a healthcheck are ready once
 // Docker reports them running; containers with a healthcheck must be healthy.
 func (d *DockerCLI) WaitComposeServiceReady(ctx context.Context, projectName, service string, timeout time.Duration) error {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+	timeout = effectiveComposeReadinessTimeout(timeout)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
