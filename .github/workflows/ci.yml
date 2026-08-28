@@ -130,12 +130,20 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y podman catatonit
+          sudo apt-get install -y podman catatonit conmon crun
           sudo systemctl stop docker.service docker.socket podman.service podman.socket || true
           sudo mkdir -p /run/podman /run/user/0
           sudo chmod 700 /run/user/0
           sudo rm -f /run/podman/podman.sock /var/run/docker.sock
-          sudo sh -c 'export PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0; nohup /usr/bin/podman system service --time=0 unix:///run/podman/podman.sock >/tmp/mypaas-podman-service.log 2>&1 &'
+          cat >/tmp/mypaas-containers.conf <<'EOF'
+          [engine]
+          conmon_path = ["/usr/bin/conmon"]
+          runtime = "crun"
+
+          [engine.runtimes]
+          crun = ["/usr/bin/crun"]
+          EOF
+          sudo sh -c 'export PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf; nohup /usr/bin/podman system service --time=0 unix:///run/podman/podman.sock >/tmp/mypaas-podman-service.log 2>&1 &'
           for _ in $(seq 1 40); do
             if [[ -S /run/podman/podman.sock ]]; then
               break
@@ -151,7 +159,7 @@ jobs:
       - name: Verify Docker CLI is backed by packaged Podman
         run: |
           set -euo pipefail
-          clean_env=(env PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0)
+          clean_env=(env PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf)
           expected="$(sudo "${clean_env[@]}" /usr/bin/podman version --format '{{.Client.Version}}')"
           actual="$(sudo docker version --format '{{.Server.Version}}')"
           if [[ "$actual" != "$expected" ]]; then
@@ -160,6 +168,10 @@ jobs:
             sudo "${clean_env[@]}" /usr/bin/podman version >&2 || true
             exit 1
           fi
+          conmon_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.Conmon.Path}}')"
+          runtime_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.OCIRuntime.Path}}')"
+          test "$conmon_path" = "/usr/bin/conmon"
+          test "$runtime_path" = "/usr/bin/crun"
           sudo docker version | tee /tmp/mypaas-docker-version.txt
           grep -q 'Podman Engine' /tmp/mypaas-docker-version.txt
           sudo docker compose version
