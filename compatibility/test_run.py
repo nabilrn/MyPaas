@@ -75,6 +75,33 @@ class CompatibilitySuiteTests(unittest.TestCase):
         self.assertEqual("/", by_id["paperless-ngx"]["execution"]["smokePath"])
         self.assertEqual("/", by_id["openclaw"]["execution"]["smokePath"])
 
+    def test_repaired_product_and_qualification_manifests_lock_same_runtime_contracts(self):
+        expected_snippets = {
+            "directus": ["/server/ping", "start_period: 20s"],
+            "n8n": ["docker.io/n8nio/n8n:2.36.7", "/healthz", "start_period: 20s"],
+            "ghost": ["ghost:6-alpine", "mysql:8.0.44", "/ghost/", "start_period: 30s"],
+            "paperless-ngx": [
+                "PAPERLESS_DBENGINE: postgresql",
+                "PAPERLESS_BIND_ADDR: 0.0.0.0",
+                "http://localhost:8000/",
+                "start_period: 30s",
+            ],
+            "openclaw": [
+                "openclaw-bootstrap:",
+                "condition: service_completed_successfully",
+                "setup\", \"--baseline",
+                "dist/docker-healthcheck.js",
+            ],
+            "umami": ["ghcr.io/umami-software/umami:3.3.1", "/api/heartbeat", "start_period: 30s"],
+        }
+
+        for app_id, snippets in expected_snippets.items():
+            for root in ("compatibility/manifests", "templates/manifests"):
+                path = runner.ROOT / root / app_id / "compose.yml"
+                text = path.read_text(encoding="utf-8")
+                for snippet in snippets:
+                    self.assertIn(snippet, text, f"{path.relative_to(runner.ROOT)} missing {snippet!r}")
+
     def test_openclaw_bootstrap_resource_is_declared(self):
         catalog = runner.load_catalog()
         app = next(item for item in catalog["applications"] if item["id"] == "openclaw")
