@@ -51,6 +51,7 @@
 	$: hostMemoryTotal = hostStats?.memory?.total_bytes ?? hostStats?.host_ram_bytes ?? 0;
 	$: hostMemoryUsed = hostStats?.memory ? Math.max(0, hostStats.memory.total_bytes - hostStats.memory.available_bytes) : 0;
 	$: hostStorageUsed = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
+	$: currentVersionLabel = updateStatus?.current_tag || currentBuildSha.substring(0, 12) || 'unknown';
 
 	onMount(() => {
 		void loadSettings();
@@ -291,11 +292,11 @@
 						{/if}
 					</div>
 					{#if updateStatus?.state === 'available'}
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400"><span class="font-mono">{updateStatus.current_tag ?? currentBuildSha.substring(0, 12) || 'unknown'}</span> → <span class="font-mono text-gray-800 dark:text-gray-200">{updateStatus.latest_tag}</span></p>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400"><span class="font-mono">{currentVersionLabel}</span> → <span class="font-mono text-gray-800 dark:text-gray-200">{updateStatus.latest_tag}</span></p>
 					{:else if updateStatus?.state === 'current'}
-						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.current_tag ?? updateStatus.latest_tag ?? currentBuildSha.substring(0, 12)}</p>
+						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.current_tag || updateStatus.latest_tag || currentVersionLabel}</p>
 					{:else if updateStatus?.state === 'tracking_ref'}
-						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.tracking_ref ?? 'main'}</p>
+						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{updateStatus.tracking_ref || 'main'}</p>
 					{:else}
 						<p class="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown build'}</p>
 					{/if}
