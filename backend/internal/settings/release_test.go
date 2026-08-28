@@ -66,6 +66,24 @@ func TestReleaseStatusReportsCurrentRelease(t *testing.T) {
 	}
 }
 
+func TestReleaseStatusUnknownBuildDoesNotOfferDowngrade(t *testing.T) {
+	server := releaseServer(t)
+	defer server.Close()
+	t.Setenv("MYPAAS_UPDATE_CHANNEL", "release")
+	t.Setenv("MYPAAS_RELEASES_API_URL", server.URL)
+
+	status, err := releaseStatus(context.Background(), "4444444444444444444444444444444444444444")
+	if err != nil {
+		t.Fatalf("releaseStatus: %v", err)
+	}
+	if status.State != "unknown" || status.UpdateAvailable {
+		t.Fatalf("unknown build must fail closed, got %#v", status)
+	}
+	if status.LatestTag != "v0.5.0-beta.3" {
+		t.Fatalf("expected latest release context, got %#v", status)
+	}
+}
+
 func TestReleaseStatusRefChannelDoesNotCallGitHub(t *testing.T) {
 	called := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
