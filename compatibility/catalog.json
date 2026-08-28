@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-27",
+  "generatedAt": "2026-08-28",
   "purpose": "Real-world self-hosted application compatibility; not performance or capacity benchmarking.",
   "defaults": {
     "repoUrl": "https://github.com/nabilrn/MyPaas.git",
@@ -99,7 +99,7 @@
       "class": "app-plus-database",
       "resourceTier": "moderate",
       "upstream": "https://github.com/umami-software/umami",
-      "evidence": "Official installation ships Docker Compose with PostgreSQL and serves on port 3000.",
+      "evidence": "Official Compose uses PostgreSQL 15 and /api/heartbeat; the MyPaas manifest pins stable v3.3.1 for repeatable qualification.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -124,7 +124,7 @@
       "class": "stateful-realtime",
       "resourceTier": "moderate",
       "upstream": "https://github.com/directus/directus",
-      "evidence": "Official Docker guide supports SQLite persistence and WebSockets on port 8055.",
+      "evidence": "Official Docker guide supports SQLite persistence and WebSockets on port 8055; /server/ping is the public liveness endpoint used by this qualification.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -135,7 +135,7 @@
         "appPort": 8055,
         "memoryLimitMb": 1024,
         "cpuLimit": 1.0,
-        "smokePath": "/server/health",
+        "smokePath": "/server/ping",
         "expectedStatus": [200]
       },
       "limitations": []
@@ -195,7 +195,7 @@
       "class": "automation-platform",
       "resourceTier": "moderate",
       "upstream": "https://github.com/n8n-io/n8n",
-      "evidence": "Official docs recommend Docker and expose the n8n service on port 5678.",
+      "evidence": "Official current Docker guidance uses docker.io/n8nio/n8n on port 5678; the MyPaas manifest pins stable 2.36.7 for repeatable qualification.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -217,7 +217,7 @@
       "class": "document-platform",
       "resourceTier": "moderate",
       "upstream": "https://github.com/paperless-ngx/paperless-ngx",
-      "evidence": "Official deployment recommends Docker Compose and PostgreSQL; the web service listens on port 8000.",
+      "evidence": "Official PostgreSQL deployment requires PAPERLESS_DBENGINE=postgresql and serves the web application on port 8000.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -243,7 +243,7 @@
       "class": "cms-plus-database",
       "resourceTier": "moderate",
       "upstream": "https://github.com/TryGhost/Ghost",
-      "evidence": "Ghost 6 self-hosting documentation provides a Docker Compose path with Ghost and MySQL.",
+      "evidence": "Ghost 6 self-hosting documentation provides a Docker Compose path with Ghost and MySQL; this baseline waits for the Ghost HTTP service rather than treating a running container as ready.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -294,7 +294,7 @@
       "class": "agent-gateway",
       "resourceTier": "moderate",
       "upstream": "https://github.com/openclaw/openclaw",
-      "evidence": "Official docs publish pre-built GHCR images and a Docker gateway on port 18789; source builds require substantially more RAM.",
+      "evidence": "Official Docker flow initializes config/workspace before starting the gateway. This entry uses the pre-built image, a baseline setup service, and the gateway on port 18789.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
@@ -305,10 +305,13 @@
         "appPort": 18789,
         "memoryLimitMb": 1536,
         "cpuLimit": 1.0,
+        "serviceResources": {
+          "openclaw-bootstrap": {"memoryLimitMb": 512, "cpuLimit": 0.5}
+        },
         "smokePath": "/",
         "expectedStatus": [200, 401, 404]
       },
-      "limitations": ["The suite uses the pre-built gateway image and a named volume. OpenClaw CLI network_mode sharing, host bind mounts, extra gateway ports and Docker-socket sandboxing are not qualified because they conflict with current MyPaaS safety boundaries."]
+      "limitations": ["The suite uses the pre-built gateway image and a named volume. OpenClaw CLI network_mode sharing, host bind mounts, extra gateway ports and Docker-socket sandboxing are not qualified because they conflict with current MyPaaS safety boundaries.", "Initial remote Control UI access can require OpenClaw device pairing approval; that application-level approval is not bypassed by MyPaas."]
     },
     {
       "id": "immich",
