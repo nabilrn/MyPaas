@@ -147,8 +147,9 @@ if docker run --rm --network "$routing_network" alpine:3.20 \
   exit 1
 fi
 
-# Compose contract: main service remains on PROJECT_NETWORK; route activation
-# attaches only the selected main-service container to ROUTING_NETWORK.
+# Compose contract: image refresh must work through the same Docker Compose
+# provider used by MyPaaS before the main service is started. This specifically
+# guards the rootful Podman + `docker compose pull --ignore-buildable` path.
 cat > "$tmpdir/compose.yml" <<EOF
 services:
   app:
@@ -164,6 +165,7 @@ networks:
     name: "$project_network"
 EOF
 
+docker compose -p "$compose_project" -f "$tmpdir/compose.yml" pull --ignore-buildable >/dev/null
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" up -d >/dev/null
 compose_ids="$(docker ps -aq --filter "label=com.docker.compose.project=$compose_project")"
 test -n "$compose_ids"
