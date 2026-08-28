@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"mypaas/internal/db"
 	projectpkg "mypaas/internal/project"
 )
@@ -37,6 +39,23 @@ func (s *Service) ReconcileAdditionalRoutes(ctx context.Context) error {
 	return firstErr
 }
 
+func (s *Service) ReconcileProjectAdditionalRoutes(ctx context.Context, projectID uuid.UUID) error {
+	config, err := s.queries.GetProjectAdditionalRouteConfig(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("get additional route config for project %s: %w", projectID, err)
+	}
+	return s.reconcileAdditionalRouteConfig(ctx, config)
+}
+
+func (s *Service) CleanupProjectWithRoutes(ctx context.Context, projectID uuid.UUID) error {
+	config, configErr := s.queries.GetProjectAdditionalRouteConfig(ctx, projectID)
+	cleanupErr := s.CleanupProject(ctx, projectID)
+	if configErr != nil {
+		return errors.Join(cleanupErr, fmt.Errorf("get additional route config for project %s: %w", projectID, configErr))
+	}
+	return errors.Join(cleanupErr, s.removeAdditionalRouteConfig(ctx, config))
+}
+
 func (s *Service) reconcileAdditionalRouteConfig(ctx context.Context, config db.ProjectAdditionalRouteConfig) error {
 	var routes []projectpkg.AdditionalRoute
 	if err := json.Unmarshal(config.Routes, &routes); err != nil {
@@ -44,15 +63,21 @@ func (s *Service) reconcileAdditionalRouteConfig(ctx context.Context, config db.
 	}
 
 	shouldServe := !config.Deleted && config.Status == "running" && config.DeployMode == "compose"
+	if !shouldServe {
+		if err := s.removeAdditionalRouteConfig(ctx, config); err != nil {
+			return err
+		}
+		if config.Deleted {
+			if err := s.queries.ClearProjectAdditionalRoutes(ctx, config.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	var firstErr error
 	for _, route := range routes {
 		host := s.additionalRouteHost(config.Name, route.Name)
-		if !shouldServe {
-			if err := s.caddy.RemoveRoute(ctx, host); err != nil && firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
 		if route.Name == "" || strings.TrimSpace(route.Service) == "" || route.ContainerPort < 1 || route.ContainerPort > 65535 {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("invalid persisted additional route for project %s", config.Name)
@@ -63,9 +88,24 @@ func (s *Service) reconcileAdditionalRouteConfig(ctx context.Context, config db.
 			firstErr = err
 		}
 	}
-	if config.Deleted && firstErr == nil {
-		if err := s.queries.ClearProjectAdditionalRoutes(ctx, config.ID); err != nil {
-			return err
+	return firstErr
+}
+
+func (s *Service) removeAdditionalRouteConfig(ctx context.Context, config db.ProjectAdditionalRouteConfig) error {
+	var routes []projectpkg.AdditionalRoute
+	if err := json.Unmarshal(config.Routes, &routes); err != nil {
+		return fmt.Errorf("decode additional routes for project %s: %w", config.Name, err)
+	}
+	var firstErr error
+	for _, route := range routes {
+		if strings.TrimSpace(route.Name) == "" {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("invalid persisted additional route for project %s", config.Name)
+			}
+			continue
+		}
+		if err := s.caddy.RemoveRoute(ctx, s.additionalRouteHost(config.Name, route.Name)); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 	return firstErr
