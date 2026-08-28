@@ -27,6 +27,10 @@ type AdditionalRoute struct {
 	ContainerPort int32  `json:"containerPort"`
 }
 
+func additionalRouteHostLabel(projectName, routeName string) string {
+	return strings.TrimSpace(projectName) + "-" + strings.TrimSpace(routeName)
+}
+
 func normalizeAdditionalRoutes(deployMode string, routes []AdditionalRoute) ([]AdditionalRoute, error) {
 	if len(routes) == 0 {
 		return []AdditionalRoute{}, nil
@@ -117,6 +121,14 @@ func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, 
 	for _, route := range normalized {
 		if project.MainService != nil && route.Service == strings.TrimSpace(*project.MainService) && route.ContainerPort == project.AppPort {
 			return nil, fmt.Errorf("%w: route %q duplicates the primary project route", errs.ErrValidation, route.Name)
+		}
+		label := additionalRouteHostLabel(project.Name, route.Name)
+		inUse, err := s.queries.ProjectHTTPHostLabelInUse(ctx, label, project.ID)
+		if err != nil {
+			return nil, fmt.Errorf("check additional route hostname ownership: %w", err)
+		}
+		if inUse {
+			return nil, fmt.Errorf("%w: public hostname label %q is already owned by another project or route", errs.ErrValidation, label)
 		}
 	}
 	if err := validateAdditionalRoutesForProjectSource(ctx, project, normalized); err != nil {
