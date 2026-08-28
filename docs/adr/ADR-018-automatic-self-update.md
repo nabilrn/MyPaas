@@ -1,71 +1,116 @@
-# ADR-018: Automatic self-update for VM installs
+# ADR-018: VM update channels and release-safe updates
 
 ## Status
 
-Proposed
+Accepted design; source-side implementation requires runtime qualification before the next release.
 
 ## Context
 
-Production VM installs are repository-backed and currently update by rerunning `scripts/bootstrap.sh`. The bootstrap uses a shallow fetch followed by an `ff-only` merge. When the upstream branch is rewritten or squash/force-updated, an existing shallow checkout can fail with `refusing to merge unrelated histories` even though the install directory is intentionally managed by MyPaas.
+MyPaas has two different operational needs that must not be conflated:
 
-The production Compose file also consumes mutable `:latest` API/dashboard images. Pulling `latest` immediately after observing a new Git commit creates a race: the source checkout can advance before the image publish workflow for that commit has completed.
+- a **production installation** should remain on a published release until the owner explicitly chooses a newer published release;
+- a **staging/development installation** may intentionally follow a mutable branch/ref while qualifying unreleased changes.
 
-MyPaas needs an updater that keeps source, migrations, Compose configuration, and application images on the same revision, without requiring Watchtower or giving another container access to the Docker socket.
+The original updater could follow `main` through `MYPAAS_REF`/`AUTO_UPDATE_REF`. That is useful for staging but unsafe as the default product update model because a production VM can advance merely because the development branch advanced.
+
+MyPaas already publishes API/dashboard images with immutable full Git SHA tags and `scripts/update-vm.sh` can deploy an explicit ref while keeping source and image revisions aligned. The missing boundary is release discovery and update-channel intent.
 
 ## Decision
 
-1. Existing installer-managed checkouts are synchronized with `git fetch` + `git reset --hard FETCH_HEAD` after refusing dirty working trees and verifying the configured origin. The checkout is not treated as a user-development clone.
-2. The image publish workflow publishes both `latest` and an immutable full Git SHA tag for API and dashboard images.
-3. `docker-compose.prod.yml` accepts `MYPAAS_IMAGE_TAG`, defaulting to `latest` for backwards compatibility.
-4. `scripts/update-vm.sh`:
-   - serializes updates with a host lock;
-   - refuses dirty checkouts;
-   - fetches the configured ref;
-   - does nothing when the revision is unchanged;
-   - waits for both SHA-tagged images before changing the checkout;
-   - tags the currently running API/dashboard images locally for best-effort runtime rollback;
-   - resets the managed checkout to the target SHA;
-   - deploys using the same SHA image tag;
-   - verifies API/Caddy/CLI health;
-   - restores the previous checkout and locally tagged runtime images if deployment/verification fails.
-5. Automatic polling is opt-in. `scripts/configure-auto-update.sh` installs a systemd oneshot service and timer only when `AUTO_UPDATE_ENABLED=true`. The default interval is 30 minutes and the minimum accepted interval is 5 minutes.
-6. No Watchtower-style Docker socket watcher is used. Updates remain coordinated through MyPaas' own migration and verification scripts.
+### 1. Two explicit update channels
+
+`MYPAAS_UPDATE_CHANNEL` defines update intent:
+
+- `release` — production/default dashboard behavior;
+- `ref` — explicit staging/development behavior.
+
+If unset, dashboard update behavior defaults to `release`.
+
+### 2. Production release discovery is notification-first
+
+For the `release` channel, the owner Settings surface checks published GitHub Releases, including prereleases used during beta.
+
+A release is eligible only when:
+
+- it is not a draft;
+- it has a tag;
+- its `target_commitish` is an immutable full Git commit SHA.
+
+The dashboard reports one of:
+
+- `Update available`;
+- `Up to date`;
+- `Release check unavailable`;
+- `Unknown build` when the running build is not identifiable.
+
+A failed external release check must not make platform settings unavailable. It must instead disable blind dashboard updates.
+
+### 3. Dashboard updates are release-pinned
+
+The dashboard update action is accepted only on the `release` channel and only after the backend verifies that a newer published release target differs from the running `MYPAAS_BUILD_SHA`.
+
+When accepted, the backend starts `scripts/update-vm.sh` with:
+
+```text
+MYPAAS_REF=<verified-release-tag>
+```
+
+The existing updater then resolves that tag and waits for the corresponding immutable SHA-tagged API/dashboard images before deployment.
+
+The dashboard must never translate `Update MyPaas` into an implicit `main` update.
+
+### 4. Ref tracking remains explicit engineering behavior
+
+A staging/development installation may use:
+
+```text
+MYPAAS_UPDATE_CHANNEL=ref
+MYPAAS_REF=main
+```
+
+or another explicit candidate ref.
+
+On this channel the dashboard shows the tracked ref and refuses the production release-update action. Host-side updater/timer workflows may still be used intentionally for staging qualification.
+
+### 5. Existing updater safety remains
+
+`scripts/update-vm.sh` continues to:
+
+- serialize updates with a host lock;
+- refuse dirty installer-managed checkouts;
+- wait for immutable SHA-tagged API/dashboard images;
+- reset the managed checkout only after target artifacts exist;
+- run deployment and post-update verification;
+- attempt best-effort rollback to the previous verified runtime when deployment fails.
+
+No Watchtower-style privileged updater container is introduced.
 
 ## Consequences
 
 ### Positive
 
-- Upstream history rewrites no longer break rerunning the bootstrap on a clean installer-managed checkout.
-- Automatic updates cannot deploy a Git revision before its API and dashboard artifacts are published.
-- Source/config/migrations and application images are pinned to one revision during an automatic update.
-- The updater is host-side and does not introduce another privileged Docker-socket container.
-- Existing installs remain unchanged unless automatic updates are explicitly enabled.
+- Production and staging no longer share the same implicit update policy.
+- A new commit on `main` alone cannot make the production dashboard perform an update.
+- Production owners can see that a release exists before deciding to install it.
+- Dashboard-triggered updates are pinned to a published release tag rather than a mutable branch.
+- GitHub release discovery failing closed does not prevent normal Settings use.
 
 ### Trade-offs
 
-- Automatic rollback is best effort. A forward database migration may not be reversible by simply restoring the previous application image. Operators should keep MyPaas backups enabled.
-- SHA image tags consume registry metadata in addition to `latest`.
-- systemd is required for scheduled automatic updates; `scripts/update-vm.sh` can still be run manually on other Linux init systems.
-- Mutable development branches are supported because the current project uses `main` operationally, but stable release tags remain preferable for conservative production environments.
+- A production installation must already contain this release-aware code before it can notify about later releases; the first transition from an older beta therefore requires one explicit upgrade/bootstrap.
+- GitHub Releases availability affects notification freshness, but not the running platform.
+- Automatic rollback remains best effort when database migrations are not reversible.
 
-## Operations
+## Qualification required before release
 
-Enable automatic updates on an installed VM:
+Source tests must prove:
 
-```bash
-cd ~/MyPaas
-AUTO_UPDATE_ENABLED=true AUTO_UPDATE_INTERVAL_MINUTES=30 bash scripts/configure-auto-update.sh
-```
+1. draft releases are ignored;
+2. prerelease/beta releases are considered;
+3. mutable release targets such as `main` are rejected;
+4. the running release is recognized by exact source SHA;
+5. a newer published release produces `update_available=true`;
+6. the dashboard update process receives the verified release tag through `MYPAAS_REF`;
+7. `ref` channel does not query GitHub Releases and refuses dashboard release updates.
 
-Inspect the timer and logs:
-
-```bash
-systemctl status mypaas-update.timer
-journalctl -u mypaas-update.service
-```
-
-Run one update check manually:
-
-```bash
-bash scripts/update-vm.sh
-```
+Runtime qualification on the staging VM must later prove the end-to-end behavior before publishing the release that production will consume.
