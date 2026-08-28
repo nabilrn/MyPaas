@@ -1,136 +1,73 @@
 # Beta backup and restore drill
 
-This runbook is the runtime evidence procedure for the `core/backup-restore` beta-readiness workstream. The repository implementation can be reviewed and unit-tested without a VM, but this gate remains `BLOCKED_ON_VM_EVIDENCE` until a bundle is restored onto a fresh controlled VM and the acceptance checks below pass.
+**Status:** Historical qualification procedure; retained for recovery provenance.  
+**Current source of truth:** `scripts/backup-restore.py`, current production configuration, and [`../engineering/beta-readiness-gates.md`](../engineering/beta-readiness-gates.md).
 
-## Scope
+This document records the intent of the beta backup/restore qualification that has already been completed. It is **not** an instruction to repeat the full drill after unrelated changes.
 
-`scripts/backup-restore.py` creates a disaster-recovery bundle containing:
+## What the qualification established
 
-- a custom-format dump of the MyPaas control-plane PostgreSQL database;
-- the production `.env` file under `private/config.env`;
-- `/var/lib/mypaas/static`;
-- `/var/lib/mypaas/compose`;
-- Docker volumes explicitly labeled `mypaas.managed=true`;
-- Docker Compose volumes whose Compose project belongs to an active MyPaas project.
+The retained beta runtime verification records fresh-host recovery of relevant MyPaaS state, including:
 
-The manifest records paths, sizes, checksums, counts, and the source Git SHA. It never records configuration values. **The bundle itself is sensitive** because `private/config.env` contains production secrets; keep the bundle on encrypted/restricted storage and do not attach it to public CI artifacts or pull requests.
+- control-plane PostgreSQL state;
+- production configuration required to decrypt/use persisted project environment values;
+- static releases;
+- managed persistent application state within the supported backup boundary;
+- Compose/runtime recovery state;
+- project/deployment history;
+- Caddy route recovery;
+- DB Studio state/connectivity within its supported database boundary.
 
-## Source VM: create a consistent bundle
+A successful restore does not imply every Docker/Podman volume layout is portable. Current migration/backup preflight owns that decision.
 
-Before a qualifying beta backup, prepare a complete recovery fixture set on the
-source VM and prove it is healthy. A drill that starts from missing, unhealthy,
-or non-persistent fixtures is not qualifying restore evidence.
+## Current operational rule
 
-The required source fixtures are:
-
-- a static project with known sentinel content and a healthy route;
-- a container or registry-backed project with a known correct container port and
-  a healthy route;
-- a persistent runtime volume with a known sentinel file or value;
-- a Compose app with a supported PostgreSQL, MySQL, or MariaDB service, a healthy
-  app route, and a known database sentinel row;
-- DB Studio connectivity to the Compose database in read-only mode;
-- an encrypted project environment sentinel verified through the normal API
-  without recording plaintext.
-
-Write those fixture identifiers and expected sentinel checks to a private JSON
-fixture spec. The spec must not contain plaintext secrets. Then run:
+Use the current script contract rather than copying historical commands blindly:
 
 ```bash
-sudo python3 scripts/backup-restore.py source-preflight \
-  --install-dir /opt/mypaas \
-  --spec /secure/path/phase2-fixtures.json \
-  --report /secure/path/source-preflight.json
+python3 scripts/backup-restore.py --help
 ```
 
-Any preflight failure is a failed drill setup. Fix the fixture state before
-creating the backup; do not create a qualifying bundle from an unhealthy source.
+Before destructive recovery:
 
-Inspect the plan first:
+1. verify the backup/bundle with the current tool;
+2. use a checkout compatible with the backup metadata and current restore contract;
+3. preserve the production encryption/configuration material required by the backup;
+4. use a disposable or intentionally selected recovery target;
+5. run the current production deployment/verification path after restore;
+6. verify application routes, persistent sentinels, project history, encrypted-env usability, and supported database access without exposing secrets.
 
-```bash
-python3 scripts/backup-restore.py plan
-```
+The exact current command flags are defined by `scripts/backup-restore.py`; this historical document must not override them.
 
-A full bundle refuses to archive a managed volume while a running container is using it. For the controlled beta drill, explicitly quiesce those project containers for the short snapshot window:
+## Evidence safety
 
-```bash
-sudo python3 scripts/backup-restore.py backup \
-  --install-dir /opt/mypaas \
-  --quiesce-managed-containers
-```
+Backup bundles and recovery evidence can contain or depend on sensitive configuration.
 
-The tool restarts any project containers it stopped, writes `manifest.json` and `backup-report.json`, and prints the bundle path. Preserve that path privately.
+Never publish:
 
-Verify it independently before moving to the target VM:
+- production `.env` contents;
+- registry credentials;
+- OAuth/JWT secrets;
+- decrypted project environment variables;
+- cookies/tokens;
+- database credentials;
+- backup material containing those secrets.
 
-```bash
-sudo python3 scripts/backup-restore.py verify --bundle /var/lib/mypaas/backups/full-...
-```
+A qualification report may retain tested Git SHA, environment shape, timestamps, checksums, project identifiers, and pass/fail status when those values are not secrets.
 
-A checksum failure is a failed drill. Do not continue with a damaged bundle.
+## Regression rule
 
-For a qualifying beta drill, also validate the manifest against the same fixture
-spec before transferring it to the target VM:
+Repeat a fresh-host backup/restore qualification only when a change materially touches:
 
-```bash
-sudo python3 scripts/backup-restore.py validate-fixture-manifest \
-  --bundle /var/lib/mypaas/backups/full-... \
-  --spec /secure/path/phase2-fixtures.json \
-  --report /secure/path/manifest-preflight.json
-```
+- backup bundle composition;
+- encryption/config restoration;
+- persistent-storage capture/restore;
+- database restore behavior;
+- migration portability rules;
+- route/runtime reconstruction after restore.
 
-The manifest validation must show non-empty static and Compose archive coverage
-and at least one captured persistent volume sentinel. `managedVolumeCount = 0`
-is not qualifying Phase 2 evidence unless another documented volume-capture
-mechanism is added and the fixture manifest validator explicitly covers it.
+Do not repeat this drill merely because an unrelated deployment, UI, template, compatibility, or documentation change landed.
 
-## Fresh target VM preparation
+## Historical failure rule
 
-Use a disposable VM with Docker and the normal MyPaas host prerequisites. Clone MyPaas and check out **the exact `sourceGitSha` from the bundle manifest**. The default restore path refuses to restore onto a different checkout.
-
-Do not copy a newly generated `.env` over the bundle. The original encryption key and other production configuration are part of the recovery material and are required for encrypted environment values to remain readable.
-
-Transfer the bundle through a private channel and preserve restrictive filesystem permissions.
-
-## Restore
-
-The restore command is destructive and therefore requires an explicit confirmation flag:
-
-```bash
-sudo python3 scripts/backup-restore.py restore \
-  --bundle /secure/path/full-... \
-  --install-dir /opt/mypaas \
-  --confirm-restore
-```
-
-Before mutation the tool verifies every manifest checksum. It then restores production configuration, static/Compose data, managed volumes, starts the control-plane PostgreSQL service, and restores the PostgreSQL dump. An existing target `.env` is copied to a timestamped `.pre-restore-*` file before replacement.
-
-After restore, start/reconcile the full platform from the same checkout and run normal production verification:
-
-```bash
-cd /opt/mypaas
-sudo MYPAAS_IMAGE_TAG="$(git rev-parse HEAD)" bash scripts/deploy-to-vm.sh
-sudo bash scripts/verify-production.sh
-```
-
-## Mandatory acceptance evidence
-
-Record the target VM shape, bundle `sourceGitSha`, restore report, and timestamps. Then prove all of the following on the fresh VM:
-
-- owner login succeeds;
-- project inventory and deployment history match the source installation;
-- encrypted project environment values are readable by the application without exposing their plaintext in the evidence;
-- static project routes return expected content;
-- container and Compose project routes recover;
-- at least one restored persistent runtime volume retains a known sentinel value;
-- at least one restored Compose database retains a known sentinel row;
-- DB Studio connects to a restored supported database and remains read-only until write mode is explicitly enabled;
-- Caddy reconciliation completes and existing routes remain reachable;
-- `scripts/verify-production.sh` passes.
-
-The acceptance report may include project identifiers, timing, status, and checksums. It must not include passwords, tokens, cookies, `.env` contents, decrypted project variables, or database credentials.
-
-## Failure handling
-
-Any missing mandatory record, checksum mismatch, unexpected in-use target volume, PostgreSQL restore failure, unreadable encrypted value, missing persistent sentinel, or failed route is a `FAIL`, not a caveat. Destroy the disposable target VM after collecting secret-safe diagnostics, fix the repository-side defect, create a fresh VM, and repeat the drill from the beginning.
+During qualification, missing mandatory state, checksum mismatch, unreadable encrypted data, lost persistent sentinel data, failed database restore, or failed recovered route was treated as a real failure rather than a caveat. That principle remains valid even though the original beta workstream is complete.
