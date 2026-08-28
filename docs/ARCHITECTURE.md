@@ -3,11 +3,9 @@
 > Canonical architecture entry point for the current single-host implementation.
 
 **Status:** Current  
-**Applies to:** `main` and the `v0.5.0-beta.1` release line  
-**Last verified:** 2026-08-16  
-**Verified against runtime candidate:** `ddc26c9a0f877fc5dd4133d6559c5f36123d6a31`
-
-Later documentation-only release commits do not change the runtime architecture described here.
+**Applies to:** `main`  
+**Last verified:** 2026-08-28  
+**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
 
 ---
 
@@ -15,8 +13,7 @@ Later documentation-only release commits do not change the runtime architecture 
 
 ```mermaid
 flowchart TB
-    Internet["Internet"] --> CF["Cloudflare Tunnel"]
-    CF --> Caddy["Caddy ingress + project router"]
+    Internet["Internet"] --> Delivery["Configured public delivery path"] --> Caddy["Caddy ingress + project router"]
 
     subgraph Control["MyPaaS control plane"]
         Dashboard["SvelteKit dashboard"]
@@ -31,8 +28,8 @@ flowchart TB
     end
 
     subgraph Projects["Project execution"]
-        Runtime["Container runtime"]
-        Static["Atomic static release"]
+        Runtime["Container-backed workloads"]
+        Static["Atomic static releases"]
     end
 
     Caddy --> Dashboard
@@ -47,9 +44,9 @@ flowchart TB
     Statd --> Cgroup
 ```
 
-MyPaaS targets one Linux VM. It is a self-hosted deployment control plane, not a Kubernetes scheduler, multi-node orchestrator, or mutually hostile multi-tenant sandbox.
+MyPaaS targets one Linux host. It is a self-hosted deployment control plane, not a Kubernetes scheduler, multi-node orchestrator, HA control plane, or mutually hostile multi-tenant sandbox.
 
-Fresh supported Ubuntu/Debian installations are **Podman-first**. `scripts/install-vm.sh` defaults `USE_PODMAN=true`, installs rootful Podman, enables `podman.socket`, and exposes that socket through the Docker-compatible path expected by the control plane. Docker Engine remains supported when an operator explicitly selects `USE_PODMAN=false`.
+Fresh supported Ubuntu/Debian installations are Podman-first. Docker Engine remains an explicit compatibility mode.
 
 ## Production components
 
@@ -60,24 +57,26 @@ Fresh supported Ubuntu/Debian installations are **Podman-first**. `scripts/insta
 | `api` | Auth, project state, deployments, lifecycle, routing, backups, migration, DB Studio, CLI/MCP APIs | Holds Docker-compatible engine authority |
 | `dashboard` | SvelteKit operator UI | Control network only |
 | `postgres` | MyPaaS state and optional shared project PostgreSQL | Intentionally dual-homed on control + project networks |
-| `caddy` | Dashboard/API ingress, static serving, dynamic project routing | Admin API is Unix-socket only in production |
+| `caddy` | Dashboard/API ingress, static serving, primary and additional project HTTP routing | Admin API is Unix-socket only in production |
 | `cloudflared` | Outbound Cloudflare Tunnel client | Control network only |
 
-`mypaas-statd` is host-native and is **not** a sixth Compose service. It runs under systemd and communicates with the API through `/run/mypaas/statd.sock`. It is optional because runtime metrics can fall back to the Docker-compatible engine path when statd is disabled or unavailable.
+`mypaas-statd` is host-native and is not a sixth Compose service. It runs under systemd and communicates with the API through `/run/mypaas/statd.sock`.
 
 ## Runtime abstraction
 
-MyPaaS deliberately keeps one engine contract while preferring Podman for fresh Linux hosts:
+MyPaaS keeps one orchestration contract while preferring Podman for fresh Linux hosts:
 
 ```mermaid
 flowchart LR
-    API["Go control plane"] --> CLI["docker CLI / docker compose"]
+    API["Go control plane"] --> CLI["docker / docker compose command surface"]
     CLI --> Socket["Docker-compatible socket"]
-    Socket --> Podman["Rootful Podman\ndefault / recommended"]
-    Socket --> Docker["Docker Engine\nexplicit compatibility mode"]
+    Socket --> Podman["Rootful Podman\ndefault"]
+    Socket --> Docker["Docker Engine\ncompatibility mode"]
 ```
 
-Podman is not a second orchestration backend. Production Podman hosts expose the Docker-compatible command/socket surface expected by the control plane. The same contract keeps Docker Engine usable for existing or intentionally Docker-based installations without duplicating orchestration logic.
+Production normalizes the host runtime socket into the stable in-container path `/var/run/docker.sock` for the API. The deploy helper accepts a configured live socket and can resolve rootful Podman (`/run/podman/podman.sock`) or Docker (`/var/run/docker.sock`) before starting the stack.
+
+Podman is therefore not a second orchestration backend; it supplies the Docker-compatible command/socket contract expected by the control plane.
 
 ## Network model
 
@@ -87,11 +86,11 @@ Production uses three distinct external networks:
 | --- | --- | --- |
 | `CONTROL_NETWORK` | API, dashboard, cloudflared, PostgreSQL, Caddy | Control-plane communication |
 | `PROJECT_NETWORK` | Project workloads, PostgreSQL | Workload communication and optional shared PostgreSQL |
-| `ROUTING_NETWORK` | Caddy + explicitly routed runtimes | Public application data plane |
+| `ROUTING_NETWORK` | Caddy + explicitly routed runtimes | Public HTTP application data plane |
 
-The API is not attached to the project or routing networks. Caddy is not attached to the general project network. A container runtime receives routing-network membership only while MyPaaS activates its public route.
+The API is not attached to the project or routing networks. Caddy is not attached to the general project network. A workload receives routing-network membership only as required for an explicit public route.
 
-See [Networking and trust boundaries](architecture/networking.md) for the detailed topology and route-activation sequence.
+See [Networking and trust boundaries](architecture/networking.md).
 
 ## Deployment model
 
@@ -100,33 +99,50 @@ Supported source/deployment modes are:
 | Source | Mode | Runtime model |
 | --- | --- | --- |
 | Git | Dockerfile | Build image, start replacement container, activate route |
-| Git | Compose | Render + validate Compose, apply managed override, start services, route public service |
+| Git | Compose | Render + validate Compose, apply managed override, start services, activate primary and declared additional HTTP routes |
 | Git | Static | Build when needed, publish atomic release, serve files directly from Caddy |
-| Registry | Image | Pull public OCI image, start replacement container, activate route |
+| Registry | Image | Pull OCI image, start replacement container, activate route |
 
-Allocated host ports remain runtime identity keys for container-backed projects. In production they are **not** the Caddy traffic path. Route activation resolves the matching runtime, verifies project-network membership, attaches it to `ROUTING_NETWORK` with `mypaas-port-<allocated-port>`, and configures Caddy to dial that alias on the internal container port.
+Image-mode registry pulls are anonymous by default and may use one bounded installation-level credential when the requested image host matches the configured registry. That credential is not inherited by project Compose environments.
 
-See [Deployment architecture](architecture/deployment.md).
+Allocated host ports remain runtime identity keys for normal container-backed primary routes. Production Caddy traffic uses managed routing-network aliases and internal container ports rather than hairpinning through the host port.
+
+### Compose additional HTTP routes
+
+Compose projects may declare up to four additional HTTP routes.
+
+Each route:
+
+- uses a platform-derived hostname `<project>-<route>.<PUBLIC_DOMAIN>`;
+- targets an existing Compose service and a TCP port declared by `ports` or `expose`;
+- is routed through Caddy over `ROUTING_NETWORK`;
+- does not allocate or publish another host port;
+- is reconciled during initial deployment, lifecycle actions, periodic recovery, and deletion;
+- is immutable after first deployment in the current version.
+
+This capability is intentionally HTTP-only. It does not expose raw TCP, SSH, UDP, arbitrary public host ports, or custom per-route domains.
+
+MinIO is the first real-VM-qualified application using this primitive: S3 API on the primary route and the Console on a derived secondary route.
+
+See [Deployment architecture](architecture/deployment.md) and [ADR-023](adr/ADR-023-compose-additional-http-routes.md).
 
 ## Security posture
 
-The control plane intentionally treats the container-engine socket as host-level authority. Dropping capabilities and enabling `no-new-privileges` reduces the API container's ambient Linux privilege, but it does not make the engine socket a low-privilege interface.
+The container-engine socket is host-level authority. Dropping capabilities and enabling `no-new-privileges` reduces ambient Linux privilege but does not make engine access low privilege.
 
-Repository Compose files are untrusted input. MyPaaS renders and validates the configuration before execution and rejects host-escape features including privileged mode, host/container namespace sharing, engine socket mounts, host bind mounts, devices, added capabilities, GPUs, custom runtimes, external networks, external volumes, unsafe build entitlements, build SSH/secrets, and privileged lifecycle hooks.
+Repository Compose files are untrusted input. MyPaaS renders and validates the configuration before execution and rejects host-escape features including privileged mode, host/container namespace sharing, engine socket mounts, host bind mounts, devices, added capabilities, GPUs, custom runtimes, external networks/volumes, unsafe build entitlements, build SSH/secrets, and privileged lifecycle hooks.
 
 Safe engine-managed named volumes are allowed by Compose sanitization; migration has a separate portability preflight for engine-managed volume state.
 
-This is a strong single-host policy boundary. It is not equivalent to VM or microVM isolation for arbitrary hostile tenants.
+This is a bounded single-host policy boundary, not VM/microVM isolation for arbitrary hostile tenants.
 
 See [Security boundaries](SECURITY_BOUNDARIES.md).
 
 ## Observability model
 
-Runtime metrics prefer `mypaas-statd` over its local Unix socket when statd is installed and configured. The daemon reads cgroup v2 and avoids repeated Docker/Podman process spawning on the steady-state metrics path. Runtime-statd failure is non-fatal and falls back to the Docker-compatible implementation.
+Runtime metrics can use optional `mypaas-statd` over its local Unix socket. If statd is disabled or unavailable, runtime metrics fall back to the Docker-compatible engine path.
 
-With the current v0.2.0 rollout, host stats can also include optional CPU, memory, storage, and network snapshots from statd. Capacity/allocation values remain available when host telemetry is disabled or unavailable.
-
-Project logs remain on the Docker-compatible CLI path. The repository keeps a benchmark harness for that path so a future native collector is justified by evidence rather than architecture preference.
+Host telemetry is optional. Project logs remain on the Docker-compatible CLI path.
 
 See [Observability architecture](architecture/observability.md) and [mypaas-statd integration](STATD.md).
 
@@ -143,15 +159,17 @@ Host-managed application state includes:
 
 Control-plane PostgreSQL data uses the production Compose `postgres_data` named volume.
 
-VM export performs storage preflight before downtime, quiesces runtime workloads without changing desired database state, packages supported state, restores runtimes, and only then marks the export ready. Engine-managed Compose named/external volumes are rejected by migration preflight because their portability between Docker Engine and Podman cannot be assumed.
+VM export performs storage preflight before downtime. Engine-managed Compose named/external volume state can be rejected by migration preflight when portability cannot be guaranteed.
 
 ## Verification boundary
 
-Repository CI verifies code, race safety, frontend checks/build, script regressions, production Compose rendering, and Docker/Podman command-contract behavior. `scripts/verify-production.sh` validates live production topology including API readiness, network membership, configured statd service/socket, the Caddy Admin Unix socket, and the absence of a published Caddy TCP admin endpoint.
+Repository CI verifies code, race safety, frontend checks/build, script regressions, production Compose rendering, and Docker/Podman command-contract behavior.
 
-The beta-readiness program adds controlled runtime evidence for update safety, fresh restore, performance, resilience, retention, Create Project behavior, and DB Studio reliability. See `docs/engineering/beta-readiness-gates.md` for tested SHAs and evidence provenance.
+Controlled runtime qualification verifies behavior such as deployment/recovery safety, routing reconciliation, backup/restore, cleanup, Create Project behavior, DB Studio, and compatibility paths that changed materially.
 
-Real-world performance outside the tested host/workload shape remains installation-specific and is not inferred solely from CI or the beta benchmark result.
+PR #157's bounded Compose HTTP-route primitive was qualified on VM `172.104.61.180` at exact head `b35176fd0156c8128e988a2ce3a46693a150c61d` before merge. The qualification proved primary and Console routing, no extra `9001` host publication, restart/redeploy persistence, reconciliation after deliberate route removal, and stop/delete cleanup.
+
+These checks establish correctness for the tested scenario. They do not establish universal throughput, concurrent-user capacity, project count, or hardware requirements.
 
 ## Detailed architecture
 
