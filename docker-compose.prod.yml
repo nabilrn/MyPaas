@@ -46,7 +46,7 @@ services:
       ENABLE_METRICS: ${ENABLE_METRICS:-true}
       METRICS_USERNAME: ${METRICS_USERNAME:-}
       METRICS_PASSWORD: ${METRICS_PASSWORD:-}
-      DOCKER_SOCKET: ${DOCKER_SOCKET}
+      DOCKER_SOCKET: /var/run/docker.sock
       DOCKER_BIND_HOST: ${DOCKER_BIND_HOST:-127.0.0.1}
       MYPAAS_REGISTRY_HOST: ${MYPAAS_REGISTRY_HOST:-}
       MYPAAS_REGISTRY_USERNAME: ${MYPAAS_REGISTRY_USERNAME:-}
@@ -77,7 +77,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./.env:/etc/mypaas/.env:ro
-      - ${DOCKER_SOCKET}:${DOCKER_SOCKET}
+      - ${DOCKER_SOCKET}:/var/run/docker.sock
       - /run/mypaas:/run/mypaas
       - /var/lib/mypaas/volumes:/var/lib/mypaas/volumes
       - /var/lib/mypaas/compose:/var/lib/mypaas/compose
