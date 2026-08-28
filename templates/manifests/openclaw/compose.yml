@@ -1,8 +1,28 @@
 services:
+  openclaw-bootstrap:
+    image: ghcr.io/openclaw/openclaw:latest
+    restart: "no"
+    init: true
+    environment:
+      HOME: /home/node
+      OPENCLAW_HOME: /home/node
+      OPENCLAW_STATE_DIR: /home/node/.openclaw
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+      OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+      OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace
+      OPENCLAW_DISABLE_BONJOUR: "1"
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - openclaw-data:/home/node/.openclaw
+    command: ["node", "dist/index.js", "setup", "--baseline", "--workspace", "/home/node/.openclaw/workspace"]
+
   openclaw-gateway:
     image: ghcr.io/openclaw/openclaw:latest
     restart: unless-stopped
     init: true
+    depends_on:
+      openclaw-bootstrap:
+        condition: service_completed_successfully
     ports:
       - "18789:18789"
     environment:
