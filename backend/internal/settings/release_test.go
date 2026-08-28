@@ -4,7 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 const (
@@ -101,5 +104,57 @@ func TestReleaseStatusRejectsMutableLatestTarget(t *testing.T) {
 	}
 	if status.State != "unavailable" || status.UpdateAvailable {
 		t.Fatalf("unexpected status: %#v", status)
+	}
+}
+
+func TestUpdateSystemPinsUpdaterToLatestPublishedTag(t *testing.T) {
+	server := releaseServer(t)
+	defer server.Close()
+
+	installDir := t.TempDir()
+	scriptsDir := filepath.Join(installDir, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	targetFile := filepath.Join(t.TempDir(), "target.txt")
+	script := "#!/usr/bin/env bash\nset -eu\nprintf '%s' \"$MYPAAS_REF\" > \"$TARGET_FILE\"\n"
+	if err := os.WriteFile(filepath.Join(scriptsDir, "update-vm.sh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("MYPAAS_UPDATE_CHANNEL", "release")
+	t.Setenv("MYPAAS_RELEASES_API_URL", server.URL)
+	t.Setenv("MYPAAS_BUILD_SHA", oldReleaseSHA)
+	t.Setenv("MYPAAS_INSTALL_DIR", installDir)
+	t.Setenv("TARGET_FILE", targetFile)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/update", nil)
+	(&Handler{}).UpdateSystem(recorder, request)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected accepted update, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		body, err := os.ReadFile(targetFile)
+		if err == nil {
+			if got := string(body); got != "v0.5.0-beta.3" {
+				t.Fatalf("expected release tag, got %q", got)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("updater did not receive release tag")
+}
+
+func TestUpdateSystemRejectsDashboardUpdateOnRefChannel(t *testing.T) {
+	t.Setenv("MYPAAS_UPDATE_CHANNEL", "ref")
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/update", nil)
+	(&Handler{}).UpdateSystem(recorder, request)
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected conflict, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
