@@ -17,7 +17,7 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - provide project-scoped persistent storage and safe owned-resource cleanup;
 - provide optional shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
 - provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and an optional local MCP bridge;
-- expose qualified OSS application templates and a real-world compatibility catalog;
+- expose catalog-backed OSS application templates and a real-world compatibility catalog;
 - use rootful Podman by default on fresh supported hosts, with Docker Engine as a compatibility mode.
 
 Static projects are served directly by Caddy. Container-backed projects run through the configured Docker-compatible engine contract.
