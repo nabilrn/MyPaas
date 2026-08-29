@@ -141,13 +141,31 @@ func composeConfigJSON(ctx context.Context, workspace, composeFile string) ([]by
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		message := strings.TrimSpace(stderr.String())
-		if message == "" {
-			message = firstNonEmptyLine(string(out))
-		}
-		return nil, fmt.Errorf("%w: compose config could not be validated: %s", errs.ErrValidation, firstNonEmptyLine(message))
+		message := composeCommandErrorDetail(stderr.String(), string(out))
+		return nil, fmt.Errorf("%w: compose config could not be validated: %s", errs.ErrValidation, message)
 	}
 	return out, nil
+}
+
+func composeCommandErrorDetail(stderr, stdout string) string {
+	message := strings.TrimSpace(stderr)
+	if message == "" {
+		message = strings.TrimSpace(stdout)
+	}
+	lines := splitNonEmptyLines(message)
+	if len(lines) == 0 {
+		return "docker compose config failed without diagnostic output"
+	}
+	const maxLines = 8
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	detail := strings.Join(lines, " | ")
+	const maxChars = 2000
+	if len(detail) > maxChars {
+		detail = strings.TrimSpace(detail[:maxChars]) + "…"
+	}
+	return detail
 }
 
 func prepareComposePreviewEnv(workspace, composeFile string, envVars []envdiscover.Var) error {
