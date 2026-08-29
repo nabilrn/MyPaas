@@ -171,6 +171,11 @@ redeploy_current_for_env_drift() {
   fi
 }
 
+migration_runner_ready() {
+  local docker_cmd="$1"
+  $docker_cmd run --rm migrate/migrate:latest -version >/dev/null 2>&1
+}
+
 main() {
   validate_integer AUTO_UPDATE_IMAGE_WAIT_SECONDS "$IMAGE_WAIT_SECONDS"
   validate_integer AUTO_UPDATE_VERIFY_ATTEMPTS "$VERIFY_ATTEMPTS"
@@ -221,6 +226,18 @@ main() {
     return 0
   fi
 
+  local target_skip_migrations=false
+  if git_repo diff --quiet "$current_sha" "$target_sha" -- backend/migrations; then
+    target_skip_migrations=true
+    log "No control-plane migration changes detected; database migration helper will be skipped"
+  else
+    log "Control-plane migrations changed; preflighting migration helper before touching the checkout"
+    if ! migration_runner_ready "$docker_cmd"; then
+      log "Migration helper could not start; leaving the running installation and checkout unchanged"
+      return 0
+    fi
+  fi
+
   local rollback_tag api_image_id dashboard_image_id rollback_ready=false
   rollback_tag="rollback-${current_sha:0:12}"
   api_image_id="$(running_image_id "$docker_cmd" mypaas-api)"
@@ -238,8 +255,9 @@ main() {
   local deploy_ok=true
   if ! reconcile_statd; then
     deploy_ok=false
-  elif ! MYPAAS_IMAGE_TAG="$target_sha" MYPAAS_BUILD_SHA="$target_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
-    ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"; then
+  elif ! MYPAAS_IMAGE_TAG="$target_sha" MYPAAS_BUILD_SHA="$target_sha" MYPAAS_SKIP_MIGRATIONS="$target_skip_migrations" \
+    DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" \
+    bash "$ROOT_DIR/scripts/deploy-to-vm.sh"; then
     deploy_ok=false
   elif ! verify_stack "$docker_cmd" "$target_sha" "$target_sha"; then
     deploy_ok=false
@@ -252,7 +270,7 @@ main() {
     local rollback_verified=false
     if [[ "$rollback_ready" == "true" ]]; then
       log "Attempting runtime rollback from verified local images"
-      if MYPAAS_IMAGE_TAG="$rollback_tag" MYPAAS_BUILD_SHA="$current_sha" MYPAAS_SKIP_IMAGE_PULL=true \
+      if MYPAAS_IMAGE_TAG="$rollback_tag" MYPAAS_BUILD_SHA="$current_sha" MYPAAS_SKIP_IMAGE_PULL=true MYPAAS_SKIP_MIGRATIONS=true \
         DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" \
         bash "$ROOT_DIR/scripts/deploy-to-vm.sh" \
         && verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"; then
