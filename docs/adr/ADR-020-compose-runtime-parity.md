@@ -12,6 +12,8 @@ Registry-image deployments pass the project env file to `docker run --env-file`,
 
 Compose deployments also started the stack without explicitly refreshing image-only services, and MyPaas routed traffic as soon as `docker compose up -d` returned successfully. A main service could exit or become unhealthy after the Compose command returned while the project was still recorded as `running`, producing an origin 502 through Caddy/Cloudflare.
 
+Repository-driven Compose builds can also contain multiple buildable services. Docker Compose defaults to unlimited parallel engine operations, which can exhaust the process/thread budget of a small VM even when every individual service fits within its configured runtime resource limits.
+
 ## Decision
 
 MyPaas gives repository/Compose deployments the same application-runtime guarantees as registry-image deployments:
@@ -20,16 +22,18 @@ MyPaas gives repository/Compose deployments the same application-runtime guarant
 2. Normal Compose deployments explicitly refresh remote image-only services with `docker compose pull --ignore-buildable` before `up`. Buildable services remain handled by the existing build path. Compose rollback does not perform this pull, so it cannot silently replace a recorded rollback target with a newer floating image.
 3. MyPaas waits for the selected main service before switching the Caddy route or persisting `running`. A running container without a Docker healthcheck is ready. A service with a healthcheck must reach `healthy`. Terminal `exited`, `dead`, or `unhealthy` states fail the deployment; transient startup states are polled with a bounded timeout.
 4. Start and restart lifecycle actions apply the same readiness gate before restoring/confirming the public route.
+5. For repository-driven Compose deployments, MyPaas adds `COMPOSE_PARALLEL_LIMIT=1` to the managed project env file when the project has not explicitly configured that variable. This bounds concurrent Compose engine operations, including multi-service builds, on resource-constrained hosts. An explicit project value remains authoritative.
 
 ## Consequences
 
 - Project env variables now behave consistently between image and Compose sources.
 - Repository deployments using floating image tags receive current remote images on normal deploys.
 - A successful Compose CLI exit is no longer confused with application readiness.
-- Existing Compose security validation, port sanitization, profiles, named volumes, networks, and build behavior remain unchanged.
+- Compose deployments default to serial engine operations on small hosts, trading some build speed for predictable process/thread usage; projects can explicitly opt into higher parallelism.
+- Existing Compose security validation, port sanitization, profiles, named volumes, networks, and build semantics remain unchanged.
 - Repositories can still declare their own `environment` values; normal Docker Compose merge/precedence semantics apply.
 - Deployments with slow healthchecks must become healthy within the bounded readiness timeout or fail instead of exposing an unhealthy origin.
 
 ## Verification
 
-Regression tests cover env-file injection, Compose pull argument construction, and readiness-state evaluation. Backend `go test ./...` must pass, followed by the repository CI suite before the PR is considered ready to merge.
+Regression tests cover env-file injection, the safe default and explicit override for Compose parallelism, Compose pull argument construction, and readiness-state evaluation. Backend `go test ./...` must pass, followed by the repository CI suite before the PR is considered ready to merge.
