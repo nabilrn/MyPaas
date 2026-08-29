@@ -36,6 +36,32 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn('verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"', updater)
         self.assertIn('previous runtime could not be verified after rollback', updater)
 
+    def test_updater_skips_migration_helper_when_tree_is_unchanged(self):
+        updater = self.text("scripts/update-vm.sh")
+        self.assertIn(
+            'git_repo diff --quiet "$current_sha" "$target_sha" -- backend/migrations',
+            updater,
+        )
+        self.assertIn("target_skip_migrations=true", updater)
+        self.assertIn('MYPAAS_SKIP_MIGRATIONS="$target_skip_migrations"', updater)
+
+    def test_updater_preflights_changed_migrations_before_checkout_reset(self):
+        updater = self.text("scripts/update-vm.sh")
+        preflight = updater.index('if ! migration_runner_ready "$docker_cmd"; then')
+        reset = updater.index('git_repo reset --hard "$target_sha"')
+        self.assertLess(preflight, reset)
+        self.assertIn(
+            "Migration helper could not start; leaving the running installation and checkout unchanged",
+            updater,
+        )
+
+    def test_runtime_rollback_explicitly_skips_up_migrations(self):
+        updater = self.text("scripts/update-vm.sh")
+        self.assertIn(
+            'MYPAAS_SKIP_IMAGE_PULL=true MYPAAS_SKIP_MIGRATIONS=true',
+            updater,
+        )
+
     def test_publish_workflow_requires_green_main_ci_and_keeps_rollback_aliases(self):
         workflow = self.text(".github/workflows/docker-publish.yml")
         self.assertIn('workflow_run:', workflow)
