@@ -31,6 +31,36 @@ class DeployToVmTest(unittest.TestCase):
         self.assertNotIn('--network "$ROUTING_NETWORK"', content)
         self.assertNotIn("--network mypaas-prod", content)
 
+    def test_deploy_skips_redundant_migrations_for_unchanged_runtime(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('SKIP_MIGRATIONS="${MYPAAS_SKIP_MIGRATIONS:-auto}"', content)
+        self.assertIn("current_runtime_build_sha()", content)
+        self.assertIn("MYPAAS_BUILD_SHA=", content)
+        self.assertIn('diff --quiet "$runtime_sha" HEAD -- backend/migrations', content)
+        self.assertIn("if should_skip_migrations; then", content)
+        self.assertIn("Skipping migrations: control-plane migration tree is unchanged", content)
+
+    def test_runtime_rollback_does_not_rerun_up_migrations(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'if [[ "$SKIP_IMAGE_PULL" == "true" && "${MYPAAS_IMAGE_TAG:-}" == rollback-* ]]; then',
+            content,
+        )
+        self.assertIn("Running an older", content)
+        self.assertIn("cannot downgrade a schema", content)
+
+    def test_database_restore_forces_migration_path(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        restore_guard = (
+            'if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then\n'
+            "    return 1\n"
+            "  fi"
+        )
+        self.assertIn(restore_guard, content)
+
     def test_deploy_does_not_rewrite_managed_app_bind_host(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
