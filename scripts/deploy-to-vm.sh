@@ -19,6 +19,7 @@ COMPOSE_BIN="${COMPOSE_BIN:-$DOCKER_BIN compose}"
 API_IMAGE_REPO="${MYPAAS_API_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-api}"
 DASHBOARD_IMAGE_REPO="${MYPAAS_DASHBOARD_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-dashboard}"
 SKIP_IMAGE_PULL="${MYPAAS_SKIP_IMAGE_PULL:-false}"
+SKIP_MIGRATIONS="${MYPAAS_SKIP_MIGRATIONS:-auto}"
 EXPLICIT_IMAGE_TAG_SET="${MYPAAS_IMAGE_TAG+x}"
 EXPLICIT_IMAGE_TAG="${MYPAAS_IMAGE_TAG:-}"
 EXPLICIT_BUILD_SHA_SET="${MYPAAS_BUILD_SHA+x}"
@@ -31,16 +32,16 @@ if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
   echo "Extracting backup bundle..."
   TMP_EXTRACT=$(mktemp -d)
   tar -xzf /tmp/mypaas-restore.tar.gz -C "$TMP_EXTRACT"
-  
+
   if [[ -f "$TMP_EXTRACT/.env" ]]; then
     cat "$TMP_EXTRACT/.env" >> "$ENV_FILE"
     echo "Restored .env from backup (merged)."
   fi
-  
+
   if [[ -f "$TMP_EXTRACT/database.sql" ]]; then
     mv "$TMP_EXTRACT/database.sql" /tmp/mypaas-database.sql
   fi
-  
+
   rm -rf "$TMP_EXTRACT"
   rm -f /tmp/mypaas-restore.tar.gz
 fi
@@ -117,6 +118,10 @@ if [[ "$SKIP_IMAGE_PULL" != "true" && "$SKIP_IMAGE_PULL" != "false" ]]; then
   echo "MYPAAS_SKIP_IMAGE_PULL must be true or false." >&2
   exit 2
 fi
+if [[ "$SKIP_MIGRATIONS" != "auto" && "$SKIP_MIGRATIONS" != "true" && "$SKIP_MIGRATIONS" != "false" ]]; then
+  echo "MYPAAS_SKIP_MIGRATIONS must be auto, true, or false." >&2
+  exit 2
+fi
 
 SUDO=""
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -187,6 +192,45 @@ if [[ -n "${MYPAAS_IMAGE_TAG:-}" ]]; then
   fi
 fi
 
+current_runtime_build_sha() {
+  $DOCKER_BIN inspect --format '{{range .Config.Env}}{{println .}}{{end}}' mypaas-api 2>/dev/null \
+    | sed -n 's/^MYPAAS_BUILD_SHA=//p' \
+    | tail -n 1
+}
+
+should_skip_migrations() {
+  local runtime_sha
+
+  # A restored database must always be brought to the checkout schema.
+  if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
+    return 1
+  fi
+  if [[ "$SKIP_MIGRATIONS" == "true" ]]; then
+    return 0
+  fi
+  if [[ "$SKIP_MIGRATIONS" == "false" ]]; then
+    return 1
+  fi
+
+  # Runtime rollback restores application images only. Running an older
+  # checkout's `migrate up` cannot downgrade a schema and only adds another
+  # failure point to the recovery path.
+  if [[ "$SKIP_IMAGE_PULL" == "true" && "${MYPAAS_IMAGE_TAG:-}" == rollback-* ]]; then
+    return 0
+  fi
+
+  # Normal updates should not launch a separate Go migration helper when the
+  # migration tree is byte-for-byte unchanged from the currently running API.
+  runtime_sha="$(current_runtime_build_sha)"
+  if [[ "$runtime_sha" =~ ^[0-9a-fA-F]{40}$ ]] \
+    && git -c safe.directory="$ROOT_DIR" cat-file -e "${runtime_sha}^{commit}" 2>/dev/null \
+    && git -c safe.directory="$ROOT_DIR" diff --quiet "$runtime_sha" HEAD -- backend/migrations; then
+    return 0
+  fi
+
+  return 1
+}
+
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
 
@@ -205,14 +249,18 @@ fi
 
 MIGRATE_DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
 
-echo "Running migrations..."
-$DOCKER_BIN run --rm \
-  --network "$CONTROL_NETWORK" \
-  -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
-  migrate/migrate:latest \
-  -path=/migrations \
-  -database "$MIGRATE_DATABASE_URL" \
-  up
+if should_skip_migrations; then
+  echo "Skipping migrations: control-plane migration tree is unchanged or this is an application rollback."
+else
+  echo "Running migrations..."
+  $DOCKER_BIN run --rm \
+    --network "$CONTROL_NETWORK" \
+    -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
+    migrate/migrate:latest \
+    -path=/migrations \
+    -database "$MIGRATE_DATABASE_URL" \
+    up
+fi
 
 echo "Starting MyPaas..."
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
