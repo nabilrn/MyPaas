@@ -3,6 +3,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { reconnectProjectStream, projectStreamConnection, projectStreamLogs } from '$stores/project-stream';
@@ -109,7 +110,10 @@
 		{#if error}<div class="alert-warning flex-wrap items-center justify-between"><span class="min-w-0 flex-1">{error}</span><ActionButton variant="ghost" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Retrying"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Retry history</ActionButton></div>{/if}
 		{#if streamError}<div class="alert-neutral flex-wrap items-center justify-between"><span class="min-w-0 flex-1">{streamError}</span><ActionButton variant="secondary" size="xs" type="button" on:click={reconnectProjectStream}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reconnect</ActionButton></div>{/if}
 		<div bind:this={logViewport} on:scroll={handleScroll} class="console-surface scrollbar-thin relative flex-1 !overflow-auto select-text p-4 selection:bg-gray-700 selection:text-white" aria-live="polite">
-			{#if loading}<div class="space-y-2">{#each [1,2,3,4,5,6] as _}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="h-4 animate-pulse rounded bg-gray-800"></span><span class="h-4 animate-pulse rounded bg-gray-800"></span><span class="h-4 animate-pulse rounded bg-gray-800"></span></div>{/each}</div>
+			{#if loading}
+				<div class="flex h-full min-h-48 items-center justify-center">
+					<LoadingIndicator label="Loading log history" size="sm" />
+				</div>
 			{:else if filteredLogs.length === 0}<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
 			{:else}{#if clippedRenderCount > 0}<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>{/if}{#each renderedLogs as log (log.id)}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span><span class="truncate text-sky-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span><span>{log.line}</span></div>{/each}{/if}
 		</div>
