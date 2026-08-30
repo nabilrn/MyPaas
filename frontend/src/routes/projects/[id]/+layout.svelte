@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import DeployControlPanel from '$components/DeployControlPanel.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import { api } from '$api';
 	import { clearShellContext, setShellContext } from '$stores/shell-context';
 	import { toast } from '$stores/toast';
@@ -191,20 +192,9 @@
 
 <div class={`page-shell ${databaseWorkspace ? 'py-3' : 'py-5'}`}>
 	{#if loading}
-		{#if databaseWorkspace}
-			<div class="surface h-24 animate-pulse"></div>
-		{:else}
-			<div class="control-panel p-5">
-				<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-					<div class="min-w-0 flex-1">
-						<div class="h-7 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-800"></div>
-						<div class="mt-3 h-3 w-56 animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-						<div class="mt-2 h-3 w-full max-w-sm animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-					</div>
-					<div class="h-9 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
-				</div>
-			</div>
-		{/if}
+		<div class={`surface flex items-center justify-center ${databaseWorkspace ? 'min-h-28' : 'min-h-48'}`}>
+			<LoadingIndicator label="Loading project" />
+		</div>
 	{:else if error || !project}
 		<div class="surface overflow-hidden">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
