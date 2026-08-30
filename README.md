@@ -12,7 +12,7 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - deploy OCI images with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repositories and support base-directory / monorepo deployments;
 - manage encrypted environment variables, resource settings, deployment history, logs, metrics, restart, redeploy, and rollback;
-- monitor running project containers from one dashboard page using the existing runtime metrics path;
+- monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
 - inspect MyPaaS runtime port allocations and manage a narrow set of MyPaaS-owned UFW allow rules from the owner UI;
 - route applications through Caddy with derived project hostnames;
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
@@ -36,9 +36,9 @@ Dockerfile and Compose are the explicit escape hatches for applications with cus
 
 ## Container monitoring
 
-The Containers page aggregates metrics from running MyPaaS projects and shows container/service CPU, memory, memory limit, and uptime. It uses the existing project runtime metrics contract and does not add a second observability stack.
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include live CPU and memory samples. Search, state/runtime filters, page sizing, and pagination keep larger hosts usable without adding a second observability stack.
 
-Lifecycle operations remain project-scoped so the fleet view stays read-oriented and predictable.
+Lifecycle operations remain project-scoped so the host-wide view stays read-oriented and predictable.
 
 ## Port management
 
