@@ -31,16 +31,16 @@ if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
   echo "Extracting backup bundle..."
   TMP_EXTRACT=$(mktemp -d)
   tar -xzf /tmp/mypaas-restore.tar.gz -C "$TMP_EXTRACT"
-  
+
   if [[ -f "$TMP_EXTRACT/.env" ]]; then
     cat "$TMP_EXTRACT/.env" >> "$ENV_FILE"
     echo "Restored .env from backup (merged)."
   fi
-  
+
   if [[ -f "$TMP_EXTRACT/database.sql" ]]; then
     mv "$TMP_EXTRACT/database.sql" /tmp/mypaas-database.sql
   fi
-  
+
   rm -rf "$TMP_EXTRACT"
   rm -f /tmp/mypaas-restore.tar.gz
 fi
@@ -121,6 +121,13 @@ fi
 SUDO=""
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   SUDO="sudo"
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+  echo "Installing MyPaaS managed firewall helper..."
+  bash "$ROOT_DIR/scripts/install-firewall-helper.sh"
+else
+  echo "systemd unavailable; firewall UI will report the helper as unavailable."
 fi
 
 for dir in \
