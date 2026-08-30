@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"mypaas/internal/container"
 	"mypaas/internal/httpx"
 	"mypaas/internal/port"
 )
@@ -18,9 +19,10 @@ type Handler struct {
 }
 
 type Overview struct {
-	BindHost    string            `json:"bindHost"`
-	Allocations []port.Allocation `json:"allocations"`
-	Firewall    Status            `json:"firewall"`
+	BindHost    string                       `json:"bindHost"`
+	Allocations []port.Allocation            `json:"allocations"`
+	Firewall    Status                       `json:"firewall"`
+	Containers  []container.RuntimeContainer `json:"containers,omitempty"`
 }
 
 func NewHandler(ports *port.Service, client *Client, bindHost string) *Handler {
@@ -44,10 +46,21 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if allocations == nil {
 		allocations = []port.Allocation{}
 	}
+
+	var runtimeContainers []container.RuntimeContainer
+	if r.URL.Query().Get("includeContainers") == "true" {
+		runtimeContainers, err = container.NewDockerCLI(h.bindHost).RuntimeContainers(r.Context())
+		if err != nil {
+			httpx.Error(w, http.StatusServiceUnavailable, "CONTAINER_INVENTORY_FAILED", err.Error(), nil)
+			return
+		}
+	}
+
 	httpx.JSON(w, http.StatusOK, Overview{
 		BindHost:    h.bindHost,
 		Allocations: allocations,
 		Firewall:    status,
+		Containers:  runtimeContainers,
 	})
 }
 
