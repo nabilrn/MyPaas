@@ -305,9 +305,9 @@
 									</div>
 									<div class="pt-2">
 										{#each node.displayColumns as column}
-											<div class="grid h-5 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 font-mono text-[9px]">
-												<span class="truncate text-gray-800 dark:text-gray-200">{column.primaryKey ? 'PK ' : isForeignKey(node, column.name) ? 'FK ' : ''}{column.name}</span>
-												{#if showDataTypes}<span class="max-w-24 truncate text-[8px] text-gray-400" title={column.dataType}>{column.dataType}</span>{/if}
+											<div class="grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,18ch)] items-center gap-2 overflow-hidden px-3 font-mono text-[9px]">
+												<span class="block min-w-0 truncate text-gray-800 dark:text-gray-200" title={`${column.primaryKey ? 'PK ' : isForeignKey(node, column.name) ? 'FK ' : ''}${column.name}`}>{column.primaryKey ? 'PK ' : isForeignKey(node, column.name) ? 'FK ' : ''}{column.name}</span>
+												{#if showDataTypes}<span class="block min-w-0 truncate text-right text-[8px] text-gray-400" title={column.dataType}>{column.dataType}</span>{/if}
 											</div>
 										{/each}
 									</div>
