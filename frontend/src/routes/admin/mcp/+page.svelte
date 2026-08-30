@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, Bot, Check, Copy, GitBranch, KeyRound, LoaderCircle, RefreshCw, Rocket, ShieldCheck, SquareTerminal, X } from '@lucide/svelte';
+	import { Activity, Bot, Check, Copy, GitBranch, KeyRound, RefreshCw, Rocket, ShieldCheck, SquareTerminal, X } from '@lucide/svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import AgentBadgeStack from '$components/AgentBadgeStack.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 
 	let mcpToken = '';
@@ -129,8 +130,8 @@
 			</div>
 
 			{#if loading}
-				<div class="flex h-24 items-center justify-center">
-					<LoaderCircle class="h-5 w-5 animate-spin motion-reduce:animate-none text-gray-500" aria-hidden="true" />
+				<div class="flex h-28 items-center justify-center">
+					<LoadingIndicator label="Loading MCP configuration" size="sm" />
 				</div>
 			{:else}
 				<label class="mt-4 block max-w-3xl" for="mcp_token">
