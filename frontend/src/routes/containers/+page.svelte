@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { ChevronLeft, ChevronRight, RefreshCw, Search } from '@lucide/svelte';
+	import { RefreshCw, Search } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
+	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
@@ -29,11 +30,10 @@
 		const matchesRuntime = runtimeFilter === 'all' || runtime === runtimeFilter;
 		return matchesSearch && matchesState && matchesRuntime;
 	});
-	$: pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-	$: if (pageIndex >= pageCount) pageIndex = pageCount - 1;
-	$: pageStart = filteredRows.length === 0 ? 0 : pageIndex * pageSize + 1;
-	$: pageEnd = Math.min(filteredRows.length, (pageIndex + 1) * pageSize);
+	$: maxPage = Math.max(0, Math.ceil(filteredRows.length / pageSize) - 1);
+	$: if (pageIndex > maxPage) pageIndex = maxPage;
 	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
+	$: hasNext = (pageIndex + 1) * pageSize < filteredRows.length;
 
 	onMount(() => {
 		void load();
@@ -157,7 +157,16 @@
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
-		<table class="data-table">
+		<table class="data-table table-fixed min-w-[64rem]">
+			<colgroup>
+				<col class="w-[16%]" />
+				<col class="w-[18%]" />
+				<col class="w-[23%]" />
+				<col class="w-[10%]" />
+				<col class="w-[8%]" />
+				<col class="w-[12%]" />
+				<col class="w-[13%]" />
+			</colgroup>
 			<thead>
 				<tr>
 					<th>Container</th>
@@ -174,42 +183,33 @@
 					<tr>
 						<td>
 							<div class="min-w-0">
-								<p class="font-mono text-xs font-medium text-gray-950 dark:text-white">{row.name}</p>
-								<p class="mt-0.5 max-w-40 truncate font-mono text-[10px] text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
+								<p class="truncate font-mono text-xs font-medium text-gray-950 dark:text-white" title={row.name}>{row.name}</p>
+								<p class="mt-0.5 truncate font-mono text-[10px] text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
 							</div>
 						</td>
-						<td class="font-mono text-xs text-gray-700 dark:text-gray-300">{runtimeGroup(row)}</td>
-						<td><p class="max-w-64 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
-						<td>
+						<td><p class="truncate font-mono text-xs text-gray-700 dark:text-gray-300" title={runtimeGroup(row)}>{runtimeGroup(row)}</p></td>
+						<td><p class="truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
+						<td class="whitespace-nowrap">
 							<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
 								<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
 							</span>
 						</td>
-						<td class="text-right font-mono text-xs">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
-						<td class="text-right font-mono text-xs">
+						<td class="whitespace-nowrap text-right font-mono text-xs tabular-nums">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
+						<td class="whitespace-nowrap text-right font-mono text-xs tabular-nums">
 							{#if row.metricsAvailable}
 								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
 							{:else}—{/if}
 						</td>
-						<td class="max-w-72 text-xs text-gray-500 dark:text-gray-400">{row.status || '—'}</td>
+						<td><p class="truncate text-xs text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 
 		{#if filteredRows.length > 0}
-			<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-neutral-800 dark:text-gray-400">
-				<p>{pageStart}–{pageEnd} of {filteredRows.length}{#if filteredRows.length !== rows.length} filtered{/if}</p>
-				<div class="flex items-center gap-2">
-					<button type="button" class="app-focus inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-2.5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-800" disabled={pageIndex === 0} on:click={() => (pageIndex -= 1)}>
-						<ChevronLeft class="h-3.5 w-3.5" /> Previous
-					</button>
-					<span class="min-w-20 text-center tabular-nums">Page {pageIndex + 1} / {pageCount}</span>
-					<button type="button" class="app-focus inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-2.5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-800" disabled={pageIndex >= pageCount - 1} on:click={() => (pageIndex += 1)}>
-						Next <ChevronRight class="h-3.5 w-3.5" />
-					</button>
-				</div>
-			</div>
+			<svelte:fragment slot="footer">
+				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={refreshing} label="Containers" />
+			</svelte:fragment>
 		{/if}
 	</TableShell>
 </div>
