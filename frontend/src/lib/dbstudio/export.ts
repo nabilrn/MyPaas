@@ -29,6 +29,11 @@ function escapeXML(value: string) {
 	return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function truncateERDText(value: string, maxCharacters: number) {
+	if (value.length <= maxCharacters) return value;
+	return `${value.slice(0, Math.max(1, maxCharacters - 1))}…`;
+}
+
 function columnY(node: ERDNode, column: string, density: ERDDensity) {
 	const rawIndex = node.displayColumns.findIndex((item) => item.name === column);
 	const index = rawIndex < 0 ? 0 : rawIndex;
@@ -123,22 +128,25 @@ export function buildERDSVG(graph: ERDGraph, direction: 'LR' | 'TB', options: ER
 
 	const edges = graph.edges.map((edge) => {
 		const relation = relationPath(edge, graph, direction, options.density);
-		const label = `${edge.foreignKey.column} → ${edge.foreignKey.referencedColumn}`;
+		const label = truncateERDText(`${edge.foreignKey.column} → ${edge.foreignKey.referencedColumn}`, 38);
 		return `<path d="${relation.path}" fill="none" stroke="#6b7280" stroke-width="1.75" stroke-linejoin="round" marker-end="url(#arrow)"/>${options.showRelationLabels ? `<text x="${relation.labelX}" y="${relation.labelY - 6}" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#374151" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">${escapeXML(label)}</text>` : ''}`;
 	}).join('');
 
-	const nodes = graph.nodes.map((node) => {
+	const nodes = graph.nodes.map((node, nodeIndex) => {
+		const clipID = `erd-node-${nodeIndex}`;
 		const columns = node.displayColumns.map((column, index) => {
 			const y = node.y + (options.density === 'compact' ? 65 : 69) + index * rowHeight;
 			const isForeignKey = node.detail.foreignKeys.some((foreignKey) => foreignKey.column === column.name);
 			const prefix = column.primaryKey ? 'PK ' : isForeignKey ? 'FK ' : '';
-			const type = options.showDataTypes ? `<text x="${node.x + node.width - 12}" y="${y}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#6b7280">${escapeXML(column.dataType)}</text>` : '';
-			return `<text x="${node.x + 12}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#1f2937">${prefix}${escapeXML(column.name)}</text>${type}`;
+			const displayName = truncateERDText(`${prefix}${column.name}`, options.showDataTypes ? 22 : 36);
+			const displayType = truncateERDText(column.dataType, 18);
+			const type = options.showDataTypes ? `<text x="${node.x + node.width - 12}" y="${y}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#6b7280">${escapeXML(displayType)}</text>` : '';
+			return `<text x="${node.x + 12}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#1f2937">${escapeXML(displayName)}</text>${type}`;
 		}).join('');
 		const more = node.hiddenColumnCount > 0
 			? `<text x="${node.x + 12}" y="${node.y + node.height - 10}" font-family="Inter, Arial, sans-serif" font-size="10" fill="#9ca3af">+${node.hiddenColumnCount} more</text>`
 			: '';
-		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="7" fill="#ffffff" stroke="#9ca3af" stroke-width="1.2"/><line x1="${node.x}" y1="${node.y + 48}" x2="${node.x + node.width}" y2="${node.y + 48}" stroke="#e5e7eb"/><text x="${node.x + 12}" y="${node.y + 16}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9ca3af">${escapeXML(node.detail.schema)}</text><text x="${node.x + 12}" y="${node.y + 36}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#111827">${escapeXML(node.detail.name)}</text>${columns}${more}</g>`;
+		return `<g><defs><clipPath id="${clipID}"><rect x="${node.x + 1}" y="${node.y + 1}" width="${Math.max(0, node.width - 2)}" height="${Math.max(0, node.height - 2)}" rx="6"/></clipPath></defs><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="7" fill="#ffffff" stroke="#9ca3af" stroke-width="1.2"/><g clip-path="url(#${clipID})"><line x1="${node.x}" y1="${node.y + 48}" x2="${node.x + node.width}" y2="${node.y + 48}" stroke="#e5e7eb"/><text x="${node.x + 12}" y="${node.y + 16}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9ca3af">${escapeXML(truncateERDText(node.detail.schema, 28))}</text><text x="${node.x + 12}" y="${node.y + 36}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#111827">${escapeXML(truncateERDText(node.detail.name, 28))}</text>${columns}${more}</g></g>`;
 	}).join('');
 
 	const title = options.title
