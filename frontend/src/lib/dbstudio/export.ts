@@ -12,6 +12,7 @@ export interface ERDExportOptions {
 }
 
 const encoder = new TextEncoder();
+const parallelEdgeSpacing = 12;
 
 export function presetRatio(preset: ERDPagePreset): number | null {
 	switch (preset) {
@@ -28,80 +29,123 @@ function escapeXML(value: string) {
 	return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function visibleColumnCount(node: ERDNode, density: ERDDensity) {
-	return density === 'compact' ? Math.min(5, node.detail.columns.length) : Math.min(7, node.detail.columns.length);
-}
-
 function columnY(node: ERDNode, column: string, density: ERDDensity) {
-	const rows = visibleColumnCount(node, density);
-	const rawIndex = node.detail.columns.findIndex((item) => item.name === column);
-	const index = rawIndex < 0 ? 0 : Math.min(rawIndex, Math.max(rows - 1, 0));
-	const headerHeight = density === 'compact' ? 55 : 58;
+	const rawIndex = node.displayColumns.findIndex((item) => item.name === column);
+	const index = rawIndex < 0 ? 0 : rawIndex;
+	const headerHeight = density === 'compact' ? 52 : 56;
 	const rowHeight = density === 'compact' ? 18 : 20;
 	return node.y + headerHeight + index * rowHeight + rowHeight / 2;
 }
 
+function edgeLane(edge: ERDEdge, graph: ERDGraph) {
+	const low = Math.min(edge.from.level, edge.to.level);
+	const high = Math.max(edge.from.level, edge.to.level);
+	const siblings = graph.edges
+		.filter((item) => item.from.group === edge.from.group && Math.min(item.from.level, item.to.level) === low && Math.max(item.from.level, item.to.level) === high)
+		.sort((a, b) => a.id.localeCompare(b.id));
+	const index = Math.max(0, siblings.findIndex((item) => item.id === edge.id));
+	return (index - (siblings.length - 1) / 2) * parallelEdgeSpacing;
+}
+
 export function relationPath(edge: ERDEdge, graph: ERDGraph, direction: 'LR' | 'TB', density: ERDDensity) {
-	const edgeIndex = Math.max(0, graph.edges.findIndex((item) => item.id === edge.id));
-	const lane = ((edgeIndex % 7) - 3) * 8;
+	const lane = edgeLane(edge, graph);
 	const fromCenterX = edge.from.x + edge.from.width / 2;
 	const toCenterX = edge.to.x + edge.to.width / 2;
+	const fromCenterY = edge.from.y + edge.from.height / 2;
+	const toCenterY = edge.to.y + edge.to.height / 2;
+	const fromRowY = columnY(edge.from, edge.foreignKey.column, density);
+	const toRowY = columnY(edge.to, edge.foreignKey.referencedColumn, density);
+	const sameRank = edge.from.level === edge.to.level;
 
-	if (direction === 'LR') {
+	if (direction === 'LR' && !sameRank) {
 		const toRight = toCenterX >= fromCenterX;
 		const fromX = toRight ? edge.from.x + edge.from.width : edge.from.x;
 		const toX = toRight ? edge.to.x : edge.to.x + edge.to.width;
-		const fromY = columnY(edge.from, edge.foreignKey.column, density);
-		const toY = columnY(edge.to, edge.foreignKey.referencedColumn, density);
 		const middleX = (fromX + toX) / 2 + lane;
-		return { path: `M ${fromX} ${fromY} H ${middleX} V ${toY} H ${toX}`, labelX: middleX, labelY: (fromY + toY) / 2 };
+		return {
+			path: `M ${fromX} ${fromRowY} H ${middleX} V ${toRowY} H ${toX}`,
+			labelX: middleX,
+			labelY: (fromRowY + toRowY) / 2
+		};
 	}
 
-	const toBelow = edge.to.y + edge.to.height / 2 >= edge.from.y + edge.from.height / 2;
-	const fromY = toBelow ? edge.from.y + edge.from.height : edge.from.y;
-	const toY = toBelow ? edge.to.y : edge.to.y + edge.to.height;
-	const fromX = fromCenterX;
-	const toX = toCenterX;
-	const middleY = (fromY + toY) / 2 + lane;
-	return { path: `M ${fromX} ${fromY} V ${middleY} H ${toX} V ${toY}`, labelX: (fromX + toX) / 2, labelY: middleY };
+	if (direction === 'TB' && !sameRank) {
+		const targetToRight = toCenterX >= fromCenterX;
+		const fromX = targetToRight ? edge.from.x + edge.from.width : edge.from.x;
+		const toX = targetToRight ? edge.to.x : edge.to.x + edge.to.width;
+		const fromStubX = fromX + (targetToRight ? 18 : -18);
+		const toStubX = toX + (targetToRight ? -18 : 18);
+		const toBelow = toCenterY >= fromCenterY;
+		const fromBoundary = toBelow ? edge.from.y + edge.from.height : edge.from.y;
+		const toBoundary = toBelow ? edge.to.y : edge.to.y + edge.to.height;
+		const middleY = (fromBoundary + toBoundary) / 2 + lane;
+		return {
+			path: `M ${fromX} ${fromRowY} H ${fromStubX} V ${middleY} H ${toStubX} V ${toRowY} H ${toX}`,
+			labelX: (fromStubX + toStubX) / 2,
+			labelY: middleY
+		};
+	}
+
+	const routeRight = fromCenterX + toCenterX >= graph.width;
+	const outsideX = routeRight
+		? Math.max(edge.from.x + edge.from.width, edge.to.x + edge.to.width) + 48 + Math.abs(lane)
+		: Math.min(edge.from.x, edge.to.x) - 48 - Math.abs(lane);
+	const fromX = routeRight ? edge.from.x + edge.from.width : edge.from.x;
+	const toX = routeRight ? edge.to.x + edge.to.width : edge.to.x;
+	return {
+		path: `M ${fromX} ${fromRowY} H ${outsideX} V ${toRowY} H ${toX}`,
+		labelX: outsideX,
+		labelY: (fromRowY + toRowY) / 2
+	};
+}
+
+function exportDimensions(graph: ERDGraph, preset: ERDPagePreset, hasTitle: boolean) {
+	const margin = 56;
+	const titleHeight = hasTitle ? 36 : 0;
+	const contentWidth = graph.width + margin * 2;
+	const contentHeight = graph.height + margin * 2 + titleHeight;
+	const ratio = presetRatio(preset);
+	if (!ratio) return { width: contentWidth, height: contentHeight, margin, titleHeight };
+
+	let width = contentWidth;
+	let height = contentHeight;
+	if (width / height < ratio) width = height * ratio;
+	else height = width / ratio;
+	return { width: Math.ceil(width), height: Math.ceil(height), margin, titleHeight };
 }
 
 export function buildERDSVG(graph: ERDGraph, direction: 'LR' | 'TB', options: ERDExportOptions) {
-	const ratio = presetRatio(options.preset);
-	const margin = 48;
-	const naturalWidth = Math.max(960, graph.width + margin * 2);
-	const naturalHeight = Math.max(600, graph.height + margin * 2);
-	const pageWidth = ratio ? 1600 : naturalWidth;
-	const pageHeight = ratio ? Math.round(pageWidth / ratio) : naturalHeight;
-	const scale = Math.min((pageWidth - margin * 2) / Math.max(graph.width, 1), (pageHeight - margin * 2) / Math.max(graph.height, 1), 1);
-	const offsetX = (pageWidth - graph.width * scale) / 2;
-	const offsetY = (pageHeight - graph.height * scale) / 2;
-	const rows = (node: ERDNode) => visibleColumnCount(node, options.density);
+	const page = exportDimensions(graph, options.preset, Boolean(options.title));
+	const offsetX = (page.width - graph.width) / 2;
+	const freeHeight = page.height - page.titleHeight;
+	const offsetY = page.titleHeight + (freeHeight - graph.height) / 2;
+	const rowHeight = options.density === 'compact' ? 18 : 20;
 
 	const edges = graph.edges.map((edge) => {
 		const relation = relationPath(edge, graph, direction, options.density);
 		const label = `${edge.foreignKey.column} → ${edge.foreignKey.referencedColumn}`;
-		return `<path d="${relation.path}" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>${options.showRelationLabels ? `<text x="${relation.labelX}" y="${relation.labelY - 6}" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#374151" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">${escapeXML(label)}</text>` : ''}`;
+		return `<path d="${relation.path}" fill="none" stroke="#6b7280" stroke-width="1.75" stroke-linejoin="round" marker-end="url(#arrow)"/>${options.showRelationLabels ? `<text x="${relation.labelX}" y="${relation.labelY - 6}" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#374151" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">${escapeXML(label)}</text>` : ''}`;
 	}).join('');
 
 	const nodes = graph.nodes.map((node) => {
-		const visible = node.detail.columns.slice(0, rows(node));
-		const columns = visible.map((column, index) => {
-			const y = node.y + 68 + index * (options.density === 'compact' ? 18 : 20);
-			const type = options.showDataTypes ? `<text x="${node.x + node.width - 12}" y="${y}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#6b7280">${escapeXML(column.dataType)}</text>` : '';
-			return `<text x="${node.x + 12}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#1f2937">${column.primaryKey ? 'PK ' : ''}${escapeXML(column.name)}</text>${type}`;
+		const columns = node.displayColumns.map((column, index) => {
+			const y = node.y + (options.density === 'compact' ? 65 : 69) + index * rowHeight;
+			const isForeignKey = node.detail.foreignKeys.some((foreignKey) => foreignKey.column === column.name);
+			const prefix = column.primaryKey ? 'PK ' : isForeignKey ? 'FK ' : '';
+			const type = options.showDataTypes ? `<text x="${node.x + node.width - 12}" y="${y}" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="#6b7280">${escapeXML(column.dataType)}</text>` : '';
+			return `<text x="${node.x + 12}" y="${y}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10.5" fill="#1f2937">${prefix}${escapeXML(column.name)}</text>${type}`;
 		}).join('');
-		const more = node.detail.columns.length > rows(node)
-			? `<text x="${node.x + 12}" y="${node.y + node.height - 12}" font-family="Inter, Arial, sans-serif" font-size="10" fill="#9ca3af">+${node.detail.columns.length - rows(node)} more</text>`
+		const more = node.hiddenColumnCount > 0
+			? `<text x="${node.x + 12}" y="${node.y + node.height - 10}" font-family="Inter, Arial, sans-serif" font-size="10" fill="#9ca3af">+${node.hiddenColumnCount} more</text>`
 			: '';
-		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" fill="#ffffff" stroke="#9ca3af" stroke-width="1.25"/><line x1="${node.x}" y1="${node.y + 50}" x2="${node.x + node.width}" y2="${node.y + 50}" stroke="#e5e7eb"/><text x="${node.x + 12}" y="${node.y + 17}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="#9ca3af">${escapeXML(node.detail.schema)}</text><text x="${node.x + 12}" y="${node.y + 37}" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#111827">${escapeXML(node.detail.name)}</text>${columns}${more}</g>`;
+		return `<g><rect x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="7" fill="#ffffff" stroke="#9ca3af" stroke-width="1.2"/><line x1="${node.x}" y1="${node.y + 48}" x2="${node.x + node.width}" y2="${node.y + 48}" stroke="#e5e7eb"/><text x="${node.x + 12}" y="${node.y + 16}" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="8.5" fill="#9ca3af">${escapeXML(node.detail.schema)}</text><text x="${node.x + 12}" y="${node.y + 36}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#111827">${escapeXML(node.detail.name)}</text>${columns}${more}</g>`;
 	}).join('');
 
 	const title = options.title
-		? `<text x="${margin}" y="${Math.max(28, offsetY - 16)}" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600" fill="#111827">${escapeXML(options.title)}</text>`
+		? `<text x="${page.margin}" y="${page.margin - 12}" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="600" fill="#111827">${escapeXML(options.title)}</text>`
 		: '';
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${pageWidth}" height="${pageHeight}" viewBox="0 0 ${pageWidth} ${pageHeight}"><rect width="100%" height="100%" fill="#ffffff"/>${title}<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#4b5563"/></marker></defs><g transform="translate(${offsetX} ${offsetY}) scale(${scale})">${edges}${nodes}</g></svg>`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${page.width}" height="${page.height}" viewBox="0 0 ${page.width} ${page.height}"><rect width="100%" height="100%" fill="#ffffff"/>${title}<defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#4b5563"/></marker></defs><g transform="translate(${offsetX} ${offsetY})">${edges}${nodes}</g></svg>`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -117,7 +161,7 @@ export function downloadSVG(svg: string, filename: string) {
 	downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), filename);
 }
 
-async function svgCanvas(svg: string, width = 2200) {
+async function svgCanvas(svg: string, requestedScale = 2.25) {
 	const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
 	const url = URL.createObjectURL(blob);
 	try {
@@ -128,12 +172,23 @@ async function svgCanvas(svg: string, width = 2200) {
 			image.onerror = () => reject(new Error('Could not render ERD image'));
 			image.src = url;
 		});
-		const ratio = image.naturalWidth / Math.max(image.naturalHeight, 1);
+		const naturalWidth = Math.max(1, image.naturalWidth);
+		const naturalHeight = Math.max(1, image.naturalHeight);
+		const maxSide = 12000;
+		const maxPixels = 48_000_000;
+		const scale = Math.max(0.5, Math.min(
+			requestedScale,
+			maxSide / naturalWidth,
+			maxSide / naturalHeight,
+			Math.sqrt(maxPixels / (naturalWidth * naturalHeight))
+		));
 		const canvas = document.createElement('canvas');
-		canvas.width = width;
-		canvas.height = Math.max(1, Math.round(width / ratio));
+		canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+		canvas.height = Math.max(1, Math.round(naturalHeight * scale));
 		const context = canvas.getContext('2d');
 		if (!context) throw new Error('Canvas is not available');
+		context.imageSmoothingEnabled = true;
+		context.imageSmoothingQuality = 'high';
 		context.fillStyle = '#ffffff';
 		context.fillRect(0, 0, canvas.width, canvas.height);
 		context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -144,7 +199,7 @@ async function svgCanvas(svg: string, width = 2200) {
 }
 
 export async function downloadPNG(svg: string, filename: string) {
-	const canvas = await svgCanvas(svg);
+	const canvas = await svgCanvas(svg, 2.5);
 	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 	if (!blob) throw new Error('Could not encode PNG');
 	downloadBlob(blob, filename);
@@ -163,8 +218,8 @@ function concatBytes(parts: Uint8Array[]) {
 
 function singleImagePDF(jpeg: Uint8Array, imageWidth: number, imageHeight: number, preset: ERDPagePreset) {
 	const ratio = presetRatio(preset) ?? imageWidth / Math.max(imageHeight, 1);
-	const pageWidth = 841.89;
-	const pageHeight = preset === 'a4-landscape' ? 595.28 : pageWidth / ratio;
+	const pageWidth = preset === 'a4-landscape' ? 841.89 : 1000;
+	const pageHeight = pageWidth / ratio;
 	const content = `q ${pageWidth.toFixed(2)} 0 0 ${pageHeight.toFixed(2)} 0 0 cm /Im0 Do Q`;
 	const objects: Uint8Array[] = [
 		encoder.encode('<< /Type /Catalog /Pages 2 0 R >>'),
@@ -193,8 +248,8 @@ function singleImagePDF(jpeg: Uint8Array, imageWidth: number, imageHeight: numbe
 }
 
 export async function downloadPDF(svg: string, filename: string, preset: ERDPagePreset) {
-	const canvas = await svgCanvas(svg, 2400);
-	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+	const canvas = await svgCanvas(svg, 2.25);
+	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.98));
 	if (!blob) throw new Error('Could not encode PDF image');
 	const jpeg = new Uint8Array(await blob.arrayBuffer());
 	const pdf = singleImagePDF(jpeg, canvas.width, canvas.height, preset);
