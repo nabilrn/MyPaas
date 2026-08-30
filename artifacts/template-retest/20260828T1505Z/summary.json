@@ -3,6 +3,13 @@
   "mainSha": "77b914071dc82ffcd3b833aefa9344aa35017a80",
   "runtimeBuildSha": "77b914071dc82ffcd3b833aefa9344aa35017a80",
   "publicDomain": "malala.tech",
+  "followUp": {
+    "testedSha": "0c13215bc999ae27fe38f61d3ef346a021705bc2",
+    "runtime": "Podman 5.4.2",
+    "result": "stopped-on-registry-rate-limit",
+    "detail": "n8n reached MyPaaS ComposePull and failed before container startup with an unauthenticated Docker Hub toomanyrequests rate limit; cleanup succeeded and the remaining affected templates were not run under the stop rule.",
+    "sourceFinding": "Direct image pulls supported isolated MYPAAS_REGISTRY_* authentication while ComposePull did not; the current corrective branch adds the same generic registry-auth contract to Compose pulls."
+  },
   "templates": [
     {
       "template": "directus",
@@ -56,7 +63,7 @@
       "rawClassification": "FAIL_TEMPLATE",
       "classification": "FAIL_UNCLASSIFIED",
       "notes": [
-        "The exact image pulled successfully with staging Podman, while the MyPaaS Docker Compose pull path exited 18; preserved evidence is insufficient to assign template or platform ownership."
+        "The original run did not preserve enough registry diagnostics to assign ownership; a later targeted run reproduced an unauthenticated Docker Hub rate limit before container startup."
       ],
       "projectId": "4141a8ee-1bac-4d81-a4c7-c1b76f8febb4",
       "error": "deployment failed: /usr/bin/docker compose --env-file /tmp/mypaas/builds/faa66adb-4bf4-47e4-8f5c-c4a953f48c9f/templates/manifests/n8n/.env -p mypaas-qual-n8n-145424 -f /tmp/mypaas/builds/faa66adb-4bf4-47e4-8f5c-c4a953f48c9f/templates/manifests/n8n/docker-compose.mypaas.sanitized.json -f /tmp/mypaas/builds/faa66adb-4bf4-47e4-8f5c-c4a953f48c9f/templates/manifests/n8n/docker-compose.mypaas.override.yml pull --ignore-buildable: exit status 18",
