@@ -28,6 +28,26 @@ func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
 	}
 }
 
+func TestComposeExecutionEnvUsesIsolatedDockerConfigWithoutLeakingRegistrySecrets(t *testing.T) {
+	t.Setenv(registryHostEnv, "docker.io")
+	t.Setenv(registryUsernameEnv, "mypaas-ci")
+	t.Setenv(registryPasswordEnv, "super-secret")
+
+	env := composeExecutionEnv([]string{"worker", "metrics"}, "/tmp/mypaas-docker-config")
+	joined := strings.Join(env, "\n")
+	if !strings.Contains(joined, "DOCKER_CONFIG=/tmp/mypaas-docker-config") {
+		t.Fatalf("compose env missing isolated DOCKER_CONFIG: %v", env)
+	}
+	if !strings.Contains(joined, "COMPOSE_PROFILES=worker,metrics") {
+		t.Fatalf("compose env missing profiles: %v", env)
+	}
+	for _, forbidden := range []string{registryHostEnv, registryUsernameEnv, registryPasswordEnv, "super-secret"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("compose env leaked registry configuration %q: %v", forbidden, env)
+		}
+	}
+}
+
 func TestEffectiveComposeReadinessTimeoutUsesPlatformFloor(t *testing.T) {
 	tests := []struct {
 		name string
