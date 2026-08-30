@@ -24,6 +24,16 @@ type Service struct {
 	pool *pgxpool.Pool
 }
 
+type Allocation struct {
+	Port          int32     `json:"port"`
+	ProjectID     uuid.UUID `json:"projectId"`
+	ProjectName   string    `json:"projectName"`
+	Service       string    `json:"service"`
+	AppPort       int32     `json:"appPort"`
+	DeployMode    string    `json:"deployMode"`
+	ProjectStatus string    `json:"projectStatus"`
+}
+
 var dockerPortBindings = runningDockerPortBindings
 
 func NewService(pool *pgxpool.Pool) *Service {
@@ -98,6 +108,40 @@ func (s *Service) ReleasePort(ctx context.Context, port int32) error {
 	}
 	queries := db.New(s.pool)
 	return queries.ReleasePort(ctx, port)
+}
+
+func (s *Service) ListInUse(ctx context.Context) ([]Allocation, error) {
+	queries := db.New(s.pool)
+	rows, err := queries.ListInUsePorts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Allocation, 0, len(rows))
+	for _, row := range rows {
+		if !row.ProjectID.Valid {
+			continue
+		}
+		projectID := uuid.UUID(row.ProjectID.Bytes)
+		item := Allocation{Port: row.Port, ProjectID: projectID, ProjectName: "orphaned"}
+		project, err := queries.GetProjectByID(ctx, projectID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				items = append(items, item)
+				continue
+			}
+			return nil, err
+		}
+		item.ProjectName = project.Name
+		item.AppPort = project.AppPort
+		item.DeployMode = project.DeployMode
+		item.ProjectStatus = project.Status
+		item.Service = "app"
+		if project.MainService != nil && strings.TrimSpace(*project.MainService) != "" {
+			item.Service = strings.TrimSpace(*project.MainService)
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 func pgUUID(id uuid.UUID) pgtype.UUID {
