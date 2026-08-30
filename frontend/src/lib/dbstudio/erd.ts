@@ -6,17 +6,21 @@ export type ERDDensity = 'compact' | 'comfortable';
 export interface ERDLayoutOptions {
 	direction?: ERDDirection;
 	density?: ERDDensity;
+	targetRatio?: number;
 }
 
 export interface ERDNode {
 	id: string;
 	detail: DBStudioTableDetails;
+	displayColumns: DBStudioTableDetails['columns'];
+	hiddenColumnCount: number;
 	x: number;
 	y: number;
 	width: number;
 	height: number;
 	group: number;
 	level: number;
+	order: number;
 }
 
 export interface ERDEdge {
@@ -34,26 +38,49 @@ export interface ERDGraph {
 	groups: number;
 }
 
-const padding = 28;
-const componentGap = 96;
+// Mirrors the layout concepts used by draw.io's hierarchical layout without
+// pulling the full diagram editor into the dashboard bundle.
+const pagePadding = 40;
+const intraCellSpacing = 44;
+const interRankCellSpacing = 128;
+const interHierarchySpacing = 104;
 
 export function tableID(schema: string, table: string) {
 	return `${schema}.${table}`;
 }
 
-function dimensions(detail: DBStudioTableDetails, density: ERDDensity) {
-	const width = density === 'compact' ? 228 : 260;
-	const visibleRows = Math.min(detail.columns.length, density === 'compact' ? 5 : 7);
-	const rowHeight = density === 'compact' ? 18 : 20;
-	const height = 66 + visibleRows * rowHeight + (detail.columns.length > visibleRows ? 18 : 0);
-	return { width, height: Math.max(density === 'compact' ? 132 : 148, height) };
+function buildDisplayColumns(
+	detail: DBStudioTableDetails,
+	incomingReferences: Set<string>,
+	density: ERDDensity
+) {
+	const baseCount = density === 'compact' ? 6 : 8;
+	const required = new Set<string>(incomingReferences);
+	for (const column of detail.columns) {
+		if (column.primaryKey) required.add(column.name);
+	}
+	for (const foreignKey of detail.foreignKeys) required.add(foreignKey.column);
+
+	const visible = new Set(detail.columns.slice(0, baseCount).map((column) => column.name));
+	for (const name of required) visible.add(name);
+
+	return detail.columns.filter((column) => visible.has(column.name));
 }
 
-function connectedGroups(ids: string[], edges: Array<{ from: string; to: string }>) {
+function dimensions(displayRows: number, hiddenRows: number, density: ERDDensity) {
+	const width = density === 'compact' ? 224 : 248;
+	const rowHeight = density === 'compact' ? 18 : 20;
+	const headerHeight = density === 'compact' ? 52 : 56;
+	const footerHeight = hiddenRows > 0 ? 24 : 10;
+	const height = headerHeight + Math.max(displayRows, 1) * rowHeight + footerHeight;
+	return { width, height: Math.max(density === 'compact' ? 126 : 142, height) };
+}
+
+function connectedGroups(ids: string[], edges: Array<{ child: string; parent: string }>) {
 	const adjacency = new Map(ids.map((id) => [id, new Set<string>()]));
 	for (const edge of edges) {
-		adjacency.get(edge.from)?.add(edge.to);
-		adjacency.get(edge.to)?.add(edge.from);
+		adjacency.get(edge.child)?.add(edge.parent);
+		adjacency.get(edge.parent)?.add(edge.child);
 	}
 
 	const groupByID = new Map<string, number>();
@@ -76,53 +103,107 @@ function connectedGroups(ids: string[], edges: Array<{ from: string; to: string 
 	return { groupByID, count: group };
 }
 
-function assignLevels(ids: string[], edges: Array<{ child: string; parent: string }>, groupByID: Map<string, number>) {
-	const children = new Map(ids.map((id) => [id, new Set<string>()]));
-	const dependencyCount = new Map(ids.map((id) => [id, 0]));
+function assignLevels(members: string[], edges: Array<{ child: string; parent: string }>) {
+	const memberSet = new Set(members);
+	const children = new Map(members.map((id) => [id, new Set<string>()]));
+	const parentCount = new Map(members.map((id) => [id, 0]));
 	for (const edge of edges) {
+		if (!memberSet.has(edge.child) || !memberSet.has(edge.parent)) continue;
 		children.get(edge.parent)?.add(edge.child);
-		dependencyCount.set(edge.child, (dependencyCount.get(edge.child) ?? 0) + 1);
+		parentCount.set(edge.child, (parentCount.get(edge.child) ?? 0) + 1);
 	}
 
 	const levels = new Map<string, number>();
-	const groups = new Map<number, string[]>();
-	for (const id of ids) {
-		const group = groupByID.get(id) ?? 0;
-		groups.set(group, [...(groups.get(group) ?? []), id]);
+	const roots = members.filter((id) => (parentCount.get(id) ?? 0) === 0).sort();
+	const seeds = roots.length > 0 ? roots : [...members].sort().slice(0, 1);
+	const queue = seeds.map((id) => ({ id, level: 0 }));
+
+	while (queue.length > 0) {
+		const current = queue.shift();
+		if (!current) continue;
+		const previous = levels.get(current.id);
+		if (previous !== undefined && previous <= current.level) continue;
+		levels.set(current.id, current.level);
+		for (const child of children.get(current.id) ?? []) {
+			if (!levels.has(child)) queue.push({ id: child, level: current.level + 1 });
+		}
 	}
 
-	for (const members of groups.values()) {
-		const ordered = [...members].sort();
-		const roots = ordered.filter((id) => (dependencyCount.get(id) ?? 0) === 0);
-		const queue = (roots.length > 0 ? roots : ordered.slice(0, 1)).map((id) => ({ id, level: 0 }));
-		const visited = new Set<string>();
-
-		while (queue.length > 0) {
-			const current = queue.shift();
-			if (!current || visited.has(current.id)) continue;
-			visited.add(current.id);
-			levels.set(current.id, current.level);
-			for (const child of children.get(current.id) ?? []) {
-				if (!visited.has(child)) queue.push({ id: child, level: current.level + 1 });
-			}
-		}
-
-		for (const id of ordered) {
-			if (!levels.has(id)) levels.set(id, 0);
-		}
+	for (const id of [...members].sort()) {
+		if (!levels.has(id)) levels.set(id, 0);
 	}
 	return levels;
 }
 
+function orderedBuckets(
+	members: string[],
+	levels: Map<string, number>,
+	edges: Array<{ child: string; parent: string }>
+) {
+	const buckets = new Map<number, string[]>();
+	for (const id of members) {
+		const level = levels.get(id) ?? 0;
+		buckets.set(level, [...(buckets.get(level) ?? []), id]);
+	}
+	for (const [level, ids] of buckets) buckets.set(level, [...ids].sort());
+
+	const adjacency = new Map(members.map((id) => [id, new Set<string>()]));
+	for (const edge of edges) {
+		if (!adjacency.has(edge.child) || !adjacency.has(edge.parent)) continue;
+		adjacency.get(edge.child)?.add(edge.parent);
+		adjacency.get(edge.parent)?.add(edge.child);
+	}
+
+	const levelsSorted = [...buckets.keys()].sort((a, b) => a - b);
+	const reorder = (level: number, neighborLevel: number) => {
+		const current = buckets.get(level);
+		const neighbors = buckets.get(neighborLevel);
+		if (!current || !neighbors || current.length < 2) return;
+		const positions = new Map(neighbors.map((id, index) => [id, index]));
+		const previousOrder = new Map(current.map((id, index) => [id, index]));
+		current.sort((a, b) => {
+			const score = (id: string) => {
+				const values = [...(adjacency.get(id) ?? [])]
+					.map((neighbor) => positions.get(neighbor))
+					.filter((value): value is number => value !== undefined);
+				return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : Number.POSITIVE_INFINITY;
+			};
+			const diff = score(a) - score(b);
+			if (Number.isFinite(diff) && Math.abs(diff) > 0.001) return diff;
+			return (previousOrder.get(a) ?? 0) - (previousOrder.get(b) ?? 0);
+		});
+	};
+
+	// Draw.io's hierarchical layout performs crossing-reduction sweeps between
+	// ranks. A few deterministic barycentric passes give ERDs the same useful
+	// property without embedding the editor runtime.
+	for (let pass = 0; pass < 4; pass += 1) {
+		for (let index = 1; index < levelsSorted.length; index += 1) {
+			reorder(levelsSorted[index], levelsSorted[index - 1]);
+		}
+		for (let index = levelsSorted.length - 2; index >= 0; index -= 1) {
+			reorder(levelsSorted[index], levelsSorted[index + 1]);
+		}
+	}
+	return buckets;
+}
+
+interface ComponentLayout {
+	group: number;
+	nodes: ERDNode[];
+	width: number;
+	height: number;
+}
+
 export function layoutERD(details: DBStudioTableDetails[], options: ERDLayoutOptions = {}): ERDGraph {
-	const direction = options.direction ?? 'LR';
+	const direction = options.direction ?? 'TB';
 	const density = options.density ?? 'comfortable';
-	const horizontalGap = density === 'compact' ? 64 : 92;
-	const verticalGap = density === 'compact' ? 42 : 64;
+	const targetRatio = Math.max(0.55, options.targetRatio ?? (direction === 'TB' ? 16 / 9 : 3 / 4));
 	const ids = details.map((detail) => tableID(detail.schema, detail.name));
 	const detailsByID = new Map(details.map((detail) => [tableID(detail.schema, detail.name), detail]));
 
 	const edgeSpecs: Array<{ id: string; child: string; parent: string; foreignKey: DBStudioForeignKey }> = [];
+	const incomingColumns = new Map(ids.map((id) => [id, new Set<string>()]));
 	for (const detail of details) {
 		const child = tableID(detail.schema, detail.name);
 		detail.foreignKeys.forEach((foreignKey, index) => {
@@ -134,61 +215,129 @@ export function layoutERD(details: DBStudioTableDetails[], options: ERDLayoutOpt
 				parent,
 				foreignKey
 			});
+			incomingColumns.get(parent)?.add(foreignKey.referencedColumn);
 		});
 	}
 
-	const { groupByID, count: groups } = connectedGroups(ids, edgeSpecs.map((edge) => ({ from: edge.child, to: edge.parent })));
-	const levels = assignLevels(ids, edgeSpecs, groupByID);
-	const nodes: ERDNode[] = [];
-	let groupOffset = padding;
-	let maxX = padding;
-	let maxY = padding;
+	const { groupByID, count: groups } = connectedGroups(ids, edgeSpecs);
+	const components: ComponentLayout[] = [];
 
 	for (let group = 0; group < groups; group += 1) {
-		const members = ids
-			.filter((id) => (groupByID.get(id) ?? 0) === group)
-			.sort((a, b) => (levels.get(a) ?? 0) - (levels.get(b) ?? 0) || a.localeCompare(b));
-		const levelBuckets = new Map<number, string[]>();
+		const members = ids.filter((id) => (groupByID.get(id) ?? 0) === group);
+		const groupEdges = edgeSpecs.filter((edge) => members.includes(edge.child) && members.includes(edge.parent));
+		const levels = assignLevels(members, groupEdges);
+		const buckets = orderedBuckets(members, levels, groupEdges);
+		const levelNumbers = [...buckets.keys()].sort((a, b) => a - b);
+		const nodeSpecs = new Map<string, { width: number; height: number; displayColumns: DBStudioTableDetails['columns']; hiddenColumnCount: number }>();
+
 		for (const id of members) {
-			const level = levels.get(id) ?? 0;
-			levelBuckets.set(level, [...(levelBuckets.get(level) ?? []), id]);
+			const detail = detailsByID.get(id);
+			if (!detail) continue;
+			const displayColumns = buildDisplayColumns(detail, incomingColumns.get(id) ?? new Set<string>(), density);
+			const hiddenColumnCount = Math.max(0, detail.columns.length - displayColumns.length);
+			nodeSpecs.set(id, { ...dimensions(displayColumns.length, hiddenColumnCount, density), displayColumns, hiddenColumnCount });
 		}
 
-		let groupExtent = 0;
-		for (const [level, levelIDs] of [...levelBuckets.entries()].sort((a, b) => a[0] - b[0])) {
-			let crossOffset = groupOffset;
-			let levelExtent = 0;
-			for (const id of levelIDs) {
-				const detail = detailsByID.get(id);
-				if (!detail) continue;
-				const { width, height } = dimensions(detail, density);
-				const x = direction === 'LR' ? padding + level * (width + horizontalGap) : crossOffset;
-				const y = direction === 'LR' ? crossOffset : padding + level * (height + verticalGap);
-				nodes.push({ id, detail, x, y, width, height, group, level });
-				crossOffset += (direction === 'LR' ? height : width) + verticalGap;
-				levelExtent = Math.max(levelExtent, crossOffset - groupOffset - verticalGap);
-				maxX = Math.max(maxX, x + width);
-				maxY = Math.max(maxY, y + height);
-			}
-			groupExtent = Math.max(groupExtent, levelExtent);
+		const rankPrimarySizes = new Map<number, number>();
+		const rankCrossSizes = new Map<number, number>();
+		for (const level of levelNumbers) {
+			const bucket = buckets.get(level) ?? [];
+			const primary = Math.max(0, ...bucket.map((id) => {
+				const spec = nodeSpecs.get(id);
+				return direction === 'LR' ? spec?.width ?? 0 : spec?.height ?? 0;
+			}));
+			const cross = bucket.reduce((sum, id, index) => {
+				const spec = nodeSpecs.get(id);
+				const size = direction === 'LR' ? spec?.height ?? 0 : spec?.width ?? 0;
+				return sum + size + (index > 0 ? intraCellSpacing : 0);
+			}, 0);
+			rankPrimarySizes.set(level, primary);
+			rankCrossSizes.set(level, cross);
 		}
-		groupOffset += groupExtent + componentGap;
+
+		const componentCross = Math.max(0, ...rankCrossSizes.values());
+		const primaryOffsets = new Map<number, number>();
+		let primaryCursor = 0;
+		for (const level of levelNumbers) {
+			primaryOffsets.set(level, primaryCursor);
+			primaryCursor += (rankPrimarySizes.get(level) ?? 0) + interRankCellSpacing;
+		}
+		const componentPrimary = Math.max(0, primaryCursor - (levelNumbers.length > 0 ? interRankCellSpacing : 0));
+		const nodes: ERDNode[] = [];
+
+		for (const level of levelNumbers) {
+			const bucket = buckets.get(level) ?? [];
+			let crossCursor = Math.max(0, (componentCross - (rankCrossSizes.get(level) ?? 0)) / 2);
+			bucket.forEach((id, order) => {
+				const detail = detailsByID.get(id);
+				const spec = nodeSpecs.get(id);
+				if (!detail || !spec) return;
+				const primary = primaryOffsets.get(level) ?? 0;
+				const x = direction === 'LR' ? primary : crossCursor;
+				const y = direction === 'LR' ? crossCursor : primary;
+				nodes.push({
+					id,
+					detail,
+					displayColumns: spec.displayColumns,
+					hiddenColumnCount: spec.hiddenColumnCount,
+					x,
+					y,
+					width: spec.width,
+					height: spec.height,
+					group,
+					level,
+					order
+				});
+				crossCursor += (direction === 'LR' ? spec.height : spec.width) + intraCellSpacing;
+			});
+		}
+
+		components.push({
+			group,
+			nodes,
+			width: direction === 'LR' ? componentPrimary : componentCross,
+			height: direction === 'LR' ? componentCross : componentPrimary
+		});
+	}
+
+	const totalArea = components.reduce((sum, component) => sum + (component.width + interHierarchySpacing) * (component.height + interHierarchySpacing), 0);
+	const targetRowWidth = Math.max(720, Math.sqrt(Math.max(totalArea, 1) * targetRatio));
+	let cursorX = pagePadding;
+	let cursorY = pagePadding;
+	let rowHeight = 0;
+	let maxX = pagePadding;
+	let maxY = pagePadding;
+	const nodes: ERDNode[] = [];
+
+	for (const component of components) {
+		if (cursorX > pagePadding && cursorX + component.width > targetRowWidth + pagePadding) {
+			cursorX = pagePadding;
+			cursorY += rowHeight + interHierarchySpacing;
+			rowHeight = 0;
+		}
+		for (const node of component.nodes) {
+			node.x += cursorX;
+			node.y += cursorY;
+			nodes.push(node);
+		}
+		maxX = Math.max(maxX, cursorX + component.width);
+		maxY = Math.max(maxY, cursorY + component.height);
+		rowHeight = Math.max(rowHeight, component.height);
+		cursorX += component.width + interHierarchySpacing;
 	}
 
 	const byID = new Map(nodes.map((node) => [node.id, node]));
-	const edges: ERDEdge[] = [];
-	for (const spec of edgeSpecs) {
+	const edges: ERDEdge[] = edgeSpecs.flatMap((spec) => {
 		const from = byID.get(spec.child);
 		const to = byID.get(spec.parent);
-		if (!from || !to) continue;
-		edges.push({ id: spec.id, from, to, foreignKey: spec.foreignKey });
-	}
+		return from && to ? [{ id: spec.id, from, to, foreignKey: spec.foreignKey }] : [];
+	});
 
 	return {
 		nodes,
 		edges,
-		width: Math.max(720, maxX + padding),
-		height: Math.max(360, maxY + padding),
+		width: Math.max(720, maxX + pagePadding),
+		height: Math.max(420, maxY + pagePadding),
 		groups
 	};
 }
