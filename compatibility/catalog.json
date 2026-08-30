@@ -195,7 +195,7 @@
       "class": "automation-platform",
       "resourceTier": "moderate",
       "upstream": "https://github.com/n8n-io/n8n",
-      "evidence": "Official core Docker guidance uses docker.n8n.io/n8nio/n8n on port 5678; the MyPaas manifest pins stable 2.36.7 for repeatable qualification.",
+      "evidence": "Official current n8n Compose installer uses docker.io/n8nio/n8n on port 5678; the MyPaas manifest pins 2.36.7 for repeatable qualification.",
       "execution": {
         "enabled": true,
         "sourceType": "git",
