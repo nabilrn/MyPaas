@@ -5,7 +5,7 @@
 </script>
 
 <div
-	class="absolute inset-0 z-30 min-h-[20rem] bg-white/92 backdrop-blur-[1px] dark:bg-neutral-950/92"
+	class="absolute inset-0 z-30 min-h-[20rem] bg-white/95 backdrop-blur-[1px] dark:bg-neutral-950/95"
 	role="status"
 	aria-live="polite"
 	aria-label={label}
