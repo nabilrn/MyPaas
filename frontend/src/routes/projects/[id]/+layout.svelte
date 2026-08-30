@@ -36,6 +36,7 @@
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
+	$: databaseWorkspace = $page.url.pathname.startsWith(`/projects/${$page.params.id}/database`);
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -188,34 +189,40 @@
 	}
 </script>
 
-<div class="page-shell py-5">
+<div class={`page-shell ${databaseWorkspace ? 'py-3' : 'py-5'}`}>
 	{#if loading}
-		<div class="control-panel p-5">
-			<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-				<div class="min-w-0 flex-1">
-					<div class="h-7 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-800"></div>
-					<div class="mt-3 h-3 w-56 animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-					<div class="mt-2 h-3 w-full max-w-sm animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
+		{#if databaseWorkspace}
+			<div class="surface h-24 animate-pulse"></div>
+		{:else}
+			<div class="control-panel p-5">
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+					<div class="min-w-0 flex-1">
+						<div class="h-7 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-800"></div>
+						<div class="mt-3 h-3 w-56 animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
+						<div class="mt-2 h-3 w-full max-w-sm animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
+					</div>
+					<div class="h-9 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
 				</div>
-				<div class="h-9 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
 			</div>
-		</div>
+		{/if}
 	{:else if error || !project}
 		<div class="surface overflow-hidden">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
 	{:else}
-		<DeployControlPanel
-			{project}
-			{publicProjectHost}
-			{publicProjectURL}
-			{pendingAction}
-			on:stop={handleStop}
-			on:restart={handleRestart}
-			on:deploy={handleDeploy}
-		/>
+		{#if !databaseWorkspace}
+			<DeployControlPanel
+				{project}
+				{publicProjectHost}
+				{publicProjectURL}
+				{pendingAction}
+				on:stop={handleStop}
+				on:restart={handleRestart}
+				on:deploy={handleDeploy}
+			/>
+		{/if}
 
-		<div class="py-5">
+		<div class={databaseWorkspace ? 'py-0' : 'py-5'}>
 			<slot />
 		</div>
 	{/if}
