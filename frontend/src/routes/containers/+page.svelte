@@ -206,10 +206,10 @@
 			</tbody>
 		</table>
 
-		{#if filteredRows.length > 0}
-			<svelte:fragment slot="footer">
+		<svelte:fragment slot="footer">
+			{#if filteredRows.length > 0}
 				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={refreshing} label="Containers" />
-			</svelte:fragment>
-		{/if}
+			{/if}
+		</svelte:fragment>
 	</TableShell>
 </div>
