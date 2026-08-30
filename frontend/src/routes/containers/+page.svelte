@@ -3,22 +3,16 @@
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import TableShell from '$components/TableShell.svelte';
-	import { api } from '$api';
-	import type { ContainerMetrics, Project } from '$types';
+	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
 
-	type ContainerRow = ContainerMetrics & {
-		projectId: string;
-		projectName: string;
-		deployMode: Project['deployMode'];
-	};
-
-	let rows: ContainerRow[] = [];
+	let rows: RuntimeContainer[] = [];
 	let loading = true;
 	let refreshing = false;
 	let error = '';
 
-	$: totalCpu = rows.reduce((sum, row) => sum + row.cpu, 0);
-	$: totalMemoryMb = rows.reduce((sum, row) => sum + row.memoryMb, 0);
+	$: runningCount = rows.filter((row) => row.state === 'running').length;
+	$: totalCpu = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.cpu : 0), 0);
+	$: totalMemoryMb = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.memoryMb : 0), 0);
 
 	onMount(() => {
 		void load();
@@ -32,26 +26,14 @@
 		if (!background && rows.length === 0) loading = true;
 		error = '';
 		try {
-			const projects = (await api.projects.list()).filter(
-				(project) => project.status === 'running' && project.deployMode !== 'static'
-			);
-			const snapshots = await Promise.allSettled(projects.map((project) => api.metrics.snapshot(project.id)));
-			const nextRows: ContainerRow[] = [];
-			for (let index = 0; index < projects.length; index += 1) {
-				const result = snapshots[index];
-				if (!result || result.status !== 'fulfilled') continue;
-				for (const metric of result.value.items ?? []) {
-					nextRows.push({
-						...metric,
-						projectId: projects[index].id,
-						projectName: projects[index].name,
-						deployMode: projects[index].deployMode
-					});
-				}
-			}
-			rows = nextRows.sort((a, b) => a.projectName.localeCompare(b.projectName) || a.service.localeCompare(b.service));
+			const next = await loadRuntimeContainers();
+			rows = next.sort((a, b) => {
+				const runningOrder = Number(b.state === 'running') - Number(a.state === 'running');
+				if (runningOrder !== 0) return runningOrder;
+				return (a.composeProject || '').localeCompare(b.composeProject || '') || a.name.localeCompare(b.name);
+			});
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load container metrics';
+			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
 			loading = false;
 			refreshing = false;
@@ -62,6 +44,23 @@
 		if (!Number.isFinite(value)) return '—';
 		return value >= 1024 ? `${(value / 1024).toFixed(2)} GB` : `${value.toFixed(0)} MB`;
 	}
+
+	function stateDot(state: string) {
+		switch (state) {
+			case 'running': return 'bg-emerald-500';
+			case 'paused': return 'bg-amber-500';
+			case 'dead': return 'bg-red-500';
+			case 'restarting': return 'bg-blue-500';
+			default: return 'bg-gray-400 dark:bg-gray-600';
+		}
+	}
+
+	function runtimeGroup(row: RuntimeContainer) {
+		if (row.composeProject && row.service) return `${row.composeProject} / ${row.service}`;
+		if (row.composeProject) return row.composeProject;
+		if (row.service) return row.service;
+		return 'standalone';
+	}
 </script>
 
 <svelte:head>
@@ -71,9 +70,9 @@
 <div class="page-shell py-6">
 	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
 		<div>
-			<p class="text-sm text-gray-500 dark:text-gray-400">Live resource view for containers owned by running MyPaaS projects.</p>
+			<p class="text-sm text-gray-500 dark:text-gray-400">Host-wide Docker-compatible runtime view, including MyPaaS system containers and application containers.</p>
 			{#if rows.length > 0}
-				<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{rows.length} containers · {totalCpu.toFixed(1)}% CPU · {formatMemory(totalMemoryMb)} RAM</p>
+				<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{rows.length} total · {runningCount} running · {totalCpu.toFixed(1)}% CPU · {formatMemory(totalMemoryMb)} RAM</p>
 			{/if}
 		</div>
 		<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => load()}>
@@ -83,38 +82,51 @@
 	</div>
 
 	<TableShell
-		title="Running containers"
-		description="CPU, memory, and uptime refresh automatically every five seconds. Lifecycle controls stay on each project page."
+		title="Host containers"
+		description="Every container visible through the host runtime is listed. Live CPU and memory are sampled for running containers every five seconds."
 		{loading}
-		loadingRows={5}
+		loadingRows={7}
 		{error}
 		empty={rows.length === 0}
-		emptyTitle="No running containers."
-		emptyDescription="Deploy or start a container-backed project to see it here."
+		emptyTitle="No containers found."
+		emptyDescription="The Docker-compatible runtime currently reports no containers."
 		on:retry={() => load()}
 	>
 		<table class="data-table">
 			<thead>
 				<tr>
-					<th>Project</th>
-					<th>Container / service</th>
-					<th>Runtime</th>
-					<th>Status</th>
+					<th>Container</th>
+					<th>Compose / service</th>
+					<th>Image</th>
+					<th>State</th>
 					<th class="text-right">CPU</th>
 					<th class="text-right">Memory</th>
-					<th class="text-right">Uptime</th>
+					<th>Status</th>
 				</tr>
 			</thead>
 			<tbody>
-				{#each rows as row}
+				{#each rows as row (row.id)}
 					<tr>
-						<td><a class="font-medium text-gray-950 hover:underline dark:text-white" href={`/projects/${row.projectId}`}>{row.projectName}</a></td>
-						<td class="font-mono text-xs text-gray-700 dark:text-gray-300">{row.service}</td>
-						<td class="text-sm capitalize">{row.deployMode}</td>
-						<td><span class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"><span class="status-dot bg-emerald-500"></span>Running</span></td>
-						<td class="text-right font-mono text-xs">{row.cpu.toFixed(2)}%</td>
-						<td class="text-right font-mono text-xs">{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}</td>
-						<td class="text-right font-mono text-xs">{row.uptime || '—'}</td>
+						<td>
+							<div class="min-w-0">
+								<p class="font-mono text-xs font-medium text-gray-950 dark:text-white">{row.name}</p>
+								<p class="mt-0.5 max-w-40 truncate font-mono text-[10px] text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
+							</div>
+						</td>
+						<td class="font-mono text-xs text-gray-700 dark:text-gray-300">{runtimeGroup(row)}</td>
+						<td><p class="max-w-64 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
+						<td>
+							<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
+								<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
+							</span>
+						</td>
+						<td class="text-right font-mono text-xs">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
+						<td class="text-right font-mono text-xs">
+							{#if row.metricsAvailable}
+								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
+							{:else}—{/if}
+						</td>
+						<td class="max-w-72 text-xs text-gray-500 dark:text-gray-400">{row.status || '—'}</td>
 					</tr>
 				{/each}
 			</tbody>
