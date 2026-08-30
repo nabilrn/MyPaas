@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorState from './ErrorState.svelte';
+	import LoadingIndicator from './LoadingIndicator.svelte';
 
 	export let title = '';
 	export let description = '';
@@ -14,7 +15,7 @@
 	export let contentClass = 'overflow-x-auto';
 
 	const dispatch = createEventDispatcher<{ retry: void }>();
-	const skeletonRows = Array.from({ length: loadingRows }, (_, index) => index);
+	$: loadingMinHeight = Math.max(8, Math.min(18, loadingRows * 3));
 </script>
 
 <section class="surface min-w-0 overflow-hidden">
@@ -35,10 +36,8 @@
 	{/if}
 
 	{#if loading}
-		<div class="space-y-2 p-4" aria-busy="true" aria-live="polite">
-			{#each skeletonRows as _}
-				<div class="h-11 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800/80"></div>
-			{/each}
+		<div class="flex items-center justify-center px-4 py-6" style={`min-height:${loadingMinHeight}rem`} aria-busy="true">
+			<LoadingIndicator label={`Loading ${title || 'table'}`} />
 		</div>
 	{:else if error}
 		<ErrorState message={error} on:retry={() => dispatch('retry')} />
