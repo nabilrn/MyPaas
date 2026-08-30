@@ -10,7 +10,7 @@
 	import SegmentedChoice from '$components/SegmentedChoice.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import { remainingVisualDelay } from '$lib/utils/analysis-choreography';
+	import { isRepositoryAnalysisBusy, remainingVisualDelay } from '$lib/utils/analysis-choreography';
 	import { createProjectBlockingSummary, presentRepositoryInspectionError } from '$lib/utils/create-project-presentation';
 	import { createProjectEnvironmentCopy, retainUserProvidedEnvironmentDrafts } from '$lib/utils/create-project-source';
 	import { projectHost, projectURL } from '$lib/utils/urls';
@@ -185,6 +185,13 @@
 		? Boolean(form.imageRef.trim())
 		: Boolean(form.repoUrl.trim() && form.branch.trim() && repositoryInspectionCurrent);
 	$: analysisPresentationBusy = analysisDetectionCompleted && analysisRevealStage > 0 && analysisRevealStage < 3;
+	$: repositoryAnalysisBusy = isRepositoryAnalysisBusy({
+		sourceType: form.sourceType,
+		detecting,
+		inspectingRepo,
+		repoInspectScheduled,
+		analysisPresentationBusy
+	});
 	$: creationReadiness = projectCreationReadiness({
 		name: form.name,
 		sourceType: form.sourceType,
@@ -193,7 +200,7 @@
 		mainService: form.mainService,
 		appPort: form.appPort,
 		composeDisabledReason,
-		busy: submitting || detecting || inspectingRepo || repoInspectScheduled || analysisPresentationBusy
+		busy: submitting || repositoryAnalysisBusy
 	});
 	$: sourceHasValue = form.sourceType === 'git' ? Boolean(form.repoUrl.trim()) : Boolean(form.imageRef.trim());
 	$: displayCreationReadiness = !sourceHasValue
@@ -255,15 +262,17 @@
 			: deployModeManual
 				? `Manual selection · ${runtimeLabel}`
 				: `Detected automatically · ${runtimeLabel}`;
-	$: environmentScanSummary = detecting
-		? 'Scanning repository for environment variables…'
-		: analysisDetectionCompleted && analysisRevealStage === 1
-			? 'Finishing environment scan…'
-			: analysisDetectionCompleted && analysisRevealStage >= 2 && !detectError
-				? envDrafts.length > 0
-					? `${envDrafts.length} environment variable${envDrafts.length === 1 ? '' : 's'} detected`
-					: 'Environment scan complete · no variables detected'
-				: '';
+	$: environmentScanSummary = form.sourceType !== 'git'
+		? ''
+		: detecting
+			? 'Scanning repository for environment variables…'
+			: analysisDetectionCompleted && analysisRevealStage === 1
+				? 'Finishing environment scan…'
+				: analysisDetectionCompleted && analysisRevealStage >= 2 && !detectError
+					? envDrafts.length > 0
+						? `${envDrafts.length} environment variable${envDrafts.length === 1 ? '' : 's'} detected`
+						: 'Environment scan complete · no variables detected'
+					: '';
 	$: backendPromptParts = error.includes('AI Prompt:\n') ? error.split('AI Prompt:\n') : [];
 	$: submissionErrorMessage = backendPromptParts.length > 1 ? backendPromptParts[0].trim() : error;
 	$: handoffEnvKeys = Array.from(new Set([
@@ -597,8 +606,14 @@
 	}
 
 	function clearDetectedSourceState() {
+		if (repoInspectTimer) {
+			clearTimeout(repoInspectTimer);
+			repoInspectTimer = undefined;
+		}
 		repoInspectRequest += 1;
 		analysisPresentationToken += 1;
+		detecting = false;
+		inspectingRepo = false;
 		analysisDetectionCompleted = false;
 		analysisRevealStage = 0;
 		repoInspectScheduled = false;
@@ -680,13 +695,16 @@
 
 	function scheduleRepositoryInspection() {
 		if (repoInspectTimer) clearTimeout(repoInspectTimer);
-		if (!form.repoUrl.trim()) {
+		if (form.sourceType !== 'git' || !form.repoUrl.trim()) {
 			repoInspectScheduled = false;
+			repoInspectTimer = undefined;
 			return;
 		}
 		repoInspectScheduled = true;
 		repoInspectTimer = setTimeout(() => {
+			repoInspectTimer = undefined;
 			repoInspectScheduled = false;
+			if (form.sourceType !== 'git') return;
 			void inspectRepository().catch(() => undefined);
 		}, 350);
 	}
@@ -710,6 +728,7 @@
 	}
 
 	async function inspectRepository(showToast = false, force = false): Promise<RepoInspection | undefined> {
+		if (form.sourceType !== 'git') return undefined;
 		const repoUrl = form.repoUrl.trim();
 		if (!repoUrl) return undefined;
 		repoInspectScheduled = false;
@@ -1015,7 +1034,7 @@
 	}
 
 	async function handleSubmit() {
-		if (submitting || detecting || inspectingRepo || repoInspectScheduled || analysisPresentationBusy) return;
+		if (submitting || repositoryAnalysisBusy) return;
 		projectNameTouched = true;
 		if (projectNameValidationMessage(form.name)) return;
 		submitting = true;
@@ -1416,7 +1435,7 @@
 
 				{#if environmentScanSummary}
 					<div class="mb-4 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
-						{#if detecting || (analysisDetectionCompleted && analysisRevealStage === 1)}
+						{#if form.sourceType === 'git' && (detecting || (analysisDetectionCompleted && analysisRevealStage === 1))}
 							<LoaderCircle class="h-4 w-4 shrink-0 animate-spin text-gray-600 motion-reduce:animate-none dark:text-gray-300" aria-hidden="true" />
 						{:else}
 							<Check class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-200" aria-hidden="true" />
@@ -1480,7 +1499,7 @@
 							</div>
 						{/each}
 					</div>
-				{:else if detecting || (analysisDetectionCompleted && analysisRevealStage === 1)}
+				{:else if form.sourceType === 'git' && (detecting || (analysisDetectionCompleted && analysisRevealStage === 1))}
 					<div class="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-gray-400">
 						<LoaderCircle class="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 						Scanning for environment variables…
@@ -1497,7 +1516,6 @@
 					</ActionButton>
 				</div>
 			</section>
-
 			{#if showSetupSummary && (form.sourceType === 'registry' || actionableHandoffPrompt)}
 				<section class="border-t border-gray-100 p-5 sm:p-6 dark:border-gray-800">
 					<div class="flex flex-col gap-4 rounded-md border border-gray-200 px-4 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
