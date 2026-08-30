@@ -70,6 +70,31 @@ export interface MigrationStatus {
 	error?: string;
 }
 
+export interface PortAllocation {
+	port: number;
+	projectId: string;
+	projectName: string;
+	service: string;
+	appPort: number;
+	deployMode: string;
+	projectStatus: string;
+}
+
+export interface FirewallRule {
+	port: number;
+	protocol: 'tcp' | 'udp';
+}
+
+export interface PortOverview {
+	bindHost: string;
+	allocations: PortAllocation[];
+	firewall: {
+		available: boolean;
+		active: boolean;
+		rules: FirewallRule[];
+	};
+}
+
 class ApiError extends Error {
 	constructor(
 		public code: string,
@@ -203,15 +228,8 @@ export const api = {
 		tableDetails: (projectId: string, schema: string, table: string): Promise<DBStudioTableDetails> =>
 			request(`/projects/${projectId}/db/columns?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}&details=true`),
 		rows: (projectId: string, schema: string, table: string, limit = 100, offset = 0, filters: DBStudioRowFilters = {}): Promise<DBStudioRowPage> => {
-			const params = new URLSearchParams({
-				schema,
-				table,
-				limit: String(limit),
-				offset: String(offset)
-			});
-			if (filters.search?.trim()) {
-				params.set('search', filters.search.trim());
-			}
+			const params = new URLSearchParams({ schema, table, limit: String(limit), offset: String(offset) });
+			if (filters.search?.trim()) params.set('search', filters.search.trim());
 			for (const [column, value] of Object.entries(filters.enumFilters ?? {})) {
 				if (value) params.set(`filter[${column}]`, value);
 			}
@@ -247,11 +265,14 @@ export const api = {
 			request('/admin/settings/cloudflare', { method: 'POST', body: JSON.stringify({ token, zone_id }) }),
 		regenerateMCPToken: (): Promise<Record<string, number> & { mcp_api_token?: string }> =>
 			request('/admin/settings/mcp-token/regenerate', { method: 'POST' }),
-		prepareMigration: (): Promise<MigrationStatus> =>
-			request('/admin/migrate/prepare', { method: 'POST' }),
-		migrationStatus: (id: string): Promise<MigrationStatus> =>
-			request(`/admin/migrate/${id}/status`),
+		prepareMigration: (): Promise<MigrationStatus> => request('/admin/migrate/prepare', { method: 'POST' }),
+		migrationStatus: (id: string): Promise<MigrationStatus> => request(`/admin/migrate/${id}/status`),
 		getHostStats: (): Promise<HostStats> => request('/admin/host-stats'),
+		ports: (): Promise<PortOverview> => request('/admin/ports'),
+		openFirewallPort: (port: number, protocol: 'tcp' | 'udp'): Promise<void> =>
+			request('/admin/ports/firewall', { method: 'POST', body: JSON.stringify({ port, protocol }) }),
+		closeFirewallPort: (port: number, protocol: 'tcp' | 'udp'): Promise<void> =>
+			request(`/admin/ports/firewall/${protocol}/${port}`, { method: 'DELETE' }),
 		updateS3Config: (d: { endpoint: string; bucket: string; region: string; access_key: string; secret_key: string }): Promise<void> =>
 			request('/admin/settings/s3', { method: 'POST', body: JSON.stringify(d) }),
 		triggerBackup: (): Promise<void> => request('/admin/backup', { method: 'POST' }),
