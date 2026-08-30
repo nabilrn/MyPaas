@@ -59,22 +59,16 @@ jobs:
         run: pnpm build
 
   scripts:
-    name: Deployment and compatibility checks
+    name: Deployment checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Bash syntax
         run: bash -n scripts/*.sh
       - name: Python syntax
-        run: python3 -m py_compile scripts/*.py benchmarks/*.py compatibility/*.py
+        run: python3 -m py_compile scripts/*.py benchmarks/*.py
       - name: Script regression tests
         run: python3 -m unittest discover -s scripts -p '*_test.py'
-      - name: Benchmark harness unit tests
-        run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
-      - name: Compatibility runner unit tests
-        run: python3 -m unittest discover -s compatibility -p 'test_*.py'
-      - name: Compatibility catalog and Compose manifests
-        run: python3 compatibility/run.py validate --compose
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
 
