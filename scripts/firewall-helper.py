@@ -21,7 +21,6 @@ SOCKET_PATH = Path(os.environ.get("MYPAAS_FIREWALL_SOCKET", "/run/mypaas/firewal
 MARKER = "mypaas-managed"
 PROTECTED_PORTS = {22, 80, 443}
 MAX_REQUEST = 4096
-RULE_RE = re.compile(r"^\[\s*(?P<number>\d+)\]\s+(?P<port>\d+)/(?:tcp|udp)\b", re.IGNORECASE)
 PORT_PROTO_RE = re.compile(r"\b(?P<port>\d+)/(?:tcp|udp)\b", re.IGNORECASE)
 
 
@@ -62,14 +61,20 @@ def validate_rule(port: object, protocol: object) -> tuple[int, str]:
     return parsed_port, parsed_protocol
 
 
-def status_lines() -> tuple[bool, list[str]]:
-    result = run_ufw("status", "numbered")
+def ufw_active() -> bool:
+    result = run_ufw("status")
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip() or "ufw status failed"
         raise RuntimeError(detail)
-    lines = result.stdout.splitlines()
-    active = any(line.strip().lower() == "status: active" for line in lines)
-    return active, lines
+    return any(line.strip().lower() == "status: active" for line in result.stdout.splitlines())
+
+
+def configured_rule_lines() -> list[str]:
+    result = run_ufw("show", "added")
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or "ufw show added failed"
+        raise RuntimeError(detail)
+    return result.stdout.splitlines()
 
 
 def managed_rules(lines: list[str]) -> list[dict[str, object]]:
@@ -93,18 +98,20 @@ def managed_rules(lines: list[str]) -> list[dict[str, object]]:
     return rules
 
 
+def current_managed_rules() -> list[dict[str, object]]:
+    return managed_rules(configured_rule_lines())
+
+
 def firewall_status() -> dict[str, object]:
     if not ufw_binary():
         return {"ok": True, "available": False, "active": False, "rules": []}
-    active, lines = status_lines()
-    return {"ok": True, "available": True, "active": active, "rules": managed_rules(lines)}
+    return {"ok": True, "available": True, "active": ufw_active(), "rules": current_managed_rules()}
 
 
 def allow_rule(port: int, protocol: str) -> dict[str, object]:
     if not ufw_binary():
         raise RuntimeError("ufw is not installed")
-    _, lines = status_lines()
-    if any(rule["port"] == port and rule["protocol"] == protocol for rule in managed_rules(lines)):
+    if any(rule["port"] == port and rule["protocol"] == protocol for rule in current_managed_rules()):
         return {"ok": True}
     comment = f"{MARKER}:{port}/{protocol}"
     result = run_ufw("allow", f"{port}/{protocol}", "comment", comment)
@@ -116,19 +123,10 @@ def allow_rule(port: int, protocol: str) -> dict[str, object]:
 def delete_rule(port: int, protocol: str) -> dict[str, object]:
     if not ufw_binary():
         raise RuntimeError("ufw is not installed")
-    _, lines = status_lines()
-    wanted = f"{MARKER}:{port}/{protocol}"
-    number: int | None = None
-    for line in lines:
-        if wanted not in line:
-            continue
-        match = RULE_RE.search(line.strip())
-        if match:
-            number = int(match.group("number"))
-            break
-    if number is None:
+    if not any(rule["port"] == port and rule["protocol"] == protocol for rule in current_managed_rules()):
         return {"ok": True}
-    result = run_ufw("--force", "delete", str(number))
+    comment = f"{MARKER}:{port}/{protocol}"
+    result = run_ufw("--force", "delete", "allow", f"{port}/{protocol}", "comment", comment)
     if result.returncode != 0:
         raise RuntimeError((result.stderr or result.stdout).strip() or "ufw delete failed")
     return {"ok": True}
