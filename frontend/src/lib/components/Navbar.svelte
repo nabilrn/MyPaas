@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, ClipboardList, Database, FolderKanban, LogOut, Moon, Package, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bot, Boxes, ClipboardList, Database, FolderKanban, LogOut, Moon, Network, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -15,14 +15,15 @@
 	export let user: User | null = null;
 
 	const navItems = [
-		{ href: '/projects', label: 'Projects', icon: FolderKanban },
-		{ href: '/templates', label: 'Templates', icon: Package },
-		{ href: '/admin/users', label: 'Users', icon: Users },
-		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
-		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
-		{ href: '/admin/backup', label: 'Backup', icon: Database },
-		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft },
-		{ href: '/admin/settings', label: 'Settings', icon: Settings }
+		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
+		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
+		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
+		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
+		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
+		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
+		{ href: '/admin/backup', label: 'Backup', icon: Database, ownerOnly: true },
+		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft, ownerOnly: true },
+		{ href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true }
 	];
 
 	let accountMenuOpen = false;
@@ -30,6 +31,7 @@
 
 	$: pathname = $page.url.pathname;
 	$: userLabel = user?.githubUsername ?? user?.email ?? 'Account';
+	$: visibleNavItems = navItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 
 	function isActive(href: string, currentPath = pathname) {
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
@@ -87,7 +89,7 @@
 	<nav class="flex-1 overflow-y-auto py-4 {$sidebarCollapsed ? 'px-2' : 'px-3'}" aria-label="Primary navigation">
 		{#if !$sidebarCollapsed}<p class="px-3 pb-2 text-xs font-medium text-gray-400 dark:text-gray-500">Workspace</p>{/if}
 		<div class="space-y-1">
-			{#each navItems as item}
+			{#each visibleNavItems as item}
 				<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, pathname, $sidebarCollapsed)} title={$sidebarCollapsed ? item.label : undefined}>
 					<svelte:component this={item.icon} class="h-4 w-4 shrink-0" aria-hidden="true" />
 					{#if $sidebarCollapsed}<span class="sr-only">{item.label}</span>{:else}{item.label}{/if}
