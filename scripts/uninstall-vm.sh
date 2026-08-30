@@ -89,12 +89,36 @@ remove_owned_network() {
 }
 
 log "Removing MyPaas workload and platform networks..."
-# Remove the routing network first, then project and control. Any workload that
-# is dual-homed on project+routing is removed once and disappears from the
-# subsequent network query.
 for network in "$ROUTING_NETWORK" "$PROJECT_NETWORK" "$CONTROL_NETWORK"; do
   remove_owned_network "$network"
 done
+
+if [[ -f /usr/local/lib/mypaas/firewall-helper.py ]]; then
+  log "Removing MyPaaS-managed UFW rules..."
+  sudo_cmd python3 - <<'PY' || true
+import importlib.util
+
+path = "/usr/local/lib/mypaas/firewall-helper.py"
+spec = importlib.util.spec_from_file_location("mypaas_firewall_helper", path)
+if spec is None or spec.loader is None:
+    raise RuntimeError("cannot load MyPaaS firewall helper")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+for rule in list(module.current_managed_rules()):
+    module.delete_rule(int(rule["port"]), str(rule["protocol"]))
+PY
+fi
+
+log "Removing MyPaaS firewall helper..."
+if command -v systemctl >/dev/null 2>&1; then
+  sudo_cmd systemctl disable --now mypaas-firewall.service >/dev/null 2>&1 || true
+fi
+sudo_cmd rm -f /etc/systemd/system/mypaas-firewall.service
+sudo_cmd rm -f /usr/local/lib/mypaas/firewall-helper.py
+sudo_cmd rm -f /run/mypaas/firewall.sock
+if command -v systemctl >/dev/null 2>&1; then
+  sudo_cmd systemctl daemon-reload >/dev/null 2>&1 || true
+fi
 
 if [[ "$REMOVE_STATD" == "true" ]]; then
   log "Removing mypaas-statd host service..."
@@ -131,7 +155,6 @@ fi
 
 log "Uninstall complete. MyPaas has been totally destroyed."
 
-# Change directory before deleting the source folder to prevent errors.
 cd /
 if [[ -d "$ROOT_DIR" && "$ROOT_DIR" != "/" ]]; then
   echo "==> Removing MyPaas source folder ($ROOT_DIR)..."
