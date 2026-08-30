@@ -87,12 +87,13 @@
 	<div class="space-y-5">
 		<SectionPanel title="System ports" description="Critical host ports are visible here but intentionally locked." padded={false}>
 			<div class="overflow-x-auto">
-				<table class="data-table">
+				<table class="data-table table-fixed">
+					<colgroup><col class="w-[18%]" /><col class="w-[58%]" /><col class="w-[24%]" /></colgroup>
 					<thead><tr><th>Port</th><th>Purpose</th><th>Control</th></tr></thead>
 					<tbody>
-						<tr><td class="font-mono text-xs">22/tcp</td><td>SSH access</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
-						<tr><td class="font-mono text-xs">80/tcp</td><td>Caddy HTTP</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
-						<tr><td class="font-mono text-xs">443/tcp</td><td>Caddy HTTPS / edge traffic</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
+						<tr><td class="whitespace-nowrap font-mono text-xs">22/tcp</td><td>SSH access</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
+						<tr><td class="whitespace-nowrap font-mono text-xs">80/tcp</td><td>Caddy HTTP</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
+						<tr><td class="whitespace-nowrap font-mono text-xs">443/tcp</td><td>Caddy HTTPS / edge traffic</td><td><span class="text-xs text-gray-500 dark:text-gray-400">Locked</span></td></tr>
 					</tbody>
 				</table>
 			</div>
@@ -108,17 +109,25 @@
 			emptyDescription="A runtime port appears after a container-backed project is deployed."
 			on:retry={load}
 		>
-			<table class="data-table">
+			<table class="data-table table-fixed min-w-[52rem]">
+				<colgroup>
+					<col class="w-[18%]" />
+					<col class="w-[22%]" />
+					<col class="w-[19%]" />
+					<col class="w-[10%]" />
+					<col class="w-[13%]" />
+					<col class="w-[18%]" />
+				</colgroup>
 				<thead><tr><th>Host binding</th><th>Project</th><th>Service</th><th>App port</th><th>Runtime</th><th>Exposure</th></tr></thead>
 				<tbody>
 					{#each overview?.allocations ?? [] as item}
 						<tr>
-							<td class="font-mono text-xs">{overview?.bindHost}:{item.port}</td>
-							<td><a class="font-medium text-gray-950 hover:underline dark:text-white" href={`/projects/${item.projectId}`}>{item.projectName}</a></td>
-							<td class="font-mono text-xs">{item.service}</td>
-							<td class="font-mono text-xs">{item.appPort}</td>
-							<td class="text-sm capitalize">{item.deployMode}</td>
-							<td class="text-xs text-gray-500 dark:text-gray-400">{localBinding ? 'Local only · Caddy' : 'Host bound'}</td>
+							<td class="whitespace-nowrap font-mono text-xs"><span class="block truncate" title={`${overview?.bindHost}:${item.port}`}>{overview?.bindHost}:{item.port}</span></td>
+							<td><a class="block truncate font-medium text-gray-950 hover:underline dark:text-white" title={item.projectName} href={`/projects/${item.projectId}`}>{item.projectName}</a></td>
+							<td><span class="block truncate font-mono text-xs" title={item.service}>{item.service}</span></td>
+							<td class="whitespace-nowrap font-mono text-xs tabular-nums">{item.appPort}</td>
+							<td class="whitespace-nowrap text-sm capitalize">{item.deployMode}</td>
+							<td><span class="block truncate text-xs text-gray-500 dark:text-gray-400" title={localBinding ? 'Local only · Caddy' : 'Host bound'}>{localBinding ? 'Local only · Caddy' : 'Host bound'}</span></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -159,15 +168,16 @@
 					<p class="py-3 text-sm text-gray-500 dark:text-gray-400">No MyPaaS-managed firewall rules.</p>
 				{:else}
 					<div class="overflow-x-auto">
-						<table class="data-table">
+						<table class="data-table table-fixed">
+							<colgroup><col class="w-[18%]" /><col class="w-[18%]" /><col class="w-[40%]" /><col class="w-[24%]" /></colgroup>
 							<thead><tr><th>Port</th><th>Protocol</th><th>Owner</th><th class="text-right">Action</th></tr></thead>
 							<tbody>
 								{#each overview.firewall.rules as rule}
 									<tr>
-										<td class="font-mono text-xs">{rule.port}</td>
-										<td class="uppercase text-xs">{rule.protocol}</td>
+										<td class="whitespace-nowrap font-mono text-xs tabular-nums">{rule.port}</td>
+										<td class="whitespace-nowrap uppercase text-xs">{rule.protocol}</td>
 										<td class="text-xs text-gray-500 dark:text-gray-400">MyPaaS managed</td>
-										<td class="text-right"><ActionButton variant="ghostDanger" size="xs" loading={deleting === `${rule.port}/${rule.protocol}`} loadingLabel="Closing" disabled={Boolean(deleting) && deleting !== `${rule.port}/${rule.protocol}`} on:click={() => closePort(rule.port, rule.protocol)}><Trash2 slot="icon" class="h-3.5 w-3.5" />Close</ActionButton></td>
+										<td class="whitespace-nowrap text-right"><ActionButton variant="ghostDanger" size="xs" loading={deleting === `${rule.port}/${rule.protocol}`} loadingLabel="Closing" disabled={Boolean(deleting) && deleting !== `${rule.port}/${rule.protocol}`} on:click={() => closePort(rule.port, rule.protocol)}><Trash2 slot="icon" class="h-3.5 w-3.5" />Close</ActionButton></td>
 									</tr>
 								{/each}
 							</tbody>
