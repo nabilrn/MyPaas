@@ -46,6 +46,7 @@
 		{ value: '16:9', label: '16:9' },
 		{ value: 'a4-landscape', label: 'A4' }
 	];
+	const exportFormats = ['svg', 'png', 'pdf', 'sql'] as const;
 
 	$: graph = layoutERD(details, { direction, density });
 	$: selectedDetails = details.find((item) => item.name === selectedTable && item.schema === selectedSchema) ?? details[0] ?? null;
@@ -141,7 +142,7 @@
 		});
 	}
 
-	async function exportDiagram(format: 'svg' | 'png' | 'pdf' | 'sql') {
+	async function exportDiagram(format: (typeof exportFormats)[number]) {
 		if (exporting) return;
 		exporting = format;
 		error = '';
@@ -226,8 +227,8 @@
 						<button class="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900" on:click={fitGraph}><LocateFixed class="h-3.5 w-3.5" /> Fit</button>
 						<div class="ml-1 flex items-center gap-1 border-l border-gray-200 pl-2 dark:border-neutral-800">
 							<Download class="mr-1 h-3.5 w-3.5 text-gray-400" />
-							{#each ['svg', 'png', 'pdf', 'sql'] as format}
-								<button type="button" class="rounded border border-gray-200 px-2 py-1 text-[10px] font-semibold uppercase hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-900" disabled={Boolean(exporting)} on:click={() => void exportDiagram(format as 'svg' | 'png' | 'pdf' | 'sql')}>{exporting === format ? '…' : format}</button>
+							{#each exportFormats as format}
+								<button type="button" class="rounded border border-gray-200 px-2 py-1 text-[10px] font-semibold uppercase hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-900" disabled={Boolean(exporting)} on:click={() => void exportDiagram(format)}>{exporting === format ? '…' : format}</button>
 							{/each}
 						</div>
 					</div>
@@ -274,4 +275,4 @@
 			{/if}
 		{/if}
 	</div>
-{/if>
+{/if}
