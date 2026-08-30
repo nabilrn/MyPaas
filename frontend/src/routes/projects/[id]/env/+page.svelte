@@ -5,6 +5,7 @@
 	import ActionButton from '$components/ActionButton.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import SecretField from '$components/SecretField.svelte';
 	import { api } from '$api';
@@ -403,12 +404,12 @@
 								<tr>
 									<td class="font-mono text-xs">{row.line}</td>
 									<td>
-										<p class="truncate font-mono text-sm text-gray-900 dark:text-gray-100">{row.importStatus === 'invalid' ? 'Invalid line' : row.key}</p>
-										{#if row.importStatus === 'invalid'}<p class="mt-0.5 truncate text-xs text-red-600 dark:text-red-300">{row.error}</p>{/if}
+										<p class="truncate font-mono text-sm text-gray-900 dark:text-gray-100" title={row.importStatus === 'invalid' ? 'Invalid line' : row.key}>{row.importStatus === 'invalid' ? 'Invalid line' : row.key}</p>
+										{#if row.importStatus === 'invalid'}<p class="mt-0.5 max-w-[40rem] truncate text-xs text-red-600 dark:text-red-300" title={row.error}>{row.error}</p>{/if}
 									</td>
-									<td class="text-sm">{importedValueLabel(row)}</td>
+									<td class="whitespace-nowrap text-sm">{importedValueLabel(row)}</td>
 									<td>
-										<span class={`inline-flex items-center gap-2 text-sm ${importStatusTextClass(row.importStatus)}`}>
+										<span class={`inline-flex max-w-40 items-center gap-2 text-sm ${importStatusTextClass(row.importStatus)}`} title={importStatusLabel(row)}>
 											<span class={`status-dot ${importStatusDotClass(row.importStatus)}`}></span>
 											<span class="truncate">{importStatusLabel(row)}</span>
 										</span>
@@ -423,8 +424,8 @@
 	{/if}
 
 	{#if loading}
-		<div class="space-y-2 p-4">
-			{#each [1, 2, 3] as _}<div class="h-12 animate-pulse rounded-md bg-gray-100 dark:bg-neutral-800"></div>{/each}
+		<div class="flex min-h-40 items-center justify-center p-4">
+			<LoadingIndicator label="Loading environment variables" />
 		</div>
 	{:else if error}
 		<ErrorState title="Could not load environment variables" message={error} on:retry={() => void load()} />
