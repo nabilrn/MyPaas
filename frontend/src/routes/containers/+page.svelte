@@ -1,18 +1,39 @@
 <script lang="ts">
-	import { RefreshCw } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, RefreshCw, Search } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
+	import { beginMainContentLoading } from '$stores/main-loading';
 
 	let rows: RuntimeContainer[] = [];
-	let loading = true;
 	let refreshing = false;
 	let error = '';
+	let query = '';
+	let stateFilter = 'all';
+	let runtimeFilter = 'all';
+	let pageIndex = 0;
+	let pageSize = 20;
 
 	$: runningCount = rows.filter((row) => row.state === 'running').length;
 	$: totalCpu = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.cpu : 0), 0);
 	$: totalMemoryMb = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.memoryMb : 0), 0);
+	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
+	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
+	$: searchTerm = query.trim().toLowerCase();
+	$: filteredRows = rows.filter((row) => {
+		const searchable = [row.name, row.id, row.image, row.composeProject, row.service, row.state, row.status].join(' ').toLowerCase();
+		const matchesSearch = !searchTerm || searchable.includes(searchTerm);
+		const matchesState = stateFilter === 'all' || (row.state || 'unknown') === stateFilter;
+		const runtime = row.composeProject || 'standalone';
+		const matchesRuntime = runtimeFilter === 'all' || runtime === runtimeFilter;
+		return matchesSearch && matchesState && matchesRuntime;
+	});
+	$: pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+	$: if (pageIndex >= pageCount) pageIndex = pageCount - 1;
+	$: pageStart = filteredRows.length === 0 ? 0 : pageIndex * pageSize + 1;
+	$: pageEnd = Math.min(filteredRows.length, (pageIndex + 1) * pageSize);
+	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 
 	onMount(() => {
 		void load();
@@ -23,7 +44,7 @@
 	async function load(background = false) {
 		if (refreshing) return;
 		refreshing = true;
-		if (!background && rows.length === 0) loading = true;
+		const finishMainLoading = !background && rows.length === 0 ? beginMainContentLoading() : null;
 		error = '';
 		try {
 			const next = await loadRuntimeContainers();
@@ -35,9 +56,18 @@
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
-			loading = false;
+			finishMainLoading?.();
 			refreshing = false;
 		}
+	}
+
+	function resetPage() {
+		pageIndex = 0;
+	}
+
+	function changePageSize(event: Event) {
+		pageSize = Number((event.currentTarget as HTMLSelectElement).value);
+		pageIndex = 0;
 	}
 
 	function formatMemory(value: number) {
@@ -81,15 +111,50 @@
 		</ActionButton>
 	</div>
 
+	<div class="surface mb-4 mx-5 grid gap-3 p-3 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end">
+		<label class="block min-w-0" for="container-search">
+			<span class="field-label">Search</span>
+			<div class="relative">
+				<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+				<input id="container-search" class="field w-full !pl-9 font-mono" placeholder="name, image, project, status…" bind:value={query} on:input={resetPage} />
+			</div>
+		</label>
+
+		<label class="block" for="container-state">
+			<span class="field-label">State</span>
+			<select id="container-state" class="field w-full" bind:value={stateFilter} on:change={resetPage}>
+				<option value="all">All states</option>
+				{#each stateOptions as state}<option value={state}>{state}</option>{/each}
+			</select>
+		</label>
+
+		<label class="block" for="container-runtime">
+			<span class="field-label">Compose / runtime</span>
+			<select id="container-runtime" class="field w-full font-mono" bind:value={runtimeFilter} on:change={resetPage}>
+				<option value="all">All runtime groups</option>
+				{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
+			</select>
+		</label>
+
+		<label class="block" for="container-page-size">
+			<span class="field-label">Rows</span>
+			<select id="container-page-size" class="field" value={pageSize} on:change={changePageSize}>
+				<option value="10">10</option>
+				<option value="20">20</option>
+				<option value="50">50</option>
+				<option value="100">100</option>
+			</select>
+		</label>
+	</div>
+
 	<TableShell
 		title="Host containers"
 		description="Every container visible through the host runtime is listed. Live CPU and memory are sampled for running containers every five seconds."
-		{loading}
-		loadingRows={7}
+		loading={false}
 		{error}
-		empty={rows.length === 0}
-		emptyTitle="No containers found."
-		emptyDescription="The Docker-compatible runtime currently reports no containers."
+		empty={filteredRows.length === 0}
+		emptyTitle={rows.length === 0 ? 'No containers found.' : 'No containers match the current filters.'}
+		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
 		<table class="data-table">
@@ -105,7 +170,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each rows as row (row.id)}
+				{#each visibleRows as row (row.id)}
 					<tr>
 						<td>
 							<div class="min-w-0">
@@ -131,5 +196,20 @@
 				{/each}
 			</tbody>
 		</table>
+
+		{#if filteredRows.length > 0}
+			<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-neutral-800 dark:text-gray-400">
+				<p>{pageStart}–{pageEnd} of {filteredRows.length}{#if filteredRows.length !== rows.length} filtered{/if}</p>
+				<div class="flex items-center gap-2">
+					<button type="button" class="app-focus inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-2.5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-800" disabled={pageIndex === 0} on:click={() => (pageIndex -= 1)}>
+						<ChevronLeft class="h-3.5 w-3.5" /> Previous
+					</button>
+					<span class="min-w-20 text-center tabular-nums">Page {pageIndex + 1} / {pageCount}</span>
+					<button type="button" class="app-focus inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-2.5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-800" disabled={pageIndex >= pageCount - 1} on:click={() => (pageIndex += 1)}>
+						Next <ChevronRight class="h-3.5 w-3.5" />
+					</button>
+				</div>
+			</div>
+		{/if}
 	</TableShell>
 </div>
