@@ -46,6 +46,34 @@ func TestRegistryCredentialsOnlyApplyToMatchingHost(t *testing.T) {
 	}
 }
 
+func TestRegistryCredentialsForImagesOnlyMatchReferencedRegistry(t *testing.T) {
+	t.Setenv(registryHostEnv, "docker.io")
+	t.Setenv(registryUsernameEnv, "mypaas-ci")
+	t.Setenv(registryPasswordEnv, "secret")
+
+	credentials, configured, err := registryCredentialsForImages([]string{
+		"ghcr.io/acme/app:latest",
+		"postgres:16-alpine",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !configured {
+		t.Fatal("expected Docker Hub credentials to match the postgres image")
+	}
+	if credentials.host != "docker.io" {
+		t.Fatalf("credentials host = %q, want docker.io", credentials.host)
+	}
+
+	_, configured, err = registryCredentialsForImages([]string{"ghcr.io/acme/app:latest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured {
+		t.Fatal("Docker Hub credentials must not be applied to GHCR-only compose projects")
+	}
+}
+
 func TestRegistryCredentialsRejectIncompleteConfiguration(t *testing.T) {
 	t.Setenv(registryHostEnv, "ghcr.io")
 	t.Setenv(registryUsernameEnv, "octocat")
