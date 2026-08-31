@@ -98,6 +98,11 @@
 		scrollbar-width: thin;
 	}
 
+	/* Project creation lives in the app header; do not reserve a separate page row for it. */
+	main .page-shell > div:first-child:has(> a[href='/projects/new'][data-action-link]) {
+		display: none;
+	}
+
 	/* ── Surfaces ────────────────────────────────────────────────
 	 * Normal product chrome is flat: 1px neutral border, 8px radius, no shadow.
 	 * Shadow is reserved for .overlay (menus, popovers, modals, toasts). */
@@ -170,18 +175,25 @@
 
 	/* ── Data tables ─────────────────────────────────────────────
 	 * One table grammar for the whole product: centered headers,
-	 * a quiet cell grid, 14px primary values, and compact rows. */
+	 * a quiet cell grid, 14px primary values, and content-aware columns. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
 		@apply min-w-full text-sm;
+	}
+	.data-table.table-fixed {
+		table-layout: auto;
+	}
+	.data-table.table-fixed > colgroup > col {
+		width: auto !important;
 	}
 	.data-table thead th {
 		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 72%, transparent);
 		background: color-mix(in oklch, var(--app-surface-muted) 60%, var(--app-surface));
 		color: var(--app-subtle);
 		text-align: center;
-		@apply px-4 py-2 text-[0.8125rem] font-medium;
+		white-space: nowrap;
+		@apply px-3 py-2 text-[0.8125rem] font-medium;
 	}
 	.data-table thead th.text-right,
 	.data-table thead th.text-center,
@@ -190,7 +202,7 @@
 	}
 	.data-table tbody td {
 		color: var(--app-muted);
-		@apply px-4 py-2.5 align-middle;
+		@apply px-3 py-2.5 align-middle;
 	}
 	.data-table tbody tr {
 		@apply transition-colors;
