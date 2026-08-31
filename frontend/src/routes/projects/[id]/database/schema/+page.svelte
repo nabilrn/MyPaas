@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Download, LocateFixed, Minus, Plus, RefreshCw, Search } from '@lucide/svelte';
+	import { Download, Hand, LocateFixed, Minus, Plus, RefreshCw, Search } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -40,6 +40,13 @@
 	let pagePreset: ERDPagePreset = 'a4-landscape';
 	let exporting = '';
 	let viewport: HTMLDivElement | null = null;
+	let handTool = false;
+	let panning = false;
+	let panPointerId: number | null = null;
+	let panStartX = 0;
+	let panStartY = 0;
+	let panScrollLeft = 0;
+	let panScrollTop = 0;
 
 	const pagePresets: Array<{ value: ERDPagePreset; label: string }> = [
 		{ value: '1:1', label: '1:1' },
@@ -149,7 +156,40 @@
 		zoom = Math.min(1.75, Math.max(0.2, Number((zoom + delta).toFixed(2))));
 	}
 
+	function toggleHandTool() {
+		handTool = !handTool;
+		panning = false;
+		panPointerId = null;
+	}
+
+	function startPan(event: PointerEvent) {
+		if (!handTool || !viewport || event.button !== 0) return;
+		panning = true;
+		panPointerId = event.pointerId;
+		panStartX = event.clientX;
+		panStartY = event.clientY;
+		panScrollLeft = viewport.scrollLeft;
+		panScrollTop = viewport.scrollTop;
+		viewport.setPointerCapture(event.pointerId);
+		event.preventDefault();
+	}
+
+	function movePan(event: PointerEvent) {
+		if (!panning || !viewport || panPointerId !== event.pointerId) return;
+		viewport.scrollLeft = panScrollLeft - (event.clientX - panStartX);
+		viewport.scrollTop = panScrollTop - (event.clientY - panStartY);
+		event.preventDefault();
+	}
+
+	function endPan(event: PointerEvent) {
+		if (!panning || !viewport || panPointerId !== event.pointerId) return;
+		if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+		panning = false;
+		panPointerId = null;
+	}
+
 	async function focusNode(node: ERDNode) {
+		if (handTool) return;
 		selectedTable = node.detail.name;
 		await tick();
 		if (!viewport) return;
@@ -261,6 +301,15 @@
 					<div class="flex flex-wrap items-center gap-2">
 						<label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"><input type="checkbox" bind:checked={showDataTypes} /> Types</label>
 						<label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"><input type="checkbox" bind:checked={showRelationLabels} /> Labels</label>
+						<button
+							type="button"
+							class={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${handTool ? 'border-gray-950 bg-gray-950 text-white dark:border-white dark:bg-white dark:text-gray-950' : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-900'}`}
+							aria-label="Pan ERD"
+							aria-pressed={handTool}
+							on:click={toggleHandTool}
+						>
+							<Hand class="h-3.5 w-3.5" /> Pan
+						</button>
 						<div class="ml-1 flex items-center overflow-hidden rounded-md border border-gray-200 dark:border-neutral-800">
 							<button class="p-1.5 hover:bg-gray-50 dark:hover:bg-neutral-900" aria-label="Zoom out" on:click={() => changeZoom(-0.1)}><Minus class="h-3.5 w-3.5" /></button>
 							<button class="border-x border-gray-200 px-2 py-1 text-[11px] tabular-nums dark:border-neutral-800" on:click={() => void fitGraph()}>{Math.round(zoom * 100)}%</button>
@@ -276,9 +325,16 @@
 					</div>
 				</div>
 
-				<div bind:this={viewport} class="max-h-[72vh] min-h-[480px] overflow-auto bg-gray-50/50 p-4 dark:bg-neutral-950/40">
+				<div
+					bind:this={viewport}
+					class={`max-h-[72vh] min-h-[480px] overflow-auto bg-gray-50/50 p-4 dark:bg-neutral-950/40 ${handTool ? (panning ? 'cursor-grabbing select-none' : 'cursor-grab') : ''}`}
+					on:pointerdown={startPan}
+					on:pointermove={movePan}
+					on:pointerup={endPan}
+					on:pointercancel={endPan}
+				>
 					<div class="relative mx-auto" style={`width:${Math.max(graph.width * zoom, viewport?.clientWidth ? viewport.clientWidth - 32 : 0)}px;height:${graph.height * zoom}px`}>
-						<div class="absolute left-0 top-0 origin-top-left" style={`width:${graph.width}px;height:${graph.height}px;transform:scale(${zoom})`}>
+						<div class:pointer-events-none={handTool} class="absolute left-0 top-0 origin-top-left" style={`width:${graph.width}px;height:${graph.height}px;transform:scale(${zoom})`}>
 							<svg class="pointer-events-none absolute inset-0" width={graph.width} height={graph.height} aria-hidden="true">
 								<defs>
 									<marker id="erd-arrow-active" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" class="fill-gray-600 dark:fill-gray-300" /></marker>
