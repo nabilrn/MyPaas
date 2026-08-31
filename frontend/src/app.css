@@ -174,18 +174,12 @@
 	}
 
 	/* ── Data tables ─────────────────────────────────────────────
-	 * One table grammar for the whole product: centered headers,
-	 * a quiet cell grid, 14px primary values, and content-aware columns. */
+	 * Stable column geometry beats browser-guessed widths for operational data.
+	 * Headers stay centered; body alignment follows the data type. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
 		@apply min-w-full text-sm;
-	}
-	.data-table.table-fixed {
-		table-layout: auto;
-	}
-	.data-table.table-fixed > colgroup > col {
-		width: auto !important;
 	}
 	.data-table thead th {
 		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 72%, transparent);
@@ -221,6 +215,43 @@
 	}
 	table > thead > tr > th {
 		text-align: center;
+	}
+
+	/* Projects inventory: deliberate widths and alignment for a calm, scannable operations table. */
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) {
+		table-layout: fixed;
+	}
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(1) { width: 23% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(2) { width: 7% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(3) { width: 20% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(4) { width: 7% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(5) { width: 11% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(6) { width: 9% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(7) { width: 8% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(8) { width: 7% !important; }
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(9) { width: 8% !important; }
+
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:first-child > div > a {
+		display: flex;
+		width: fit-content;
+		max-width: 100%;
+	}
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:first-child > div > a + a {
+		margin-top: 0.2rem;
+	}
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(2),
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(4),
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(8),
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(9) {
+		text-align: center;
+	}
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(6),
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(7) {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody tr {
+		height: 3.75rem;
 	}
 
 	/* ── Chips ───────────────────────────────────────────────────
