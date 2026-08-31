@@ -16,9 +16,12 @@ MyPaaS is a flat monochrome operational UI. Prefer consistency, information hier
 
 ## Shell ownership
 
-- Desktop sidebar owns primary navigation, user identity/account access, and appearance/theme control.
-- Global topbar owns only page context/breadcrumbs and the notification bell.
-- Mobile navigation must still expose account and appearance controls because the desktop sidebar is hidden.
+- Desktop primary navigation is a compact 56px rail by default.
+- Hover or keyboard focus expands the desktop navigation as an overlay over main content. Expanded navigation must never resize, shift, or reflow the main workspace.
+- Selecting a navigation item collapses the overlay back to the rail. Do not add a persistent manual minimize/expand toggle or store sidebar-width preference in local storage.
+- The desktop sidebar owns navigation only. User identity/account access and appearance/theme control belong in the global topbar.
+- Global topbar owns page context/breadcrumbs, notifications, appearance/theme control, and account access.
+- Mobile navigation remains available from the topbar and must expose the same authorized primary destinations as desktop navigation. Account and appearance controls remain directly available in the topbar.
 - The notification center is generic infrastructure for real platform/release/deployment/resource events. Never fabricate unread state or release availability.
 - Root routes must not repeat the same title in both the topbar and page body. Deep routes may use the topbar for breadcrumb context such as `Projects / project / Deployments`. Project observability belongs on Project Detail, not a standalone Metrics route.
 - Do not keep a second route-level breadcrumb implementation hidden with CSS. Navigation context must have one owner.
@@ -39,7 +42,7 @@ Use only the established surface hierarchy:
 
 - `.surface`: normal card/content container. Flat, bordered, no shadow.
 - `.surface-muted`: subtle inset/secondary grouping. No shadow.
-- `.overlay`: floating UI such as menus, popovers, notification panels, and modal surfaces. Shadow is allowed here.
+- `.overlay`: floating UI such as menus, popovers, notification panels, expanded desktop navigation, and modal surfaces. Shadow is allowed here.
 
 Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, headers, or toolbars. Semantic alerts may use tinted backgrounds, but an alert tone is not a new card/elevation type.
 Use `.console-surface` and `.code-surface` for terminal/code content instead of recreating dark boxes per route.
@@ -48,7 +51,8 @@ Use `.console-surface` and `.code-surface` for terminal/code content instead of 
 
 - Reuse `ActionButton` for text buttons, `ActionLink` for text navigation actions, and `IconButton` for icon-only utility/repeated actions before writing a generic raw control.
 - Visible workflow actions should normally combine a Lucide icon with a readable text label: New project, Refresh, Deploy, Start, Stop, Save, Retry, Import, Download, and similar actions.
-- Icon-only controls are reserved for compact chrome/utility actions such as notifications, overflow menus, clear input, reveal/hide, copy in a dense context, row expand/collapse, or sidebar collapse.
+- Icon-only controls are reserved for compact chrome/utility actions such as notifications, appearance, overflow menus, clear input, reveal/hide, copy in a dense context, or row expand/collapse.
+- Do not add an icon-only desktop sidebar collapse/expand control; the desktop rail expands by hover/focus and collapses after navigation.
 - Canonical action variants are `primary`, `secondary`, `ghost`, `danger`, and `ghostDanger`. Legacy IconButton aliases may exist for compatibility but new code should not use them.
 - Standard controls should align to the 36px visual height. Keep the existing 44px coarse-pointer/touch target behavior.
 - Use `LoaderCircle` from Lucide for loading indicators. Do not add custom border spinners.
@@ -68,8 +72,9 @@ Use `.console-surface` and `.code-surface` for terminal/code content instead of 
 - Live metric numbers use tabular numerals so streaming/background updates do not visually shift digits.
 - Prefer weights 400, 500, and 600. Avoid making every hierarchy level bold.
 - Normal body, controls, and primary table values should generally be 14–15px. Section titles should generally be 15–16px. Page/object titles should generally be 20–24px.
-- Metadata is normally 12–13px. Do not introduce generic 10–11px text; reserve micro typography for exceptional technical annotations only.
+- Metadata is normally 13px. Do not introduce generic 10–11px text; reserve micro typography for exceptional technical annotations only.
 - A route should not shrink most supporting text to `text-xs` simply to create hierarchy. Use weight, tone, alignment, and spacing as well.
+- Compact means tighter layout/chrome, not smaller readable text.
 
 ## Status and chips
 
