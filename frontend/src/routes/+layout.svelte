@@ -12,7 +12,6 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$api';
 	import { mainContentLoading } from '$stores/main-loading';
-	import { sidebarCollapsed } from '$stores/sidebar';
 	import type { User } from '$types';
 	import faviconWhite from '../assets/new-assets/logoonly_white.png';
 
@@ -43,10 +42,10 @@
 
 {#if checked || isPublic}
 	{#if !isPublic && user}
-		<div class="min-h-screen transition-[padding] duration-200 {$sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}">
+		<div class="min-h-screen lg:pl-14">
 			<Navbar {user} />
 			<AppHeader {user} />
-			<main class="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)]" aria-busy={showMainLoader}>
+			<main class="relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
 				<div
 					class:invisible={showMainLoader}
 					class:pointer-events-none={showMainLoader}
