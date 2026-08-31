@@ -60,7 +60,7 @@
 		<div class="min-h-screen lg:pl-14">
 			<Navbar {user} />
 			<AppHeader {user} />
-			<main class="relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
+			<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
 				<div
 					class:invisible={showMainLoader}
 					class:pointer-events-none={showMainLoader}
