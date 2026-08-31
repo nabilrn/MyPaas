@@ -7,7 +7,7 @@
 </script>
 
 {#if schemaActive}
-	<section class="database-design-shell fixed bottom-0 right-0 top-14 z-30 flex flex-col overflow-hidden bg-gray-50 dark:bg-neutral-950 lg:left-14">
+	<section class="database-design-shell fixed bottom-0 left-0 right-0 top-14 z-30 flex flex-col overflow-hidden bg-gray-50 dark:bg-neutral-950 lg:left-14">
 		<header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 dark:border-neutral-800 dark:bg-neutral-950">
 			<div class="flex min-w-0 items-center gap-3">
 				<a href={base} class="app-focus inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950 dark:border-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white">
