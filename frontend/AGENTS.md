@@ -30,9 +30,13 @@ MyPaaS is a flat monochrome operational UI. Prefer consistency, information hier
 
 - Operational routes use the shared `page-shell`. Do not introduce route-specific centered `max-w-*` wrappers for the whole page unless the content is genuinely document/dialog-like.
 - Field-level `max-w-*` is allowed when it improves readability. Constrain the field, not the entire operational workflow.
-- Parent layouts own external spacing between sections. Components own only their internal padding/gaps.
+- Authenticated operational pages use the connected-workspace layout token: adjacent page-level surfaces have zero card gap, share borders, and read as one workspace rather than a stack of floating cards.
+- `SectionPanel` and `TableShell` are canonical workspace sections. Do not reintroduce route-local `mb-*`/`gap-*` merely to separate consecutive panels; use internal padding and dividers instead.
+- Side-by-side surface grids should behave like split panes: use a quiet 1px divider rather than a large gutter. Forms, field groups, lists, and controls may retain normal internal gaps because they are not page-level surfaces.
+- Rounded outer corners belong to the edge of a connected workspace cluster. Do not give every touching section its own visible rounded card silhouette.
+- Parent layouts own external spacing between distinct workflows. Components own only their internal padding/gaps.
 - Avoid nested cards used only to create more whitespace. Use dividers and layout grids when the content belongs to one surface.
-- Prefer a restrained spacing rhythm around 8px inline, 12px small detail, 16px normal content, 20px sections, and 24px page spacing instead of arbitrary route-local gap/mb values.
+- Prefer a restrained spacing rhythm around 8px inline, 12px small detail, 16px normal content, and compact page padding instead of arbitrary route-local gap/mb values.
 - Operational table rows should normally land around 52–60px effective height. Do not use `px-5 py-4` card-like rows by default.
 - Prefer the shared `.data-table` grammar for ordinary operational/admin tables.
 
@@ -40,7 +44,7 @@ MyPaaS is a flat monochrome operational UI. Prefer consistency, information hier
 
 Use only the established surface hierarchy:
 
-- `.surface`: normal card/content container. Flat, bordered, no shadow.
+- `.surface`: normal content container. Flat, bordered, no shadow; page-level surfaces participate in the connected workspace layout.
 - `.surface-muted`: subtle inset/secondary grouping. No shadow.
 - `.overlay`: floating UI such as menus, popovers, notification panels, expanded desktop navigation, and modal surfaces. Shadow is allowed here.
 
