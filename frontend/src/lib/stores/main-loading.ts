@@ -30,15 +30,17 @@ export function beginMainContentLoading() {
 export function beginInitialRouteRequestLoading() {
 	if (!browser) return null;
 
-	const pathname = get(page).url.pathname;
+	const currentPage = get(page);
+	const pathname = currentPage.url.pathname;
 	if (pathname === '/' || pathname === '/login' || pathname.startsWith('/docs')) return null;
+	const routeKey = `${pathname}${currentPage.url.search}`;
 
-	if (pathname !== activeRoute) {
-		activeRoute = pathname;
+	if (routeKey !== activeRoute) {
+		activeRoute = routeKey;
 		settledRoute = '';
 		pendingInitialRequests = 0;
 	}
-	if (settledRoute === pathname) return null;
+	if (settledRoute === routeKey) return null;
 
 	pendingInitialRequests += 1;
 	const finishMainLoading = beginMainContentLoading();
@@ -51,7 +53,7 @@ export function beginInitialRouteRequestLoading() {
 
 		window.setTimeout(() => {
 			finishMainLoading();
-			if (activeRoute === pathname && pendingInitialRequests === 0) settledRoute = pathname;
+			if (activeRoute === routeKey && pendingInitialRequests === 0) settledRoute = routeKey;
 		}, 0);
 	};
 }
