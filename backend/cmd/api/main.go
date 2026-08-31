@@ -34,6 +34,7 @@ import (
 	"mypaas/internal/dbstudio"
 	"mypaas/internal/deployment"
 	"mypaas/internal/envvar"
+	"mypaas/internal/firewall"
 	"mypaas/internal/logger"
 	"mypaas/internal/migration"
 	"mypaas/internal/port"
@@ -129,10 +130,10 @@ func run() error {
 
 	appCtx, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
-	
+
 	dockerClient := container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)
 	backupService := backup.NewService(cfg, dockerClient)
-	
+
 	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
 
 	srv := &http.Server{
@@ -211,6 +212,11 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	webhookHandler := webhook.NewHandler(queries, deploymentService)
 	settingsHandler := settings.NewHandler(queries, cfg, backupService)
 	migrationHandler := migration.NewHandler(migration.NewService(cfg))
+	firewallSocket := strings.TrimSpace(os.Getenv("FIREWALL_SOCKET"))
+	if firewallSocket == "" {
+		firewallSocket = "/run/mypaas/firewall.sock"
+	}
+	firewallHandler := firewall.NewHandler(portService, firewall.NewClient(firewallSocket), cfg.DockerBindHost)
 
 	r := chi.NewRouter()
 
@@ -221,9 +227,9 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler)
 	})
 
 	return r
@@ -285,6 +291,7 @@ func registerRoutes(
 	auditHandler *audit.Handler,
 	settingsHandler *settings.Handler,
 	migrationHandler *migration.Handler,
+	firewallHandler *firewall.Handler,
 ) {
 	r.Get("/health", handleHealth)
 	r.Get("/ready", handleReady(pool))
@@ -367,6 +374,9 @@ func registerRoutes(
 			r.Post("/update", settingsHandler.UpdateSystem)
 			r.Post("/backup", settingsHandler.TriggerBackup)
 			r.Get("/backup/download", settingsHandler.DownloadBackup)
+			r.Get("/ports", firewallHandler.List)
+			r.Post("/ports/firewall", firewallHandler.Allow)
+			r.Delete("/ports/firewall/{protocol}/{port}", firewallHandler.Delete)
 		})
 	})
 }

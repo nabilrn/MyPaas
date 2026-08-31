@@ -9,15 +9,16 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 ## Current capabilities
 
 - deploy Git repositories with **Dockerfile**, **Docker Compose**, or **static output**;
-- deploy OCI images with anonymous pulls from public registries or one bounded installation-level credential for a configured private registry;
+- deploy OCI images with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repositories and support base-directory / monorepo deployments;
 - manage encrypted environment variables, resource settings, deployment history, logs, metrics, restart, redeploy, and rollback;
+- monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
+- inspect MyPaaS runtime port allocations and manage a narrow set of MyPaaS-owned UFW allow rules from the owner UI;
 - route applications through Caddy with derived project hostnames;
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
 - provide project-scoped persistent storage and safe owned-resource cleanup;
 - provide optional shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
 - provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and an optional local MCP bridge;
-- expose catalog-backed OSS application templates and a real-world compatibility catalog;
 - use rootful Podman by default on fresh supported hosts, with Docker Engine as a compatibility mode.
 
 Static projects are served directly by Caddy. Container-backed projects run through the configured Docker-compatible engine contract.
@@ -29,13 +30,34 @@ Static projects are served directly by Caddy. Container-backed projects run thro
 | Git repository | Dockerfile | Build and run a single managed application runtime |
 | Git repository | Docker Compose | Multi-service deployment with one primary public route and optional bounded additional HTTP routes |
 | Git repository | Static | Build/publish static files and serve them directly with Caddy |
-| OCI registry | Image | Anonymous pull or one configured authenticated registry for image-mode deployments |
+| OCI registry | Image | Anonymous pull or one configured authenticated registry |
 
-Dockerfile and Compose remain the explicit escape hatches for applications that do not fit repository inspection.
+Dockerfile and Compose are the explicit escape hatches for applications with custom deployment requirements. MyPaaS intentionally does not maintain a separate one-click application template catalog.
+
+## Container monitoring
+
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include live CPU and memory samples. Search, state/runtime filters, page sizing, and pagination keep larger hosts usable without adding a second observability stack.
+
+Lifecycle operations remain project-scoped so the host-wide view stays read-oriented and predictable.
+
+## Port management
+
+The Ports page distinguishes two things:
+
+- **project bindings** — the runtime ports allocated by MyPaaS, normally bound locally and exposed to HTTP clients through Caddy;
+- **managed firewall rules** — explicit UFW allow rules created by MyPaaS on the host.
+
+The firewall control is intentionally narrow:
+
+- owner-only;
+- MyPaaS never enables or disables UFW;
+- SSH `22/tcp` and Caddy `80/tcp` / `443/tcp` are protected;
+- only rules tagged `mypaas-managed` are removable from the UI;
+- arbitrary firewall commands and arbitrary rule editing are not exposed.
 
 ## Compose additional HTTP routes
 
-Compose projects may declare up to four additional HTTP routes when an application has multiple HTTP surfaces, for example MinIO's S3 API and web Console.
+Compose projects may declare up to four additional HTTP routes when an application has multiple HTTP surfaces.
 
 The contract is intentionally narrow:
 
@@ -45,10 +67,9 @@ The contract is intentionally narrow:
 - target must be an existing Compose service and a TCP port declared by `ports` or `expose`;
 - no extra host-port publication for the secondary route;
 - no arbitrary custom hostname;
-- no raw TCP, SSH, or UDP forwarding;
 - route contract is immutable after first deployment.
 
-MinIO is the first real-VM-qualified application using this primitive. See [`docs/adr/ADR-023-compose-additional-http-routes.md`](docs/adr/ADR-023-compose-additional-http-routes.md) and [`compatibility/CATALOG.md`](compatibility/CATALOG.md).
+See [`docs/adr/ADR-023-compose-additional-http-routes.md`](docs/adr/ADR-023-compose-additional-http-routes.md).
 
 ## Operating boundary
 
@@ -67,13 +88,11 @@ Application capacity is workload-specific. A static site, Go API, SSR applicatio
 
 On a single-host installation, builds, the MyPaaS control plane, databases, and running applications share host resources. Operators remain responsible for sizing the host for their workloads.
 
-## Verification and compatibility
+## Verification
 
-Repository CI and controlled runtime checks cover platform behavior such as deployment safety, rollback, backup/restore, cleanup, routing reconciliation, Create Project behavior, DB Studio, and Docker/Podman compatibility.
+Repository CI covers source-level behavior such as backend tests, race detection, frontend checks/build, deployment-script syntax, production Compose rendering, and the Docker-compatible Podman contract. Real deployment and host-operation behavior is qualified directly on a VM when a feature requires it.
 
-The compatibility suite separately asks whether MyPaaS can correctly host representative real-world OSS application patterns. A compatibility `PASS` means the declared deployment and smoke/lifecycle checks succeeded on the tested host. It is **not** a throughput, concurrency, or hardware-capacity certification.
-
-See [`docs/engineering/beta-readiness-gates.md`](docs/engineering/beta-readiness-gates.md) and [`compatibility/CATALOG.md`](compatibility/CATALOG.md).
+See [`docs/engineering/beta-readiness-gates.md`](docs/engineering/beta-readiness-gates.md).
 
 ## Architecture
 
@@ -87,6 +106,7 @@ flowchart TB
     API --> Postgres[("PostgreSQL")]
     API --> Engine["Podman default / Docker compatibility"]
     API --> Statd["optional mypaas-statd"]
+    API --> Firewall["bounded host firewall helper"]
     Engine --> Runtime
 ```
 
@@ -97,7 +117,6 @@ flowchart TB
 - [`docs/README.md`](docs/README.md) — documentation index and source-of-truth rules
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — canonical architecture
 - [`docs/SECURITY_BOUNDARIES.md`](docs/SECURITY_BOUNDARIES.md) — trust and isolation boundaries
-- [`compatibility/CATALOG.md`](compatibility/CATALOG.md) — real-world application compatibility
 - [`docs/STATD.md`](docs/STATD.md) — optional native telemetry integration
 
 ## Development

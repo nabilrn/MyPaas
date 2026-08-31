@@ -5,21 +5,21 @@
 	import '@fontsource/ibm-plex-mono/500.css';
 	import '../app.css';
 	import AppHeader from '$components/AppHeader.svelte';
+	import MainContentLoader from '$components/MainContentLoader.svelte';
 	import Navbar from '$components/Navbar.svelte';
 	import Toast from '$components/Toast.svelte';
-	import { page } from '$app/stores';
+	import { navigating, page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$api';
-	import { sidebarCollapsed } from '$stores/sidebar';
-	import { theme } from '$stores/theme';
+	import { mainContentLoading } from '$stores/main-loading';
 	import type { User } from '$types';
-	import faviconBlack from '../assets/new-assets/logoonly_black.png';
 	import faviconWhite from '../assets/new-assets/logoonly_white.png';
 
 	let user: User | null = null;
 	let checked = false;
 
 	$: isPublic = $page.url.pathname === '/' || $page.url.pathname === '/login' || $page.url.pathname.startsWith('/docs');
+	$: showMainLoader = Boolean($navigating) || $mainContentLoading;
 
 	onMount(async () => {
 		if (isPublic) {
@@ -37,16 +37,26 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" type="image/png" href={$theme === 'dark' ? faviconWhite : faviconBlack} />
+	<link rel="icon" type="image/png" href={faviconWhite} />
 </svelte:head>
 
 {#if checked || isPublic}
 	{#if !isPublic && user}
-		<div class="min-h-screen transition-[padding] duration-200 {$sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'}">
+		<div class="min-h-screen lg:pl-14">
 			<Navbar {user} />
 			<AppHeader {user} />
-			<main class="min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)]">
-				<slot />
+			<main class="relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
+				<div
+					class:invisible={showMainLoader}
+					class:pointer-events-none={showMainLoader}
+					class:absolute={showMainLoader}
+					class:inset-0={showMainLoader}
+					class:overflow-hidden={showMainLoader}
+					aria-hidden={showMainLoader}
+				>
+					<slot />
+				</div>
+				{#if showMainLoader}<MainContentLoader />{/if}
 			</main>
 		</div>
 	{:else}

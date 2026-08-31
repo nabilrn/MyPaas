@@ -128,6 +128,13 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
   SUDO="sudo"
 fi
 
+if command -v systemctl >/dev/null 2>&1; then
+  echo "Installing MyPaaS managed firewall helper..."
+  bash "$ROOT_DIR/scripts/install-firewall-helper.sh"
+else
+  echo "systemd unavailable; firewall UI will report the helper as unavailable."
+fi
+
 for dir in \
   /var/lib/mypaas/volumes \
   /var/lib/mypaas/compose \

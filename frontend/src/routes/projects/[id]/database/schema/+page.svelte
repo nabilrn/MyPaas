@@ -1,13 +1,25 @@
 <script lang="ts">
-	import { LocateFixed, Minus, Plus, RefreshCw, Search } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { Download, Hand, LocateFixed, Minus, Plus, RefreshCw, Search } from '@lucide/svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
-	import { layoutERD, type ERDDensity, type ERDDirection, type ERDEdge, type ERDNode } from '$lib/dbstudio/erd';
+	import { layoutERD, type ERDDirection, type ERDEdge, type ERDNode } from '$lib/dbstudio/erd';
+	import {
+		buildERDSVG,
+		buildSchemaSQL,
+		downloadPDF,
+		downloadPNG,
+		downloadSQL,
+		downloadSVG,
+		presetRatio,
+		relationPath,
+		type ERDPagePreset
+	} from '$lib/dbstudio/export';
+	import { beginMainContentLoading } from '$stores/main-loading';
 	import type { DBStudioSchema, DBStudioStatus, DBStudioTable, DBStudioTableDetails } from '$types';
 
 	let status: DBStudioStatus | null = null;
@@ -16,64 +28,83 @@
 	let details: DBStudioTableDetails[] = [];
 	let selectedSchema = '';
 	let selectedTable = '';
-	let loading = true;
+	let initialized = false;
 	let loadingSchema = false;
 	let error = '';
-	let direction: ERDDirection = 'LR';
-	let density: ERDDensity = 'comfortable';
-	let colorMode: 'neutral' | 'group' = 'neutral';
+	let direction: ERDDirection = 'TB';
+	const density = 'comfortable' as const;
 	let showDataTypes = true;
 	let showRelationLabels = false;
 	let tableSearch = '';
 	let zoom = 1;
+	let pagePreset: ERDPagePreset = 'a4-landscape';
+	let exporting = '';
+	let viewport: HTMLDivElement | null = null;
+	let handTool = false;
+	let panning = false;
+	let panPointerId: number | null = null;
+	let panStartX = 0;
+	let panStartY = 0;
+	let panScrollLeft = 0;
+	let panScrollTop = 0;
 
-	$: graph = layoutERD(details, { direction, density });
+	const pagePresets: Array<{ value: ERDPagePreset; label: string }> = [
+		{ value: '1:1', label: '1:1' },
+		{ value: '4:3', label: '4:3' },
+		{ value: '3:2', label: '3:2' },
+		{ value: '16:9', label: '16:9' },
+		{ value: 'a4-landscape', label: 'A4' }
+	];
+	const exportFormats = ['svg', 'png', 'pdf', 'sql'] as const;
+
+	$: graph = layoutERD(details, {
+		direction,
+		density,
+		targetRatio: presetRatio(pagePreset) ?? 16 / 9
+	});
 	$: selectedDetails = details.find((item) => item.name === selectedTable && item.schema === selectedSchema) ?? details[0] ?? null;
 	$: searchTerm = tableSearch.trim().toLowerCase();
 	$: matchingNodeIDs = new Set(graph.nodes.filter((node) => !searchTerm || `${node.detail.schema}.${node.detail.name}`.toLowerCase().includes(searchTerm)).map((node) => node.id));
-
-	const groupClasses = [
-		'border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/25',
-		'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/25',
-		'border-violet-200 bg-violet-50/80 dark:border-violet-900 dark:bg-violet-950/25',
-		'border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/25',
-		'border-rose-200 bg-rose-50/80 dark:border-rose-900 dark:bg-rose-950/25'
-	];
+	$: selectedNodeID = selectedTable ? `${selectedSchema}.${selectedTable}` : '';
 
 	onMount(() => {
 		void load();
 	});
 
 	async function load() {
-		loading = true;
+		const finishLoading = beginMainContentLoading();
 		error = '';
 		try {
 			status = await api.dbStudio.status($page.params.id ?? '');
 			if (!status.connected) return;
 			schemas = await api.dbStudio.schemas($page.params.id ?? '');
 			selectedSchema = selectedSchema || schemas[0]?.name || '';
-			if (selectedSchema) await loadSchema();
+			if (selectedSchema) await loadSchema(false);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load database schema';
 		} finally {
-			loading = false;
+			initialized = true;
+			finishLoading();
 		}
 	}
 
-	async function loadSchema() {
+	async function loadSchema(showOverlay = true) {
 		if (!selectedSchema) return;
+		const finishLoading = showOverlay ? beginMainContentLoading() : null;
 		loadingSchema = true;
 		error = '';
 		try {
 			tables = await api.dbStudio.tables($page.params.id ?? '', selectedSchema);
 			details = await Promise.all(tables.map((table) => api.dbStudio.tableDetails($page.params.id ?? '', table.schema, table.name)));
 			selectedTable = details.some((item) => item.name === selectedTable) ? selectedTable : details[0]?.name || '';
-			fitGraph();
+			await tick();
+			await fitGraph();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load schema metadata';
 			details = [];
 		} finally {
 			loadingSchema = false;
+			finishLoading?.();
 		}
 	}
 
@@ -84,55 +115,133 @@
 		await loadSchema();
 	}
 
-	function edgePath(edge: ERDEdge) {
-		const fromCenterX = edge.from.x + edge.from.width / 2;
-		const fromCenterY = edge.from.y + edge.from.height / 2;
-		const toCenterX = edge.to.x + edge.to.width / 2;
-		const toCenterY = edge.to.y + edge.to.height / 2;
-		if (direction === 'LR') {
-			const fromX = fromCenterX >= toCenterX ? edge.from.x : edge.from.x + edge.from.width;
-			const toX = fromCenterX >= toCenterX ? edge.to.x + edge.to.width : edge.to.x;
-			const middleX = (fromX + toX) / 2;
-			return `M ${fromX} ${fromCenterY} H ${middleX} V ${toCenterY} H ${toX}`;
-		}
-		const fromY = fromCenterY >= toCenterY ? edge.from.y : edge.from.y + edge.from.height;
-		const toY = fromCenterY >= toCenterY ? edge.to.y + edge.to.height : edge.to.y;
-		const middleY = (fromY + toY) / 2;
-		return `M ${fromCenterX} ${fromY} V ${middleY} H ${toCenterX} V ${toY}`;
+	async function handleLayoutChange(event: Event) {
+		direction = (event.currentTarget as HTMLSelectElement).value as ERDDirection;
+		await tick();
+		await fitGraph();
 	}
 
-	function edgeLabelPosition(edge: ERDEdge) {
-		return {
-			x: (edge.from.x + edge.from.width / 2 + edge.to.x + edge.to.width / 2) / 2,
-			y: (edge.from.y + edge.from.height / 2 + edge.to.y + edge.to.height / 2) / 2
-		};
+	function edgeGeometry(edge: ERDEdge) {
+		return relationPath(edge, graph, direction, density);
+	}
+
+	function edgeIsActive(edge: ERDEdge) {
+		return !selectedNodeID || edge.from.id === selectedNodeID || edge.to.id === selectedNodeID;
+	}
+
+	function nodeIsConnected(node: ERDNode) {
+		if (!selectedNodeID || node.id === selectedNodeID) return false;
+		return graph.edges.some((edge) => (edge.from.id === selectedNodeID && edge.to.id === node.id) || (edge.to.id === selectedNodeID && edge.from.id === node.id));
 	}
 
 	function nodeClasses(node: ERDNode) {
-		const selected = selectedTable === node.detail.name;
+		const selected = selectedNodeID === node.id;
+		const connected = nodeIsConnected(node);
 		const muted = searchTerm && !matchingNodeIDs.has(node.id);
-		const tone = colorMode === 'group'
-			? groupClasses[node.group % groupClasses.length]
-			: 'border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-950';
-		return `${tone} ${selected ? 'ring-2 ring-gray-950 dark:ring-white' : 'hover:border-gray-400 dark:hover:border-gray-600'} ${muted ? 'opacity-25' : 'opacity-100'}`;
+		return `border-gray-300 bg-white dark:border-neutral-700 dark:bg-neutral-950 ${selected ? 'ring-2 ring-gray-950 dark:ring-white' : connected ? 'ring-1 ring-gray-400 dark:ring-gray-500' : 'hover:border-gray-500 dark:hover:border-gray-500'} ${muted ? 'opacity-20' : 'opacity-100'}`;
 	}
 
-	function visibleColumnCount(node: ERDNode) {
-		return density === 'compact' ? Math.min(5, node.detail.columns.length) : Math.min(7, node.detail.columns.length);
+	function isForeignKey(node: ERDNode, column: string) {
+		return node.detail.foreignKeys.some((foreignKey) => foreignKey.column === column);
 	}
 
-	function fitGraph() {
-		const targetWidth = 1080;
-		zoom = Math.min(1, Math.max(0.55, targetWidth / Math.max(graph.width, 1)));
+	async function fitGraph() {
+		await tick();
+		const targetWidth = Math.max(320, (viewport?.clientWidth ?? 1160) - 32);
+		const targetHeight = Math.max(360, Math.min(viewport?.clientHeight ?? 680, 720) - 32);
+		zoom = Math.min(1.15, Math.max(0.22, Math.min(targetWidth / Math.max(graph.width, 1), targetHeight / Math.max(graph.height, 1))));
 	}
 
 	function changeZoom(delta: number) {
-		zoom = Math.min(1.4, Math.max(0.5, Number((zoom + delta).toFixed(2))));
+		zoom = Math.min(1.75, Math.max(0.2, Number((zoom + delta).toFixed(2))));
 	}
 
-	function focusFirstMatch() {
+	function toggleHandTool() {
+		handTool = !handTool;
+		panning = false;
+		panPointerId = null;
+	}
+
+	function startPan(event: PointerEvent) {
+		if (!handTool || !viewport || event.button !== 0) return;
+		panning = true;
+		panPointerId = event.pointerId;
+		panStartX = event.clientX;
+		panStartY = event.clientY;
+		panScrollLeft = viewport.scrollLeft;
+		panScrollTop = viewport.scrollTop;
+		viewport.setPointerCapture(event.pointerId);
+		event.preventDefault();
+	}
+
+	function movePan(event: PointerEvent) {
+		if (!panning || !viewport || panPointerId !== event.pointerId) return;
+		viewport.scrollLeft = panScrollLeft - (event.clientX - panStartX);
+		viewport.scrollTop = panScrollTop - (event.clientY - panStartY);
+		event.preventDefault();
+	}
+
+	function endPan(event: PointerEvent) {
+		if (!panning || !viewport || panPointerId !== event.pointerId) return;
+		if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+		panning = false;
+		panPointerId = null;
+	}
+
+	async function focusNode(node: ERDNode) {
+		if (handTool) return;
+		selectedTable = node.detail.name;
+		await tick();
+		if (!viewport) return;
+		viewport.scrollTo({
+			left: Math.max(0, node.x * zoom - viewport.clientWidth / 2 + node.width * zoom / 2),
+			top: Math.max(0, node.y * zoom - viewport.clientHeight / 2 + node.height * zoom / 2),
+			behavior: 'smooth'
+		});
+	}
+
+	async function focusFirstMatch() {
 		const match = graph.nodes.find((node) => matchingNodeIDs.has(node.id));
-		if (match) selectedTable = match.detail.name;
+		if (match) await focusNode(match);
+	}
+
+	async function choosePreset(preset: ERDPagePreset) {
+		pagePreset = preset;
+		await tick();
+		await fitGraph();
+	}
+
+	function exportSVGSource() {
+		return buildERDSVG(graph, direction, {
+			preset: pagePreset,
+			density,
+			showDataTypes,
+			showRelationLabels,
+			title: `${selectedSchema} schema`
+		});
+	}
+
+	async function exportDiagram(format: (typeof exportFormats)[number]) {
+		if (exporting) return;
+		exporting = format;
+		error = '';
+		const base = `${selectedSchema || 'database'}-erd`;
+		try {
+			if (format === 'sql') {
+				const driver = status?.connection?.driver;
+				if (!driver) throw new Error('Database driver is unavailable');
+				downloadSQL(buildSchemaSQL(details, driver), `${selectedSchema || 'schema'}.sql`);
+				return;
+			}
+			const svg = exportSVGSource();
+			if (format === 'svg') downloadSVG(svg, `${base}.svg`);
+			if (format === 'png') await downloadPNG(svg, `${base}.png`);
+			if (format === 'pdf') await downloadPDF(svg, `${base}.pdf`, pagePreset);
+		} catch (err) {
+			error = err instanceof Error ? err.message : `Failed to export ${format.toUpperCase()}`;
+		} finally {
+			exporting = '';
+		}
 	}
 </script>
 
@@ -140,8 +249,8 @@
 	<title>Schema & ERD · MyPaas</title>
 </svelte:head>
 
-{#if loading}
-	<div class="surface h-80 animate-pulse"></div>
+{#if !initialized}
+	<div class="min-h-[34rem]"></div>
 {:else if error && !status}
 	<div class="surface overflow-hidden"><ErrorState title="Could not load schema metadata" message={error} on:retry={() => void load()} /></div>
 {:else if !status?.configured}
@@ -151,68 +260,114 @@
 {:else}
 	<div class="space-y-4">
 		<div class="surface flex flex-wrap items-end gap-3 p-3">
-			<div class="min-w-44">
+			<div class="min-w-40">
 				<label class="field-label" for="metadata-schema">Schema</label>
 				<select id="metadata-schema" class="field w-full font-mono" value={selectedSchema} on:change={handleSchemaChange}>{#each schemas as schema}<option value={schema.name}>{schema.name}</option>{/each}</select>
 			</div>
-			<div class="min-w-48 flex-1">
+			<div class="min-w-52 flex-1">
 				<label class="field-label" for="erd-search">Find table</label>
-				<div class="relative"><Search class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" /><input id="erd-search" class="field w-full pl-8 font-mono" placeholder="users, audit_logs…" bind:value={tableSearch} on:keydown={(event) => event.key === 'Enter' && focusFirstMatch()} /></div>
+				<div class="relative">
+					<Search class="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+					<input id="erd-search" class="field w-full !pl-10 font-mono" placeholder="users, audit_logs…" bind:value={tableSearch} on:keydown={(event) => event.key === 'Enter' && void focusFirstMatch()} />
+				</div>
 			</div>
 			<div>
 				<label class="field-label" for="erd-direction">Layout</label>
-				<select id="erd-direction" class="field" bind:value={direction}><option value="LR">Left → right</option><option value="TB">Top → bottom</option></select>
+				<select id="erd-direction" class="field" value={direction} on:change={handleLayoutChange}>
+					<option value="TB">Landscape</option>
+					<option value="LR">Portrait</option>
+				</select>
 			</div>
 			<div>
-				<label class="field-label" for="erd-density">Density</label>
-				<select id="erd-density" class="field" bind:value={density}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select>
-			</div>
-			<div>
-				<label class="field-label" for="erd-color">Color</label>
-				<select id="erd-color" class="field" bind:value={colorMode}><option value="neutral">Neutral</option><option value="group">Relation groups</option></select>
+				<p class="field-label">Page ratio</p>
+				<div class="flex overflow-hidden rounded-md border border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
+					{#each pagePresets as preset}
+						<button type="button" class={`border-r border-gray-200 px-2.5 py-2 text-[11px] last:border-r-0 dark:border-neutral-800 ${pagePreset === preset.value ? 'bg-gray-950 text-white dark:bg-white dark:text-gray-950' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-neutral-900'}`} on:click={() => void choosePreset(preset.value)}>{preset.label}</button>
+					{/each}
+				</div>
 			</div>
 			<ActionButton variant="secondary" size="sm" on:click={() => void loadSchema()} loading={loadingSchema} loadingLabel="Refreshing"><RefreshCw slot="icon" class="h-4 w-4" />Refresh</ActionButton>
 			{#if error}<div class="alert-danger basis-full">{error}</div>{/if}
 		</div>
 
-		{#if loadingSchema}
-			<div class="surface h-96 animate-pulse"></div>
-		{:else if details.length === 0}
+		{#if details.length === 0}
 			<SectionPanel title="Relationships"><EmptyState title="No tables found." description="Choose another schema or create database tables first." /></SectionPanel>
 		{:else}
 			<div class="surface overflow-hidden">
 				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-3 py-2 dark:border-neutral-800">
-					<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400"><span>{graph.nodes.length} tables</span><span>·</span><span>{graph.edges.length} relations</span><span>·</span><span>{graph.groups} groups</span></div>
+					<div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+						<span>{graph.nodes.length} tables</span><span>·</span><span>{graph.edges.length} relations</span><span>·</span><span>{direction === 'TB' ? 'Landscape' : 'Portrait'} · {pagePresets.find((preset) => preset.value === pagePreset)?.label}</span>
+					</div>
 					<div class="flex flex-wrap items-center gap-2">
 						<label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"><input type="checkbox" bind:checked={showDataTypes} /> Types</label>
-						<label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"><input type="checkbox" bind:checked={showRelationLabels} /> FK labels</label>
+						<label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"><input type="checkbox" bind:checked={showRelationLabels} /> Labels</label>
+						<button
+							type="button"
+							class={`flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${handTool ? 'border-gray-950 bg-gray-950 text-white dark:border-white dark:bg-white dark:text-gray-950' : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-900'}`}
+							aria-label="Pan ERD"
+							aria-pressed={handTool}
+							on:click={toggleHandTool}
+						>
+							<Hand class="h-3.5 w-3.5" /> Pan
+						</button>
 						<div class="ml-1 flex items-center overflow-hidden rounded-md border border-gray-200 dark:border-neutral-800">
 							<button class="p-1.5 hover:bg-gray-50 dark:hover:bg-neutral-900" aria-label="Zoom out" on:click={() => changeZoom(-0.1)}><Minus class="h-3.5 w-3.5" /></button>
-							<button class="border-x border-gray-200 px-2 py-1 text-[11px] tabular-nums dark:border-neutral-800" on:click={fitGraph}>{Math.round(zoom * 100)}%</button>
+							<button class="border-x border-gray-200 px-2 py-1 text-[11px] tabular-nums dark:border-neutral-800" on:click={() => void fitGraph()}>{Math.round(zoom * 100)}%</button>
 							<button class="p-1.5 hover:bg-gray-50 dark:hover:bg-neutral-900" aria-label="Zoom in" on:click={() => changeZoom(0.1)}><Plus class="h-3.5 w-3.5" /></button>
 						</div>
-						<button class="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900" on:click={fitGraph}><LocateFixed class="h-3.5 w-3.5" /> Fit</button>
+						<button class="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] hover:bg-gray-50 dark:border-neutral-800 dark:hover:bg-neutral-900" on:click={() => void fitGraph()}><LocateFixed class="h-3.5 w-3.5" /> Fit</button>
+						<div class="ml-1 flex items-center gap-1 border-l border-gray-200 pl-2 dark:border-neutral-800">
+							<Download class="mr-1 h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
+							{#each exportFormats as format}
+								<button type="button" class="rounded border border-gray-200 px-2 py-1 text-[10px] font-semibold uppercase hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-800 dark:hover:bg-neutral-900" disabled={Boolean(exporting)} on:click={() => void exportDiagram(format)}>{exporting === format ? '…' : format}</button>
+							{/each}
+						</div>
 					</div>
 				</div>
 
-				<div class="max-h-[68vh] overflow-auto bg-gray-50/50 p-3 dark:bg-neutral-950/40">
-					<div class="relative" style={`width:${graph.width * zoom}px;height:${graph.height * zoom}px;min-width:100%`}>
-						<div class="absolute left-0 top-0 origin-top-left" style={`width:${graph.width}px;height:${graph.height}px;transform:scale(${zoom})`}>
+				<div
+					bind:this={viewport}
+					class={`max-h-[72vh] min-h-[480px] overflow-auto bg-gray-50/50 p-4 dark:bg-neutral-950/40 ${handTool ? (panning ? 'cursor-grabbing select-none' : 'cursor-grab') : ''}`}
+					on:pointerdown={startPan}
+					on:pointermove={movePan}
+					on:pointerup={endPan}
+					on:pointercancel={endPan}
+				>
+					<div class="relative mx-auto" style={`width:${Math.max(graph.width * zoom, viewport?.clientWidth ? viewport.clientWidth - 32 : 0)}px;height:${graph.height * zoom}px`}>
+						<div class:pointer-events-none={handTool} class="absolute left-0 top-0 origin-top-left" style={`width:${graph.width}px;height:${graph.height}px;transform:scale(${zoom})`}>
 							<svg class="pointer-events-none absolute inset-0" width={graph.width} height={graph.height} aria-hidden="true">
-								<defs><marker id="erd-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" class="fill-gray-400 dark:fill-gray-600" /></marker></defs>
+								<defs>
+									<marker id="erd-arrow-active" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" class="fill-gray-600 dark:fill-gray-300" /></marker>
+									<marker id="erd-arrow-muted" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" class="fill-gray-300 dark:fill-neutral-700" /></marker>
+								</defs>
 								{#each graph.edges as edge (edge.id)}
-									<path d={edgePath(edge)} fill="none" class="stroke-gray-300 dark:stroke-gray-700" stroke-width="1.5" marker-end="url(#erd-arrow)" />
-									{#if showRelationLabels}{@const label = edgeLabelPosition(edge)}<text x={label.x} y={label.y - 5} text-anchor="middle" class="fill-gray-500 text-[10px] dark:fill-gray-400">{edge.foreignKey.column}</text>{/if}
+									{@const relation = edgeGeometry(edge)}
+									{@const active = edgeIsActive(edge)}
+									<path d={relation.path} fill="none" class={active ? 'stroke-gray-600 dark:stroke-gray-300' : 'stroke-gray-300 dark:stroke-neutral-700'} stroke-width={active ? 1.8 : 1} stroke-linejoin="round" marker-end={active ? 'url(#erd-arrow-active)' : 'url(#erd-arrow-muted)'} opacity={active ? 1 : 0.45} />
+									{#if showRelationLabels && active}<text x={relation.labelX} y={relation.labelY - 6} text-anchor="middle" class="fill-gray-700 text-[9px] [paint-order:stroke] stroke-white stroke-[4px] dark:fill-gray-300 dark:stroke-neutral-950">{edge.foreignKey.column} → {edge.foreignKey.referencedColumn}</text>{/if}
 								{/each}
 							</svg>
 
 							{#each graph.nodes as node (node.id)}
-								<button type="button" class={`absolute overflow-hidden rounded-lg border text-left shadow-sm transition ${nodeClasses(node)}`} style={`left:${node.x}px;top:${node.y}px;width:${node.width}px;height:${node.height}px`} on:click={() => (selectedTable = node.detail.name)}>
-									<div class="border-b border-black/5 px-3 py-2 dark:border-white/10"><p class="truncate font-mono text-[10px] text-gray-400 dark:text-gray-500">{node.detail.schema}</p><p class="truncate text-sm font-semibold text-gray-950 dark:text-white">{node.detail.name}</p></div>
-									<div class="space-y-1 px-3 py-2">
-										{#each node.detail.columns.slice(0, visibleColumnCount(node)) as column}<div class="flex items-center justify-between gap-2 text-[11px]"><span class="truncate font-mono text-gray-700 dark:text-gray-300">{column.primaryKey ? 'PK ' : ''}{column.name}</span>{#if showDataTypes}<span class="shrink-0 text-gray-400 dark:text-gray-500">{column.dataType}</span>{/if}</div>{/each}
-										{#if node.detail.columns.length > visibleColumnCount(node)}<p class="text-[10px] text-gray-400 dark:text-gray-500">+{node.detail.columns.length - visibleColumnCount(node)} more</p>{/if}
+								<button
+									type="button"
+									class={`absolute overflow-hidden rounded-md border text-left shadow-sm transition-[border-color,box-shadow,opacity] ${nodeClasses(node)}`}
+									style={`left:${node.x}px;top:${node.y}px;width:${node.width}px;height:${node.height}px`}
+									on:click={() => void focusNode(node)}
+								>
+									<div class="h-12 border-b border-gray-100 px-3 pt-2 dark:border-neutral-800">
+										<p class="truncate font-mono text-[8px] text-gray-400">{node.detail.schema}</p>
+										<p class="mt-0.5 truncate text-[12px] font-semibold text-gray-950 dark:text-white" title={node.detail.name}>{node.detail.name}</p>
 									</div>
+									<div class="pt-2">
+										{#each node.displayColumns as column}
+											<div class="grid h-5 min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,18ch)] items-center gap-2 overflow-hidden px-3 font-mono text-[9px]">
+												<span class="block min-w-0 truncate text-gray-800 dark:text-gray-200" title={`${column.primaryKey ? 'PK ' : isForeignKey(node, column.name) ? 'FK ' : ''}${column.name}`}>{column.primaryKey ? 'PK ' : isForeignKey(node, column.name) ? 'FK ' : ''}{column.name}</span>
+												{#if showDataTypes}<span class="block min-w-0 truncate text-right text-[8px] text-gray-400" title={column.dataType}>{column.dataType}</span>{/if}
+											</div>
+										{/each}
+									</div>
+									{#if node.hiddenColumnCount > 0}<p class="absolute bottom-2 left-3 text-[8px] text-gray-400">+{node.hiddenColumnCount} more</p>{/if}
 								</button>
 							{/each}
 						</div>

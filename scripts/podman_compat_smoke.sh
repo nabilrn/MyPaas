@@ -39,7 +39,7 @@ docker run -d \
   --restart unless-stopped \
   alpine:3.20 sleep 300 >/dev/null
 
-docker ps -q --filter label=mypaas.smoke=true | grep -q .
+test -n "$(docker ps -q --filter label=mypaas.smoke=true)"
 docker inspect "$container_name" >/dev/null
 docker stop --time 5 "$container_name" >/dev/null
 docker start "$container_name" >/dev/null
@@ -85,13 +85,19 @@ docker run -d \
   -p "127.0.0.1:18080:80" \
   nginx:1.27-alpine >/dev/null
 
-docker inspect "$route_name" | grep -q '"HostPort": "18080"'
+route_port="$(docker port "$route_name" 80/tcp)"
+if [[ "$route_port" != *"127.0.0.1:18080"* ]]; then
+  echo "runtime smoke did not publish expected host port 18080" >&2
+  docker inspect "$route_name" >&2 || true
+  exit 1
+fi
 docker network connect --alias mypaas-port-18080 "$routing_network" "$route_name"
 
 alias_ready=false
 for _ in $(seq 1 20); do
-  if docker run --rm --network "$routing_network" alpine:3.20 \
-    wget -qO- http://mypaas-port-18080:80 2>/dev/null | grep -q 'Welcome to nginx'; then
+  alias_body="$(docker run --rm --network "$routing_network" alpine:3.20 \
+    wget -qO- http://mypaas-port-18080:80 2>/dev/null || true)"
+  if [[ "$alias_body" == *"Welcome to nginx"* ]]; then
     alias_ready=true
     break
   fi
@@ -127,9 +133,12 @@ docker start "$caddy_name" >/dev/null
 
 caddy_ready=false
 for _ in $(seq 1 30); do
-  if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]] && \
-    docker run --rm --network "$control_network" alpine:3.20 \
-      wget -qO- http://caddy-edge:18081 2>/dev/null | grep -q 'Welcome to nginx'; then
+  caddy_body=""
+  if [[ -S "$tmpdir/caddy-run/caddy-admin.sock" ]]; then
+    caddy_body="$(docker run --rm --network "$control_network" alpine:3.20 \
+      wget -qO- http://caddy-edge:18081 2>/dev/null || true)"
+  fi
+  if [[ "$caddy_body" == *"Welcome to nginx"* ]]; then
     caddy_ready=true
     break
   fi
@@ -147,8 +156,9 @@ if docker run --rm --network "$routing_network" alpine:3.20 \
   exit 1
 fi
 
-# Compose contract: main service remains on PROJECT_NETWORK; route activation
-# attaches only the selected main-service container to ROUTING_NETWORK.
+# Compose contract: image refresh must work through the same Docker Compose
+# provider used by MyPaaS before the main service is started. This specifically
+# guards the rootful Podman + `docker compose pull --ignore-buildable` path.
 cat > "$tmpdir/compose.yml" <<EOF
 services:
   app:
@@ -164,19 +174,26 @@ networks:
     name: "$project_network"
 EOF
 
+docker compose -p "$compose_project" -f "$tmpdir/compose.yml" pull --ignore-buildable >/dev/null
 docker compose -p "$compose_project" -f "$tmpdir/compose.yml" up -d >/dev/null
 compose_ids="$(docker ps -aq --filter "label=com.docker.compose.project=$compose_project")"
 test -n "$compose_ids"
 # shellcheck disable=SC2086
 docker inspect $compose_ids >/dev/null
-compose_id="$(printf '%s\n' "$compose_ids" | head -n1)"
-docker inspect "$compose_id" | grep -q '"HostPort": "18082"'
+read -r compose_id <<< "$compose_ids"
+compose_port="$(docker port "$compose_id" 80/tcp)"
+if [[ "$compose_port" != *"127.0.0.1:18082"* ]]; then
+  echo "Compose smoke did not publish expected host port 18082" >&2
+  docker inspect "$compose_id" >&2 || true
+  exit 1
+fi
 docker network connect --alias mypaas-port-18082 "$routing_network" "$compose_id"
 
 compose_alias_ready=false
 for _ in $(seq 1 20); do
-  if docker run --rm --network "$routing_network" alpine:3.20 \
-    wget -qO- http://mypaas-port-18082:80 2>/dev/null | grep -q 'Welcome to nginx'; then
+  compose_body="$(docker run --rm --network "$routing_network" alpine:3.20 \
+    wget -qO- http://mypaas-port-18082:80 2>/dev/null || true)"
+  if [[ "$compose_body" == *"Welcome to nginx"* ]]; then
     compose_alias_ready=true
     break
   fi

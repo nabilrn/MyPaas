@@ -80,16 +80,29 @@
 	</div>
 
 	<TableShell title="Event stream" description="Review what changed, which resource was touched, and the response returned by the control plane." {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Authenticated admin and deployment events will appear here after changes are made." on:retry={load}>
-		<table class="data-table">
-			<thead><tr><th>Action</th><th>Resource</th><th>Status</th><th>Time</th><th class="w-12"><span class="sr-only">Details</span></th></tr></thead>
+		<table class="data-table table-fixed min-w-[50rem]">
+			<colgroup>
+				<col class="w-[28%]" />
+				<col class="w-[34%]" />
+				<col class="w-[12%]" />
+				<col class="w-[20%]" />
+				<col class="w-[6%]" />
+			</colgroup>
+			<thead><tr><th>Action</th><th>Resource</th><th>Status</th><th>Time</th><th class="text-right"><span class="sr-only">Details</span></th></tr></thead>
 			<tbody>
 				{#each visibleRows as row}
 					<tr class="align-top">
-						<td><p class="font-mono text-sm font-medium text-gray-950 dark:text-white">{row.action}</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{row.ipAddress ?? 'unknown ip'}</p></td>
-						<td><p class="text-sm text-gray-700 dark:text-gray-300">{row.resourceType ?? '—'}</p>{#if row.resourceId}<p class="mt-0.5 max-w-64 truncate font-mono text-xs text-gray-400 dark:text-gray-500" title={row.resourceId}>{row.resourceId}</p>{/if}</td>
-						<td><span class={`inline-flex items-center gap-2 font-mono text-sm ${statusTextClass(row.metadata.status)}`}><span class={`status-dot ${statusDotClass(row.metadata.status)}`}></span>{String(row.metadata.status ?? '—')}</span></td>
-						<td class="text-sm">{formatDateTime(row.createdAt)}</td>
-						<td class="text-right"><IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} audit log details`} variant="ghost" on:click={() => toggle(row.id)}>{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></td>
+						<td>
+							<p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white" title={row.action}>{row.action}</p>
+							<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400" title={row.ipAddress ?? 'unknown ip'}>{row.ipAddress ?? 'unknown ip'}</p>
+						</td>
+						<td>
+							<p class="truncate text-sm text-gray-700 dark:text-gray-300" title={row.resourceType ?? '—'}>{row.resourceType ?? '—'}</p>
+							{#if row.resourceId}<p class="mt-0.5 truncate font-mono text-xs text-gray-400 dark:text-gray-500" title={row.resourceId}>{row.resourceId}</p>{/if}
+						</td>
+						<td class="whitespace-nowrap"><span class={`inline-flex items-center gap-2 font-mono text-sm ${statusTextClass(row.metadata.status)}`}><span class={`status-dot ${statusDotClass(row.metadata.status)}`}></span>{String(row.metadata.status ?? '—')}</span></td>
+						<td class="whitespace-nowrap text-sm tabular-nums">{formatDateTime(row.createdAt)}</td>
+						<td class="whitespace-nowrap text-right"><IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} audit log details`} variant="ghost" on:click={() => toggle(row.id)}>{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></td>
 					</tr>
 					{#if expanded.has(row.id)}
 						<tr class="!bg-gray-50/70 dark:!bg-neutral-900/50"><td colspan="5" class="!p-4"><div class="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]"><div class="space-y-3 text-sm text-gray-500 dark:text-gray-400"><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">IP address</p><p class="mt-1 font-mono text-xs">{row.ipAddress ?? 'unknown'}</p></div><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">User agent</p><p class="mt-1 line-clamp-4 break-words text-xs">{row.userAgent ?? 'unknown'}</p></div></div><pre class="console-surface max-h-80 overflow-auto p-3">{JSON.stringify(row.metadata, null, 2)}</pre></div></td></tr>

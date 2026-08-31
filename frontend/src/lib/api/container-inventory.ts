@@ -1,0 +1,34 @@
+export interface RuntimeContainer {
+	id: string;
+	name: string;
+	image: string;
+	state: string;
+	status: string;
+	composeProject: string;
+	service: string;
+	cpu: number;
+	memoryMb: number;
+	memoryLimitMb: number;
+	metricsAvailable: boolean;
+}
+
+interface InventoryEnvelope {
+	data?: {
+		containers?: RuntimeContainer[];
+	};
+	error?: {
+		message?: string;
+	};
+}
+
+export async function loadRuntimeContainers(): Promise<RuntimeContainer[]> {
+	const response = await fetch('/api/admin/ports?includeContainers=true', {
+		credentials: 'include',
+		headers: { Accept: 'application/json' }
+	});
+	const body = (await response.json().catch(() => ({}))) as InventoryEnvelope;
+	if (!response.ok) {
+		throw new Error(body.error?.message || 'Failed to load host container inventory');
+	}
+	return body.data?.containers ?? [];
+}

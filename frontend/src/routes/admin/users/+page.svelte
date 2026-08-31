@@ -141,7 +141,7 @@
 		emptyDescription="Add a collaborator or owner to allow GitHub OAuth sign-in."
 		on:retry={load}
 	>
-		<table class="data-table table-fixed">
+		<table class="data-table table-fixed min-w-[48rem]">
 			<colgroup>
 				<col class="w-[42%]" />
 				<col class="w-[14%]" />
@@ -155,7 +155,7 @@
 					<th>Role</th>
 					<th>Last login</th>
 					<th>Added</th>
-					<th class="text-center">Action</th>
+					<th class="text-right">Action</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -169,8 +169,8 @@
 									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-gray-300">{initial(user.email)}</div>
 								{/if}
 								<div class="min-w-0">
-									<p class="truncate text-sm font-medium text-gray-950 dark:text-white">{user.githubUsername ?? 'Not logged in yet'}</p>
-									<p class="truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+									<p class="truncate text-sm font-medium text-gray-950 dark:text-white" title={user.githubUsername ?? 'Not logged in yet'}>{user.githubUsername ?? 'Not logged in yet'}</p>
+									<p class="truncate text-xs text-gray-500 dark:text-gray-400" title={user.email}>{user.email}</p>
 								</div>
 							</div>
 						</td>
@@ -180,10 +180,10 @@
 								{user.role}
 							</span>
 						</td>
-						<td class="whitespace-nowrap text-sm">{formatDate(user.lastLoginAt)}</td>
-						<td class="whitespace-nowrap text-sm">{formatDate(user.createdAt)}</td>
-						<td class="whitespace-nowrap text-center">
-							<div class="flex justify-center gap-2">
+						<td class="whitespace-nowrap text-sm tabular-nums">{formatDate(user.lastLoginAt)}</td>
+						<td class="whitespace-nowrap text-sm tabular-nums">{formatDate(user.createdAt)}</td>
+						<td class="whitespace-nowrap text-right">
+							<div class="flex justify-end gap-2">
 								{#if confirmRemoveUserId === user.id}
 									<ActionButton variant="ghost" size="xs" on:click={() => (confirmRemoveUserId = '')}>Cancel</ActionButton>
 									<ActionButton variant="danger" size="xs" on:click={() => handleRemove(user.id, user.email)} disabled={removingUserId !== '' && removingUserId !== user.id} loading={removingUserId === user.id} loadingLabel="Removing">

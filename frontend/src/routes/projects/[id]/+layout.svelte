@@ -5,6 +5,7 @@
 	import DeployControlPanel from '$components/DeployControlPanel.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import { api } from '$api';
+	import { beginMainContentLoading } from '$stores/main-loading';
 	import { clearShellContext, setShellContext } from '$stores/shell-context';
 	import { toast } from '$stores/toast';
 	import {
@@ -36,6 +37,7 @@
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
+	$: databaseWorkspace = $page.url.pathname.startsWith(`/projects/${$page.params.id}/database`);
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -130,6 +132,8 @@
 	async function loadProject(background = false) {
 		if (projectRefreshInFlight) return;
 		projectRefreshInFlight = true;
+		const foreground = !background && !project;
+		const finishMainLoading = foreground ? beginMainContentLoading() : null;
 		if (!background || !project) {
 			loading = true;
 			error = '';
@@ -141,6 +145,7 @@
 			if (!background || !project) error = message;
 		} finally {
 			if (!background || !project) loading = false;
+			finishMainLoading?.();
 			projectRefreshInFlight = false;
 		}
 	}
@@ -188,34 +193,25 @@
 	}
 </script>
 
-<div class="page-shell py-5">
-	{#if loading}
-		<div class="control-panel p-5">
-			<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-				<div class="min-w-0 flex-1">
-					<div class="h-7 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-800"></div>
-					<div class="mt-3 h-3 w-56 animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-					<div class="mt-2 h-3 w-full max-w-sm animate-pulse rounded bg-gray-100 dark:bg-gray-800"></div>
-				</div>
-				<div class="h-9 w-28 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"></div>
-			</div>
-		</div>
-	{:else if error || !project}
+<div class={`page-shell ${databaseWorkspace ? 'py-3' : 'py-5'}`}>
+	{#if !loading && (error || !project)}
 		<div class="surface overflow-hidden">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
-	{:else}
-		<DeployControlPanel
-			{project}
-			{publicProjectHost}
-			{publicProjectURL}
-			{pendingAction}
-			on:stop={handleStop}
-			on:restart={handleRestart}
-			on:deploy={handleDeploy}
-		/>
+	{:else if project}
+		{#if !databaseWorkspace}
+			<DeployControlPanel
+				{project}
+				{publicProjectHost}
+				{publicProjectURL}
+				{pendingAction}
+				on:stop={handleStop}
+				on:restart={handleRestart}
+				on:deploy={handleDeploy}
+			/>
+		{/if}
 
-		<div class="py-5">
+		<div class={databaseWorkspace ? 'py-0' : 'py-5'}>
 			<slot />
 		</div>
 	{/if}

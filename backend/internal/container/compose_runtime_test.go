@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
@@ -24,6 +25,47 @@ func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
 	}
 	if strings.Join(got, "|") != strings.Join(wantParts, "|") {
 		t.Fatalf("composePullArgs() = %v, want %v", got, wantParts)
+	}
+}
+
+func TestComposeExecutionEnvUsesIsolatedDockerConfigWithoutLeakingRegistrySecrets(t *testing.T) {
+	t.Setenv(registryHostEnv, "docker.io")
+	t.Setenv(registryUsernameEnv, "mypaas-ci")
+	t.Setenv(registryPasswordEnv, "super-secret")
+
+	env := composeExecutionEnv([]string{"worker", "metrics"}, "/tmp/mypaas-docker-config")
+	joined := strings.Join(env, "\n")
+	if !strings.Contains(joined, "DOCKER_CONFIG=/tmp/mypaas-docker-config") {
+		t.Fatalf("compose env missing isolated DOCKER_CONFIG: %v", env)
+	}
+	if !strings.Contains(joined, "COMPOSE_PROFILES=worker,metrics") {
+		t.Fatalf("compose env missing profiles: %v", env)
+	}
+	for _, forbidden := range []string{registryHostEnv, registryUsernameEnv, registryPasswordEnv, "super-secret"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("compose env leaked registry configuration %q: %v", forbidden, env)
+		}
+	}
+}
+
+func TestEffectiveComposeReadinessTimeoutUsesPlatformFloor(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Duration
+		want time.Duration
+	}{
+		{name: "zero", in: 0, want: minimumComposeReadinessTimeout},
+		{name: "legacy one minute", in: time.Minute, want: minimumComposeReadinessTimeout},
+		{name: "exact floor", in: minimumComposeReadinessTimeout, want: minimumComposeReadinessTimeout},
+		{name: "longer caller timeout", in: 8 * time.Minute, want: 8 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := effectiveComposeReadinessTimeout(tt.in); got != tt.want {
+				t.Fatalf("effectiveComposeReadinessTimeout(%s) = %s, want %s", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

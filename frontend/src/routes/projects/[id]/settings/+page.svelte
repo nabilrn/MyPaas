@@ -6,6 +6,7 @@
 	import ActionButton from '$components/ActionButton.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import IconButton from '$components/IconButton.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import ProjectEffectiveConfiguration from '$components/ProjectEffectiveConfiguration.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
@@ -354,12 +355,8 @@
 </svelte:head>
 
 {#if loading}
-	<div class="space-y-4">
-		<div class="surface h-44 animate-pulse"></div>
-		<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-			<div class="surface h-60 animate-pulse"></div>
-			<div class="surface h-60 animate-pulse"></div>
-		</div>
+	<div class="surface flex min-h-64 items-center justify-center">
+		<LoadingIndicator label="Loading project settings" />
 	</div>
 {:else if loadError || !project}
 	<div class="surface overflow-hidden">

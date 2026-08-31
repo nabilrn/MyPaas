@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Cloud, Download, Database, HardDrive, ShieldCheck, LoaderCircle } from '@lucide/svelte';
+	import { Cloud, Download, Database, ShieldCheck } from '@lucide/svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -90,11 +90,7 @@
 		</div>
 	</SectionPanel>
 
-	{#if loading}
-		<div class="surface flex h-36 items-center justify-center">
-			<LoaderCircle class="h-6 w-6 animate-spin motion-reduce:animate-none text-gray-500 dark:text-gray-400" aria-hidden="true" />
-		</div>
-	{:else}
+	{#if !loading}
 		<SectionPanel title="S3 Automated Backup" description="Configure S3-compatible storage for automated daily backups.">
 			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
 				<div class="h-max rounded-md border border-gray-200 p-4 text-sm text-gray-600 dark:border-neutral-800 dark:text-gray-300">

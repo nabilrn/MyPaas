@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
 
 var ErrComposeServiceUnhealthy = errors.New("compose service unhealthy")
+
+const minimumComposeReadinessTimeout = 5 * time.Minute
 
 type composeHealthState struct {
 	Status string `json:"Status"`
@@ -31,18 +32,77 @@ func composePullArgs(opts ComposeUpOptions) []string {
 	return append(args, "pull", "--ignore-buildable")
 }
 
+func composeExecutionEnv(profiles []string, dockerConfig string) []string {
+	env := composeEnv()
+	if dockerConfig != "" {
+		env = envWithValue(env, "DOCKER_CONFIG", dockerConfig)
+	}
+	if len(profiles) > 0 {
+		env = envWithValue(env, "COMPOSE_PROFILES", strings.Join(profiles, ","))
+	}
+	return env
+}
+
+func (d *DockerCLI) composeImages(ctx context.Context, opts ComposeUpOptions) ([]string, error) {
+	args := composeBaseArgs(opts.EnvFile)
+	args = append(args, "-p", opts.ProjectName)
+	for _, file := range composeUpFiles(opts) {
+		args = append(args, "-f", file)
+	}
+	args = append(args, "config", "--images")
+	cmd := commandContext(ctx, "docker", args...)
+	if opts.WorkDir != "" {
+		cmd.Dir = opts.WorkDir
+	}
+	cmd.Env = composeExecutionEnv(opts.Profiles, "")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("docker compose config --images: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return fieldsByLine(string(out)), nil
+}
+
+func (d *DockerCLI) composeRegistryDockerConfig(ctx context.Context, opts ComposeUpOptions, log func(string)) (string, func(), error) {
+	_, configured, err := configuredRegistryCredentials()
+	if err != nil {
+		return "", func() {}, err
+	}
+	if !configured {
+		return "", func() {}, nil
+	}
+
+	images, err := d.composeImages(ctx, opts)
+	if err != nil {
+		return "", func() {}, err
+	}
+	credentials, matched, err := registryCredentialsForImages(images)
+	if err != nil {
+		return "", func() {}, err
+	}
+	if !matched {
+		return "", func() {}, nil
+	}
+	return prepareRegistryDockerConfig(ctx, credentials, log)
+}
+
 // ComposePull refreshes remote image-only services while leaving buildable
 // services alone. This gives repository/Compose deployments the same explicit
 // registry refresh behavior as image deployments without trying to pull local
-// MyPaas build tags.
+// MyPaas build tags. When the configured registry is actually referenced by
+// the rendered Compose project, the same isolated registry-auth contract used
+// by direct image deployments is applied to the Compose pull.
 func (d *DockerCLI) ComposePull(ctx context.Context, opts ComposeUpOptions, log func(string)) error {
+	dockerConfig, cleanup, err := d.composeRegistryDockerConfig(ctx, opts, log)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
 	cmd := commandContext(ctx, "docker", composePullArgs(opts)...)
 	if opts.WorkDir != "" {
 		cmd.Dir = opts.WorkDir
 	}
-	if len(opts.Profiles) > 0 {
-		cmd.Env = append(os.Environ(), "COMPOSE_PROFILES="+strings.Join(opts.Profiles, ","))
-	}
+	cmd.Env = composeExecutionEnv(opts.Profiles, dockerConfig)
 	return runLoggedCmd(ctx, cmd, log)
 }
 
@@ -79,6 +139,18 @@ func evaluateComposeReadiness(state composeContainerState) (bool, error) {
 	}
 }
 
+func effectiveComposeReadinessTimeout(timeout time.Duration) time.Duration {
+	// Compose healthchecks commonly use start_period plus multiple retry
+	// intervals. A one-minute caller timeout can therefore reject a service
+	// while its declared health contract is still legitimately in "starting".
+	// Keep a bounded platform floor while still allowing callers to request a
+	// longer timeout when needed.
+	if timeout < minimumComposeReadinessTimeout {
+		return minimumComposeReadinessTimeout
+	}
+	return timeout
+}
+
 func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, service string) (composeContainerState, error) {
 	id, err := d.composeServiceContainer(ctx, projectName, service)
 	if err != nil {
@@ -104,9 +176,7 @@ func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, servic
 // service is actually usable. Containers without a healthcheck are ready once
 // Docker reports them running; containers with a healthcheck must be healthy.
 func (d *DockerCLI) WaitComposeServiceReady(ctx context.Context, projectName, service string, timeout time.Duration) error {
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
+	timeout = effectiveComposeReadinessTimeout(timeout)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 

@@ -6,6 +6,7 @@
 	import EmptyState from '$components/EmptyState.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api, type ProjectHTTPRoute } from '$api';
 	import { projectRouteURL, projectURL } from '$lib/utils/urls';
@@ -148,12 +149,8 @@
 </svelte:head>
 
 {#if loading}
-	<div class="space-y-4">
-		<div class="surface h-56 animate-pulse"></div>
-		<div class="grid gap-4 lg:grid-cols-2">
-			<div class="surface h-64 animate-pulse"></div>
-			<div class="surface h-64 animate-pulse"></div>
-		</div>
+	<div class="surface flex min-h-64 items-center justify-center">
+		<LoadingIndicator label="Loading project dashboard" />
 	</div>
 {:else if error && !project}
 	<div class="surface overflow-hidden">

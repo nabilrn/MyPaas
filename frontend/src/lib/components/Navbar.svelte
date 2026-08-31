@@ -1,124 +1,108 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, ClipboardList, Database, FolderKanban, LogOut, Moon, Package, Settings, Sun, Users } from '@lucide/svelte';
-	import { goto } from '$app/navigation';
+	import { ArrowRightLeft, Bot, Boxes, ClipboardList, Database, FolderKanban, Network, Settings, Users } from '@lucide/svelte';
 	import { page } from '$app/stores';
-	import ActionButton from '$components/ActionButton.svelte';
 	import BrandLogo from '$components/BrandLogo.svelte';
-	import IconButton from '$components/IconButton.svelte';
-	import SidebarPanelIcon from '$components/SidebarPanelIcon.svelte';
-	import { api } from '$api';
-	import { dismissable } from '$lib/actions/dismissable';
-	import { sidebarCollapsed } from '$stores/sidebar';
-	import { theme } from '$stores/theme';
 	import type { User } from '$types';
 
 	export let user: User | null = null;
 
-	const navItems = [
-		{ href: '/projects', label: 'Projects', icon: FolderKanban },
-		{ href: '/templates', label: 'Templates', icon: Package },
-		{ href: '/admin/users', label: 'Users', icon: Users },
-		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
-		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
-		{ href: '/admin/backup', label: 'Backup', icon: Database },
-		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft },
-		{ href: '/admin/settings', label: 'Settings', icon: Settings }
+	const workspaceItems = [
+		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
+		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
+		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true }
 	];
 
-	let accountMenuOpen = false;
-	let signingOut = false;
+	const administrationItems = [
+		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
+		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
+		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
+		{ href: '/admin/backup', label: 'Backup', icon: Database, ownerOnly: true },
+		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft, ownerOnly: true },
+		{ href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true }
+	];
+
+	let expanded = false;
+	let sidebar: HTMLElement | null = null;
 
 	$: pathname = $page.url.pathname;
-	$: userLabel = user?.githubUsername ?? user?.email ?? 'Account';
+	$: visibleWorkspaceItems = workspaceItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
+	$: visibleAdministrationItems = administrationItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 
 	function isActive(href: string, currentPath = pathname) {
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
 		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
 
-	function navItemClass(href: string, currentPath = pathname, collapsed = false) {
-		const base = `group relative flex min-h-10 items-center rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'}`;
+	function navItemClass(href: string) {
+		const base = `group relative flex min-h-9 items-center rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${expanded ? 'gap-3 px-3' : 'justify-center px-0'}`;
 		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
 		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
-		return `${base} ${isActive(href, currentPath) ? active : idle}`;
+		return `${base} ${isActive(href) ? active : idle}`;
 	}
 
-	function initial() {
-		return (user?.githubUsername || user?.email || '?').slice(0, 1).toUpperCase();
+	function handleFocusOut(event: FocusEvent) {
+		const next = event.relatedTarget;
+		if (!sidebar || !(next instanceof Node) || !sidebar.contains(next)) expanded = false;
 	}
 
-	function closeAccountMenu() {
-		accountMenuOpen = false;
-	}
-
-	async function handleLogout() {
-		if (signingOut) return;
-		signingOut = true;
-		try {
-			await api.auth.logout();
-		} finally {
-			await goto('/login');
-		}
+	function chooseNavigation() {
+		expanded = false;
 	}
 </script>
 
-<aside class="fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-gray-200 bg-white transition-[width] duration-200 dark:border-neutral-800 dark:bg-neutral-950 lg:flex {$sidebarCollapsed ? 'w-16' : 'w-64'}">
-	<div class="flex h-16 items-center border-b border-gray-200 dark:border-neutral-800 {$sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-2.5 px-4'}">
-		{#if $sidebarCollapsed}
-			<button
-				type="button"
-				class="app-focus flex h-10 w-10 items-center justify-center rounded-md border border-transparent transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
-				aria-label="Expand sidebar"
-				title="Expand sidebar"
-				on:click={() => sidebarCollapsed.toggle()}
-			>
-				<SidebarPanelIcon collapsed className="h-[18px] w-[18px]" />
-			</button>
-		{:else}
-			<a href="/projects" class="flex min-w-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 dark:focus-visible:ring-white">
-				<BrandLogo />
-			</a>
-			<IconButton label="Collapse sidebar" variant="ghost" on:click={() => sidebarCollapsed.toggle()}>
-				<SidebarPanelIcon className="h-[18px] w-[18px]" />
-			</IconButton>
-		{/if}
+<aside
+	bind:this={sidebar}
+	class={`fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-gray-200 bg-white transition-[width,box-shadow] duration-150 ease-out dark:border-neutral-800 dark:bg-neutral-950 lg:flex ${expanded ? 'w-60 shadow-[10px_0_28px_rgb(0_0_0/0.10)] dark:shadow-[10px_0_28px_rgb(0_0_0/0.32)]' : 'w-14 shadow-none'}`}
+	on:mouseenter={() => (expanded = true)}
+	on:mouseleave={() => (expanded = false)}
+	on:focusin={() => (expanded = true)}
+	on:focusout={handleFocusOut}
+>
+	<div class={`flex h-14 shrink-0 items-center border-b border-gray-200 dark:border-neutral-800 ${expanded ? 'px-4' : 'justify-center px-2'}`}>
+		<a
+			href="/projects"
+			class="app-focus flex h-9 min-w-0 items-center rounded-md"
+			aria-label="MyPaaS projects"
+			on:click={chooseNavigation}
+		>
+			<BrandLogo compact={!expanded} />
+		</a>
 	</div>
 
-	<nav class="flex-1 overflow-y-auto py-4 {$sidebarCollapsed ? 'px-2' : 'px-3'}" aria-label="Primary navigation">
-		{#if !$sidebarCollapsed}<p class="px-3 pb-2 text-xs font-medium text-gray-400 dark:text-gray-500">Workspace</p>{/if}
+	<nav class={`flex-1 overflow-y-auto py-3 ${expanded ? 'px-3' : 'px-2'}`} aria-label="Primary navigation">
+		{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Workspace</p>{/if}
 		<div class="space-y-1">
-			{#each navItems as item}
-				<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, pathname, $sidebarCollapsed)} title={$sidebarCollapsed ? item.label : undefined}>
-					<svelte:component this={item.icon} class="h-4 w-4 shrink-0" aria-hidden="true" />
-					{#if $sidebarCollapsed}<span class="sr-only">{item.label}</span>{:else}{item.label}{/if}
+			{#each visibleWorkspaceItems as item}
+				<a
+					href={item.href}
+					aria-current={isActive(item.href) ? 'page' : undefined}
+					class={navItemClass(item.href)}
+					title={expanded ? undefined : item.label}
+					on:click={chooseNavigation}
+				>
+					<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+					{#if expanded}<span class="whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
 				</a>
 			{/each}
 		</div>
-	</nav>
 
-	<div class="border-t border-gray-200 p-2 dark:border-neutral-800">
-		<div class="relative" use:dismissable={{ enabled: accountMenuOpen, onDismiss: closeAccountMenu }}>
-			{#if $sidebarCollapsed}
-				<button type="button" class="app-focus mx-auto flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-transparent text-xs font-semibold text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-100 dark:text-gray-200 dark:hover:border-neutral-800 dark:hover:bg-neutral-900" aria-label="Open account menu" aria-expanded={accountMenuOpen} title={userLabel} on:click={() => (accountMenuOpen = !accountMenuOpen)}>
-					{#if user?.avatarUrl}<img src={user.avatarUrl} alt="" class="h-7 w-7 rounded-full object-cover" />{:else}<span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800">{initial()}</span>{/if}
-				</button>
-			{:else}
-				<button type="button" class="app-focus flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900" aria-label="Open account menu" aria-expanded={accountMenuOpen} on:click={() => (accountMenuOpen = !accountMenuOpen)}>
-					{#if user?.avatarUrl}<img src={user.avatarUrl} alt="" class="h-8 w-8 shrink-0 rounded-full object-cover" />{:else}<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 dark:bg-neutral-800 dark:text-gray-200">{initial()}</span>{/if}
-					<span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{userLabel}</span>{#if user?.email}<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</span>{/if}</span>
-				</button>
-			{/if}
-			{#if accountMenuOpen}
-				<div class="overlay absolute z-50 mb-2 w-56 p-1 {$sidebarCollapsed ? 'bottom-0 left-full ml-2' : 'bottom-full left-0 right-0 w-auto'}">
-					<ActionButton variant="ghostDanger" size="xs" full className="justify-start" loading={signingOut} loadingLabel="Signing out..." on:click={handleLogout}><LogOut slot="icon" class="h-4 w-4" />Sign out</ActionButton>
-				</div>
-			{/if}
-		</div>
-
-		{#if $sidebarCollapsed}
-			<div class="mt-1 flex justify-center"><IconButton label={$theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'} variant="ghost" on:click={() => theme.toggle()}>{#if $theme === 'dark'}<Sun class="h-4 w-4" aria-hidden="true" />{:else}<Moon class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></div>
-		{:else}
-			<ActionButton variant="ghost" size="xs" full className="mt-1 justify-start" on:click={() => theme.toggle()}>{#if $theme === 'dark'}<Sun slot="icon" class="h-4 w-4" />Light appearance{:else}<Moon slot="icon" class="h-4 w-4" />Dark appearance{/if}</ActionButton>
+		{#if visibleAdministrationItems.length > 0}
+			<div class={`my-3 border-t border-gray-200 dark:border-neutral-800 ${expanded ? 'mx-1' : 'mx-1.5'}`}></div>
+			{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Administration</p>{/if}
+			<div class="space-y-1">
+				{#each visibleAdministrationItems as item}
+					<a
+						href={item.href}
+						aria-current={isActive(item.href) ? 'page' : undefined}
+						class={navItemClass(item.href)}
+						title={expanded ? undefined : item.label}
+						on:click={chooseNavigation}
+					>
+						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+						{#if expanded}<span class="whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
+					</a>
+				{/each}
+			</div>
 		{/if}
-	</div>
+	</nav>
 </aside>

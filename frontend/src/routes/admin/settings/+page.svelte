@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { LoaderCircle } from '@lucide/svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 
 	type SettingKey = 'user_ram_quota_gb' | 'user_cpu_quota' | 'max_projects' | 'build_timeout_minutes';
@@ -151,8 +151,8 @@
 
 {#if updateOverlayOpen}
 	<div class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm dark:bg-gray-950/90">
-		<LoaderCircle class="mb-4 h-12 w-12 animate-spin text-gray-500 dark:text-gray-400" />
-		<h2 class="text-xl font-medium text-gray-900 dark:text-white">Updating MyPaas</h2>
+		<LoadingIndicator label="Updating MyPaaS" size="lg" />
+		<h2 class="mt-5 text-xl font-medium text-gray-900 dark:text-white">Updating MyPaaS</h2>
 		<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Restarting control plane…</p>
 	</div>
 {/if}
@@ -183,8 +183,8 @@
 	</SectionPanel>
 
 	{#if loadingSettings}
-		<div class="surface flex h-36 items-center justify-center">
-			<LoaderCircle class="h-6 w-6 animate-spin motion-reduce:animate-none text-gray-500 dark:text-gray-400" aria-hidden="true" />
+		<div class="surface flex h-40 items-center justify-center">
+			<LoadingIndicator label="Loading platform settings" />
 		</div>
 	{:else}
 		<SectionPanel title="Platform limits">

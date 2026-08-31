@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { ExternalLink, FolderGit2, GitBranch, LoaderCircle, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FolderGit2, GitBranch, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
@@ -255,7 +256,6 @@
 		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
-
 	function formatBytes(value: number) {
 		if (!Number.isFinite(value) || value < 0) return '-';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -408,9 +408,8 @@
 				/>
 			</div>
 		{:else}
-			<div class="flex h-40 items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400" aria-busy="true" aria-live="polite">
-				<LoaderCircle class="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-				<span>Loading host telemetry…</span>
+			<div class="flex h-40 items-center justify-center">
+				<LoadingIndicator label="Loading host telemetry" size="sm" />
 			</div>
 		{/if}
 	</SectionPanel>
@@ -481,7 +480,7 @@
 					<th>Usage</th>
 					<th>Uptime</th>
 					<th>Updated</th>
-					<th class="text-center">Action</th>
+					<th class="text-right">Action</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -534,18 +533,18 @@
 							{#if project.id in projectMemory}
 								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
 							{:else if uptimeLoadingIds.has(project.id)}
-								<span class="inline-flex items-center text-gray-400 dark:text-gray-500"><LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /><span class="sr-only">Loading metrics</span></span>
+								<span class="text-sm text-gray-400 dark:text-gray-500" aria-label="Loading metrics">…</span>
 							{:else}
 								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
 							{/if}
 						</td>
 						<td class="metric-value whitespace-nowrap text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
 						<td class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
-						<td class="whitespace-nowrap text-center">
+						<td class="whitespace-nowrap text-right">
 							<ActionButton
 								variant={projectPrimaryVariant(project)}
 								size="xs"
-								className="mx-auto min-w-[5.75rem]"
+								className="ml-auto min-w-[5.75rem]"
 								on:click={() => handlePrimaryProjectAction(project)}
 								loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
 								loadingLabel={projectPrimaryLabel(project)}

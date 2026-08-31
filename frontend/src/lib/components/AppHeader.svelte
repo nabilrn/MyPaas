@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, ChevronRight, ClipboardList, FolderKanban, LogOut, Menu, Moon, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -13,12 +13,15 @@
 	export let user: User | null = null;
 
 	const navItems = [
-		{ href: '/projects', label: 'Projects', icon: FolderKanban },
-		{ href: '/admin/users', label: 'Users', icon: Users },
-		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList },
-		{ href: '/admin/mcp', label: 'MCP', icon: Bot },
-		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft },
-		{ href: '/admin/settings', label: 'Settings', icon: Settings }
+		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
+		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
+		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
+		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
+		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
+		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
+		{ href: '/admin/backup', label: 'Backup', icon: Database, ownerOnly: true },
+		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft, ownerOnly: true },
+		{ href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true }
 	];
 
 	const projectSectionLabels: Record<string, string> = {
@@ -32,11 +35,13 @@
 
 	let mobileMenuOpen = false;
 	let notificationsOpen = false;
+	let accountMenuOpen = false;
 	let signingOut = false;
 
 	$: pathname = $page.url.pathname;
 	$: headerContext = resolveHeaderContext(pathname, $shellContext);
 	$: userLabel = user?.githubUsername ?? user?.email ?? 'Account';
+	$: visibleNavItems = navItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 
 	function resolveHeaderContext(currentPath: string, context: { projectId?: string; projectName?: string }) {
 		if (currentPath === '/projects/new') {
@@ -54,9 +59,12 @@
 				current: section || projectLabel
 			};
 		}
+		if (currentPath.startsWith('/containers')) return { root: 'Containers', rootHref: '/containers', middle: null, current: '' };
+		if (currentPath.startsWith('/ports')) return { root: 'Ports', rootHref: '/ports', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/users')) return { root: 'Users', rootHref: '/admin/users', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/audit-logs')) return { root: 'Audit', rootHref: '/admin/audit-logs', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/mcp')) return { root: 'MCP', rootHref: '/admin/mcp', middle: null, current: '' };
+		if (currentPath.startsWith('/admin/backup')) return { root: 'Backup', rootHref: '/admin/backup', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/migration')) return { root: 'Migration', rootHref: '/admin/migration', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/settings')) return { root: 'Settings', rootHref: '/admin/settings', middle: null, current: '' };
 		return { root: 'Projects', rootHref: '/projects', middle: null, current: '' };
@@ -74,8 +82,26 @@
 		return `${base} ${isActive(href) ? active : idle}`;
 	}
 
+	function initial() {
+		return (user?.githubUsername || user?.email || '?').slice(0, 1).toUpperCase();
+	}
+
 	function closeNotifications() {
 		notificationsOpen = false;
+	}
+
+	function closeAccountMenu() {
+		accountMenuOpen = false;
+	}
+
+	function toggleNotifications() {
+		accountMenuOpen = false;
+		notificationsOpen = !notificationsOpen;
+	}
+
+	function toggleAccountMenu() {
+		notificationsOpen = false;
+		accountMenuOpen = !accountMenuOpen;
 	}
 
 	async function handleLogout() {
@@ -90,7 +116,7 @@
 </script>
 
 <header class="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
-	<div class="flex h-14 items-center justify-between gap-3 px-4 lg:h-16 lg:px-6">
+	<div class="flex h-14 items-center justify-between gap-3 px-4 lg:px-5">
 		<div class="flex min-w-0 items-center gap-3">
 			<IconButton
 				label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
@@ -117,61 +143,76 @@
 			</nav>
 		</div>
 
-		<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
-			<IconButton label="Notifications" variant="ghost" on:click={() => (notificationsOpen = !notificationsOpen)}>
-				<Bell class="h-4 w-4" aria-hidden="true" />
+		<div class="flex shrink-0 items-center gap-1">
+			<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
+				<IconButton label="Notifications" variant="ghost" on:click={toggleNotifications}>
+					<Bell class="h-[18px] w-[18px]" aria-hidden="true" />
+				</IconButton>
+				{#if notificationsOpen}
+					<div class="overlay absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden">
+						<div class="border-b border-gray-100 px-4 py-3 dark:border-neutral-800">
+							<p class="text-sm font-semibold text-gray-950 dark:text-white">Notifications</p>
+							<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Platform updates and operational events will appear here.</p>
+						</div>
+						<div class="px-4 py-8 text-center">
+							<Bell class="mx-auto h-5 w-5 text-gray-300 dark:text-gray-700" aria-hidden="true" />
+							<p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">You're all caught up</p>
+							<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">Release updates, deployment alerts, and resource notifications can use this center later.</p>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			<IconButton label={$theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'} variant="ghost" on:click={() => theme.toggle()}>
+				{#if $theme === 'dark'}<Sun class="h-[18px] w-[18px]" aria-hidden="true" />{:else}<Moon class="h-[18px] w-[18px]" aria-hidden="true" />{/if}
 			</IconButton>
-			{#if notificationsOpen}
-				<div class="overlay absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden">
-					<div class="border-b border-gray-100 px-4 py-3 dark:border-neutral-800">
-						<p class="text-sm font-semibold text-gray-950 dark:text-white">Notifications</p>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Platform updates and operational events will appear here.</p>
+
+			<div class="relative" use:dismissable={{ enabled: accountMenuOpen, onDismiss: closeAccountMenu }}>
+				<button
+					type="button"
+					class="app-focus flex h-9 max-w-48 items-center gap-2 rounded-md border border-transparent px-1.5 text-left transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
+					aria-label="Open account menu"
+					aria-expanded={accountMenuOpen}
+					on:click={toggleAccountMenu}
+				>
+					{#if user?.avatarUrl}
+						<img src={user.avatarUrl} alt="" class="h-7 w-7 shrink-0 rounded-full object-cover" />
+					{:else}
+						<span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 dark:bg-neutral-800 dark:text-gray-200">{initial()}</span>
+					{/if}
+					<span class="hidden min-w-0 truncate text-sm font-medium text-gray-800 dark:text-gray-200 xl:block">{userLabel}</span>
+					<ChevronDown class="hidden h-3.5 w-3.5 shrink-0 text-gray-400 sm:block" aria-hidden="true" />
+				</button>
+
+				{#if accountMenuOpen}
+					<div class="overlay absolute right-0 mt-2 w-64 overflow-hidden p-1">
+						<div class="px-3 py-2.5">
+							<p class="truncate text-sm font-semibold text-gray-950 dark:text-white">{userLabel}</p>
+							{#if user?.email}<p class="mt-0.5 truncate text-[13px] text-gray-500 dark:text-gray-400">{user.email}</p>{/if}
+							{#if user?.role}<p class="mt-1 text-[13px] capitalize text-gray-400 dark:text-gray-500">{user.role}</p>{/if}
+						</div>
+						<div class="border-t border-gray-100 p-1 dark:border-neutral-800">
+							<ActionButton variant="ghostDanger" size="xs" full className="justify-start" loading={signingOut} loadingLabel="Signing out..." on:click={handleLogout}>
+								<LogOut slot="icon" class="h-4 w-4" />
+								Sign out
+							</ActionButton>
+						</div>
 					</div>
-					<div class="px-4 py-8 text-center">
-						<Bell class="mx-auto h-5 w-5 text-gray-300 dark:text-gray-700" aria-hidden="true" />
-						<p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">You're all caught up</p>
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Release updates, deployment alerts, and resource notifications can use this center later.</p>
-					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</div>
 	</div>
 
 	{#if mobileMenuOpen}
 		<div class="border-t border-gray-100 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950 lg:hidden">
 			<nav class="grid gap-1" aria-label="Primary navigation">
-				{#each navItems as item}
+				{#each visibleNavItems as item}
 					<a href={item.href} class={navItemClass(item.href)} aria-current={isActive(item.href) ? 'page' : undefined} on:click={() => (mobileMenuOpen = false)}>
-						<svelte:component this={item.icon} class="h-4 w-4 shrink-0" aria-hidden="true" />
+						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
 						{item.label}
 					</a>
 				{/each}
 			</nav>
-
-			<div class="mt-3 border-t border-gray-100 pt-3 dark:border-neutral-800">
-				<div class="px-3 pb-2">
-					<p class="truncate text-sm font-medium text-gray-950 dark:text-white">{userLabel}</p>
-					{#if user?.email}
-						<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-					{/if}
-				</div>
-				<div class="grid gap-1">
-					<ActionButton variant="ghost" size="sm" full className="justify-start" on:click={() => theme.toggle()}>
-						<svelte:fragment slot="icon">
-							{#if $theme === 'dark'}
-								<Sun class="h-4 w-4" />
-							{:else}
-								<Moon class="h-4 w-4" />
-							{/if}
-						</svelte:fragment>
-						{$theme === 'dark' ? 'Light appearance' : 'Dark appearance'}
-					</ActionButton>
-					<ActionButton variant="ghostDanger" size="sm" full className="justify-start" loading={signingOut} loadingLabel="Signing out..." on:click={handleLogout}>
-						<LogOut slot="icon" class="h-4 w-4" />
-						Sign out
-					</ActionButton>
-				</div>
-			</div>
 		</div>
 	{/if}
 </header>

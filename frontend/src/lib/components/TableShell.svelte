@@ -10,14 +10,15 @@
 	export let empty = false;
 	export let emptyTitle = 'No rows yet.';
 	export let emptyDescription = '';
+	// Retained as a compatibility prop for existing callers. TableShell no longer
+	// owns initial loading visuals; authenticated main content owns that state.
 	export let loadingRows = 3;
 	export let contentClass = 'overflow-x-auto';
 
 	const dispatch = createEventDispatcher<{ retry: void }>();
-	const skeletonRows = Array.from({ length: loadingRows }, (_, index) => index);
 </script>
 
-<section class="surface min-w-0 overflow-hidden">
+<section class="surface min-w-0 overflow-hidden" aria-busy={loading}>
 	{#if title || description || $$slots.actions}
 		<div class="panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 			<div class="min-w-0">
@@ -34,15 +35,9 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<div class="space-y-2 p-4" aria-busy="true" aria-live="polite">
-			{#each skeletonRows as _}
-				<div class="h-11 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800/80"></div>
-			{/each}
-		</div>
-	{:else if error}
+	{#if error && !loading}
 		<ErrorState message={error} on:retry={() => dispatch('retry')} />
-	{:else if empty}
+	{:else if empty && !loading}
 		<EmptyState title={emptyTitle} description={emptyDescription} compact />
 	{:else}
 		<slot name="notice" />

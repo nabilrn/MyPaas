@@ -28,31 +28,16 @@ func (d *DockerCLI) pullImage(ctx context.Context, image string, log func(string
 		return runRegistryPull(ctx, image, "", log)
 	}
 
-	dockerConfig, err := os.MkdirTemp("", "mypaas-registry-auth-*")
+	dockerConfig, cleanup, err := prepareRegistryDockerConfig(ctx, credentials, log)
 	if err != nil {
-		return fmt.Errorf("create isolated registry auth directory: %w", err)
+		return err
 	}
-	defer os.RemoveAll(dockerConfig)
-	if err := os.Chmod(dockerConfig, 0700); err != nil {
-		return fmt.Errorf("secure isolated registry auth directory: %w", err)
-	}
-
-	login := commandContext(ctx, "docker", "login", credentials.host, "--username", credentials.username, "--password-stdin")
-	login.Env = dockerEnvWithConfig(dockerConfig)
-	login.Stdin = strings.NewReader(credentials.password + "\n")
-	loginOutput, loginErr := login.CombinedOutput()
-	logRegistryOutput(loginOutput, log)
-	if loginErr != nil {
-		return classifyRegistryCommandError("login", image, credentials.host, loginErr, loginOutput)
-	}
-	if log != nil {
-		log("Using configured registry credentials for " + credentials.host)
-	}
+	defer cleanup()
 
 	return runRegistryPull(ctx, image, dockerConfig, log)
 }
 
-func registryCredentialsForImage(image string) (registryCredentials, bool, error) {
+func configuredRegistryCredentials() (registryCredentials, bool, error) {
 	configuredHost := normalizeRegistryHost(os.Getenv(registryHostEnv))
 	username := strings.TrimSpace(os.Getenv(registryUsernameEnv))
 	password := os.Getenv(registryPasswordEnv)
@@ -62,12 +47,57 @@ func registryCredentialsForImage(image string) (registryCredentials, bool, error
 	if configuredHost == "" || username == "" || password == "" {
 		return registryCredentials{}, false, fmt.Errorf("private registry configuration is incomplete: %s, %s, and %s must be set together", registryHostEnv, registryUsernameEnv, registryPasswordEnv)
 	}
+	return registryCredentials{host: configuredHost, username: username, password: password}, true, nil
+}
 
-	imageHost := registryHost(image)
-	if configuredHost != imageHost {
+func registryCredentialsForImage(image string) (registryCredentials, bool, error) {
+	credentials, configured, err := configuredRegistryCredentials()
+	if err != nil || !configured {
+		return registryCredentials{}, configured, err
+	}
+	if credentials.host != registryHost(image) {
 		return registryCredentials{}, false, nil
 	}
-	return registryCredentials{host: configuredHost, username: username, password: password}, true, nil
+	return credentials, true, nil
+}
+
+func registryCredentialsForImages(images []string) (registryCredentials, bool, error) {
+	credentials, configured, err := configuredRegistryCredentials()
+	if err != nil || !configured {
+		return registryCredentials{}, configured, err
+	}
+	for _, image := range images {
+		if credentials.host == registryHost(image) {
+			return credentials, true, nil
+		}
+	}
+	return registryCredentials{}, false, nil
+}
+
+func prepareRegistryDockerConfig(ctx context.Context, credentials registryCredentials, log func(string)) (string, func(), error) {
+	dockerConfig, err := os.MkdirTemp("", "mypaas-registry-auth-*")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create isolated registry auth directory: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(dockerConfig) }
+	if err := os.Chmod(dockerConfig, 0700); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("secure isolated registry auth directory: %w", err)
+	}
+
+	login := commandContext(ctx, "docker", "login", credentials.host, "--username", credentials.username, "--password-stdin")
+	login.Env = dockerEnvWithConfig(dockerConfig)
+	login.Stdin = strings.NewReader(credentials.password + "\n")
+	loginOutput, loginErr := login.CombinedOutput()
+	logRegistryOutput(loginOutput, log)
+	if loginErr != nil {
+		cleanup()
+		return "", func() {}, classifyRegistryCommandError("login", credentials.host, credentials.host, loginErr, loginOutput)
+	}
+	if log != nil {
+		log("Using configured registry credentials for " + credentials.host)
+	}
+	return dockerConfig, cleanup, nil
 }
 
 func registryHost(image string) string {
@@ -113,16 +143,19 @@ func runRegistryPull(ctx context.Context, image, dockerConfig string, log func(s
 }
 
 func dockerEnvWithConfig(path string) []string {
-	base := dockerEnv()
+	return envWithValue(dockerEnv(), "DOCKER_CONFIG", path)
+}
+
+func envWithValue(base []string, wantedKey, value string) []string {
 	out := make([]string, 0, len(base)+1)
 	for _, item := range base {
 		key, _, ok := strings.Cut(item, "=")
-		if ok && strings.EqualFold(key, "DOCKER_CONFIG") {
+		if ok && strings.EqualFold(key, wantedKey) {
 			continue
 		}
 		out = append(out, item)
 	}
-	return append(out, "DOCKER_CONFIG="+path)
+	return append(out, wantedKey+"="+value)
 }
 
 func logRegistryOutput(output []byte, log func(string)) {
