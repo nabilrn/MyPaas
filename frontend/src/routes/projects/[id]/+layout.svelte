@@ -4,8 +4,8 @@
 	import { page } from '$app/stores';
 	import DeployControlPanel from '$components/DeployControlPanel.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
-	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import { api } from '$api';
+	import { beginMainContentLoading } from '$stores/main-loading';
 	import { clearShellContext, setShellContext } from '$stores/shell-context';
 	import { toast } from '$stores/toast';
 	import {
@@ -132,6 +132,8 @@
 	async function loadProject(background = false) {
 		if (projectRefreshInFlight) return;
 		projectRefreshInFlight = true;
+		const foreground = !background && !project;
+		const finishMainLoading = foreground ? beginMainContentLoading() : null;
 		if (!background || !project) {
 			loading = true;
 			error = '';
@@ -143,6 +145,7 @@
 			if (!background || !project) error = message;
 		} finally {
 			if (!background || !project) loading = false;
+			finishMainLoading?.();
 			projectRefreshInFlight = false;
 		}
 	}
@@ -191,15 +194,11 @@
 </script>
 
 <div class={`page-shell ${databaseWorkspace ? 'py-3' : 'py-5'}`}>
-	{#if loading}
-		<div class={`surface flex items-center justify-center ${databaseWorkspace ? 'min-h-28' : 'min-h-48'}`}>
-			<LoadingIndicator label="Loading project" />
-		</div>
-	{:else if error || !project}
+	{#if !loading && (error || !project)}
 		<div class="surface overflow-hidden">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
-	{:else}
+	{:else if project}
 		{#if !databaseWorkspace}
 			<DeployControlPanel
 				{project}
