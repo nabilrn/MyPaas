@@ -4,7 +4,6 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
-	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 
 	let loading = true;
@@ -91,11 +90,7 @@
 		</div>
 	</SectionPanel>
 
-	{#if loading}
-		<div class="surface flex h-40 items-center justify-center">
-			<LoadingIndicator label="Loading backup configuration" />
-		</div>
-	{:else}
+	{#if !loading}
 		<SectionPanel title="S3 Automated Backup" description="Configure S3-compatible storage for automated daily backups.">
 			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
 				<div class="h-max rounded-md border border-gray-200 p-4 text-sm text-gray-600 dark:border-neutral-800 dark:text-gray-300">
