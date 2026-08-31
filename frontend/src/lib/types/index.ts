@@ -4,7 +4,7 @@ export type ProjectStatus = 'pending' | 'running' | 'stopped' | 'crashed' | 'bui
 export type DeployMode    = 'dockerfile' | 'compose' | 'static' | 'image';
 export type ProjectSourceType = 'git' | 'registry';
 export type DeployStatus  = 'queued' | 'cloning' | 'building' | 'starting' | 'running' | 'failed' | 'stopped' | 'rolled_back';
-export type UserRole      = 'owner' | 'collaborator';
+export type UserRole      = 'owner';
 export type TriggeredBy   = 'manual' | 'webhook' | 'rollback';
 export type ResourceProfile = 'static' | 'go-small' | 'node-python' | 'compose-main' | 'custom';
 
@@ -186,6 +186,13 @@ export interface LogsResponse {
 		service: string;
 		line: string;
 	}>;
+}
+
+export interface ShellSession {
+	id: string;
+	shell: string;
+	startedAt: string;
+	expiresAt: string;
 }
 
 export type DBStudioDriver = 'postgres' | 'mysql' | 'mariadb';

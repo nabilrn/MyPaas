@@ -42,6 +42,7 @@ import (
 	"mypaas/internal/quota"
 	"mypaas/internal/settings"
 	"mypaas/internal/sharedpostgres"
+	"mypaas/internal/shell"
 	"mypaas/internal/user"
 	"mypaas/internal/webhook"
 )
@@ -133,12 +134,14 @@ func run() error {
 
 	dockerClient := container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork)
 	backupService := backup.NewService(cfg, dockerClient)
+	shellService := shell.NewService()
+	defer shellService.Close()
 
 	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient),
+		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient, shellService),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -180,7 +183,7 @@ func run() error {
 	return nil
 }
 
-func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.TokenService, cipher *crypto.AESGCM, backupService *backup.Service, dockerClient *container.DockerCLI) http.Handler {
+func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.TokenService, cipher *crypto.AESGCM, backupService *backup.Service, dockerClient *container.DockerCLI, shellService *shell.Service) http.Handler {
 	queries := db.New(pool)
 	authHandler := auth.NewHandler(cfg, queries, tokenService)
 	authMiddleware := auth.Middleware(tokenService, queries, cfg)
@@ -212,6 +215,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	webhookHandler := webhook.NewHandler(queries, deploymentService)
 	settingsHandler := settings.NewHandler(queries, cfg, backupService)
 	migrationHandler := migration.NewHandler(migration.NewService(cfg))
+	shellHandler := shell.NewHandler(shellService)
 	firewallSocket := strings.TrimSpace(os.Getenv("FIREWALL_SOCKET"))
 	if firewallSocket == "" {
 		firewallSocket = "/run/mypaas/firewall.sock"
@@ -227,9 +231,9 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, shellHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, shellHandler)
 	})
 
 	return r
@@ -292,6 +296,7 @@ func registerRoutes(
 	settingsHandler *settings.Handler,
 	migrationHandler *migration.Handler,
 	firewallHandler *firewall.Handler,
+	shellHandler *shell.Handler,
 ) {
 	r.Get("/health", handleHealth)
 	r.Get("/ready", handleReady(pool))
@@ -377,6 +382,12 @@ func registerRoutes(
 			r.Get("/ports", firewallHandler.List)
 			r.Post("/ports/firewall", firewallHandler.Allow)
 			r.Delete("/ports/firewall/{protocol}/{port}", firewallHandler.Delete)
+			r.Route("/shell", func(r chi.Router) {
+				r.Post("/sessions", shellHandler.Start)
+				r.Get("/sessions/{id}/stream", shellHandler.Stream)
+				r.Post("/sessions/{id}/input", shellHandler.Input)
+				r.Delete("/sessions/{id}", shellHandler.Stop)
+			})
 		})
 	})
 }

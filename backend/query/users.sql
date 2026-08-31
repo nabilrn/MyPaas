@@ -32,6 +32,12 @@ SELECT id, email, github_id, github_username, avatar_url, role, created_at, last
 FROM users
 ORDER BY created_at DESC;
 
+-- name: GetMasterUserID :one
+SELECT id
+FROM users
+ORDER BY created_at ASC, id ASC
+LIMIT 1;
+
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1;

@@ -108,6 +108,10 @@ func Middleware(service *Service) func(http.Handler) http.Handler {
 }
 
 func shouldAudit(r *http.Request) bool {
+	if strings.Contains(r.URL.Path, "/admin/shell/sessions/") && strings.HasSuffix(r.URL.Path, "/input") {
+		// Shell input is intentionally not persisted because command lines may contain secrets.
+		return false
+	}
 	switch r.Method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		return true
@@ -139,6 +143,10 @@ func classify(r *http.Request) (string, *string, uuid.UUID) {
 		return "project.updated", stringPtr("project"), id
 	case r.Method == http.MethodDelete && strings.Contains(path, "/projects/"):
 		return "project.deleted", stringPtr("project"), id
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/admin/shell/sessions"):
+		return "shell.session_started", stringPtr("shell"), uuid.Nil
+	case r.Method == http.MethodDelete && strings.Contains(path, "/admin/shell/sessions/"):
+		return "shell.session_stopped", stringPtr("shell"), id
 	case r.Method == http.MethodPut && strings.HasSuffix(path, "/env"):
 		return "project.env_updated", stringPtr("project"), id
 	case r.Method == http.MethodDelete && strings.Contains(path, "/env/"):

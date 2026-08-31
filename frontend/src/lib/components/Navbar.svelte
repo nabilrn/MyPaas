@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, Boxes, ClipboardList, Database, FolderKanban, Network, Settings, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bot, Boxes, ClipboardList, Database, FolderKanban, Network, Settings, Terminal, Users } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import BrandLogo from '$components/BrandLogo.svelte';
 	import type { User } from '$types';
@@ -9,7 +9,8 @@
 	const workspaceItems = [
 		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
 		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
-		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true }
+		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
+		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true }
 	];
 
 	const administrationItems = [

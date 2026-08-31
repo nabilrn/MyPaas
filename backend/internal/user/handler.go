@@ -39,7 +39,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email string `json:"email"`
-		Role  string `json:"role"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
@@ -47,13 +46,6 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.ToLower(strings.TrimSpace(req.Email))
 	if _, err := mail.ParseAddress(email); err != nil {
-		httpx.DomainError(w, errs.ErrValidation)
-		return
-	}
-	if req.Role == "" {
-		req.Role = "collaborator"
-	}
-	if req.Role != "owner" && req.Role != "collaborator" {
 		httpx.DomainError(w, errs.ErrValidation)
 		return
 	}
@@ -67,7 +59,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.queries.CreateUser(r.Context(), db.CreateUserParams{
 		Email: email,
-		Role:  req.Role,
+		Role:  "owner",
 	})
 	if err != nil {
 		httpx.DomainError(w, err)
@@ -89,6 +81,28 @@ func (h *Handler) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 	if id == current.ID {
 		httpx.Error(w, http.StatusBadRequest, "CANNOT_REMOVE_SELF", "You cannot remove your own account.", nil)
+		return
+	}
+	target, err := h.queries.GetUserByID(r.Context(), id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			httpx.DomainError(w, errs.ErrNotFound)
+			return
+		}
+		httpx.DomainError(w, err)
+		return
+	}
+	masterID, err := h.queries.GetMasterUserID(r.Context())
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	if id == masterID {
+		httpx.DomainError(w, errs.ErrCannotRemoveMaster)
+		return
+	}
+	if target.Role == "owner" {
+		httpx.DomainError(w, errs.ErrCannotRemoveOwner)
 		return
 	}
 	if err := h.queries.DeleteUser(r.Context(), id); err != nil {

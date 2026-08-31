@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Terminal, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -17,6 +17,7 @@
 		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
 		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
 		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
+		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true },
 		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
 		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
 		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
@@ -45,6 +46,7 @@
 	$: visibleNavItems = navItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 
 	function resolveHeaderContext(currentPath: string, context: { projectId?: string; projectName?: string }) {
+		if (currentPath === '/shell') return { root: 'Shell', rootHref: '/shell', middle: null as { label: string; href: string } | null, current: '' };
 		if (currentPath === '/projects/new') {
 			return { root: 'Projects', rootHref: '/projects', middle: null as { label: string; href: string } | null, current: 'New project' };
 		}

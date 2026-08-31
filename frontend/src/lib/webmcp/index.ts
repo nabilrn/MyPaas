@@ -289,8 +289,8 @@ function ownerTools(): WebMCPTool[] {
 	];
 }
 
-export function buildWebMCPTools(user: Pick<User, 'role'>): WebMCPTool[] {
-	return user.role === 'owner' ? [...projectTools(), ...ownerTools()] : projectTools();
+export function buildWebMCPTools(_user: Pick<User, 'role'>): WebMCPTool[] {
+	return [...projectTools(), ...ownerTools()];
 }
 
 export function registerWebMCPTools(user: Pick<User, 'role'>): () => void {

@@ -29,6 +29,7 @@ flowchart TB
         EngineSocket["Docker-compatible engine socket"]
         Engine["Docker Engine / rootful Podman"]
         CaddyAdmin["Caddy Admin Unix socket"]
+        HostShell["Owner-only short-lived host shell"]
         Statd["mypaas-statd Unix socket"]
         Cgroup["cgroup v2"]
     end
@@ -40,6 +41,7 @@ flowchart TB
     API --> DB
     API --> EngineSocket --> Engine
     API --> CaddyAdmin
+    API --> HostShell
     API --> Statd --> Cgroup
     Engine --> Runtime
 
@@ -48,6 +50,12 @@ flowchart TB
 ```
 
 The core rule is simple: project workloads are restricted, but the API itself is privileged because it controls the container engine.
+
+## Owner-only host shell
+
+The `/shell` dashboard page and `/admin/shell/*` API are available only after authentication and the existing `RequireOwner` check. Every whitelisted account is an owner; the first account by registration order is the master account and cannot be removed. Owner accounts cannot remove other owner accounts.
+
+The shell process runs on the MyPaaS host and therefore must be treated as host authority, not as an isolated project terminal. Sessions expire after 30 minutes and stop after 10 minutes of inactivity. Shell input is deliberately excluded from audit metadata because it may contain secrets; session start and stop remain auditable. This feature does not add public SSH, raw TCP forwarding, or a shell inside a project workload.
 
 ## Container-engine socket
 
