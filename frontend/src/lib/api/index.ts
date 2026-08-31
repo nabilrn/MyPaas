@@ -21,7 +21,8 @@ import type {
 	DBStudioRowFilters,
 	DBStudioWriteSession,
 	LogsResponse,
-	CloudflareAnalytics
+	CloudflareAnalytics,
+	ShellSession
 } from '$types';
 
 export interface ProjectHTTPRoute {
@@ -282,6 +283,12 @@ export const api = {
 		updateS3Config: (d: { endpoint: string; bucket: string; region: string; access_key: string; secret_key: string }): Promise<void> =>
 			request('/admin/settings/s3', { method: 'POST', body: JSON.stringify(d) }),
 		triggerBackup: (): Promise<void> => request('/admin/backup', { method: 'POST' }),
-		triggerUpdate: (): Promise<void> => request('/admin/update', { method: 'POST' })
+		triggerUpdate: (): Promise<void> => request('/admin/update', { method: 'POST' }),
+		shell: {
+			startSession: (): Promise<ShellSession> => request('/admin/shell/sessions', { method: 'POST' }),
+			sendInput: (id: string, data: string): Promise<void> =>
+				request(`/admin/shell/sessions/${id}/input`, { method: 'POST', body: JSON.stringify({ data }) }),
+			stopSession: (id: string): Promise<void> => request(`/admin/shell/sessions/${id}`, { method: 'DELETE' })
+		}
 	}
 };

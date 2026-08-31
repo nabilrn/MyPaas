@@ -15,6 +15,7 @@ MyPaaS can:
 - manage primary project routing through Caddy;
 - provide up to four derived additional HTTP routes for Compose projects, targeting declared service ports without publishing extra host ports;
 - expose deployment history, logs, metrics, and lifecycle actions;
+- provide a short-lived owner-only host shell for trusted VM operators;
 - support rollback for compatible container-backed deployments;
 - provide project-scoped persistent storage and owned-resource cleanup;
 - provide PostgreSQL provisioning, DB Studio Lite, backups, restore, and migration tooling;
@@ -80,6 +81,8 @@ Application and build capacity depend on the workload and on the CPU, memory, st
 ## Security and operations
 
 The MyPaaS API has privileged container-engine authority. The current trust model is therefore an owner or small trusted team, not mutually hostile tenants.
+
+Whitelisted accounts are owners. The first account is the master account and cannot be removed; owner accounts cannot remove other owner accounts. The owner-only Shell page exposes a short-lived host shell for trusted VM operators. It is a control-plane operation, not public SSH or generic project TCP/SSH forwarding.
 
 Host sizing, application architecture, provider availability, infrastructure security, and off-host recovery material remain operator responsibilities.
 

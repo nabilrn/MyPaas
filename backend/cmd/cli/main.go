@@ -180,17 +180,15 @@ func runUser(client *apiClient, args []string) error {
 		return nil
 	case "add":
 		fs := flag.NewFlagSet("user add", flag.ContinueOnError)
-		role := fs.String("role", "collaborator", "user role: owner or collaborator")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		if fs.NArg() != 1 {
-			return errors.New("usage: mypaas user add [--role collaborator] <email>")
+			return errors.New("usage: mypaas user add <email>")
 		}
 		body, err := json.Marshal(struct {
 			Email string `json:"email"`
-			Role  string `json:"role"`
-		}{Email: fs.Arg(0), Role: *role})
+		}{Email: fs.Arg(0)})
 		if err != nil {
 			return err
 		}
@@ -519,7 +517,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  mypaas config set token <jwt>")
 	fmt.Fprintln(w, "  mypaas config show")
 	fmt.Fprintln(w, "  mypaas user list")
-	fmt.Fprintln(w, "  mypaas user add [--role collaborator] <email>")
+	fmt.Fprintln(w, "  mypaas user add <email>")
 	fmt.Fprintln(w, "  mypaas user remove <id>")
 	fmt.Fprintln(w, "  mypaas project list")
 	fmt.Fprintln(w, "  mypaas project deploy <name>")

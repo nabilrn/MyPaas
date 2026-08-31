@@ -57,6 +57,20 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getMasterUserID = `-- name: GetMasterUserID :one
+SELECT id
+FROM users
+ORDER BY created_at ASC, id ASC
+LIMIT 1
+`
+
+func (q *Queries) GetMasterUserID(ctx context.Context) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getMasterUserID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
 FROM users

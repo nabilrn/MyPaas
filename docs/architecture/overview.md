@@ -13,7 +13,7 @@
 
 ```mermaid
 flowchart LR
-    Operator["Owner / collaborator"] --> Browser["Browser"]
+    Operator["Trusted owner operators"] --> Browser["Browser"]
     GitHub["GitHub"] --> Webhook["Webhook"]
     Automation["CLI / MCP"] --> API["Go API"]
 
@@ -24,6 +24,7 @@ flowchart LR
     Caddy --> API
 
     API --> DB[("PostgreSQL")]
+    API --> HostShell["Owner-only short-lived host shell"]
     API --> Engine["Docker-compatible engine contract\nPodman default on fresh hosts"]
     API --> CaddyAdmin["Caddy Admin Unix socket"]
     API --> Statd["optional mypaas-statd Unix socket"]
@@ -74,6 +75,8 @@ Caddy has two distinct roles:
 2. data-plane routing and static-file serving for projects.
 
 Project routing includes the primary project hostname and, for eligible Compose projects, up to four additional platform-derived HTTP hostnames. Additional routes never grant access to the Caddy Admin socket.
+
+Whitelisted users are trusted owners. The first account is the non-removable master account. Owners can use the owner-only Shell page to open a short-lived host shell; this is separate from public project routing and does not expose generic SSH/TCP forwarding.
 
 The production Admin API is reachable only over `/run/mypaas/caddy-admin.sock`, shared with the API container through `/run/mypaas`.
 

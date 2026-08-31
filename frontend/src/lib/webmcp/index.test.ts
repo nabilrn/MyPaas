@@ -22,7 +22,7 @@ describe('WebMCP site tools', () => {
 	});
 
 	it('exposes the bounded project operation surface', () => {
-		const names = buildWebMCPTools({ role: 'collaborator' }).map((tool) => tool.name);
+		const names = buildWebMCPTools({ role: 'owner' }).map((tool) => tool.name);
 		expect(names).toEqual(expect.arrayContaining([
 			'list_projects',
 			'get_project',
@@ -36,12 +36,10 @@ describe('WebMCP site tools', () => {
 		for (const forbidden of forbiddenNames) expect(names).not.toContain(forbidden);
 	});
 
-	it('only exposes host, port, container and DB schema tools to owners', () => {
-		const ownerNames = buildWebMCPTools({ role: 'owner' }).map((tool) => tool.name);
-		const collaboratorNames = buildWebMCPTools({ role: 'collaborator' }).map((tool) => tool.name);
+	it('exposes host, port, container and DB schema tools to every owner', () => {
+		const names = buildWebMCPTools({ role: 'owner' }).map((tool) => tool.name);
 		for (const name of ['get_host_stats', 'list_containers', 'list_ports', 'get_database_schema']) {
-			expect(ownerNames).toContain(name);
-			expect(collaboratorNames).not.toContain(name);
+			expect(names).toContain(name);
 		}
 	});
 

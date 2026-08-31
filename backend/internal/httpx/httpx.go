@@ -41,6 +41,10 @@ func Error(w http.ResponseWriter, status int, code, message string, details map[
 
 func DomainError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, errs.ErrCannotRemoveMaster):
+		Error(w, http.StatusBadRequest, "CANNOT_REMOVE_MASTER", "The master account cannot be removed.", nil)
+	case errors.Is(err, errs.ErrCannotRemoveOwner):
+		Error(w, http.StatusBadRequest, "CANNOT_REMOVE_OWNER", "Owner accounts cannot remove one another.", nil)
 	case errors.Is(err, errs.ErrUnauthorized):
 		Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication is required.", nil)
 	case errors.Is(err, errs.ErrForbidden):
@@ -53,6 +57,12 @@ func DomainError(w http.ResponseWriter, err error) {
 		Error(w, http.StatusConflict, "PROJECT_NAME_TAKEN", "Project name is already taken.", nil)
 	case errors.Is(err, errs.ErrUserAlreadyExists):
 		Error(w, http.StatusConflict, "USER_ALREADY_EXISTS", "User is already whitelisted.", nil)
+	case errors.Is(err, errs.ErrShellSessionNotFound):
+		Error(w, http.StatusNotFound, "SHELL_SESSION_NOT_FOUND", "The shell session no longer exists.", nil)
+	case errors.Is(err, errs.ErrShellSessionClosed):
+		Error(w, http.StatusConflict, "SHELL_SESSION_CLOSED", "The shell session is no longer accepting input.", nil)
+	case errors.Is(err, errs.ErrShellInputTooLarge):
+		Error(w, http.StatusRequestEntityTooLarge, "SHELL_INPUT_TOO_LARGE", "Shell input is too large for one request.", nil)
 	case errors.Is(err, errs.ErrPortPoolExhausted):
 		Error(w, http.StatusConflict, "PORT_POOL_EXHAUSTED", "No available internal port remains.", nil)
 	case errors.Is(err, errs.ErrQuotaExceeded):

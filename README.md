@@ -14,6 +14,7 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - manage encrypted environment variables, resource settings, deployment history, logs, metrics, restart, redeploy, and rollback;
 - monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
 - inspect MyPaaS runtime port allocations and manage a narrow set of MyPaaS-owned UFW allow rules from the owner UI;
+- provide an owner-only short-lived host shell for trusted VM operators;
 - route applications through Caddy with derived project hostnames;
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
 - provide project-scoped persistent storage and safe owned-resource cleanup;
@@ -54,6 +55,10 @@ The firewall control is intentionally narrow:
 - SSH `22/tcp` and Caddy `80/tcp` / `443/tcp` are protected;
 - only rules tagged `mypaas-managed` are removable from the UI;
 - arbitrary firewall commands and arbitrary rule editing are not exposed.
+
+## Host shell
+
+The Shell page is available only to whitelisted owners. It opens a short-lived shell on the MyPaaS host for trusted operators; it is not public SSH, TCP forwarding, or a project workload terminal. Session input is not written to audit logs, while session start and stop actions are auditable.
 
 ## Compose additional HTTP routes
 
