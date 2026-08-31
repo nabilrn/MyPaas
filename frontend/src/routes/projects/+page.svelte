@@ -67,17 +67,6 @@
 		if (project.deployMode !== 'static' && project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
 		return project.status;
 	};
-	$: runningCount = projects.filter((project) => getDerivedStatus(project) === 'running').length;
-	$: buildingCount = projects.filter((project) => getDerivedStatus(project) === 'building').length;
-	$: issueCount = projects.filter((project) => getDerivedStatus(project) === 'crashed').length;
-	$: stoppedCount = projects.filter((project) => getDerivedStatus(project) === 'stopped').length;
-	$: pendingCount = projects.filter((project) => getDerivedStatus(project) === 'pending').length;
-	$: dockerfileCount = projects.filter((project) => project.deployMode === 'dockerfile').length;
-	$: composeCount = projects.filter((project) => project.deployMode === 'compose').length;
-	$: staticCount = projects.filter((project) => project.deployMode === 'static').length;
-	$: imageCount = projects.filter((project) => project.deployMode === 'image').length;
-	$: syncLabel = error ? 'Updates delayed' : loading ? 'Connecting' : 'Live';
-	$: syncDotClass = error ? 'bg-amber-500' : loading ? 'bg-gray-400 animate-pulse' : 'bg-emerald-500 dark:bg-emerald-400';
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) currentPage = maxPage;
 	$: pageStart = currentPage * pageSize;
@@ -320,18 +309,11 @@
 </svelte:head>
 
 <div class="page-shell py-6">
-	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
-		<p class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
-			<span class={`status-dot ${syncDotClass}`}></span>
-			<span>{syncLabel}</span>
-			<span class="text-gray-400 dark:text-gray-500">· {projects.length} project{projects.length === 1 ? '' : 's'}</span>
-		</p>
-		<div class="flex items-center gap-2">
-			<ActionLink href="/projects/new" variant="primary">
-				<Plus slot="icon" class="h-4 w-4" />
-				New project
-			</ActionLink>
-		</div>
+	<div class="mb-5 flex justify-end px-5">
+		<ActionLink href="/projects/new" variant="primary">
+			<Plus slot="icon" class="h-4 w-4" />
+			New project
+		</ActionLink>
 	</div>
 
 	{#if hostRamWarning || cpuAllocationWarning || storageWarning}
@@ -349,7 +331,7 @@
 		</div>
 	{/if}
 
-	<SectionPanel title="Host resources" description="Live host utilization when the telemetry service is available. Allocation remains visible as capacity context." contentClass="p-0" className="mb-5">
+	<SectionPanel title="Host resources" description="CPU, memory, storage, and network." contentClass="p-0" className="mb-5">
 		<svelte:fragment slot="actions">
 			<div class="flex items-center gap-3">
 				<a
@@ -621,32 +603,4 @@
 			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleProjects.length} {hasNext} {loading} label="Projects" />
 		</svelte:fragment>
 	</TableShell>
-
-	<section class="surface mt-5 overflow-hidden">
-		<div class="panel-header">
-			<h2 class="panel-title">Fleet</h2>
-			<p class="panel-description">Secondary fleet state and runtime mix across connected projects.</p>
-		</div>
-		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 md:grid-cols-2 md:divide-x md:divide-y-0">
-			<div class="p-4">
-				<p class="metric-label">State</p>
-				<div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
-					<span class="inline-flex items-center gap-2"><span class="status-dot bg-emerald-500"></span>{runningCount} running</span>
-					<span class="inline-flex items-center gap-2"><span class="status-dot bg-amber-500"></span>{buildingCount} building</span>
-					<span class="inline-flex items-center gap-2"><span class="status-dot bg-red-500"></span>{issueCount} crashed</span>
-					<span class="inline-flex items-center gap-2"><span class="status-dot bg-gray-400 dark:bg-gray-500"></span>{stoppedCount} stopped</span>
-					{#if pendingCount > 0}<span class="inline-flex items-center gap-2"><span class="status-dot bg-sky-500"></span>{pendingCount} pending</span>{/if}
-				</div>
-			</div>
-			<div class="p-4">
-				<p class="metric-label">Runtime mix</p>
-				<div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-700 dark:text-gray-300">
-					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{composeCount}</strong> Compose</span>
-					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{dockerfileCount}</strong> Dockerfile</span>
-					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{staticCount}</strong> Static</span>
-					<span><strong class="metric-value font-semibold text-gray-950 dark:text-white">{imageCount}</strong> Image</span>
-				</div>
-			</div>
-		</div>
-	</section>
 </div>
