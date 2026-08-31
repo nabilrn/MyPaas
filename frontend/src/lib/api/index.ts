@@ -1,3 +1,4 @@
+import { beginInitialRouteRequestLoading } from '$stores/main-loading';
 import { validateProjectCreateInput, validateProjectUpdateInput } from '$lib/validation/project';
 import type {
 	Project,
@@ -106,33 +107,38 @@ class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
-	const res = await fetch(`/api${path}`, {
-		headers: { 'Content-Type': 'application/json' },
-		credentials: 'include',
-		...init
-	});
+	const finishInitialLoading = beginInitialRouteRequestLoading();
+	try {
+		const res = await fetch(`/api${path}`, {
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			...init
+		});
 
-	if (res.status === 204) {
-		return undefined as T;
-	}
-
-	const body = await res.json().catch(() => ({}));
-
-	if (!res.ok) {
-		if (res.status === 401 && retryOnUnauthorized && path !== '/auth/refresh') {
-			const refreshed = await fetch('/api/auth/refresh', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include'
-			});
-			if (refreshed.ok) {
-				return request<T>(path, init, false);
-			}
+		if (res.status === 204) {
+			return undefined as T;
 		}
-		throw new ApiError(body.error?.code ?? 'UNKNOWN', body.error?.message ?? 'Request failed');
-	}
 
-	return (body as { data: T }).data;
+		const body = await res.json().catch(() => ({}));
+
+		if (!res.ok) {
+			if (res.status === 401 && retryOnUnauthorized && path !== '/auth/refresh') {
+				const refreshed = await fetch('/api/auth/refresh', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'include'
+				});
+				if (refreshed.ok) {
+					return request<T>(path, init, false);
+				}
+			}
+			throw new ApiError(body.error?.code ?? 'UNKNOWN', body.error?.message ?? 'Request failed');
+		}
+
+		return (body as { data: T }).data;
+	} finally {
+		finishInitialLoading?.();
+	}
 }
 
 function keepDetectedTreeRootRelative(data: unknown, result: DeployModeDetection): DeployModeDetection {
