@@ -170,14 +170,14 @@
 
 	/* ── Data tables ─────────────────────────────────────────────
 	 * One table grammar for the whole product: centered headers,
-	 * subtle column separators, 14px primary values, compact rows. */
+	 * a quiet cell grid, 14px primary values, and compact rows. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
 		@apply min-w-full text-sm;
 	}
 	.data-table thead th {
-		border-bottom: 1px solid var(--app-border);
+		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 72%, transparent);
 		background: color-mix(in oklch, var(--app-surface-muted) 60%, var(--app-surface));
 		color: var(--app-subtle);
 		text-align: center;
@@ -187,9 +187,6 @@
 	.data-table thead th.text-center,
 	.data-table thead th.text-left {
 		text-align: center;
-	}
-	.data-table tbody {
-		@apply divide-y divide-gray-100 dark:divide-neutral-800;
 	}
 	.data-table tbody td {
 		color: var(--app-muted);
@@ -202,10 +199,13 @@
 		background: color-mix(in oklch, var(--app-surface-muted) 55%, var(--app-surface));
 	}
 
-	/* Every product table uses the same quiet vertical column rhythm. */
+	/* Quiet grid lines make operational tables scan like DB Studio without looking boxed-in. */
 	table > thead > tr > th:not(:last-child),
 	table > tbody > tr > td:not(:last-child) {
-		border-right: 1px solid var(--app-border);
+		border-right: 1px solid color-mix(in oklch, var(--app-border) 55%, transparent);
+	}
+	table > tbody > tr:not(:last-child) > td {
+		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 50%, transparent);
 	}
 	table > thead > tr > th {
 		text-align: center;
