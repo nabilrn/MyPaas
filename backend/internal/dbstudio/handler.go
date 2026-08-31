@@ -28,6 +28,15 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("probe")), "false") {
+		out, err := h.service.ConfigurationStatus(r.Context(), projectID)
+		if err != nil {
+			httpx.DomainError(w, err)
+			return
+		}
+		httpx.JSON(w, http.StatusOK, out)
+		return
+	}
 	out, err := h.service.Status(r.Context(), projectID, userID)
 	if err != nil {
 		httpx.DomainError(w, err)
