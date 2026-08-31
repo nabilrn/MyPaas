@@ -47,7 +47,9 @@
 			<Navbar {user} />
 			<AppHeader {user} />
 			<main class="relative min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)]" aria-busy={showMainLoader}>
-				<slot />
+				<div class:invisible={showMainLoader} class:pointer-events-none={showMainLoader} aria-hidden={showMainLoader}>
+					<slot />
+				</div>
 				{#if showMainLoader}<MainContentLoader />{/if}
 			</main>
 		</div>
