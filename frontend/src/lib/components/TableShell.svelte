@@ -2,7 +2,6 @@
 	import { createEventDispatcher } from 'svelte';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorState from './ErrorState.svelte';
-	import LoadingIndicator from './LoadingIndicator.svelte';
 
 	export let title = '';
 	export let description = '';
@@ -11,14 +10,15 @@
 	export let empty = false;
 	export let emptyTitle = 'No rows yet.';
 	export let emptyDescription = '';
+	// Retained as a compatibility prop for existing callers. TableShell no longer
+	// owns initial loading visuals; authenticated main content owns that state.
 	export let loadingRows = 3;
 	export let contentClass = 'overflow-x-auto';
 
 	const dispatch = createEventDispatcher<{ retry: void }>();
-	$: loadingMinHeight = Math.max(8, Math.min(18, loadingRows * 3));
 </script>
 
-<section class="surface min-w-0 overflow-hidden">
+<section class="surface min-w-0 overflow-hidden" aria-busy={loading}>
 	{#if title || description || $$slots.actions}
 		<div class="panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 			<div class="min-w-0">
@@ -35,13 +35,9 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<div class="flex items-center justify-center px-4 py-6" style={`min-height:${loadingMinHeight}rem`} aria-busy="true">
-			<LoadingIndicator label={`Loading ${title || 'table'}`} />
-		</div>
-	{:else if error}
+	{#if error && !loading}
 		<ErrorState message={error} on:retry={() => dispatch('retry')} />
-	{:else if empty}
+	{:else if empty && !loading}
 		<EmptyState title={emptyTitle} description={emptyDescription} compact />
 	{:else}
 		<slot name="notice" />
