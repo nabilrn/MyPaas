@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Settings, Sun, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
+	import ActionLink from './ActionLink.svelte';
 	import IconButton from './IconButton.svelte';
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
@@ -70,16 +71,16 @@
 		return { root: 'Projects', rootHref: '/projects', middle: null, current: '' };
 	}
 
-	function isActive(href: string) {
-		if (href === '/projects') return pathname === '/projects' || pathname.startsWith('/projects/');
-		return pathname === href || pathname.startsWith(`${href}/`);
+	function isActive(href: string, currentPath = pathname) {
+		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
+		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
 
-	function navItemClass(href: string) {
+	function navItemClass(href: string, currentPath = pathname) {
 		const base = 'flex min-h-10 items-center gap-3 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950';
 		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
 		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
-		return `${base} ${isActive(href) ? active : idle}`;
+		return `${base} ${isActive(href, currentPath) ? active : idle}`;
 	}
 
 	function initial() {
@@ -144,6 +145,13 @@
 		</div>
 
 		<div class="flex shrink-0 items-center gap-1">
+			{#if pathname === '/projects'}
+				<ActionLink href="/projects/new" variant="primary" size="xs" className="mr-1 hidden sm:inline-flex">
+					<Plus slot="icon" class="h-3.5 w-3.5" />
+					New project
+				</ActionLink>
+			{/if}
+
 			<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
 				<IconButton label="Notifications" variant="ghost" on:click={toggleNotifications}>
 					<Bell class="h-[18px] w-[18px]" aria-hidden="true" />
@@ -207,7 +215,7 @@
 		<div class="border-t border-gray-100 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950 lg:hidden">
 			<nav class="grid gap-1" aria-label="Primary navigation">
 				{#each visibleNavItems as item}
-					<a href={item.href} class={navItemClass(item.href)} aria-current={isActive(item.href) ? 'page' : undefined} on:click={() => (mobileMenuOpen = false)}>
+					<a href={item.href} class={navItemClass(item.href, pathname)} aria-current={isActive(item.href, pathname) ? 'page' : undefined} on:click={() => (mobileMenuOpen = false)}>
 						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
 						{item.label}
 					</a>
