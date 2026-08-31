@@ -4,8 +4,9 @@ import { derived, get, writable } from 'svelte/store';
 
 const activeLoads = writable(0);
 let activeRoute = '';
-let settledRoute = '';
-let pendingInitialRequests = 0;
+let activeGeneration = 0;
+let settledGeneration = -1;
+const pendingByGeneration = new Map<number, number>();
 
 export const mainContentLoading = derived(activeLoads, (count) => count > 0);
 
@@ -23,9 +24,11 @@ export function beginMainContentLoading() {
 /**
  * Gate API requests that belong to the first resource load for an authenticated route.
  *
- * A route stays unsettled while its initial parallel/sequential request chain is active.
- * Release is deferred one task so page state can commit before the main-content loader
- * disappears. Later polling, refreshes, and mutations on the settled route stay non-blocking.
+ * Every route/query transition receives its own generation. Requests from a previous
+ * generation can finish later without changing the pending count or settled state of
+ * the current page. Release is deferred one task so page state commits before the
+ * main-content loader disappears. Polling, refreshes, and mutations on a settled page
+ * remain non-blocking.
  */
 export function beginInitialRouteRequestLoading() {
 	if (!browser) return null;
@@ -37,23 +40,28 @@ export function beginInitialRouteRequestLoading() {
 
 	if (routeKey !== activeRoute) {
 		activeRoute = routeKey;
-		settledRoute = '';
-		pendingInitialRequests = 0;
+		activeGeneration += 1;
+		settledGeneration = -1;
+		pendingByGeneration.set(activeGeneration, 0);
 	}
-	if (settledRoute === routeKey) return null;
 
-	pendingInitialRequests += 1;
+	const generation = activeGeneration;
+	if (settledGeneration === generation) return null;
+
+	pendingByGeneration.set(generation, (pendingByGeneration.get(generation) ?? 0) + 1);
 	const finishMainLoading = beginMainContentLoading();
 	let finished = false;
 
 	return () => {
 		if (finished) return;
 		finished = true;
-		pendingInitialRequests = Math.max(0, pendingInitialRequests - 1);
+		pendingByGeneration.set(generation, Math.max(0, (pendingByGeneration.get(generation) ?? 1) - 1));
 
 		window.setTimeout(() => {
 			finishMainLoading();
-			if (activeRoute === routeKey && pendingInitialRequests === 0) settledRoute = routeKey;
+			const pending = pendingByGeneration.get(generation) ?? 0;
+			if (generation === activeGeneration && pending === 0) settledGeneration = generation;
+			if (generation !== activeGeneration && pending === 0) pendingByGeneration.delete(generation);
 		}, 0);
 	};
 }
