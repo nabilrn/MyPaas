@@ -18,7 +18,7 @@
 	export let tone: 'neutral' | 'success' | 'info' | 'warning' | 'danger' = 'neutral';
 
 	const chartWidth = 240;
-	const chartHeight = 82;
+	const chartHeight = 112;
 	const curveTension = 0.72;
 	let inferredResource: Resource = 'neutral';
 	const resourceClasses = {
@@ -144,14 +144,14 @@
 					<span class={`h-1.5 w-1.5 rounded-full ${resourceClass.dot}`}></span>
 					<p class="metric-label truncate">{label}</p>
 				</div>
-				<p class="metric-value mt-1 truncate text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{value}</p>
+				<p class="metric-value mt-1 truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">{value}</p>
 			</div>
 			{#if effectiveIndicator}
-				<p class="metric-value shrink-0 text-xs font-semibold text-gray-500 dark:text-gray-400">{effectiveIndicator}</p>
+				<p class="metric-value shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400">{effectiveIndicator}</p>
 			{/if}
 		</div>
 
-		<div class="relative mt-3 h-[5.75rem] overflow-hidden rounded-md border border-gray-200/90 bg-white dark:border-gray-800/90 dark:bg-neutral-950">
+		<div class="relative mt-2 h-32 overflow-hidden rounded-md border border-gray-200/70 bg-white dark:border-gray-800/70 dark:bg-neutral-950">
 			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
 				<g class="stroke-gray-100/45 dark:stroke-neutral-800/35" stroke-width="0.7">
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
