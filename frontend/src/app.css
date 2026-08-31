@@ -169,8 +169,8 @@
 	}
 
 	/* ── Data tables ─────────────────────────────────────────────
-	 * One table grammar for the whole product: 13px medium headers,
-	 * 14px primary values, compact 52–60px rows. */
+	 * One table grammar for the whole product: centered headers,
+	 * subtle column separators, 14px primary values, compact rows. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
@@ -180,13 +180,12 @@
 		border-bottom: 1px solid var(--app-border);
 		background: color-mix(in oklch, var(--app-surface-muted) 60%, var(--app-surface));
 		color: var(--app-subtle);
-		@apply px-4 py-2 text-left text-[0.8125rem] font-medium;
+		text-align: center;
+		@apply px-4 py-2 text-[0.8125rem] font-medium;
 	}
-	/* Explicit table alignment utilities must win over the default header alignment. */
-	.data-table thead th.text-right {
-		text-align: right;
-	}
-	.data-table thead th.text-center {
+	.data-table thead th.text-right,
+	.data-table thead th.text-center,
+	.data-table thead th.text-left {
 		text-align: center;
 	}
 	.data-table tbody {
@@ -201,6 +200,15 @@
 	}
 	.data-table tbody tr:hover {
 		background: color-mix(in oklch, var(--app-surface-muted) 55%, var(--app-surface));
+	}
+
+	/* Every product table uses the same quiet vertical column rhythm. */
+	table > thead > tr > th:not(:last-child),
+	table > tbody > tr > td:not(:last-child) {
+		border-right: 1px solid var(--app-border);
+	}
+	table > thead > tr > th {
+		text-align: center;
 	}
 
 	/* ── Chips ───────────────────────────────────────────────────
