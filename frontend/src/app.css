@@ -139,11 +139,11 @@
 	}
 	.field-label {
 		color: var(--app-muted);
-		@apply mb-1 block text-xs font-medium;
+		@apply mb-1 block text-[0.8125rem] font-medium;
 	}
 	.field-hint {
 		color: var(--app-subtle);
-		@apply mt-1 text-xs;
+		@apply mt-1 text-[0.8125rem];
 	}
 	.app-focus {
 		outline: none;
@@ -165,11 +165,11 @@
 	}
 	.panel-description {
 		color: var(--app-subtle);
-		@apply mt-0.5 max-w-2xl text-xs;
+		@apply mt-0.5 max-w-2xl text-[0.8125rem];
 	}
 
 	/* ── Data tables ─────────────────────────────────────────────
-	 * One table grammar for the whole product: 12px medium headers,
+	 * One table grammar for the whole product: 13px medium headers,
 	 * 14px primary values, compact 52–60px rows. */
 	.data-table {
 		border-collapse: separate;
@@ -180,7 +180,7 @@
 		border-bottom: 1px solid var(--app-border);
 		background: color-mix(in oklch, var(--app-surface-muted) 60%, var(--app-surface));
 		color: var(--app-subtle);
-		@apply px-4 py-2 text-left text-xs font-medium;
+		@apply px-4 py-2 text-left text-[0.8125rem] font-medium;
 	}
 	/* Explicit table alignment utilities must win over the default header alignment. */
 	.data-table thead th.text-right {
@@ -210,14 +210,14 @@
 		border: 1px solid var(--app-border);
 		background: var(--app-surface-muted);
 		color: var(--app-muted);
-		@apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium leading-5;
+		@apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[0.8125rem] font-medium leading-5;
 	}
 	.status-dot {
 		@apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
 	}
 
 	/* ── Inline alerts ───────────────────────────────────────────
-	 * Semantic banners; an alert tone is not a new elevation level. */
+	 * Semantic banners; an alert tone is not a new card/elevation type. */
 	.alert {
 		@apply flex gap-3 rounded-md border px-4 py-3 text-sm;
 	}
@@ -242,17 +242,17 @@
 		border: 1px solid var(--app-border);
 		background: var(--app-surface-muted);
 		color: var(--app-muted);
-		@apply block break-all rounded-md px-3 py-2 font-mono text-xs;
+		@apply block break-all rounded-md px-3 py-2 font-mono text-[0.8125rem];
 	}
 	/* Dark terminal surface — allowed because the content is terminal output. */
 	.console-surface {
-		@apply overflow-hidden rounded-md border border-gray-800 bg-gray-950 font-mono text-xs leading-5 text-gray-100;
+		@apply overflow-hidden rounded-md border border-gray-800 bg-gray-950 font-mono text-[0.8125rem] leading-5 text-gray-100;
 	}
 
 	/* ── Metrics ───────────────────────────────────────────────── */
 	.metric-label {
 		color: var(--app-subtle);
-		@apply text-xs font-medium;
+		@apply text-[0.8125rem] font-medium;
 	}
 	.metric-value {
 		font-variant-numeric: tabular-nums;
