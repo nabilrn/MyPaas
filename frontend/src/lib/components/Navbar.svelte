@@ -33,8 +33,9 @@
 		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
 
-	function navItemClass(href: string) {
-		const base = `group relative flex min-h-9 items-center rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${expanded ? 'gap-3 px-3' : 'justify-center px-0'}`;
+	function navItemClass(href: string, isExpanded: boolean) {
+		const layout = isExpanded ? 'justify-start gap-2.5 px-3' : 'justify-center px-0';
+		const base = `group relative flex min-h-9 w-full items-center rounded-md border text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${layout}`;
 		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
 		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
 		return `${base} ${isActive(href) ? active : idle}`;
@@ -76,12 +77,12 @@
 				<a
 					href={item.href}
 					aria-current={isActive(item.href) ? 'page' : undefined}
-					class={navItemClass(item.href)}
+					class={navItemClass(item.href, expanded)}
 					title={expanded ? undefined : item.label}
 					on:click={chooseNavigation}
 				>
 					<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-					{#if expanded}<span class="whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
+					{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
 				</a>
 			{/each}
 		</div>
@@ -94,12 +95,12 @@
 					<a
 						href={item.href}
 						aria-current={isActive(item.href) ? 'page' : undefined}
-						class={navItemClass(item.href)}
+						class={navItemClass(item.href, expanded)}
 						title={expanded ? undefined : item.label}
 						on:click={chooseNavigation}
 					>
 						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-						{#if expanded}<span class="whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
+						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
 					</a>
 				{/each}
 			</div>
