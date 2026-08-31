@@ -2,8 +2,48 @@
 	import { ArrowLeft, Workflow } from '@lucide/svelte';
 	import { page } from '$app/stores';
 
+	let designCanvas: HTMLDivElement | null = null;
+
 	$: base = `/projects/${$page.params.id}/database`;
 	$: schemaActive = $page.url.pathname.startsWith(`${base}/schema`);
+
+	function graphScale(viewport: Element) {
+		const layer = viewport.querySelector<HTMLElement>('[style*="transform:scale"]');
+		const match = layer?.style.transform.match(/scale\(([-\d.]+)\)/);
+		return match ? Number.parseFloat(match[1]) : 1;
+	}
+
+	function handleDesignWheel(event: WheelEvent) {
+		if (!designCanvas || !(event.target instanceof Element)) return;
+		if (event.target.closest('input, select, textarea, button, a, summary')) return;
+
+		const viewport = event.target.closest('.overflow-auto');
+		if (!(viewport instanceof HTMLElement) || !designCanvas.contains(viewport)) return;
+
+		const mouseWheel = event.deltaMode !== 0 || Math.abs(event.deltaY) >= 48;
+		const zoomGesture = event.ctrlKey || event.metaKey || mouseWheel;
+		if (!zoomGesture || event.deltaY === 0) return;
+
+		const zoomButton = designCanvas.querySelector<HTMLButtonElement>(`button[aria-label="${event.deltaY > 0 ? 'Zoom out' : 'Zoom in'}"]`);
+		if (!zoomButton || zoomButton.disabled) return;
+
+		event.preventDefault();
+		const beforeScale = graphScale(viewport);
+		const beforeScrollLeft = viewport.scrollLeft;
+		const beforeScrollTop = viewport.scrollTop;
+		const rect = viewport.getBoundingClientRect();
+		const pointerX = event.clientX - rect.left;
+		const pointerY = event.clientY - rect.top;
+
+		zoomButton.click();
+		requestAnimationFrame(() => {
+			const afterScale = graphScale(viewport);
+			if (!Number.isFinite(beforeScale) || !Number.isFinite(afterScale) || beforeScale <= 0 || afterScale <= 0) return;
+			const ratio = afterScale / beforeScale;
+			viewport.scrollLeft = Math.max(0, (beforeScrollLeft + pointerX) * ratio - pointerX);
+			viewport.scrollTop = Math.max(0, (beforeScrollTop + pointerY) * ratio - pointerY);
+		});
+	}
 </script>
 
 {#if schemaActive}
@@ -20,7 +60,7 @@
 				</div>
 			</div>
 		</header>
-		<div class="database-design-canvas min-h-0 flex-1 overflow-hidden">
+		<div bind:this={designCanvas} class="database-design-canvas min-h-0 flex-1 overflow-hidden" on:wheel|nonpassive={handleDesignWheel}>
 			<slot />
 		</div>
 	</section>
