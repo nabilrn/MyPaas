@@ -28,17 +28,17 @@
 	$: visibleWorkspaceItems = workspaceItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 	$: visibleAdministrationItems = administrationItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
 
-	function isActive(href: string, currentPath = pathname) {
+	function isActive(href: string, currentPath: string) {
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
 		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
 
-	function navItemClass(href: string, isExpanded: boolean) {
+	function navItemClass(href: string, isExpanded: boolean, currentPath: string) {
 		const layout = isExpanded ? 'justify-start gap-2.5 px-3' : 'justify-center px-0';
 		const base = `group relative flex min-h-9 w-full items-center rounded-md border text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${layout}`;
 		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
 		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
-		return `${base} ${isActive(href) ? active : idle}`;
+		return `${base} ${isActive(href, currentPath) ? active : idle}`;
 	}
 
 	function handleFocusOut(event: FocusEvent) {
@@ -76,8 +76,8 @@
 			{#each visibleWorkspaceItems as item}
 				<a
 					href={item.href}
-					aria-current={isActive(item.href) ? 'page' : undefined}
-					class={navItemClass(item.href, expanded)}
+					aria-current={isActive(item.href, pathname) ? 'page' : undefined}
+					class={navItemClass(item.href, expanded, pathname)}
 					title={expanded ? undefined : item.label}
 					on:click={chooseNavigation}
 				>
@@ -94,8 +94,8 @@
 				{#each visibleAdministrationItems as item}
 					<a
 						href={item.href}
-						aria-current={isActive(item.href) ? 'page' : undefined}
-						class={navItemClass(item.href, expanded)}
+						aria-current={isActive(item.href, pathname) ? 'page' : undefined}
+						class={navItemClass(item.href, expanded, pathname)}
 						title={expanded ? undefined : item.label}
 						on:click={chooseNavigation}
 					>
