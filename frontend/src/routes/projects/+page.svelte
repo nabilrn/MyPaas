@@ -8,6 +8,7 @@
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import Pagination from '$components/Pagination.svelte';
+	import ProjectDatabaseShortcut from '$components/ProjectDatabaseShortcut.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
@@ -398,7 +399,7 @@
 
 	<TableShell
 		title="Inventory"
-		description="Runtime shape, current service sample, and the next relevant action for each project."
+		description="Runtime shape, database access, current service sample, and the next relevant action for each project."
 		{loading}
 		loadingRows={3}
 		error={error && projects.length === 0 ? error : ''}
@@ -442,15 +443,16 @@
 
 		<table class="data-table hidden table-fixed xl:table">
 			<colgroup>
-				<col class="w-[17%]" />
-				<col class="w-[9%]" />
-				<col class="w-[20%]" />
-				<col class="w-[8%]" />
-				<col class="w-[11%]" />
+				<col class="w-[16%]" />
+				<col class="w-[7%]" />
+				<col class="w-[18%]" />
+				<col class="w-[7%]" />
 				<col class="w-[10%]" />
+				<col class="w-[10%]" />
+				<col class="w-[9%]" />
 				<col class="w-[7%]" />
-				<col class="w-[7%]" />
-				<col class="w-[11%]" />
+				<col class="w-[6%]" />
+				<col class="w-[10%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -459,29 +461,30 @@
 					<th>Repository</th>
 					<th>Branch</th>
 					<th>Runtime</th>
+					<th>Database</th>
 					<th>Usage</th>
 					<th>Uptime</th>
 					<th>Updated</th>
-					<th class="text-right">Action</th>
+					<th>Action</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
 					{@const derivedStatus = getDerivedStatus(project)}
-					<tr>
+					<tr class="h-[3.75rem]">
 						<td>
 							<div class="min-w-0">
-								<a href="/projects/{project.id}" class="inline-flex max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
+								<a href="/projects/{project.id}" class="flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
 									<span class="truncate">{project.name}</span>
 								</a>
-								<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
+								<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 flex w-fit max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
 									<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
 									<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
 								</a>
 							</div>
 						</td>
-						<td class="whitespace-nowrap"><ProjectStatus status={derivedStatus} /></td>
+						<td class="whitespace-nowrap text-center"><ProjectStatus status={derivedStatus} /></td>
 						<td>
 							{#if source.href}
 								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
@@ -495,7 +498,7 @@
 								</span>
 							{/if}
 						</td>
-						<td class="whitespace-nowrap">
+						<td class="whitespace-nowrap text-center">
 							{#if project.sourceType === 'git' && project.branch}
 								<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}>
 									<GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -511,7 +514,8 @@
 								<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
 							</div>
 						</td>
-						<td class="metric-value whitespace-nowrap">
+						<td class="text-center"><ProjectDatabaseShortcut projectId={project.id} /></td>
+						<td class="metric-value whitespace-nowrap text-right">
 							{#if project.id in projectMemory}
 								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
 							{:else if uptimeLoadingIds.has(project.id)}
@@ -520,13 +524,13 @@
 								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
 							{/if}
 						</td>
-						<td class="metric-value whitespace-nowrap text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
-						<td class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
-						<td class="whitespace-nowrap text-right">
+						<td class="metric-value whitespace-nowrap text-right text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
+						<td class="whitespace-nowrap text-center text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
+						<td class="whitespace-nowrap text-center">
 							<ActionButton
 								variant={projectPrimaryVariant(project)}
 								size="xs"
-								className="ml-auto min-w-[5.75rem]"
+								className="mx-auto min-w-[5.75rem]"
 								on:click={() => handlePrimaryProjectAction(project)}
 								loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
 								loadingLabel={projectPrimaryLabel(project)}
