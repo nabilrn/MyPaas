@@ -44,6 +44,21 @@ func (s *Service) Status(ctx context.Context, projectID, userID uuid.UUID) (Stat
 	return Status{Configured: true, Connected: true, Message: "Connected", Connection: &conn, WriteAccess: session}, nil
 }
 
+// ConfigurationStatus resolves whether DB Studio has a supported database target
+// without opening a database connection. This is intended for lightweight UI
+// inventory surfaces where a live connection probe would be unnecessarily costly.
+func (s *Service) ConfigurationStatus(ctx context.Context, projectID uuid.UUID) (Status, error) {
+	conn, err := s.resolve(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, errs.ErrValidation) {
+			message := trimDomainPrefix(err)
+			return Status{Configured: !strings.Contains(message, "no supported database"), Message: message}, nil
+		}
+		return Status{}, err
+	}
+	return Status{Configured: true, Connected: false, Message: "Configured", Connection: &conn}, nil
+}
+
 func (s *Service) Schemas(ctx context.Context, projectID uuid.UUID) ([]Schema, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) ([]Schema, error) {
 		return handle.adapter.Schemas(ctx, handle.conn)
