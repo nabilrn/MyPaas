@@ -21,6 +21,7 @@
 	let unregisterWebMCP: (() => void) | null = null;
 
 	$: isPublic = $page.url.pathname === '/' || $page.url.pathname === '/login' || $page.url.pathname.startsWith('/docs');
+	$: createProjectWorkspace = $page.url.pathname === '/projects/new';
 	$: showMainLoader = Boolean($navigating) || $mainContentLoading;
 	$: if (isPublic && unregisterWebMCP) {
 		unregisterWebMCP();
@@ -62,6 +63,7 @@
 			<AppHeader {user} />
 			<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
 				<div
+					class:create-project-workspace={createProjectWorkspace}
 					class:invisible={showMainLoader}
 					class:pointer-events-none={showMainLoader}
 					class:absolute={showMainLoader}
@@ -93,6 +95,13 @@
 
 	:global(.app-workspace .page-shell > .surface),
 	:global(.app-workspace .page-shell > .workspace-section) {
+		border: 0;
+		border-radius: 0;
+	}
+
+	/* Create Project is a staged workflow: keep internal field spacing but remove the legacy outer card. */
+	:global(.create-project-workspace > .page-shell > div > form.surface) {
+		border: 0;
 		border-radius: 0;
 	}
 </style>
