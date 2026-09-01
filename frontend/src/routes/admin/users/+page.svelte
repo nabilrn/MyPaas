@@ -67,7 +67,7 @@
 	<title>Users · MyPaaS Admin</title>
 </svelte:head>
 
-<div class="page-shell py-6">
+<div class="page-shell">
 	{#if adding}
 		<SectionPanel title="Add owner" description="Whitelist an owner for GitHub OAuth and control-plane access.">
 			<form class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-start" on:submit|preventDefault={handleAdd}>
