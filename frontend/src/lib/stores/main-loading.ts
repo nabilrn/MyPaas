@@ -22,16 +22,16 @@ export function beginMainContentLoading() {
 }
 
 /**
- * Gate API requests that belong to the first resource load for an authenticated route.
+ * Gate GET requests that belong to the first resource load for an authenticated route.
  *
  * Every route/query transition receives its own generation. Requests from a previous
  * generation can finish later without changing the pending count or settled state of
  * the current page. Release is deferred one task so page state commits before the
- * main-content loader disappears. Polling, refreshes, and mutations on a settled page
- * remain non-blocking.
+ * main-content loader disappears. Polling, refreshes, inspections, and mutations stay
+ * non-blocking and use their own local progress states.
  */
-export function beginInitialRouteRequestLoading() {
-	if (!browser) return null;
+export function beginInitialRouteRequestLoading(method = 'GET') {
+	if (!browser || method.toUpperCase() !== 'GET') return null;
 
 	const currentPage = get(page);
 	const pathname = currentPage.url.pathname;
