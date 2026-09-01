@@ -5,8 +5,9 @@ cleanup_advice() {
   echo "" >&2
   echo "=================================================================" >&2
   echo "❌ DEPLOYMENT FAILED!" >&2
-  echo "To clean up the failed deployment and start fresh, please run:" >&2
-  echo "   bash scripts/uninstall-vm.sh" >&2
+  echo "The existing MyPaas installation was not intentionally removed." >&2
+  echo "Review the error above and fix the reported runtime or configuration issue before retrying." >&2
+  echo "Do not run scripts/uninstall-vm.sh unless you intentionally want to remove MyPaas state." >&2
   echo "=================================================================" >&2
 }
 trap cleanup_advice ERR
@@ -20,6 +21,7 @@ API_IMAGE_REPO="${MYPAAS_API_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-api}"
 DASHBOARD_IMAGE_REPO="${MYPAAS_DASHBOARD_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-dashboard}"
 SKIP_IMAGE_PULL="${MYPAAS_SKIP_IMAGE_PULL:-false}"
 SKIP_MIGRATIONS="${MYPAAS_SKIP_MIGRATIONS:-auto}"
+MIGRATION_PIDS_LIMIT="${MIGRATION_PIDS_LIMIT:-256}"
 EXPLICIT_IMAGE_TAG_SET="${MYPAAS_IMAGE_TAG+x}"
 EXPLICIT_IMAGE_TAG="${MYPAAS_IMAGE_TAG:-}"
 EXPLICIT_BUILD_SHA_SET="${MYPAAS_BUILD_SHA+x}"
@@ -122,6 +124,10 @@ if [[ "$SKIP_MIGRATIONS" != "auto" && "$SKIP_MIGRATIONS" != "true" && "$SKIP_MIG
   echo "MYPAAS_SKIP_MIGRATIONS must be auto, true, or false." >&2
   exit 2
 fi
+if [[ ! "$MIGRATION_PIDS_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "MIGRATION_PIDS_LIMIT must be a positive integer." >&2
+  exit 2
+fi
 
 SUDO=""
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -152,6 +158,48 @@ if [[ "$CONTROL_NETWORK" == "$PROJECT_NETWORK" || "$CONTROL_NETWORK" == "$ROUTIN
   echo "CONTROL_NETWORK, PROJECT_NETWORK, and ROUTING_NETWORK must be distinct." >&2
   exit 1
 fi
+
+port_is_listening() {
+  local port="$1"
+  ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .
+}
+
+managed_container_running() {
+  local name="$1"
+  [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' "$name" 2>/dev/null || true)" == "true" ]]
+}
+
+preflight_managed_port() {
+  local port="$1"
+  local container="$2"
+
+  if ! port_is_listening "$port"; then
+    return
+  fi
+  if managed_container_running "$container"; then
+    return
+  fi
+
+  echo "Port $port is already in use while $container is not running in the selected container runtime." >&2
+  echo "This can indicate a stale container proxy or MyPaas state owned by another Docker-compatible engine." >&2
+  echo "Refusing to continue before changing deployment state. Inspect the port owner and container runtime first." >&2
+  exit 1
+}
+
+preflight_control_plane_ports() {
+  if ! command -v ss >/dev/null 2>&1; then
+    echo "Warning: ss is unavailable; skipping control-plane port ownership preflight." >&2
+    return
+  fi
+
+  preflight_managed_port 5432 mypaas-postgres-prod
+  preflight_managed_port 8080 mypaas-api
+  preflight_managed_port 3000 mypaas-dashboard
+  preflight_managed_port 80 mypaas-caddy-prod
+}
+
+preflight_control_plane_ports
+
 for network in "$CONTROL_NETWORK" "$PROJECT_NETWORK" "$ROUTING_NETWORK"; do
   $DOCKER_BIN network inspect "$network" >/dev/null 2>&1 || $DOCKER_BIN network create "$network" >/dev/null
 done
@@ -261,6 +309,7 @@ if should_skip_migrations; then
 else
   echo "Running migrations..."
   $DOCKER_BIN run --rm \
+    --pids-limit "$MIGRATION_PIDS_LIMIT" \
     --network "$CONTROL_NETWORK" \
     -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
     migrate/migrate:latest \
