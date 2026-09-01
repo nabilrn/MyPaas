@@ -32,14 +32,3 @@ export async function loadRuntimeContainers(): Promise<RuntimeContainer[]> {
 	}
 	return body.data?.containers ?? [];
 }
-
-export async function removeRuntimeContainer(id: string): Promise<void> {
-	const response = await fetch(`/api/admin/containers/${encodeURIComponent(id)}`, {
-		method: 'DELETE',
-		credentials: 'include',
-		headers: { Accept: 'application/json' }
-	});
-	if (response.ok) return;
-	const body = (await response.json().catch(() => ({}))) as InventoryEnvelope;
-	throw new Error(body.error?.message || 'Failed to remove container');
-}
