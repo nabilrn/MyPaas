@@ -39,12 +39,12 @@
 	}
 </script>
 
-<section class="surface overflow-visible">
-	<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+	<div class="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
 		<div class="min-w-0">
 			<div class="flex flex-wrap items-center gap-3"><h1 class="truncate text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">{project.name}</h1><StatusBadge status={project.status} pulse /></div>
 			<a href={publicProjectURL} target="_blank" rel="noopener" class="mt-2 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{publicProjectHost}<ExternalLink class="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>
-			<p class="mt-2 max-w-2xl truncate text-xs text-gray-500 dark:text-gray-400" title={projectSummary}>{projectSummary}</p>
+			<p class="mt-2 max-w-2xl truncate text-[13px] text-gray-500 dark:text-gray-400" title={projectSummary}>{projectSummary}</p>
 		</div>
 
 		<div class="flex shrink-0 items-center gap-2">
