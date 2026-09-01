@@ -70,16 +70,13 @@
 
 <svelte:head><title>Audit Logs · MyPaas Admin</title></svelte:head>
 
-<div class="page-shell py-6">
-	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
-		<p class="max-w-3xl text-sm leading-6 text-gray-500 dark:text-gray-400">Authenticated control-plane changes across projects, deployments, environment variables, and admin access.</p>
-		<div class="flex flex-wrap items-center gap-2">
+<div class="page-shell">
+	<TableShell title="Event stream" description="Authenticated control-plane changes across projects, deployments, environment variables, and owner access." {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Authenticated admin and deployment events will appear here after changes are made." on:retry={load}>
+		<svelte:fragment slot="actions">
 			<ActionButton variant="secondary" size="sm" loading={loading} loadingLabel="Refreshing" on:click={load}><RefreshCw slot="icon" class="h-4 w-4" />Refresh</ActionButton>
 			<ActionLink href="/admin/users" variant="secondary" size="sm"><User slot="icon" class="h-4 w-4" />User whitelist</ActionLink>
-		</div>
-	</div>
+		</svelte:fragment>
 
-	<TableShell title="Event stream" description="Review what changed, which resource was touched, and the response returned by the control plane." {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Authenticated admin and deployment events will appear here after changes are made." on:retry={load}>
 		<table class="data-table table-fixed min-w-[50rem]">
 			<colgroup>
 				<col class="w-[28%]" />
