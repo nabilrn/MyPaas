@@ -58,7 +58,7 @@
 
 {#if checked || isPublic}
 	{#if !isPublic && user}
-		<div class="min-h-screen lg:pl-14">
+		<div class="app-shell min-h-screen lg:pl-14">
 			<Navbar {user} />
 			<AppHeader {user} />
 			<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
@@ -86,22 +86,47 @@
 <Toast />
 
 <style>
+	:global(.app-shell),
+	:global(.app-shell > aside),
+	:global(.app-shell > header),
+	:global(.app-workspace) {
+		background: var(--app-surface) !important;
+	}
+
+	:global(.app-shell > aside),
+	:global(.app-shell > header) {
+		border-color: var(--app-border) !important;
+	}
+
 	:global(.app-workspace .page-shell) {
 		width: 100%;
 		max-width: none;
 		margin: 0;
 		padding: 0 !important;
+		background: var(--app-surface);
 	}
 
 	:global(.app-workspace .page-shell > .surface),
 	:global(.app-workspace .page-shell > .workspace-section) {
 		border: 0;
+		border-bottom: 1px solid var(--app-border) !important;
 		border-radius: 0;
+		background: var(--app-surface) !important;
+	}
+
+	:global(.app-workspace .panel-header) {
+		border-color: var(--app-border) !important;
+		background: var(--app-surface) !important;
+	}
+
+	:global(.app-workspace .workspace-section article) {
+		background: var(--app-surface) !important;
 	}
 
 	/* Create Project is a staged workflow: keep internal field spacing but remove the legacy outer card. */
 	:global(.create-project-workspace > .page-shell > div > form.surface) {
 		border: 0;
 		border-radius: 0;
+		background: var(--app-surface) !important;
 	}
 </style>
