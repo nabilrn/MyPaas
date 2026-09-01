@@ -193,7 +193,7 @@
 	}
 </script>
 
-<div class={`page-shell ${databaseWorkspace ? 'py-3' : 'py-5'}`}>
+<div class="page-shell">
 	{#if !loading && (error || !project)}
 		<div class="surface overflow-hidden">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
@@ -211,8 +211,6 @@
 			/>
 		{/if}
 
-		<div class={databaseWorkspace ? 'py-0' : 'py-5'}>
-			<slot />
-		</div>
+		<slot />
 	{/if}
 </div>
