@@ -5,6 +5,8 @@ REPO_URL="${MYPAAS_REPO_URL:-https://github.com/nabilrn/MyPaas.git}"
 REF="${MYPAAS_REF:-main}"
 INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
 INSTALL_WIZARD="${INSTALL_WIZARD:-true}"
+EXPLICIT_USE_PODMAN_SET="${USE_PODMAN+x}"
+USE_PODMAN="${USE_PODMAN:-true}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -37,6 +39,7 @@ usage() {
     '  MYPAAS_REF                    Branch or tag to install (default: main)' \
     '  MYPAAS_INSTALL_DIR            Checkout directory (default: $HOME/MyPaas)' \
     '  INSTALL_WIZARD                Start browser setup wizard (default: true)' \
+    '  USE_PODMAN                    Fresh-install runtime choice (default: true; existing installs preserve their detected engine)' \
     '  AUTO_UPDATE_ENABLED           Enable systemd self-updates (default: false)' \
     '  AUTO_UPDATE_INTERVAL_MINUTES  Update check interval (default: 30)' \
     '  AUTO_UPDATE_REF               Ref watched by the updater (default: main)' \
@@ -53,6 +56,61 @@ ensure_git() {
   log "Installing Git"
   run_root apt-get update
   run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
+}
+
+socket_has_mypaas_containers() {
+  local socket="$1"
+  [[ -S "$socket" ]] || return 1
+  DOCKER_HOST="unix://$socket" docker ps -a --format '{{.Names}}' 2>/dev/null \
+    | grep -Eq '^mypaas-(postgres-prod|api|dashboard|caddy-prod|cloudflared)$'
+}
+
+detect_existing_runtime() {
+  [[ -d "$INSTALL_DIR/.git" && -f "$INSTALL_DIR/.env" ]] || return
+  command_exists docker || return
+
+  local docker_socket="/var/run/docker.sock"
+  local podman_socket="/run/podman/podman.sock"
+  local docker_socket_target=""
+  local docker_has_state=false
+  local podman_has_state=false
+  local detected_use_podman=""
+
+  if [[ -e "$docker_socket" || -L "$docker_socket" ]]; then
+    docker_socket_target="$(readlink -f "$docker_socket" 2>/dev/null || true)"
+  fi
+
+  if [[ -S "$docker_socket" && "$docker_socket_target" != "$podman_socket" ]] \
+    && socket_has_mypaas_containers "$docker_socket"; then
+    docker_has_state=true
+  fi
+  if socket_has_mypaas_containers "$podman_socket"; then
+    podman_has_state=true
+  fi
+
+  if [[ "$docker_has_state" == "true" && "$podman_has_state" == "true" ]]; then
+    die "MyPaas state exists in both Docker Engine and Podman; refusing a split-runtime update. Keep the current installation on one engine or migrate to a fresh VM."
+  fi
+
+  if [[ "$docker_has_state" == "true" ]]; then
+    detected_use_podman=false
+  elif [[ "$podman_has_state" == "true" ]]; then
+    detected_use_podman=true
+  else
+    return
+  fi
+
+  if [[ -n "$EXPLICIT_USE_PODMAN_SET" && "$USE_PODMAN" != "$detected_use_podman" ]]; then
+    die "Refusing an in-place Docker/Podman engine switch for an existing MyPaas installation. Use the VM migration workflow for engine changes."
+  fi
+
+  USE_PODMAN="$detected_use_podman"
+  export USE_PODMAN
+  if [[ "$USE_PODMAN" == "true" ]]; then
+    log "Preserving existing Podman runtime"
+  else
+    log "Preserving existing Docker Engine runtime"
+  fi
 }
 
 checkout_repo() {
@@ -90,11 +148,12 @@ main() {
   [[ "$(uname -s)" == "Linux" ]] || die "bootstrap.sh must run on a Linux VM"
 
   ensure_git
+  detect_existing_runtime
   checkout_repo
 
   log "Starting MyPaas installer"
   cd "$INSTALL_DIR"
-  INSTALL_WIZARD="$INSTALL_WIZARD" bash scripts/install-vm.sh
+  INSTALL_WIZARD="$INSTALL_WIZARD" USE_PODMAN="$USE_PODMAN" bash scripts/install-vm.sh
 }
 
 main "$@"
