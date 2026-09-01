@@ -10,7 +10,7 @@
 
 <section class={`surface workspace-section min-w-0 overflow-hidden !rounded-none !border-0 ${className}`.trim()}>
 	{#if title || description || $$slots.actions}
-		<div class="panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+		<div class="panel-header flex flex-col gap-2 !border-gray-100/70 sm:flex-row sm:items-center sm:justify-between dark:!border-neutral-900">
 			<div class="min-w-0">
 				{#if title}
 					<h2 class="panel-title">{title}</h2>
