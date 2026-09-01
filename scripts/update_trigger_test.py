@@ -14,6 +14,13 @@ class UpdateTriggerContractTest(unittest.TestCase):
         self.assertIn("systemctl enable --now mypaas-update.path", configure)
         self.assertIn("dashboard-triggered updates remain available", configure)
 
+    def test_systemd_service_uses_valid_absolute_working_directory_syntax(self) -> None:
+        configure = (ROOT / "scripts" / "configure-auto-update.sh").read_text(encoding="utf-8")
+
+        self.assertIn("WorkingDirectory=$root_q", configure)
+        self.assertNotIn('WorkingDirectory="$root_q"', configure)
+        self.assertIn('systemd-analyze verify "$SERVICE_FILE" "$PATH_FILE"', configure)
+
     def test_deploy_reconciles_host_update_units(self) -> None:
         deploy = (ROOT / "scripts" / "deploy-to-vm.sh").read_text(encoding="utf-8")
 
