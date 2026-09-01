@@ -1,5 +1,6 @@
 import os
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -59,6 +60,26 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn("Preserving existing Podman runtime", content)
         self.assertIn("refusing a split-runtime update", content)
         self.assertIn("Refusing an in-place Docker/Podman engine switch", content)
+
+    def test_fresh_install_runtime_detection_is_successful_noop(self) -> None:
+        bash = os.environ.get("BASH_EXECUTABLE", "bash")
+        content = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+        harness = content.rsplit('main "$@"', 1)[0] + 'detect_existing_runtime\nprintf "ok\\n"\n'
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = os.environ.copy()
+            env["MYPAAS_INSTALL_DIR"] = str(Path(temp_dir) / "MyPaas")
+            result = subprocess.run(
+                [bash],
+                input=harness,
+                check=True,
+                capture_output=True,
+                cwd=ROOT_DIR,
+                env=env,
+                text=True,
+            )
+
+        self.assertEqual("ok", result.stdout.strip())
 
 
 if __name__ == "__main__":
