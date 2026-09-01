@@ -116,4 +116,12 @@
 	:global(.database-design-canvas > .space-y-4 > .grid) {
 		display: none;
 	}
+
+	/* Canvas chrome follows the normal UI typography floor; ERD node microtype is exempt. */
+	:global(.database-design-canvas > .space-y-4 > .surface:first-child button),
+	:global(.database-design-canvas > .space-y-4 > .surface:nth-child(2) > div:first-child button),
+	:global(.database-design-canvas > .space-y-4 > .surface:nth-child(2) > div:first-child label),
+	:global(.database-design-canvas > .space-y-4 > .surface:nth-child(2) > div:first-child span) {
+		font-size: 0.8125rem;
+	}
 </style>
