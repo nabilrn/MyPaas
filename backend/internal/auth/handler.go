@@ -136,6 +136,10 @@ func (h *Handler) Repositories(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
+	if user.Role != "owner" {
+		httpx.DomainError(w, errs.ErrForbidden)
+		return
+	}
 	page := 1
 	if rawPage := r.URL.Query().Get("page"); rawPage != "" {
 		page, err = strconv.Atoi(rawPage)
@@ -149,6 +153,7 @@ func (h *Handler) Repositories(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	httpx.JSON(w, http.StatusOK, result)
 }
 
