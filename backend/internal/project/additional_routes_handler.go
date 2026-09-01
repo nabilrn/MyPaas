@@ -3,7 +3,6 @@ package project
 import (
 	"net/http"
 
-	"mypaas/internal/auth"
 	"mypaas/internal/httpx"
 )
 
@@ -21,13 +20,13 @@ func (h *Handler) Routes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SetRoutes(w http.ResponseWriter, r *http.Request) {
-	user, err := auth.CurrentUser(r)
-	if err != nil {
-		httpx.DomainError(w, err)
-		return
-	}
 	id, ok := projectID(w, r)
 	if !ok {
+		return
+	}
+	project, err := h.service.Get(r.Context(), id)
+	if err != nil {
+		httpx.DomainError(w, err)
 		return
 	}
 	var req struct {
@@ -37,7 +36,7 @@ func (h *Handler) SetRoutes(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
 		return
 	}
-	githubAccessToken, err := h.githubAccessToken(r.Context(), user.ID, true)
+	githubAccessToken, err := h.githubAccessToken(r.Context(), project.UserID, true)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
