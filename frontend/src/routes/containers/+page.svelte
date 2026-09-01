@@ -34,6 +34,9 @@
 	$: if (pageIndex > maxPage) pageIndex = maxPage;
 	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 	$: hasNext = (pageIndex + 1) * pageSize < filteredRows.length;
+	$: inventoryDescription = rows.length > 0
+		? `${rows.length} total · ${runningCount} running · ${totalCpu.toFixed(1)}% CPU · ${formatMemory(totalMemoryMb)} RAM`
+		: 'Host-wide Docker-compatible runtime inventory, including MyPaaS and application containers.';
 
 	onMount(() => {
 		void load();
@@ -97,59 +100,10 @@
 	<title>Containers · MyPaas</title>
 </svelte:head>
 
-<div class="page-shell py-6">
-	<div class="mb-5 flex flex-wrap items-center justify-between gap-3 px-5">
-		<div>
-			<p class="text-sm text-gray-500 dark:text-gray-400">Host-wide Docker-compatible runtime view, including MyPaaS system containers and application containers.</p>
-			{#if rows.length > 0}
-				<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{rows.length} total · {runningCount} running · {totalCpu.toFixed(1)}% CPU · {formatMemory(totalMemoryMb)} RAM</p>
-			{/if}
-		</div>
-		<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => load()}>
-			<RefreshCw slot="icon" class="h-4 w-4" />
-			Refresh
-		</ActionButton>
-	</div>
-
-	<div class="surface mb-4 mx-5 grid gap-3 p-3 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end">
-		<label class="block min-w-0" for="container-search">
-			<span class="field-label">Search</span>
-			<div class="relative">
-				<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-				<input id="container-search" class="field w-full !pl-9 font-mono" placeholder="name, image, project, status…" bind:value={query} on:input={resetPage} />
-			</div>
-		</label>
-
-		<label class="block" for="container-state">
-			<span class="field-label">State</span>
-			<select id="container-state" class="field w-full" bind:value={stateFilter} on:change={resetPage}>
-				<option value="all">All states</option>
-				{#each stateOptions as state}<option value={state}>{state}</option>{/each}
-			</select>
-		</label>
-
-		<label class="block" for="container-runtime">
-			<span class="field-label">Compose / runtime</span>
-			<select id="container-runtime" class="field w-full font-mono" bind:value={runtimeFilter} on:change={resetPage}>
-				<option value="all">All runtime groups</option>
-				{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
-			</select>
-		</label>
-
-		<label class="block" for="container-page-size">
-			<span class="field-label">Rows</span>
-			<select id="container-page-size" class="field" value={pageSize} on:change={changePageSize}>
-				<option value="10">10</option>
-				<option value="20">20</option>
-				<option value="50">50</option>
-				<option value="100">100</option>
-			</select>
-		</label>
-	</div>
-
+<div class="page-shell">
 	<TableShell
 		title="Host containers"
-		description="Every container visible through the host runtime is listed. Live CPU and memory are sampled for running containers every five seconds."
+		description={inventoryDescription}
 		loading={false}
 		{error}
 		empty={filteredRows.length === 0}
@@ -157,6 +111,51 @@
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
+		<svelte:fragment slot="actions">
+			<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => load()}>
+				<RefreshCw slot="icon" class="h-4 w-4" />
+				Refresh
+			</ActionButton>
+		</svelte:fragment>
+
+		<svelte:fragment slot="notice">
+			<div class="grid gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end lg:px-5">
+				<label class="block min-w-0" for="container-search">
+					<span class="field-label">Search</span>
+					<div class="relative">
+						<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+						<input id="container-search" class="field w-full !pl-9 font-mono" placeholder="name, image, project, status…" bind:value={query} on:input={resetPage} />
+					</div>
+				</label>
+
+				<label class="block" for="container-state">
+					<span class="field-label">State</span>
+					<select id="container-state" class="field w-full" bind:value={stateFilter} on:change={resetPage}>
+						<option value="all">All states</option>
+						{#each stateOptions as state}<option value={state}>{state}</option>{/each}
+					</select>
+				</label>
+
+				<label class="block" for="container-runtime">
+					<span class="field-label">Compose / runtime</span>
+					<select id="container-runtime" class="field w-full font-mono" bind:value={runtimeFilter} on:change={resetPage}>
+						<option value="all">All runtime groups</option>
+						{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
+					</select>
+				</label>
+
+				<label class="block" for="container-page-size">
+					<span class="field-label">Rows</span>
+					<select id="container-page-size" class="field" value={pageSize} on:change={changePageSize}>
+						<option value="10">10</option>
+						<option value="20">20</option>
+						<option value="50">50</option>
+						<option value="100">100</option>
+					</select>
+				</label>
+			</div>
+		</svelte:fragment>
+
 		<table class="data-table table-fixed min-w-[64rem]">
 			<colgroup>
 				<col class="w-[16%]" />
@@ -183,24 +182,24 @@
 					<tr>
 						<td>
 							<div class="min-w-0">
-								<p class="truncate font-mono text-xs font-medium text-gray-950 dark:text-white" title={row.name}>{row.name}</p>
-								<p class="mt-0.5 truncate font-mono text-[10px] text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
+								<p class="truncate font-mono text-[13px] font-medium text-gray-950 dark:text-white" title={row.name}>{row.name}</p>
+								<p class="mt-0.5 truncate font-mono text-xs text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
 							</div>
 						</td>
-						<td><p class="truncate font-mono text-xs text-gray-700 dark:text-gray-300" title={runtimeGroup(row)}>{runtimeGroup(row)}</p></td>
-						<td><p class="truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
+						<td><p class="truncate font-mono text-[13px] text-gray-700 dark:text-gray-300" title={runtimeGroup(row)}>{runtimeGroup(row)}</p></td>
+						<td><p class="truncate font-mono text-[13px] text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
 						<td class="whitespace-nowrap">
 							<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
 								<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
 							</span>
 						</td>
-						<td class="whitespace-nowrap text-right font-mono text-xs tabular-nums">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
-						<td class="whitespace-nowrap text-right font-mono text-xs tabular-nums">
+						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
+						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">
 							{#if row.metricsAvailable}
 								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
 							{:else}—{/if}
 						</td>
-						<td><p class="truncate text-xs text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
+						<td><p class="truncate text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
 					</tr>
 				{/each}
 			</tbody>
