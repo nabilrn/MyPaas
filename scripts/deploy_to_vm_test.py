@@ -38,6 +38,16 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn('--pids-limit "$MIGRATION_PIDS_LIMIT"', content)
         self.assertIn("MIGRATION_PIDS_LIMIT must be a positive integer.", content)
 
+    def test_control_plane_recreation_is_serialized(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"', content)
+        self.assertIn("COMPOSE_PARALLEL_LIMIT must be a positive integer.", content)
+        self.assertIn("export COMPOSE_PARALLEL_LIMIT", content)
+        self.assertIn("for service in api dashboard caddy cloudflared; do", content)
+        self.assertIn('up -d --no-deps "$service"', content)
+        self.assertIn('up -d --force-recreate --no-deps api', content)
+
     def test_deploy_preflights_control_plane_port_ownership(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
@@ -116,7 +126,7 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn("RESTORED_CONTROL_PLANE_DB=false", content)
         self.assertIn("RESTORED_CONTROL_PLANE_DB=true", content)
         self.assertIn('if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then', content)
-        self.assertIn('up -d --force-recreate api', content)
+        self.assertIn('up -d --force-recreate --no-deps api', content)
 
 
 if __name__ == "__main__":
