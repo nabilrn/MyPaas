@@ -108,7 +108,7 @@ class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
-	const finishInitialLoading = beginInitialRouteRequestLoading();
+	const finishInitialLoading = beginInitialRouteRequestLoading(init?.method ?? 'GET');
 	try {
 		const res = await fetch(`/api${path}`, {
 			headers: { 'Content-Type': 'application/json' },
