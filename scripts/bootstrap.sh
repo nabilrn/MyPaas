@@ -66,8 +66,10 @@ socket_has_mypaas_containers() {
 }
 
 detect_existing_runtime() {
-  [[ -d "$INSTALL_DIR/.git" && -f "$INSTALL_DIR/.env" ]] || return
-  command_exists docker || return
+  if [[ ! -d "$INSTALL_DIR/.git" || ! -f "$INSTALL_DIR/.env" ]]; then
+    return 0
+  fi
+  command_exists docker || return 0
 
   local docker_socket="/var/run/docker.sock"
   local podman_socket="/run/podman/podman.sock"
@@ -97,7 +99,7 @@ detect_existing_runtime() {
   elif [[ "$podman_has_state" == "true" ]]; then
     detected_use_podman=true
   else
-    return
+    return 0
   fi
 
   if [[ -n "$EXPLICIT_USE_PODMAN_SET" && "$USE_PODMAN" != "$detected_use_podman" ]]; then
