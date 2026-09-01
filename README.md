@@ -28,7 +28,7 @@ Static projects are served directly by Caddy. Container-backed projects run thro
 
 The New Project form can list repositories available to the connected GitHub account. Selecting a repository fills its clone URL and default branch; the URL can still be entered manually.
 
-Private GitHub repositories use the OAuth access token saved for the signed-in administrator. MyPaaS encrypts that token in the control-plane database and uses it only for repository listing, inspection, deployment, and rollback. The token is not passed to project workloads or written to Git command arguments or logs.
+Private GitHub repositories use the OAuth access token saved for the signed-in administrator. MyPaaS encrypts that token in the control-plane database and uses it only for repository listing, inspection, deployment, Compose route validation, and rollback. The token is not passed to project workloads or written to Git command arguments or logs.
 
 ## Deployment modes
 
