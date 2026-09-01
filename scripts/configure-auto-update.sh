@@ -171,7 +171,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory="$root_q"
+WorkingDirectory=$root_q
 EnvironmentFile=-$config_q
 Environment="ENV_FILE=$env_q"
 Environment="MYPAAS_INSTALL_DIR=$root_q"
@@ -216,6 +216,13 @@ EOF
   fi
 
   run_root systemctl daemon-reload
+  if command_exists systemd-analyze; then
+    if [[ "$enabled" == "true" ]]; then
+      run_root systemd-analyze verify "$SERVICE_FILE" "$PATH_FILE" "$TIMER_FILE"
+    else
+      run_root systemd-analyze verify "$SERVICE_FILE" "$PATH_FILE"
+    fi
+  fi
   run_root systemctl enable --now mypaas-update.path >/dev/null
   if [[ "$enabled" == "true" ]]; then
     run_root systemctl enable --now mypaas-update.timer >/dev/null
