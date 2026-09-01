@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"mypaas/internal/db"
 	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
+	"mypaas/internal/github"
 	"mypaas/internal/httpx"
 	"mypaas/internal/repopath"
 )
@@ -24,6 +26,7 @@ type Handler struct {
 	updateRouting     func(context.Context, db.Project, db.Project) error
 	provisionSharedDB func(context.Context, db.Project) error
 	envs              *envvar.Service
+	github            github.TokenReader
 }
 
 func NewHandler(
@@ -32,8 +35,13 @@ func NewHandler(
 	updateRouting func(context.Context, db.Project, db.Project) error,
 	provisionSharedDB func(context.Context, db.Project) error,
 	envs *envvar.Service,
+	githubTokens ...github.TokenReader,
 ) *Handler {
-	return &Handler{service: service, cleanup: cleanup, updateRouting: updateRouting, provisionSharedDB: provisionSharedDB, envs: envs}
+	var githubTokenReader github.TokenReader
+	if len(githubTokens) > 0 {
+		githubTokenReader = githubTokens[0]
+	}
+	return &Handler{service: service, cleanup: cleanup, updateRouting: updateRouting, provisionSharedDB: provisionSharedDB, envs: envs, github: githubTokenReader}
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +122,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.MemoryLimitMb == 0 {
 		req.MemoryLimitMb = req.MemoryMb
 	}
+	githubAccessToken, err := h.githubAccessToken(r.Context(), user.ID, req.SourceType != "registry" && req.DeployMode != "image")
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 
 	project, err := h.service.CreateValidated(r.Context(), CreateValidationInput{
 		Project: CreateInput{
@@ -136,6 +149,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			ServiceResources:     req.ServiceResources,
 			StaticFrontendPath:   req.StaticFrontendPath,
 			BaseDirectory:        req.BaseDirectory,
+			GitHubAccessToken:    githubAccessToken,
 		},
 		EnvVars:        req.EnvVars,
 		SharedPostgres: req.SharedPostgres,
@@ -181,7 +195,30 @@ func (h *Handler) cleanupCreatedProject(r *http.Request, id uuid.UUID) {
 	}
 }
 
+func (h *Handler) githubAccessToken(ctx context.Context, userID uuid.UUID, required bool) (string, error) {
+	if !required || h.github == nil {
+		return "", nil
+	}
+	accessToken, err := h.github.AccessToken(ctx, userID)
+	if errors.Is(err, errs.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return accessToken, nil
+}
+
 func (h *Handler) DetectMode(w http.ResponseWriter, r *http.Request) {
+	var userID uuid.UUID
+	if h.github != nil {
+		user, err := auth.CurrentUser(r)
+		if err != nil {
+			httpx.DomainError(w, err)
+			return
+		}
+		userID = user.ID
+	}
 	var req struct {
 		RepoURL       string `json:"repoUrl"`
 		Branch        string `json:"branch"`
@@ -192,12 +229,18 @@ func (h *Handler) DetectMode(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
 		return
 	}
+	githubAccessToken, err := h.githubAccessToken(r.Context(), userID, true)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 
 	result, err := h.service.DetectModeValidated(r.Context(), DetectInput{
-		RepoURL:       req.RepoURL,
-		Branch:        req.Branch,
-		InspectOnly:   req.InspectOnly,
-		BaseDirectory: req.BaseDirectory,
+		RepoURL:           req.RepoURL,
+		Branch:            req.Branch,
+		InspectOnly:       req.InspectOnly,
+		BaseDirectory:     req.BaseDirectory,
+		GitHubAccessToken: githubAccessToken,
 	})
 	if err != nil {
 		httpx.DomainError(w, err)
@@ -207,6 +250,15 @@ func (h *Handler) DetectMode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DetectCompose(w http.ResponseWriter, r *http.Request) {
+	var userID uuid.UUID
+	if h.github != nil {
+		user, err := auth.CurrentUser(r)
+		if err != nil {
+			httpx.DomainError(w, err)
+			return
+		}
+		userID = user.ID
+	}
 	var req struct {
 		RepoURL       string `json:"repoUrl"`
 		Branch        string `json:"branch"`
@@ -216,11 +268,17 @@ func (h *Handler) DetectCompose(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_JSON", "Request body must be valid JSON.", nil)
 		return
 	}
+	githubAccessToken, err := h.githubAccessToken(r.Context(), userID, true)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 
 	result, err := h.service.DetectCompose(r.Context(), DetectComposeInput{
-		RepoURL:       req.RepoURL,
-		Branch:        req.Branch,
-		BaseDirectory: req.BaseDirectory,
+		RepoURL:           req.RepoURL,
+		Branch:            req.Branch,
+		BaseDirectory:     req.BaseDirectory,
+		GitHubAccessToken: githubAccessToken,
 	})
 	if err != nil {
 		httpx.DomainError(w, err)

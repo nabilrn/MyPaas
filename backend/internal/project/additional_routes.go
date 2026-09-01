@@ -103,7 +103,7 @@ func (s *Service) AdditionalRoutes(ctx context.Context, projectID uuid.UUID) ([]
 	return normalizeAdditionalRoutes(project.DeployMode, routes)
 }
 
-func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, routes []AdditionalRoute) ([]AdditionalRoute, error) {
+func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, routes []AdditionalRoute, githubAccessTokens ...string) ([]AdditionalRoute, error) {
 	project, err := s.Get(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,11 @@ func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, 
 			return nil, fmt.Errorf("%w: public hostname label %q is already owned by another project or route", errs.ErrValidation, label)
 		}
 	}
-	if err := validateAdditionalRoutesForProjectSource(ctx, project, normalized); err != nil {
+	githubAccessToken := ""
+	if len(githubAccessTokens) > 0 {
+		githubAccessToken = githubAccessTokens[0]
+	}
+	if err := validateAdditionalRoutesForProjectSource(ctx, project, normalized, githubAccessToken); err != nil {
 		return nil, err
 	}
 	raw, err := encodeAdditionalRoutes(normalized)
@@ -144,7 +148,7 @@ func (s *Service) SetAdditionalRoutes(ctx context.Context, projectID uuid.UUID, 
 	return normalized, nil
 }
 
-func validateAdditionalRoutesForProjectSource(ctx context.Context, project db.Project, routes []AdditionalRoute) error {
+func validateAdditionalRoutesForProjectSource(ctx context.Context, project db.Project, routes []AdditionalRoute, githubAccessToken string) error {
 	if len(routes) == 0 {
 		return nil
 	}
@@ -157,7 +161,7 @@ func validateAdditionalRoutesForProjectSource(ctx context.Context, project db.Pr
 	}
 	defer os.RemoveAll(root)
 
-	if err := cloneForDetect(validateCtx, root, project.RepoUrl, project.Branch); err != nil {
+	if err := cloneForDetect(validateCtx, root, project.RepoUrl, project.Branch, githubAccessToken); err != nil {
 		return err
 	}
 	workspace, err := resolveLifecycleDirectory(root, valueOrEmpty(project.BaseDirectory), "base directory")

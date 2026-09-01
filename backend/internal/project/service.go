@@ -30,6 +30,7 @@ import (
 	"mypaas/internal/db"
 	"mypaas/internal/envdiscover"
 	"mypaas/internal/errs"
+	"mypaas/internal/gitremote"
 	"mypaas/internal/nixpacks"
 	"mypaas/internal/quota"
 	"mypaas/internal/resourceprofile"
@@ -68,6 +69,7 @@ type CreateInput struct {
 	ServiceResources     json.RawMessage
 	StaticFrontendPath   *string
 	BaseDirectory        *string
+	GitHubAccessToken    string
 }
 
 type UpdateInput struct {
@@ -90,16 +92,18 @@ type UpdateInput struct {
 }
 
 type DetectInput struct {
-	RepoURL       string
-	Branch        string
-	InspectOnly   bool
-	BaseDirectory string
+	RepoURL           string
+	Branch            string
+	InspectOnly       bool
+	BaseDirectory     string
+	GitHubAccessToken string
 }
 
 type DetectComposeInput struct {
-	RepoURL       string
-	Branch        string
-	BaseDirectory string
+	RepoURL           string
+	Branch            string
+	BaseDirectory     string
+	GitHubAccessToken string
 }
 
 // DetectComposeResult is the response for the detect-compose endpoint: the
@@ -162,7 +166,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
 	defer cancel()
 
-	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL)
+	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL, input.GitHubAccessToken)
 	if err != nil {
 		return DetectResult{}, err
 	}
@@ -176,7 +180,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 	}
 
 	if input.InspectOnly {
-		tree, truncated, err := inspectRepositoryTree(ctx, repoURL, branch)
+		tree, truncated, err := inspectRepositoryTree(ctx, repoURL, branch, input.GitHubAccessToken)
 		if err != nil {
 			return DetectResult{}, err
 		}
@@ -189,7 +193,7 @@ func (s *Service) DetectMode(ctx context.Context, input DetectInput) (DetectResu
 		}, nil
 	}
 
-	result, err := detectModeOnBranch(ctx, repoURL, branch, input.BaseDirectory)
+	result, err := detectModeOnBranch(ctx, repoURL, branch, input.BaseDirectory, input.GitHubAccessToken)
 	if err != nil {
 		return DetectResult{}, err
 	}
@@ -210,7 +214,7 @@ func (s *Service) DetectCompose(ctx context.Context, input DetectComposeInput) (
 	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
 	defer cancel()
 
-	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL)
+	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL, input.GitHubAccessToken)
 	if err != nil {
 		return DetectComposeResult{}, err
 	}
@@ -228,7 +232,7 @@ func (s *Service) DetectCompose(ctx context.Context, input DetectComposeInput) (
 	}
 	defer os.RemoveAll(workspace)
 
-	if err := cloneForDetect(ctx, workspace, repoURL, branch); err != nil {
+	if err := cloneForDetect(ctx, workspace, repoURL, branch, input.GitHubAccessToken); err != nil {
 		return DetectComposeResult{}, err
 	}
 	if input.BaseDirectory != "" {
@@ -246,7 +250,7 @@ func (s *Service) DetectCompose(ctx context.Context, input DetectComposeInput) (
 	}, nil
 }
 
-func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (DetectResult, error) {
+func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir, accessToken string) (DetectResult, error) {
 	if branch == "" {
 		return DetectResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
 	}
@@ -257,7 +261,7 @@ func detectModeOnBranch(ctx context.Context, repoURL, branch, baseDir string) (D
 	}
 	defer os.RemoveAll(workspace)
 
-	if err := cloneForDetect(ctx, workspace, repoURL, branch); err != nil {
+	if err := cloneForDetect(ctx, workspace, repoURL, branch, accessToken); err != nil {
 		return DetectResult{}, err
 	}
 	if baseDir != "" {
@@ -405,7 +409,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (db.Project, er
 		}
 		input.Branch = strings.TrimSpace(input.Branch)
 		if input.Branch == "" {
-			branch, err := resolveDefaultBranch(ctx, input.RepoURL)
+			branch, err := resolveDefaultBranch(ctx, input.RepoURL, input.GitHubAccessToken)
 			if err != nil {
 				return db.Project{}, err
 			}
@@ -638,8 +642,8 @@ func valueOrEmpty(value *string) string {
 	return *value
 }
 
-func cloneForDetect(ctx context.Context, workspace, repoURL, branch string) error {
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--single-branch", "--branch", branch, repoURL, ".")
+func cloneForDetect(ctx context.Context, workspace, repoURL, branch, accessToken string) error {
+	cmd := gitremote.CommandContext(ctx, repoURL, accessToken, "clone", "--depth", "1", "--single-branch", "--branch", branch, repoURL, ".")
 	cmd.Dir = workspace
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: failed to clone repository branch %q", errs.ErrValidation, branch)
@@ -647,17 +651,17 @@ func cloneForDetect(ctx context.Context, workspace, repoURL, branch string) erro
 	return nil
 }
 
-func resolveDefaultBranch(ctx context.Context, repoURL string) (string, error) {
-	defaultBranch, _, err := inspectRemoteBranches(ctx, repoURL)
+func resolveDefaultBranch(ctx context.Context, repoURL, accessToken string) (string, error) {
+	defaultBranch, _, err := inspectRemoteBranches(ctx, repoURL, accessToken)
 	return defaultBranch, err
 }
 
-func listRemoteBranches(ctx context.Context, repoURL string) ([]string, error) {
-	_, branches, err := inspectRemoteBranches(ctx, repoURL)
+func listRemoteBranches(ctx context.Context, repoURL, accessToken string) ([]string, error) {
+	_, branches, err := inspectRemoteBranches(ctx, repoURL, accessToken)
 	return branches, err
 }
 
-func inspectRemoteBranches(ctx context.Context, repoURL string) (string, []string, error) {
+func inspectRemoteBranches(ctx context.Context, repoURL, accessToken string) (string, []string, error) {
 	repoURL = strings.TrimSpace(repoURL)
 	if repoURL == "" {
 		return "", nil, fmt.Errorf("%w: repository URL is required", errs.ErrValidation)
@@ -665,7 +669,7 @@ func inspectRemoteBranches(ctx context.Context, repoURL string) (string, []strin
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--symref", repoURL, "HEAD", "refs/heads/*").CombinedOutput()
+	out, err := gitremote.CommandContext(ctx, repoURL, accessToken, "ls-remote", "--symref", repoURL, "HEAD", "refs/heads/*").CombinedOutput()
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: failed to inspect remote branches: %s", errs.ErrValidation, firstNonEmptyLine(string(out)))
 	}
@@ -733,14 +737,14 @@ func prioritizeDefaultBranch(defaultBranch string, branches []string) []string {
 	return append([]string{defaultBranch}, rest...)
 }
 
-func inspectRepositoryTree(ctx context.Context, repoURL, branch string) ([]RepoTreeEntry, bool, error) {
+func inspectRepositoryTree(ctx context.Context, repoURL, branch, accessToken string) ([]RepoTreeEntry, bool, error) {
 	workspace, err := os.MkdirTemp("", "mypaas-repo-preview-*")
 	if err != nil {
 		return nil, false, fmt.Errorf("create repository preview workspace: %w", err)
 	}
 	defer os.RemoveAll(workspace)
 
-	if err := cloneForTreePreview(ctx, workspace, repoURL, branch); err != nil {
+	if err := cloneForTreePreview(ctx, workspace, repoURL, branch, accessToken); err != nil {
 		return nil, false, err
 	}
 	tree, truncated, err := listGitRepositoryTree(ctx, workspace, maxRepoTreeEntries)
@@ -750,8 +754,8 @@ func inspectRepositoryTree(ctx context.Context, repoURL, branch string) ([]RepoT
 	return tree, truncated, nil
 }
 
-func cloneForTreePreview(ctx context.Context, workspace, repoURL, branch string) error {
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--filter", "blob:none", "--no-checkout", "--single-branch", "--branch", branch, repoURL, ".")
+func cloneForTreePreview(ctx context.Context, workspace, repoURL, branch, accessToken string) error {
+	cmd := gitremote.CommandContext(ctx, repoURL, accessToken, "clone", "--depth", "1", "--filter", "blob:none", "--no-checkout", "--single-branch", "--branch", branch, repoURL, ".")
 	cmd.Dir = workspace
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%w: failed to clone repository branch %q for preview", errs.ErrValidation, branch)

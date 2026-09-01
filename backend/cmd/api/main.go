@@ -35,6 +35,7 @@ import (
 	"mypaas/internal/deployment"
 	"mypaas/internal/envvar"
 	"mypaas/internal/firewall"
+	"mypaas/internal/github"
 	"mypaas/internal/logger"
 	"mypaas/internal/migration"
 	"mypaas/internal/port"
@@ -89,6 +90,7 @@ func run() error {
 		return fmt.Errorf("crypto: %w", err)
 	}
 	queries := db.New(pool)
+	githubService := github.NewService(queries, cipher)
 
 	// Load dynamic API tokens from database
 	if settingsRows, err := queries.GetAllSettings(context.Background()); err == nil {
@@ -121,6 +123,7 @@ func run() error {
 		port.NewService(pool),
 		caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost),
 		container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+		githubService,
 	)
 
 	// Recover missing container-backed runtimes. Static projects have no Docker
@@ -141,7 +144,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient, shellService),
+		Handler:      buildRouter(cfg, pool, tokenService, cipher, backupService, dockerClient, githubService, shellService),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -183,9 +186,9 @@ func run() error {
 	return nil
 }
 
-func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.TokenService, cipher *crypto.AESGCM, backupService *backup.Service, dockerClient *container.DockerCLI, shellService *shell.Service) http.Handler {
+func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.TokenService, cipher *crypto.AESGCM, backupService *backup.Service, dockerClient *container.DockerCLI, githubService *github.Service, shellService *shell.Service) http.Handler {
 	queries := db.New(pool)
-	authHandler := auth.NewHandler(cfg, queries, tokenService)
+	authHandler := auth.NewHandler(cfg, queries, tokenService, githubService)
 	authMiddleware := auth.Middleware(tokenService, queries, cfg)
 	auditService := audit.NewService(queries)
 	auditHandler := audit.NewHandler(auditService)
@@ -194,7 +197,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	portService := port.NewService(pool)
 	quotaService := quota.NewService(queries, cfg, dockerClient)
 	sharedPostgresService := sharedpostgres.NewService(pool, cfg, envService)
-	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost), dockerClient)
+	deploymentService := deployment.NewService(cfg, queries, envService, portService, caddy.NewClient(cfg.CaddyAdmin, cfg.CaddyUpstreamHost), dockerClient, githubService)
 	dbStudioHandler := dbstudio.NewHandler(dbstudio.NewService(queries, envService, auditService))
 	projectHandler := project.NewHandler(
 		project.NewService(queries, cfg.PublicDomain, quotaService),
@@ -207,6 +210,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 		deploymentService.UpdateProjectRoute,
 		sharedPostgresService.Provision,
 		envService,
+		githubService,
 	)
 	deploymentHandler := deployment.NewHandler(deploymentService)
 	envHandler := envvar.NewHandler(envService)
@@ -310,6 +314,7 @@ func registerRoutes(
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
 			r.Get("/me", authHandler.Me)
+			r.Get("/github/repositories", authHandler.Repositories)
 			r.Post("/logout", authHandler.Logout)
 		})
 	})

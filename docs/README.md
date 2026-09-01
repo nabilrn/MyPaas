@@ -47,6 +47,7 @@ When documentation disagrees, use this order:
 - Do not claim multi-node HA, Kubernetes-style scheduling, hostile multi-tenant isolation, or automatic horizontal scaling.
 - Do not claim generic private-registry management beyond the one configured image-mode credential in ADR-022.
 - Do not reinterpret ADR-023 as permission for arbitrary port forwarding or non-HTTP protocol exposure.
+- Treat GitHub OAuth repository access as a control-plane credential boundary; do not pass the token to workloads or logs.
 - Do not turn a test fixture count, VM shape, RPS result, or concurrent-user run into a product-capacity promise.
 - Application capacity depends on the application and on available CPU, memory, storage, network, database behavior, and build requirements.
 - Generated test artifacts belong outside the source tree unless a specific review requires them.
