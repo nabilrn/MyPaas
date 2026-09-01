@@ -44,9 +44,9 @@ Dockerfile and Compose are the explicit escape hatches for applications with cus
 
 ## Container monitoring
 
-The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include CPU and memory samples. Search, state/runtime filters, ten-row pagination, and safe removal of non-running containers keep larger hosts usable without adding a second observability stack.
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include CPU and memory samples. Search, state/runtime filters, and pagination keep larger hosts usable without adding a second observability stack.
 
-Running containers remain lifecycle-managed through their project. The host-wide view only permits removal after the runtime confirms that a container is stopped.
+The host-wide inventory is intentionally read-only. Application lifecycle stays project-scoped so stopping a project preserves the runtime state required by later Start, Restart, and redeploy operations.
 
 ## Port management
 
