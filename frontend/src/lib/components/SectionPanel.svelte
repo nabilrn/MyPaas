@@ -8,7 +8,7 @@
 	$: bodyClass = contentClass || (padded ? 'p-5' : '');
 </script>
 
-<section class={`surface workspace-section min-w-0 overflow-hidden ${className}`.trim()}>
+<section class={`surface workspace-section min-w-0 overflow-hidden !rounded-none !border-0 ${className}`.trim()}>
 	{#if title || description || $$slots.actions}
 		<div class="panel-header flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 			<div class="min-w-0">
