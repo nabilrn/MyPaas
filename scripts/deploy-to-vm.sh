@@ -22,6 +22,7 @@ DASHBOARD_IMAGE_REPO="${MYPAAS_DASHBOARD_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-dash
 SKIP_IMAGE_PULL="${MYPAAS_SKIP_IMAGE_PULL:-false}"
 SKIP_MIGRATIONS="${MYPAAS_SKIP_MIGRATIONS:-auto}"
 MIGRATION_PIDS_LIMIT="${MIGRATION_PIDS_LIMIT:-256}"
+COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 EXPLICIT_IMAGE_TAG_SET="${MYPAAS_IMAGE_TAG+x}"
 EXPLICIT_IMAGE_TAG="${MYPAAS_IMAGE_TAG:-}"
 EXPLICIT_BUILD_SHA_SET="${MYPAAS_BUILD_SHA+x}"
@@ -128,6 +129,11 @@ if [[ ! "$MIGRATION_PIDS_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
   echo "MIGRATION_PIDS_LIMIT must be a positive integer." >&2
   exit 2
 fi
+if [[ ! "$COMPOSE_PARALLEL_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "COMPOSE_PARALLEL_LIMIT must be a positive integer." >&2
+  exit 2
+fi
+export COMPOSE_PARALLEL_LIMIT
 
 SUDO=""
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -318,14 +324,17 @@ else
     up
 fi
 
-echo "Starting MyPaas..."
+echo "Starting MyPaas control plane sequentially..."
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 fi
-$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+for service in api dashboard caddy cloudflared; do
+  echo "Starting $service..."
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps "$service"
+done
 if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
   echo "Recreating API after database restore to trigger runtime reconciliation..."
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate api
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate --no-deps api
 fi
 
 echo "MyPaas production stack is starting. Run scripts/verify-production.sh after the containers settle."
