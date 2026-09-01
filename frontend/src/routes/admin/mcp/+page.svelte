@@ -80,13 +80,11 @@
 	<title>MCP · MyPaas</title>
 </svelte:head>
 
-<div class="page-shell space-y-4 py-6">
-	<p class="px-5 text-sm text-gray-500 dark:text-gray-400">Connect an MCP-compatible AI agent to this MyPaaS instance through the authenticated local bridge included in the repository.</p>
-
-	<SectionPanel title="What MCP enables" description="The MyPaaS MCP server translates agent tool calls into authenticated MyPaaS API operations." contentClass="p-0">
+<div class="page-shell">
+	<SectionPanel title="What MCP enables" description="Connect an MCP-compatible agent through the authenticated local bridge. Tool calls are translated into authorized MyPaaS API operations." contentClass="p-0">
 		<svelte:fragment slot="actions"><AgentBadgeStack /></svelte:fragment>
-		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-			<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+			<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
 				<div class="flex gap-3 p-4">
 					<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Projects and repository inspection</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">List and inspect projects, inspect Git repositories, detect Compose configuration, create projects, and update mutable project settings.</p></div>
@@ -96,21 +94,21 @@
 					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Deployments and runtime control</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy, start, stop, and restart projects; inspect deployment history; and roll back to a successful deployment.</p></div>
 				</div>
 			</div>
-			<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+			<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
 				<div class="flex gap-3 p-4">
 					<Activity class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Logs, metrics, and environment</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Read recent logs and metrics snapshots, list environment keys, set environment variables, and delete a variable with explicit key confirmation. Environment values are not revealed by the list operation.</p></div>
 				</div>
 				<div class="flex gap-3 p-4">
 					<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Capacity and admin context</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Inspect quota usage and, with owner/admin access, host resource statistics. The bridge does not bypass the authorization enforced by the MyPaaS API.</p></div>
+					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Capacity and admin context</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Inspect quota usage and, with owner access, host resource statistics. The bridge does not bypass API authorization.</p></div>
 				</div>
 			</div>
 		</div>
 	</SectionPanel>
 
 	<SectionPanel title="Access token" description="Credential used by the local MCP bridge to authenticate against this MyPaaS instance." contentClass="p-0">
-		<div class="p-4">
+		<div class="p-4 lg:p-5">
 			<div class="alert-neutral">
 				<KeyRound class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
 				<p>Treat this token like an administrative credential. Any MCP client that receives it can perform the MyPaaS operations allowed to that token.</p>
@@ -133,7 +131,7 @@
 			{/if}
 		</div>
 
-		<div class="border-t border-gray-100 p-4 dark:border-neutral-800">
+		<div class="border-t border-gray-100/70 p-4 dark:border-neutral-900 lg:px-5">
 			{#if confirmRegenerateToken}
 				<div class="alert-warning flex-wrap items-center justify-between">
 					<div class="min-w-0 flex-1"><p class="font-medium">Regenerate MCP token?</p><p class="mt-0.5">Clients still using the old token will lose access immediately and must be reconfigured.</p></div>
@@ -149,8 +147,8 @@
 	</SectionPanel>
 
 	<SectionPanel title="Connect an agent" description="Run the MCP bridge locally over stdio and point it at this remote MyPaaS API." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-[20rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
-			<div class="p-4">
+		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-[20rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
+			<div class="p-4 lg:p-5">
 				<div class="flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><Bot class="h-4 w-4" aria-hidden="true" />Setup</div>
 				<ol class="mt-3 list-decimal space-y-2 pl-5 text-sm text-gray-600 dark:text-gray-300">
 					<li>Install Go on the machine where your MCP-compatible agent runs.</li>
@@ -159,7 +157,7 @@
 					<li>Provide this instance URL and MCP token through the two environment variables shown.</li>
 				</ol>
 			</div>
-			<div class="min-w-0 p-4">
+			<div class="min-w-0 p-4 lg:p-5">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div class="flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><SquareTerminal class="h-4 w-4" aria-hidden="true" />MCP client configuration</div>
 					<ActionButton variant="secondary" size="xs" on:click={() => copyToClipboard(mcpConfig, 'config')}>
