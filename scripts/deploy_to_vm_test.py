@@ -31,6 +31,31 @@ class DeployToVmTest(unittest.TestCase):
         self.assertNotIn('--network "$ROUTING_NETWORK"', content)
         self.assertNotIn("--network mypaas-prod", content)
 
+    def test_migration_container_has_explicit_pid_budget(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('MIGRATION_PIDS_LIMIT="${MIGRATION_PIDS_LIMIT:-256}"', content)
+        self.assertIn('--pids-limit "$MIGRATION_PIDS_LIMIT"', content)
+        self.assertIn("MIGRATION_PIDS_LIMIT must be a positive integer.", content)
+
+    def test_deploy_preflights_control_plane_port_ownership(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("preflight_control_plane_ports", content)
+        self.assertIn("preflight_managed_port 5432 mypaas-postgres-prod", content)
+        self.assertIn("preflight_managed_port 8080 mypaas-api", content)
+        self.assertIn("preflight_managed_port 3000 mypaas-dashboard", content)
+        self.assertIn("preflight_managed_port 80 mypaas-caddy-prod", content)
+        self.assertIn("stale container proxy", content)
+        self.assertIn("another Docker-compatible engine", content)
+
+    def test_failure_advice_does_not_recommend_destructive_uninstall(self) -> None:
+        content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn("To clean up the failed deployment and start fresh", content)
+        self.assertIn("was not intentionally removed", content)
+        self.assertIn("Do not run scripts/uninstall-vm.sh unless", content)
+
     def test_deploy_skips_redundant_migrations_for_unchanged_runtime(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
