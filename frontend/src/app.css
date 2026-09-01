@@ -14,10 +14,7 @@
 		--app-ink: #171717;
 		--app-muted: #525252;
 		--app-subtle: #737373;
-		--workspace-section-gap: 0px;
-		--workspace-surface-radius: 0.375rem;
-		--workspace-divider: color-mix(in oklch, var(--app-border) 68%, transparent);
-		/* Accent is intentionally neutral: product chrome is monochrome. */
+		--workspace-divider: color-mix(in oklch, var(--app-border) 48%, transparent);
 		--app-accent: #171717;
 		--app-accent-strong: #0a0a0a;
 		--app-accent-soft: #e5e5e5;
@@ -26,7 +23,6 @@
 		--app-warning: #d97706;
 		--app-info: #0284c7;
 		--app-success: #059669;
-		/* Resource colors communicate data meaning, not brand decoration. */
 		--chart-cpu: #0ea5e9;
 		--chart-cpu-soft: rgb(14 165 233 / 0.12);
 		--chart-memory: #10b981;
@@ -38,6 +34,7 @@
 		--chart-grid: #e5e5e5;
 		--chart-tick: #737373;
 	}
+
 	.dark {
 		color-scheme: dark;
 		--app-bg: #0a0a0a;
@@ -49,6 +46,7 @@
 		--app-ink: #fafafa;
 		--app-muted: #a3a3a3;
 		--app-subtle: #737373;
+		--workspace-divider: color-mix(in oklch, var(--app-border) 56%, transparent);
 		--app-accent: #fafafa;
 		--app-accent-strong: #ffffff;
 		--app-accent-soft: #333333;
@@ -68,22 +66,26 @@
 		--chart-grid: #333333;
 		--chart-tick: #a3a3a3;
 	}
+
 	html {
 		font-size: 16px;
 		font-family: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 		text-rendering: optimizeLegibility;
 		background: var(--app-bg);
 	}
+
 	body {
 		min-height: 100vh;
 		background: var(--app-bg);
 		color: var(--app-ink);
 		@apply antialiased;
 	}
+
 	::selection {
 		background: var(--app-accent-strong);
 		color: var(--app-surface);
 	}
+
 	input,
 	select,
 	textarea {
@@ -97,79 +99,37 @@
 		margin-inline: auto;
 		padding-inline: clamp(0.875rem, 1.1vw, 1.5rem);
 	}
+
 	.scrollbar-thin {
 		scrollbar-width: thin;
 	}
 
-	/* Project creation lives in the app header; do not reserve a separate page row for it. */
-	main .page-shell > div:first-child:has(> a[href='/projects/new'][data-action-link]) {
-		display: none;
+	/* Workspace surfaces are structural regions, not floating cards. */
+	.workspace-section {
+		background: var(--app-surface);
 	}
 
-	/* Authenticated operational pages use connected workspace sections instead of card stacks. */
-	.app-workspace .page-shell > :is(.workspace-section, .surface) {
-		margin-inline: 0 !important;
-		margin-bottom: 0 !important;
-	}
-	.app-workspace .page-shell > :is(.workspace-section, .surface):has(+ :is(.workspace-section, .surface)) {
-		border-bottom-left-radius: 0;
-		border-bottom-right-radius: 0;
-	}
-	.app-workspace .page-shell > :is(.workspace-section, .surface) + :is(.workspace-section, .surface) {
-		margin-top: var(--workspace-section-gap) !important;
-		border-top: 0;
-		border-top-left-radius: 0;
-		border-top-right-radius: 0;
-	}
-	.app-workspace .page-shell :is(.space-y-4, .space-y-5, .space-y-6):has(> :is(.workspace-section, .surface)) > :not([hidden]) ~ :not([hidden]) {
-		margin-top: var(--workspace-section-gap) !important;
-		margin-bottom: 0 !important;
-	}
-	.app-workspace .page-shell :is(.space-y-4, .space-y-5, .space-y-6):has(> :is(.workspace-section, .surface)) > :is(.workspace-section, .surface):has(+ :is(.workspace-section, .surface)) {
-		border-bottom-left-radius: 0;
-		border-bottom-right-radius: 0;
-	}
-	.app-workspace .page-shell :is(.space-y-4, .space-y-5, .space-y-6):has(> :is(.workspace-section, .surface)) > :is(.workspace-section, .surface) + :is(.workspace-section, .surface) {
-		border-top: 0;
-		border-top-left-radius: 0;
-		border-top-right-radius: 0;
-	}
-	.app-workspace .page-shell .grid:has(> :is(.workspace-section, section.surface)) {
-		gap: 1px !important;
-		overflow: hidden;
-		border: 1px solid var(--app-border);
-		border-radius: var(--workspace-surface-radius);
-		background: var(--workspace-divider);
-	}
-	.app-workspace .page-shell .grid:has(> :is(.workspace-section, section.surface)) > :is(.workspace-section, section.surface) {
-		margin: 0 !important;
-		border: 0;
-		border-radius: 0;
-	}
-
-	/* ── Surfaces ────────────────────────────────────────────────
-	 * Normal product chrome is flat and connected at page level.
-	 * Shadow is reserved for .overlay (menus, popovers, modals, toasts). */
+	/* Inset/control surfaces retain an explicit boundary. */
 	.surface,
 	.control-panel {
 		border: 1px solid var(--app-border);
-		border-radius: var(--workspace-surface-radius);
+		border-radius: 0.375rem;
 		background: var(--app-surface);
 	}
-	.workspace-section {
-		border-radius: var(--workspace-surface-radius);
-	}
+
 	.surface-raised {
 		border: 1px solid var(--app-border);
-		border-radius: var(--workspace-surface-radius);
+		border-radius: 0.375rem;
 		background: var(--app-surface);
 	}
+
 	.surface-muted,
 	.soft-panel {
 		border: 1px solid var(--app-border);
-		border-radius: var(--workspace-surface-radius);
+		border-radius: 0.375rem;
 		background: color-mix(in oklch, var(--app-surface-muted) 72%, var(--app-surface));
 	}
+
 	.overlay {
 		border: 1px solid var(--app-border);
 		border-radius: 0.5rem;
@@ -177,7 +137,7 @@
 		box-shadow: 0 12px 28px rgb(0 0 0 / 0.14);
 	}
 
-	/* ── Fields ────────────────────────────────────────────────── */
+	/* Fields */
 	.field {
 		border: 1px solid var(--app-border);
 		border-radius: 0.375rem;
@@ -185,149 +145,125 @@
 		color: var(--app-ink);
 		@apply px-3 py-2 text-sm outline-none transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500;
 	}
+
 	.field:focus {
 		border-color: var(--app-accent);
 		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 72%, transparent);
 	}
+
 	.field-label {
 		color: var(--app-muted);
 		@apply mb-1 block text-[0.8125rem] font-medium;
 	}
+
 	.field-hint {
 		color: var(--app-subtle);
 		@apply mt-1 text-[0.8125rem];
 	}
+
 	.app-focus {
 		outline: none;
 	}
+
 	.app-focus:focus-visible {
 		border-color: var(--app-accent);
 		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 72%, transparent);
 	}
 
-	/* ── Panels ────────────────────────────────────────────────── */
+	/* Panel chrome */
 	.panel-header {
-		border-bottom: 1px solid var(--app-border);
+		border-bottom: 1px solid var(--workspace-divider);
 		background: var(--app-surface);
 		@apply px-5 py-3;
 	}
+
 	.panel-title {
 		color: var(--app-ink);
 		@apply text-[0.9375rem] font-semibold tracking-tight;
 	}
+
 	.panel-description {
 		color: var(--app-subtle);
 		@apply mt-0.5 max-w-2xl text-[0.8125rem];
 	}
 
-	/* ── Data tables ─────────────────────────────────────────────
-	 * Stable column geometry beats browser-guessed widths for operational data.
-	 * Headers stay centered; body alignment follows the data type. */
+	/* Data tables: geometry comes from each table's colgroup, not browser heuristics. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
 		@apply min-w-full text-sm;
 	}
+
 	.data-table thead th {
-		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 72%, transparent);
-		background: color-mix(in oklch, var(--app-surface-muted) 60%, var(--app-surface));
+		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 52%, transparent);
+		background: color-mix(in oklch, var(--app-surface-muted) 52%, var(--app-surface));
 		color: var(--app-subtle);
 		text-align: center;
 		white-space: nowrap;
 		@apply px-3 py-2 text-[0.8125rem] font-medium;
 	}
+
 	.data-table thead th.text-right,
 	.data-table thead th.text-center,
 	.data-table thead th.text-left {
 		text-align: center;
 	}
+
 	.data-table tbody td {
 		color: var(--app-muted);
 		@apply px-3 py-2.5 align-middle;
 	}
+
 	.data-table tbody tr {
 		@apply transition-colors;
 	}
+
 	.data-table tbody tr:hover {
-		background: color-mix(in oklch, var(--app-surface-muted) 55%, var(--app-surface));
+		background: color-mix(in oklch, var(--app-surface-muted) 48%, var(--app-surface));
 	}
 
-	/* Quiet grid lines make operational tables scan like DB Studio without looking boxed-in. */
 	table > thead > tr > th:not(:last-child),
 	table > tbody > tr > td:not(:last-child) {
-		border-right: 1px solid color-mix(in oklch, var(--app-border) 55%, transparent);
+		border-right: 1px solid color-mix(in oklch, var(--app-border) 34%, transparent);
 	}
+
 	table > tbody > tr:not(:last-child) > td {
-		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 50%, transparent);
+		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 38%, transparent);
 	}
+
 	table > thead > tr > th {
 		text-align: center;
 	}
 
-	/* Projects inventory: deliberate widths and alignment for a calm, scannable operations table. */
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) {
-		table-layout: fixed;
-	}
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(1) { width: 23% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(2) { width: 7% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(3) { width: 20% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(4) { width: 7% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(5) { width: 11% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(6) { width: 9% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(7) { width: 8% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(8) { width: 7% !important; }
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) > colgroup > col:nth-child(9) { width: 8% !important; }
-
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:first-child > div > a {
-		display: flex;
-		width: fit-content;
-		max-width: 100%;
-	}
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:first-child > div > a + a {
-		margin-top: 0.2rem;
-	}
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(2),
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(4),
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(8),
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(9) {
-		text-align: center;
-	}
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(6),
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody td:nth-child(7) {
-		text-align: right;
-		font-variant-numeric: tabular-nums;
-	}
-	.data-table.table-fixed:has(> colgroup > col:nth-child(9):last-child) tbody tr {
-		height: 3.75rem;
-	}
-
-	/* ── Chips ───────────────────────────────────────────────────
-	 * Restrained status chips: semantic dot + neutral text by default.
-	 * Tints are reserved for states that genuinely need emphasis. */
+	/* Status */
 	.chip {
 		border: 1px solid var(--app-border);
 		background: var(--app-surface-muted);
 		color: var(--app-muted);
 		@apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[0.8125rem] font-medium leading-5;
 	}
+
 	.status-dot {
 		@apply inline-block h-1.5 w-1.5 shrink-0 rounded-full;
 	}
 
-	/* ── Inline alerts ───────────────────────────────────────────
-	 * Semantic banners; an alert tone is not a new card/elevation type. */
+	/* Semantic inline alerts */
 	.alert {
 		@apply flex gap-3 rounded-md border px-4 py-3 text-sm;
 	}
+
 	.alert-warning {
 		@apply alert border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200;
 	}
+
 	.alert-danger {
 		@apply alert border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/25 dark:text-red-200;
 	}
+
 	.alert-info {
 		@apply alert border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-200;
 	}
+
 	.alert-neutral {
 		border-color: var(--app-border);
 		background: var(--app-surface-muted);
@@ -335,23 +271,24 @@
 		@apply alert;
 	}
 
-	/* ── Code / technical surfaces ─────────────────────────────── */
+	/* Technical surfaces */
 	.code-surface {
 		border: 1px solid var(--app-border);
 		background: var(--app-surface-muted);
 		color: var(--app-muted);
 		@apply block break-all rounded-md px-3 py-2 font-mono text-[0.8125rem];
 	}
-	/* Dark terminal surface — allowed because the content is terminal output. */
+
 	.console-surface {
 		@apply overflow-hidden rounded-md border border-gray-800 bg-gray-950 font-mono text-[0.8125rem] leading-5 text-gray-100;
 	}
 
-	/* ── Metrics ───────────────────────────────────────────────── */
+	/* Metrics */
 	.metric-label {
 		color: var(--app-subtle);
 		@apply text-[0.8125rem] font-medium;
 	}
+
 	.metric-value {
 		font-variant-numeric: tabular-nums;
 	}
