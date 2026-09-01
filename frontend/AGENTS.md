@@ -1,127 +1,154 @@
-# Frontend UI consistency rules
+# Frontend agent instructions
 
-These rules apply to everything under `frontend/`. Keep the implementation small and reuse the existing Svelte/Tailwind primitives before adding abstractions or dependencies.
+These rules apply to everything under `frontend/`.
 
-## Product visual direction
+## Mandatory visual source of truth
 
-MyPaaS is a flat monochrome operational UI. Prefer consistency, information hierarchy, real data, and useful density over decorative variety.
+Before making ANY UI/layout/styling change, read [`DESIGN.md`](./DESIGN.md).
 
-- Normal product chrome is white, black, and neutral gray in light/dark mode.
-- Do not use green/emerald as generic brand decoration, generic selection color, or generic primary-action color.
-- Primary workflow actions use monochrome inversion: dark control on light surfaces, light control on dark surfaces.
-- Color is reserved for actual state and data semantics. Current resource mapping is RAM=green, CPU=blue, storage=amber, network=violet.
-- Warning, danger, info, and success colors are allowed only when they communicate real state.
-- Keep normal cards flat and neutral. Do not imitate another PaaS mechanically; preserve MyPaaS's own compact operational language.
-- Do not make the interface feel premium by adding whitespace. MyPaaS is an operational control plane and should expose useful information per viewport.
+`DESIGN.md` is authoritative for:
 
-## Shell ownership
+- application-shell geometry;
+- page/workspace spacing;
+- surfaces, borders, radius, and elevation;
+- navigation states;
+- typography and color;
+- operational tables;
+- metrics/charts;
+- loading-state scope;
+- full-canvas tools such as ERD and Shell;
+- responsive behavior and visual anti-patterns.
 
-- Desktop primary navigation is a compact 56px rail by default.
-- Hover or keyboard focus expands the desktop navigation as an overlay over main content. Expanded navigation must never resize, shift, or reflow the main workspace.
-- Selecting a navigation item collapses the overlay back to the rail. Do not add a persistent manual minimize/expand toggle or store sidebar-width preference in local storage.
-- The desktop sidebar owns navigation only. User identity/account access and appearance/theme control belong in the global topbar.
-- Global topbar owns page context/breadcrumbs, notifications, appearance/theme control, and account access.
-- Mobile navigation remains available from the topbar and must expose the same authorized primary destinations as desktop navigation. Account and appearance controls remain directly available in the topbar.
-- The notification center is generic infrastructure for real platform/release/deployment/resource events. Never fabricate unread state or release availability.
-- Root routes must not repeat the same title in both the topbar and page body. Deep routes may use the topbar for breadcrumb context such as `Projects / project / Deployments`. Project observability belongs on Project Detail, not a standalone Metrics route.
-- Do not keep a second route-level breadcrumb implementation hidden with CSS. Navigation context must have one owner.
+Do not invent route-local visual rules that contradict `DESIGN.md`. If a requested change intentionally changes the visual contract, update `DESIGN.md` first or in the same change.
 
-## Layout and density
+In particular, do not reintroduce generic SaaS card stacks, first-level rounded boxes, strong border grids, large outer page padding, or full-page loading for local operations.
 
-- Operational routes use the shared `page-shell`. Do not introduce route-specific centered `max-w-*` wrappers for the whole page unless the content is genuinely document/dialog-like.
-- Field-level `max-w-*` is allowed when it improves readability. Constrain the field, not the entire operational workflow.
-- Authenticated operational pages use the connected-workspace layout token: adjacent page-level surfaces have zero card gap, share borders, and read as one workspace rather than a stack of floating cards.
-- `SectionPanel` and `TableShell` are canonical workspace sections. Do not reintroduce route-local `mb-*`/`gap-*` merely to separate consecutive panels; use internal padding and dividers instead.
-- Side-by-side surface grids should behave like split panes: use a quiet 1px divider rather than a large gutter. Forms, field groups, lists, and controls may retain normal internal gaps because they are not page-level surfaces.
-- Rounded outer corners belong to the edge of a connected workspace cluster. Do not give every touching section its own visible rounded card silhouette.
-- Parent layouts own external spacing between distinct workflows. Components own only their internal padding/gaps.
-- Avoid nested cards used only to create more whitespace. Use dividers and layout grids when the content belongs to one surface.
-- Prefer a restrained spacing rhythm around 8px inline, 12px small detail, 16px normal content, and compact page padding instead of arbitrary route-local gap/mb values.
-- Operational table rows should normally land around 52–60px effective height. Do not use `px-5 py-4` card-like rows by default.
-- Prefer the shared `.data-table` grammar for ordinary operational/admin tables.
+## Implementation discipline
 
-## Surfaces and elevation
+- Keep implementation small and reuse existing Svelte/Tailwind primitives before adding abstractions or dependencies.
+- Prefer fixing a shared primitive/token when an issue is systemic instead of patching many routes separately.
+- Do not add a new UI framework or icon library. Svelte, Tailwind, and Lucide are sufficient for the current product scope.
+- Do not create a second visual system for one feature.
 
-Use only the established surface hierarchy:
+## Application shell ownership
 
-- `.surface`: normal content container. Flat, bordered, no shadow; page-level surfaces participate in the connected workspace layout.
-- `.surface-muted`: subtle inset/secondary grouping. No shadow.
-- `.overlay`: floating UI such as menus, popovers, notification panels, expanded desktop navigation, and modal surfaces. Shadow is allowed here.
+- Desktop primary navigation is the existing 56px rail.
+- Hover/keyboard focus expands desktop navigation as an overlay; expansion must never resize or reflow the main workspace.
+- Selecting a navigation item collapses the overlay.
+- Do not add a persistent manual minimize/expand toggle or sidebar-width preference.
+- Sidebar owns navigation only.
+- Global topbar owns breadcrumbs/page context, notifications, appearance/theme control, account access, and suitable route-level primary actions.
+- Mobile navigation must expose the same authorized destinations as desktop navigation.
+- Root routes must not repeat the same title in topbar and body.
+- Project observability belongs on Project Detail, not a standalone Metrics route.
+- Do not keep duplicate route-level breadcrumbs hidden with CSS.
 
-Do not add arbitrary `shadow-*` classes to normal cards, tables, stat tiles, headers, or toolbars. Semantic alerts may use tinted backgrounds, but an alert tone is not a new card/elevation type.
-Use `.console-surface` and `.code-surface` for terminal/code content instead of recreating dark boxes per route.
+## Shared UI primitives
+
+Before creating a new component, check whether these already solve the problem:
+
+- `ActionButton`
+- `ActionLink`
+- `IconButton`
+- `SectionPanel`
+- `TableShell`
+- `PageHeader`
+- `EmptyState`
+- `StatusBadge`
+- `SegmentedChoice`
+- `InfoDisclosure`
+- shared field/surface utilities
+
+Prefer a small extension to an existing primitive over a parallel component with slightly different styling.
 
 ## Controls
 
-- Reuse `ActionButton` for text buttons, `ActionLink` for text navigation actions, and `IconButton` for icon-only utility/repeated actions before writing a generic raw control.
-- Visible workflow actions should normally combine a Lucide icon with a readable text label: New project, Refresh, Deploy, Start, Stop, Save, Retry, Import, Download, and similar actions.
-- Icon-only controls are reserved for compact chrome/utility actions such as notifications, appearance, overflow menus, clear input, reveal/hide, copy in a dense context, or row expand/collapse.
-- Do not add an icon-only desktop sidebar collapse/expand control; the desktop rail expands by hover/focus and collapses after navigation.
-- Canonical action variants are `primary`, `secondary`, `ghost`, `danger`, and `ghostDanger`. Legacy IconButton aliases may exist for compatibility but new code should not use them.
-- Standard controls should align to the 36px visual height. Keep the existing 44px coarse-pointer/touch target behavior.
-- Use `LoaderCircle` from Lucide for loading indicators. Do not add custom border spinners.
+- Reuse `ActionButton` for text buttons, `ActionLink` for text navigation actions, and `IconButton` for icon-only utility/repeated actions.
+- Visible workflow actions normally combine a Lucide icon with a readable label: New project, Refresh, Deploy, Start, Stop, Save, Retry, Import, Download, etc.
+- Icon-only controls are reserved for compact utility/chrome actions such as notifications, appearance, overflow, clear input, reveal/hide, copy in a dense context, or row expand/collapse.
+- Canonical action variants are `primary`, `secondary`, `ghost`, `danger`, and `ghostDanger`.
+- Use `LoaderCircle` from Lucide for local loading indicators. Do not add custom border spinners.
 
 ## Icons
 
 - `@lucide/svelte` is the single source for generic product/UI icons.
-- Brand marks may use a local centralized SVG/component when Lucide intentionally does not provide the brand.
+- Brand marks may use a centralized local component when Lucide intentionally does not provide the brand.
 - Do not use emoji or Unicode glyphs as UI status/action icons.
-- Icon semantics must match the operation: Stop is not Pause; Download is not Upload; Restart is not Refresh unless the action really means refresh.
-- Decorative icons must use `aria-hidden="true"`; icon-only controls require a meaningful accessible label.
+- Icon semantics must match the actual operation.
+- Decorative icons use `aria-hidden="true"`; icon-only controls require a meaningful accessible label.
 
-## Typography
+## Loading behavior
 
-- Product UI uses bundled Inter Variable with the system sans stack as fallback.
-- Technical identifiers such as commit SHAs, domains, env keys, ports, filenames, branches, and repository identifiers use IBM Plex Mono with a system monospace fallback.
-- Live metric numbers use tabular numerals so streaming/background updates do not visually shift digits.
-- Prefer weights 400, 500, and 600. Avoid making every hierarchy level bold.
-- Normal body, controls, and primary table values should generally be 14–15px. Section titles should generally be 15–16px. Page/object titles should generally be 20–24px.
-- Metadata is normally 13px. Do not introduce generic 10–11px text; reserve micro typography for exceptional technical annotations only.
-- A route should not shrink most supporting text to `text-xs` simply to create hierarchy. Use weight, tone, alignment, and spacing as well.
-- Compact means tighter layout/chrome, not smaller readable text.
+Follow the scope contract in `DESIGN.md`.
 
-## Status and chips
+- Global main-content loading is for initial authenticated route/resource loading only.
+- Repository inspection/detection is local state and MUST NOT blank the whole page.
+- Mutations such as deploy/start/stop/restart, DB writes, shell input, explicit refresh, and form submissions use local progress.
+- Polling, SSE, and background telemetry never trigger the global blocking loader.
+- Preserve the mounted route while global initial loading is visually active so lifecycle requests can execute.
 
-- Do not default to a tinted rounded badge for every state.
-- Ordinary operational state should usually be a semantic `.status-dot` plus neutral readable text.
-- Tinted pills are reserved for states that genuinely need stronger emphasis, such as critical/failed/warning or a special workflow state.
-- Do not represent the same state redundantly in multiple columns when another contextual control already communicates it. For example, Projects inventory intentionally does not have a separate Status column because Start/Stop/Deploy and local error cues already expose actionable state.
-
-## Metrics and charts
+## Data and telemetry integrity
 
 - Chart color communicates the resource being measured, not generic brand emphasis.
-- Never manufacture fake history from a current percentage. Overview trend charts must use real bounded rolling samples or clearly render a current-value meter instead.
-- Network counters are cumulative unless an API explicitly returns a rate. Derive transfer rate only from successive valid samples and elapsed time; reset the baseline if a counter decreases.
-- Preserve last-known telemetry during successful background refreshes. Do not show a spinner for every host/project telemetry sample; loading indicators are for initial connection or explicit recovery only.
-- Do not present policy quotas such as maximum project count as equivalent to physical RAM/CPU/storage/network capacity.
+- Never manufacture fake history from a current percentage.
+- Network counters are cumulative unless an API explicitly returns a rate; derive rates from successive valid samples and elapsed time.
+- Reset network baseline if counters decrease.
+- Preserve last-known telemetry during successful background refreshes.
+- Do not present policy quotas as if they are physical host capacity.
+- Do not fabricate unread state, release availability, progress, or success.
 
-## Empty, status, and notification states
+## Status behavior
 
-- Empty states should be quiet and neutral. Do not force one generic illustration/icon onto unrelated contexts.
-- Status colors must represent real backend/runtime state; do not invent fake progress, unread state, release availability, or success.
-- The global notification center only renders unread/update content when real data exists.
+- Status colors represent real backend/runtime state only.
+- Do not default every state to a tinted rounded badge.
+- Do not repeat the same state redundantly when another nearby control already communicates it clearly.
 
-## Create Project
+## Create Project workflow
 
-- Preserve the current source-first state machine: repository inspection, branch resolution, deployment detection, environment scan, and staged presentation are real workflow states.
-- Real repository/detection requests start immediately. Minimum visual duration may make a real operation readable, but must not delay when work begins or fabricate backend work.
-- Deployment Type stays in the normal flow, not hidden inside Advanced settings.
-- Environment detection stays visible in the normal flow.
-- Advanced settings must have a clearly visible disclosure trigger and contain only genuine overrides/diagnostics.
-- Do not reintroduce a narrow route-level max-width for this operational workflow.
+Preserve the source-first workflow:
 
-## Adding UI primitives
+- repository inspection;
+- branch resolution;
+- deployment detection;
+- environment scan;
+- staged presentation of real results.
 
-Before creating a new component, check whether `ActionButton`, `ActionLink`, `IconButton`, `SectionPanel`, `TableShell`, `PageHeader`, `EmptyState`, `StatusBadge`, `SegmentedChoice`, `InfoDisclosure`, or the shared surface utilities already solve the problem. Prefer a small extension to an existing primitive over a parallel component with slightly different styling.
+Rules:
 
-Do not add a new UI framework or icon library merely to solve consistency. Svelte, Tailwind, and Lucide are sufficient for the current product scope.
+- Real repository/detection requests start immediately.
+- Minimum visual duration may make a real operation readable but must never delay when work begins or fabricate backend work.
+- Deployment Type remains in the normal flow, not hidden inside Advanced settings.
+- Environment detection remains visible in the normal flow.
+- Advanced settings contain only genuine overrides/diagnostics and require a clear disclosure trigger.
+- Do not constrain the whole workflow with an arbitrary narrow route-level max width.
+
+## Database / ERD
+
+- Database Studio and schema design follow the full-workspace contract in `DESIGN.md`.
+- ERD canvas owns pan/zoom interaction.
+- Preserve pointer-anchored zoom behavior for mouse/trackpad gestures.
+- Do not re-wrap the design canvas in generic cards or introduce page scroll around a full-canvas schema workspace.
+
+## Host Shell
+
+- Host Shell is an operational workspace, not a dashboard card.
+- Preserve owner-only authorization and existing backend safety/session boundaries.
+- Terminal output/input loading stays local; shell commands must not trigger the global page loader.
+- Do not add decorative terminal wrappers that reduce usable workspace height.
+
+## Accessibility
+
+- Preserve keyboard access and visible focus states.
+- Hover-only behavior requires an equivalent focus/keyboard path where applicable.
+- Do not rely on color alone for critical state.
+- Avoid noisy live announcements during polling/background refresh.
 
 ## Frontend validation
 
 For frontend-only changes, the required merge gate is:
 
-1. frontend unit tests
-2. Svelte/TypeScript checks
-3. production frontend build
+1. frontend unit tests;
+2. Svelte/TypeScript checks;
+3. production frontend build.
 
 Fix failures before merging. Backend/infrastructure gates are required only when the change actually touches those contracts.
