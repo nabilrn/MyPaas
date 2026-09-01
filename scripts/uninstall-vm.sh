@@ -116,8 +116,22 @@ fi
 sudo_cmd rm -f /etc/systemd/system/mypaas-firewall.service
 sudo_cmd rm -f /usr/local/lib/mypaas/firewall-helper.py
 sudo_cmd rm -f /run/mypaas/firewall.sock
+
+log "Removing MyPaaS host update units..."
+if command -v systemctl >/dev/null 2>&1; then
+  sudo_cmd systemctl stop mypaas-update.timer mypaas-update.path mypaas-update.service >/dev/null 2>&1 || true
+  sudo_cmd systemctl disable mypaas-update.timer mypaas-update.path mypaas-update.service >/dev/null 2>&1 || true
+fi
+sudo_cmd rm -f /etc/systemd/system/mypaas-update.service
+sudo_cmd rm -f /etc/systemd/system/mypaas-update.timer
+sudo_cmd rm -f /etc/systemd/system/mypaas-update.path
+sudo_cmd rm -f /etc/mypaas/update.env
+sudo_cmd rm -f /run/mypaas/update.request
+sudo_cmd rmdir /etc/mypaas >/dev/null 2>&1 || true
+
 if command -v systemctl >/dev/null 2>&1; then
   sudo_cmd systemctl daemon-reload >/dev/null 2>&1 || true
+  sudo_cmd systemctl reset-failed mypaas-update.service >/dev/null 2>&1 || true
 fi
 
 if [[ "$REMOVE_STATD" == "true" ]]; then
