@@ -61,84 +61,78 @@
 	<title>Backup · MyPaas</title>
 </svelte:head>
 
-<div class="page-shell space-y-4 py-6">
-	<p class="px-5 text-sm text-gray-500 dark:text-gray-400">Manage automated off-site backups and on-demand manual archives of PostgreSQL and platform configuration.</p>
-
-	<SectionPanel title="How backup works" description="MyPaaS automatically creates and manages backups to ensure your platform state is safe." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-			<div class="flex gap-3 p-4">
+<div class="page-shell">
+	<SectionPanel title="How backup works" description="Automated off-site backups and on-demand archives of PostgreSQL and platform configuration." contentClass="p-0">
+		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<Database class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">1. Database Snapshot</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The platform performs a consistent pg_dump of the entire PostgreSQL database, capturing users, projects, and deployment state.</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Database snapshot</p>
+					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">A consistent PostgreSQL dump captures users, projects, and deployment state.</p>
 				</div>
 			</div>
-			<div class="flex gap-3 p-4">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">2. Platform Config</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Core platform files and configuration are archived alongside the database to ensure a seamless restoration process.</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Platform config</p>
+					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Core platform files and configuration are archived with the database.</p>
 				</div>
 			</div>
-			<div class="flex gap-3 p-4">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<Cloud class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">3. Off-site Sync</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">When configured, backups are automatically compressed, encrypted (if using HTTPS), and synced to an S3-compatible object storage provider daily.</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Off-site sync</p>
+					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Configured backups are compressed and synced daily to S3-compatible storage.</p>
 				</div>
 			</div>
 		</div>
 	</SectionPanel>
 
 	{#if !loading}
-		<SectionPanel title="S3 Automated Backup" description="Configure S3-compatible storage for automated daily backups.">
-			<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]">
-				<div class="h-max rounded-md border border-gray-200 p-4 text-sm text-gray-600 dark:border-neutral-800 dark:text-gray-300">
-					<p class="font-medium text-gray-950 dark:text-white">Cloudflare R2 Setup Guide</p>
-					<div class="mt-2 space-y-2 leading-6">
-						<p>1. Go to Cloudflare Dashboard &rarr; <strong>R2 Object Storage</strong> and create a bucket.</p>
-						<p>2. Click <strong>Manage R2 API Tokens</strong> and create a token with <strong>Object Read &amp; Write</strong> permissions.</p>
-						<p>3. Copy the <strong>S3 Endpoint</strong> from the bucket settings.</p>
-						<p>4. Use Region <code>auto</code> unless you specified a specific jurisdiction.</p>
+		<SectionPanel title="S3 automated backup" description="Configure S3-compatible storage for automated daily backups." contentClass="p-0">
+			<div class="grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1fr)]">
+				<div class="border-b border-gray-100/70 p-5 text-sm text-gray-600 dark:border-neutral-900 dark:text-gray-300 lg:border-b-0 lg:border-r">
+					<p class="font-medium text-gray-950 dark:text-white">Cloudflare R2 setup</p>
+					<div class="mt-3 space-y-2 leading-6">
+						<p>1. Create a bucket in R2 Object Storage.</p>
+						<p>2. Create an API token with Object Read &amp; Write permissions.</p>
+						<p>3. Copy the S3 endpoint from the bucket settings.</p>
+						<p>4. Use region <code>auto</code> unless a jurisdiction requires another value.</p>
 					</div>
 				</div>
-				<div class="space-y-4">
+				<div class="space-y-4 p-5">
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="endpoint">S3 Endpoint</label>
+						<label class="field-label" for="endpoint">S3 endpoint</label>
 						<input id="endpoint" type="text" bind:value={s3Config.endpoint} class="field w-full font-mono text-sm" placeholder="https://<account-id>.r2.cloudflarestorage.com" />
 					</div>
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="bucket">Bucket</label>
+						<label class="field-label" for="bucket">Bucket</label>
 						<input id="bucket" type="text" bind:value={s3Config.bucket} class="field w-full font-mono text-sm" placeholder="mypaas-backups" />
 					</div>
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="region">Region</label>
+						<label class="field-label" for="region">Region</label>
 						<input id="region" type="text" bind:value={s3Config.region} class="field w-full font-mono text-sm" placeholder="auto" />
 					</div>
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="access-key">Access Key</label>
+						<label class="field-label" for="access-key">Access key</label>
 						<input id="access-key" type="text" bind:value={s3Config.access_key} class="field w-full font-mono text-sm" />
 					</div>
 					<div>
-						<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="secret-key">Secret Key</label>
+						<label class="field-label" for="secret-key">Secret key</label>
 						<input id="secret-key" type="password" bind:value={s3Config.secret_key} class="field w-full font-mono text-sm" />
 					</div>
-					<div class="pt-2">
-						<ActionButton variant="primary" loading={savingS3} on:click={saveS3Config}>Save S3 Config</ActionButton>
-					</div>
+					<ActionButton variant="primary" loading={savingS3} on:click={saveS3Config}>Save S3 config</ActionButton>
 				</div>
 			</div>
 		</SectionPanel>
 
-		<SectionPanel title="Manual Backup" description="Download a complete snapshot of the database and platform configuration immediately.">
-			<div class="flex items-center gap-4">
+		<SectionPanel title="Manual backup" description="Download a current database and platform-configuration snapshot.">
+			<div class="flex flex-wrap items-center gap-4">
 				<ActionButton variant="secondary" size="sm" on:click={downloadBackup}>
 					<Download slot="icon" class="h-4 w-4" />
-					Download Backup
+					Download backup
 				</ActionButton>
-				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Note: This includes the database dump and core config, but does not include user project volumes.
-				</p>
+				<p class="text-sm text-gray-500 dark:text-gray-400">Project volumes are not included.</p>
 			</div>
 		</SectionPanel>
 	{/if}
