@@ -2,6 +2,7 @@ package gitremote
 
 import (
 	"context"
+	"encoding/base64"
 	"net/url"
 	"os"
 	"os/exec"
@@ -13,16 +14,22 @@ import (
 func CommandContext(ctx context.Context, repoURL, accessToken string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	host, ok := githubHTTPSHost(repoURL)
-	if strings.TrimSpace(accessToken) == "" || !ok {
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" || !ok {
 		return cmd
 	}
 	cmd.Env = setEnv(os.Environ(), map[string]string{
 		"GIT_CONFIG_COUNT":    "1",
 		"GIT_CONFIG_KEY_0":    "http.https://" + host + "/.extraheader",
-		"GIT_CONFIG_VALUE_0":  "AUTHORIZATION: bearer " + accessToken,
+		"GIT_CONFIG_VALUE_0":  githubBasicAuthorizationHeader(accessToken),
 		"GIT_TERMINAL_PROMPT": "0",
 	})
 	return cmd
+}
+
+func githubBasicAuthorizationHeader(accessToken string) string {
+	credential := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + accessToken))
+	return "AUTHORIZATION: basic " + credential
 }
 
 func setEnv(env []string, values map[string]string) []string {
