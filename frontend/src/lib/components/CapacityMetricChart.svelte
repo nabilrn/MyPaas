@@ -151,9 +151,9 @@
 			{/if}
 		</div>
 
-		<div class="relative mt-2 h-32 overflow-hidden rounded-md border border-gray-200/70 bg-white dark:border-gray-800/70 dark:bg-neutral-950">
+		<div class="relative mt-2 h-32 overflow-hidden rounded-md bg-gray-50/45 dark:bg-neutral-900/45">
 			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
-				<g class="stroke-gray-100/45 dark:stroke-neutral-800/35" stroke-width="0.7">
+				<g class="stroke-gray-100/30 dark:stroke-neutral-800/25" stroke-width="0.55">
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
