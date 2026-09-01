@@ -8,8 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Editable resource-profile defaults with built-in memory/CPU floors, persisted runtime enforcement, and consistent Create Project/Project Settings values.
-- Safe removal of stopped containers from the owner container inventory.
 - Deployment history readiness diagnostics with an explicit queued, source, build, and service-readiness timeline plus the last captured deployment event.
 - Owner-only short-lived host shell for trusted VM operators, with owner/master whitelist invariants, session timeout/idle cleanup, and audit-safe command handling.
 - Bounded additional HTTP routes for Docker Compose projects, with platform-derived hostnames, service/port validation against the resolved Compose contract, route ownership checks, a four-route maximum, lifecycle reconciliation, and no additional host-port publication. MinIO is the first real-VM-qualified multi-route template. See ADR-023 and PR #157.
@@ -76,8 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
 
 ### Changed
-- Dashboard-triggered updates now use a host-side systemd path request, avoiding invalid host-script execution inside the API container.
-- Simplified Backup, Migration, MCP, Ports, Audit, Containers, and Settings copy and action hierarchy.
 - Production deployment now resolves a live configured/Podman/Docker engine socket on the host and maps it into the API at the stable in-container `/var/run/docker.sock` path.
 - Initial Compose deployment now reconciles declared additional HTTP routes synchronously before the deployment is marked running; lifecycle and periodic reconciliation remain recovery/maintenance paths.
 - Compose repository deployments now inject MyPaas project env vars into the public service, refresh remote image-only services before normal deploys, and wait for the main service to be running/healthy before routing traffic or marking the deployment running. Rollbacks keep their recorded image behavior.
