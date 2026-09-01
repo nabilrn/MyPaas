@@ -26,6 +26,19 @@ func TestCommandContextUsesEphemeralGitHubCredential(t *testing.T) {
 	}
 }
 
+func TestCommandContextUsesWWWGitHubCredentialScope(t *testing.T) {
+	const token = "github-token-for-test"
+	cmd := CommandContext(context.Background(), "https://www.github.com/acme/app.git", token, "ls-remote", "https://www.github.com/acme/app.git")
+
+	joinedEnv := strings.Join(cmd.Env, "\n")
+	if !strings.Contains(joinedEnv, "GIT_CONFIG_KEY_0=http.https://www.github.com/.extraheader") {
+		t.Fatalf("command environment does not scope the credential to www.github.com: %v", cmd.Env)
+	}
+	if strings.Contains(strings.Join(cmd.Args, " "), token) {
+		t.Fatal("GitHub access token must not be present in command arguments")
+	}
+}
+
 func TestCommandContextDoesNotAttachGitHubCredentialToOtherHosts(t *testing.T) {
 	cmd := CommandContext(context.Background(), "https://gitlab.com/acme/app.git", "github-token-for-test", "clone")
 
@@ -60,6 +73,5 @@ func TestIsGitHubURL(t *testing.T) {
 			if got := IsGitHubURL(tt.url); got != tt.want {
 				t.Fatalf("IsGitHubURL(%q) = %v, want %v", tt.url, got, tt.want)
 			}
-		})
 	}
 }
