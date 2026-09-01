@@ -6,7 +6,6 @@
 	import EmptyState from '$components/EmptyState.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
-	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api, type ProjectHTTPRoute } from '$api';
 	import { projectRouteURL, projectURL } from '$lib/utils/urls';
@@ -18,7 +17,6 @@
 	let dbStatus: DBStudioStatus | null = null;
 	let httpRoutes: ProjectHTTPRoute[] = [];
 	let supportingSummaryLoaded = false;
-	let loading = true;
 	let overviewInFlight = false;
 	let error = '';
 
@@ -65,7 +63,6 @@
 	async function loadOverview(background = false) {
 		if (overviewInFlight) return;
 		overviewInFlight = true;
-		if (!background && !project) loading = true;
 		try {
 			const [projectResult, deploymentRows] = await Promise.all([
 				api.projects.get($page.params.id ?? ''),
@@ -77,7 +74,6 @@
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load project dashboard';
 		} finally {
-			loading = false;
 			overviewInFlight = false;
 		}
 	}
@@ -148,26 +144,22 @@
 	<title>{project?.name ?? 'Project'} · MyPaas</title>
 </svelte:head>
 
-{#if loading}
-	<div class="surface flex min-h-64 items-center justify-center">
-		<LoadingIndicator label="Loading project dashboard" />
-	</div>
-{:else if error && !project}
-	<div class="surface overflow-hidden">
+{#if error && !project}
+	<div class="workspace-section">
 		<ErrorState title="Could not load project dashboard" message={error} on:retry={() => void loadOverview()} />
 	</div>
 {:else if project}
-	<div class="space-y-4">
+	<div class="project-overview-workspace">
 		{#if error}
-			<div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+			<div class="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
 				<p class="font-medium">Dashboard refresh failed</p>
 				<p class="mt-1">{error}</p>
 			</div>
 		{/if}
 
 		{#if project.status === 'building' || project.status === 'crashed' || project.status === 'pending'}
-			<section class="surface overflow-hidden">
-				<div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+			<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+				<div class="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
 							<StatusBadge status={project.status} pulse />
@@ -187,12 +179,12 @@
 
 		<ProjectObservability {project} />
 
-		<div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
-			<section class="surface overflow-hidden">
-				<div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
+		<div class="grid bg-gray-100/70 dark:bg-neutral-900 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
+			<section class="min-w-0 bg-white dark:bg-neutral-950 lg:border-r lg:border-gray-100/70 lg:dark:border-neutral-900">
+				<div class="panel-header flex items-start justify-between gap-3">
 					<div>
-						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Latest deployment</h2>
-						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The newest deployment attempt for this project.</p>
+						<h2 class="panel-title">Latest deployment</h2>
+						<p class="panel-description">Latest deployment attempt.</p>
 					</div>
 					<ActionLink href={`${base}/deployments`} variant="ghost" size="xs">
 						<History slot="icon" class="h-3.5 w-3.5" />
@@ -209,10 +201,10 @@
 									{project.sourceType === 'registry' ? (lastDeploy.imageTag ?? project.imageRef ?? '-') : (lastDeploy.commitSha?.slice(0, 8) ?? '-')}
 								</p>
 							</div>
-							<p class="metric-value text-xs text-gray-500 dark:text-gray-400">{formatDuration(lastDeploy.startedAt, lastDeploy.finishedAt)}</p>
+							<p class="metric-value text-[13px] text-gray-500 dark:text-gray-400">{formatDuration(lastDeploy.startedAt, lastDeploy.finishedAt)}</p>
 						</div>
 						<p class="mt-4 text-sm text-gray-800 dark:text-gray-200">{lastDeploy.commitMessage || 'No deployment message'}</p>
-						<div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+						<div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-gray-500 dark:text-gray-400">
 							<span>Triggered by <span class="capitalize text-gray-700 dark:text-gray-300">{lastDeploy.triggeredBy}</span></span>
 							<span>{formatDate(lastDeploy.startedAt)}</span>
 						</div>
@@ -224,23 +216,23 @@
 				{/if}
 			</section>
 
-			<section class="surface overflow-hidden">
-				<div class="border-b border-gray-100 px-5 py-4 dark:border-neutral-800">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Project essentials</h2>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current public endpoints and configuration entry points.</p>
+			<section class="min-w-0 bg-white dark:bg-neutral-950">
+				<div class="panel-header">
+					<h2 class="panel-title">Project essentials</h2>
+					<p class="panel-description">Endpoints and configuration.</p>
 				</div>
 
-				<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+				<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
 					<div class="px-5 py-4">
 						<div class="flex items-start gap-3">
 							<ExternalLink class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 							<div class="min-w-0 flex-1">
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Public endpoints</p>
-								<a href={primaryEndpoint} target="_blank" rel="noreferrer" class="mt-1 block truncate font-mono text-[11px] text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{primaryEndpoint}</a>
+								<a href={primaryEndpoint} target="_blank" rel="noreferrer" class="mt-1 block truncate font-mono text-xs text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{primaryEndpoint}</a>
 								{#each additionalEndpoints as endpoint}
 									<div class="mt-2">
-										<a href={endpoint.url} target="_blank" rel="noreferrer" class="block truncate font-mono text-[11px] text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{endpoint.url}</a>
-										<p class="mt-0.5 font-mono text-[10px] text-gray-400 dark:text-gray-500">{endpoint.service}:{endpoint.containerPort} · HTTP route {endpoint.name}</p>
+										<a href={endpoint.url} target="_blank" rel="noreferrer" class="block truncate font-mono text-xs text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white">{endpoint.url}</a>
+										<p class="mt-0.5 font-mono text-xs text-gray-400 dark:text-gray-500">{endpoint.service}:{endpoint.containerPort} · HTTP route {endpoint.name}</p>
 									</div>
 								{/each}
 							</div>
@@ -252,7 +244,7 @@
 							<KeyRound class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 							<div class="min-w-0">
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Environment</p>
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{envCount === null ? (supportingSummaryLoaded ? 'Unavailable' : 'Checking…') : `${envCount} variable${envCount === 1 ? '' : 's'} configured`}</p>
+								<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{envCount === null ? (supportingSummaryLoaded ? 'Unavailable' : 'Checking…') : `${envCount} variable${envCount === 1 ? '' : 's'} configured`}</p>
 							</div>
 						</div>
 						<ArrowRight class="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -263,7 +255,7 @@
 							<Database class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 							<div class="min-w-0">
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Database</p>
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{databaseLabel}</p>
+								<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{databaseLabel}</p>
 							</div>
 						</div>
 						<ArrowRight class="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
@@ -274,8 +266,8 @@
 							<Settings2 class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 							<div class="min-w-0">
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Deployment setup</p>
-								<p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{deploymentSummary}</p>
-								<p class="metric-value mt-1 text-[11px] text-gray-400 dark:text-gray-500">{project.memoryLimitMb} MB · {project.cpuLimit} CPU</p>
+								<p class="mt-1 truncate text-[13px] text-gray-500 dark:text-gray-400">{deploymentSummary}</p>
+								<p class="metric-value mt-1 text-xs text-gray-400 dark:text-gray-500">{project.memoryLimitMb} MB · {project.cpuLimit} CPU</p>
 							</div>
 						</div>
 						<ArrowRight class="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
