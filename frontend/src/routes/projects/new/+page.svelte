@@ -1266,7 +1266,7 @@
 						<div>
 							<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
 								<div>
-									<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
+									<label class="field-label" for="repo">Repository URL</label>
 									<input
 										id="repo"
 										type="text"
@@ -1279,7 +1279,7 @@
 								</div>
 								<ActionButton type="button" variant="secondary" loading={githubRepositoriesLoading && !githubRepositoriesLoaded} loadingLabel="Loading repositories..." on:click={() => void openRepositoryPicker()}>
 									<GitBranch slot="icon" class="h-4 w-4" />
-									Choose a repository
+									Browse GitHub
 								</ActionButton>
 							</div>
 
@@ -1287,19 +1287,19 @@
 								<div class="mt-3 overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
 									<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-3 dark:border-gray-800">
 										<div>
-											<h3 class="text-sm font-semibold text-gray-950 dark:text-white">Choose a repository</h3>
-											<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Repositories available to your GitHub account.</p>
+											<h3 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub repositories</h3>
+											<p class="mt-0.5 text-[0.8125rem] text-gray-500 dark:text-gray-400">Accessible to the connected account.</p>
 										</div>
-										<button type="button" class="app-focus rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-white" aria-label="Close repository picker" on:click={() => (githubRepositoryPickerOpen = false)}>
+										<IconButton label="Close repository picker" variant="ghost" type="button" on:click={() => (githubRepositoryPickerOpen = false)}>
 											<X class="h-4 w-4" aria-hidden="true" />
-										</button>
+										</IconButton>
 									</div>
 									<div class="border-b border-gray-100 p-3 dark:border-gray-800">
 										<label class="sr-only" for="repositorySearch">Search repositories</label>
 										<input id="repositorySearch" type="search" bind:value={githubRepositorySearch} placeholder="Search repositories" class="field w-full" autocomplete="off" />
 									</div>
 									{#if githubRepositoriesError}
-										<div class="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-xs text-red-700 dark:text-red-200">
+										<div class="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-[0.8125rem] text-red-700 dark:text-red-200">
 											<span>{githubRepositoriesError}</span>
 											<a class="font-medium underline underline-offset-2" href="/api/auth/github/login">Reconnect GitHub</a>
 										</div>
@@ -1307,18 +1307,18 @@
 										<div class="max-h-72 overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
 											{#each filteredGithubRepositories as repository}
 												<button type="button" class="app-focus flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-900" on:click={() => chooseGithubRepository(repository)}>
-											<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+													<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
 													<span class="min-w-0 flex-1">
 														<span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{repository.fullName}</span>
-														<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{repository.description || 'No description'} · {repository.private ? 'Private' : 'Public'} · {repository.defaultBranch}</span>
+														<span class="mt-0.5 block truncate text-[0.8125rem] text-gray-500 dark:text-gray-400">{repository.description ? `${repository.description} · ` : ''}{repository.private ? 'Private' : 'Public'} · {repository.defaultBranch}</span>
 													</span>
-													</button>
+												</button>
 											{/each}
 										</div>
 									{:else if githubRepositoriesLoading}
-										<p class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400">Loading repositories...</p>
+										<p class="px-3 py-4 text-[0.8125rem] text-gray-500 dark:text-gray-400">Loading repositories...</p>
 									{:else if githubRepositoriesLoaded}
-										<p class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400">{githubRepositorySearch.trim() ? 'No repositories match your search.' : 'No repositories available.'}</p>
+										<p class="px-3 py-4 text-[0.8125rem] text-gray-500 dark:text-gray-400">{githubRepositorySearch.trim() ? 'No repositories match your search.' : 'No repositories available.'}</p>
 									{/if}
 									{#if githubRepositoryHasNext && !githubRepositoriesError}
 										<div class="border-t border-gray-100 p-3 dark:border-gray-800">
