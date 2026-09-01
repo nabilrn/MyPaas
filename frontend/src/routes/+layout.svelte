@@ -90,4 +90,9 @@
 		margin: 0;
 		padding: 0 !important;
 	}
+
+	:global(.app-workspace .page-shell > .surface),
+	:global(.app-workspace .page-shell > .workspace-section) {
+		border-radius: 0;
+	}
 </style>
