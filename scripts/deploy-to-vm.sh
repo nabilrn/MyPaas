@@ -140,7 +140,8 @@ for dir in \
   /var/lib/mypaas/compose \
   /var/lib/mypaas/static \
   /var/lib/mypaas/backups \
-  /tmp/mypaas/builds
+  /tmp/mypaas/builds \
+  /run/mypaas
 do
   $SUDO mkdir -p "$dir"
 done
@@ -208,7 +209,6 @@ current_runtime_build_sha() {
 should_skip_migrations() {
   local runtime_sha
 
-  # A restored database must always be brought to the checkout schema.
   if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
     return 1
   fi
@@ -219,64 +219,54 @@ should_skip_migrations() {
     return 1
   fi
 
-  # Runtime rollback restores application images only. Running an older
-  # checkout's `migrate up` cannot downgrade a schema and only adds another
-  # failure point to the recovery path.
-  if [[ "$SKIP_IMAGE_PULL" == "true" && "${MYPAAS_IMAGE_TAG:-}" == rollback-* ]]; then
-    return 0
-  fi
-
-  # Normal updates should not launch a separate Go migration helper when the
-  # migration tree is byte-for-byte unchanged from the currently running API.
   runtime_sha="$(current_runtime_build_sha)"
-  if [[ "$runtime_sha" =~ ^[0-9a-fA-F]{40}$ ]] \
-    && git -c safe.directory="$ROOT_DIR" cat-file -e "${runtime_sha}^{commit}" 2>/dev/null \
-    && git -c safe.directory="$ROOT_DIR" diff --quiet "$runtime_sha" HEAD -- backend/migrations; then
-    return 0
-  fi
+  [[ -n "$runtime_sha" && "$runtime_sha" == "$MYPAAS_BUILD_SHA" ]]
+}
 
-  return 1
+is_podman_runtime() {
+  $DOCKER_BIN info 2>/dev/null | grep -qi podman
+}
+
+compose_up_control_plane() {
+  if is_podman_runtime; then
+    echo "Starting MyPaas control plane serially for Podman compatibility..."
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps api
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps caddy
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps cloudflared
+  else
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d api dashboard caddy cloudflared
+  fi
 }
 
 echo "Starting PostgreSQL..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d postgres
 
 echo "Waiting for PostgreSQL..."
-until $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T postgres pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
-  sleep 2
+for _ in $(seq 1 60); do
+  if $DOCKER_BIN inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' mypaas-postgres-prod 2>/dev/null | grep -q '^healthy$'; then
+    break
+  fi
+  sleep 1
 done
-
-if [[ -f "/tmp/mypaas-database.sql" ]]; then
-  echo "Found database backup, restoring..."
-  cat /tmp/mypaas-database.sql | $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T -i postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-  rm -f /tmp/mypaas-database.sql
-  RESTORED_CONTROL_PLANE_DB=true
-  echo "Database restored successfully."
+if ! $DOCKER_BIN inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' mypaas-postgres-prod 2>/dev/null | grep -q '^healthy$'; then
+  echo "PostgreSQL did not become healthy." >&2
+  exit 1
 fi
-
-MIGRATE_DATABASE_URL="postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
 
 if should_skip_migrations; then
   echo "Skipping migrations: control-plane migration tree is unchanged or this is an application rollback."
 else
-  echo "Running migrations..."
-  $DOCKER_BIN run --rm \
-    --network "$CONTROL_NETWORK" \
+  echo "Running control-plane migrations..."
+  $DOCKER_BIN run --rm --network "$CONTROL_NETWORK" \
     -v "$ROOT_DIR/backend/migrations:/migrations:ro" \
     migrate/migrate:latest \
     -path=/migrations \
-    -database "$MIGRATE_DATABASE_URL" \
+    -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mypaas-postgres-prod:5432/${POSTGRES_DB}?sslmode=disable" \
     up
 fi
 
 echo "Starting MyPaas..."
-if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
-fi
-$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
-if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
-  echo "Recreating API after database restore to trigger runtime reconciliation..."
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate api
-fi
+compose_up_control_plane
 
 echo "MyPaas production stack is starting. Run scripts/verify-production.sh after the containers settle."
