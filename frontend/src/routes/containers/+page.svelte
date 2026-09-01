@@ -1,16 +1,13 @@
 <script lang="ts">
-	import { Search, Trash2 } from '@lucide/svelte';
+	import { Search } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
-	import { loadRuntimeContainers, removeRuntimeContainer, type RuntimeContainer } from '$lib/api/container-inventory';
+	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
-	import { toast } from '$stores/toast';
 
 	let rows: RuntimeContainer[] = [];
 	let loading = false;
-	let deletingID = '';
 	let error = '';
 	let query = '';
 	let stateFilter = 'all';
@@ -57,25 +54,6 @@
 		}
 	}
 
-	async function removeContainer(row: RuntimeContainer) {
-		if (!canRemove(row) || deletingID) return;
-		if (!window.confirm(`Remove stopped container ${row.name}?`)) return;
-		deletingID = row.id;
-		try {
-			await removeRuntimeContainer(row.id);
-			rows = rows.filter((item) => item.id !== row.id);
-			toast.success('Container removed');
-		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Failed to remove container');
-		} finally {
-			deletingID = '';
-		}
-	}
-
-	function canRemove(row: RuntimeContainer) {
-		return !['running', 'paused', 'restarting'].includes(row.state);
-	}
-
 	function resetPage() {
 		pageIndex = 0;
 	}
@@ -115,6 +93,7 @@
 <div class="page-shell">
 	<TableShell
 		title="Containers"
+		description="Read-only host runtime inventory. Manage application lifecycle from each project."
 		loading={false}
 		{error}
 		empty={filteredRows.length === 0}
@@ -160,16 +139,15 @@
 			</div>
 		</svelte:fragment>
 
-		<table class="data-table table-fixed min-w-[68rem]">
+		<table class="data-table table-fixed min-w-[64rem]">
 			<colgroup>
-				<col class="w-[16%]" />
-				<col class="w-[18%]" />
-				<col class="w-[23%]" />
-				<col class="w-[10%]" />
+				<col class="w-[17%]" />
+				<col class="w-[19%]" />
+				<col class="w-[24%]" />
+				<col class="w-[11%]" />
 				<col class="w-[8%]" />
 				<col class="w-[12%]" />
 				<col class="w-[9%]" />
-				<col class="w-[4%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -180,7 +158,6 @@
 					<th class="text-right">CPU</th>
 					<th class="text-right">Memory</th>
 					<th>Status</th>
-					<th><span class="sr-only">Actions</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -206,13 +183,6 @@
 							{:else}—{/if}
 						</td>
 						<td><p class="truncate text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
-						<td class="text-right">
-							{#if canRemove(row)}
-								<IconButton label={`Remove ${row.name}`} variant="ghostDanger" loading={deletingID === row.id} disabled={Boolean(deletingID) && deletingID !== row.id} on:click={() => void removeContainer(row)}>
-									<Trash2 class="h-4 w-4" aria-hidden="true" />
-								</IconButton>
-							{/if}
-						</td>
 					</tr>
 				{/each}
 			</tbody>
