@@ -7,6 +7,7 @@
 	import Pagination from '$components/Pagination.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import TableShell from '$components/TableShell.svelte';
+	import DeploymentReadinessTimeline from '$components/DeploymentReadinessTimeline.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { expandFocusedDeployment, normalizeDeploymentFocus, pinFocusedDeployment } from '$lib/utils/deploymentFocus';
@@ -234,6 +235,9 @@
 				</div>
 
 				{#if expanded.has(d.id)}
+					{#if isPipelineActive(d.status) || d.status === 'running'}
+						<DeploymentReadinessTimeline status={d.status} buildLog={d.buildLog} active={d.id === project?.activeDeploymentId && project?.status === 'running'} />
+					{/if}
 					<div class="console-surface mt-3 overflow-hidden">
 						<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 px-3 py-2">
 							<p class="font-mono text-xs font-semibold uppercase tracking-wide text-gray-300">Deployment output</p>
