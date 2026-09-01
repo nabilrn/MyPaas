@@ -79,9 +79,9 @@
 	}
 
 	function navItemClass(href: string, currentPath = pathname) {
-		const base = 'flex min-h-10 items-center gap-3 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950';
-		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
-		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
+		const base = 'flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950';
+		const active = 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white';
+		const idle = 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-white';
 		return `${base} ${isActive(href, currentPath) ? active : idle}`;
 	}
 
@@ -118,7 +118,7 @@
 	}
 </script>
 
-<header class="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
+<header class="sticky top-0 z-30 border-b border-gray-100/80 bg-white/95 backdrop-blur dark:border-neutral-900 dark:bg-neutral-950/95">
 	<div class="flex h-14 items-center justify-between gap-3 px-4 lg:px-5">
 		<div class="flex min-w-0 items-center gap-3">
 			<IconButton
@@ -180,7 +180,7 @@
 			<div class="relative" use:dismissable={{ enabled: accountMenuOpen, onDismiss: closeAccountMenu }}>
 				<button
 					type="button"
-					class="app-focus flex h-9 max-w-48 items-center gap-2 rounded-md border border-transparent px-1.5 text-left transition-colors hover:border-gray-200 hover:bg-gray-100 dark:hover:border-neutral-800 dark:hover:bg-neutral-900"
+					class="app-focus flex h-9 max-w-48 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
 					aria-label="Open account menu"
 					aria-expanded={accountMenuOpen}
 					on:click={toggleAccountMenu}
@@ -214,7 +214,7 @@
 	</div>
 
 	{#if mobileMenuOpen}
-		<div class="border-t border-gray-100 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950 lg:hidden">
+		<div class="border-t border-gray-100/80 bg-white p-3 dark:border-neutral-900 dark:bg-neutral-950 lg:hidden">
 			<nav class="grid gap-1" aria-label="Primary navigation">
 				{#each visibleNavItems as item}
 					<a href={item.href} class={navItemClass(item.href, pathname)} aria-current={isActive(item.href, pathname) ? 'page' : undefined} on:click={() => (mobileMenuOpen = false)}>
