@@ -8,14 +8,23 @@
 
 	let loading = true;
 	let savingS3 = false;
+	let s3Configured = false;
 
 	let s3Config = {
 		endpoint: '',
 		bucket: '',
-		region: '',
+		region: 'auto',
 		access_key: '',
 		secret_key: ''
 	};
+
+	$: canSaveS3 = Boolean(
+		s3Config.endpoint.trim()
+		&& s3Config.bucket.trim()
+		&& s3Config.region.trim()
+		&& s3Config.access_key.trim()
+		&& s3Config.secret_key.trim()
+	);
 
 	onMount(() => {
 		void loadConfig();
@@ -25,13 +34,7 @@
 		loading = true;
 		try {
 			const data = await api.admin.getSettings();
-			s3Config = {
-				endpoint: ((data as any).s3_endpoint as string) || '',
-				bucket: ((data as any).s3_bucket as string) || '',
-				region: ((data as any).s3_region as string) || '',
-				access_key: ((data as any).s3_access_key as string) || '',
-				secret_key: ((data as any).s3_secret_key as string) || ''
-			};
+			s3Configured = Boolean((data as any).s3_configured);
 		} catch (error) {
 			toast.error('Failed to load backup configuration');
 			console.error(error);
@@ -41,9 +44,27 @@
 	}
 
 	async function saveS3Config() {
+		if (savingS3 || !canSaveS3) return;
 		savingS3 = true;
 		try {
-			await api.admin.updateS3Config(s3Config);
+			const response = await fetch('/api/admin/settings/s3', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					s3_endpoint: s3Config.endpoint.trim(),
+					s3_bucket: s3Config.bucket.trim(),
+					s3_region: s3Config.region.trim(),
+					s3_access_key: s3Config.access_key.trim(),
+					s3_secret_key: s3Config.secret_key
+				})
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(body.error?.message || 'Failed to save S3 configuration');
+			}
+			s3Configured = true;
+			s3Config = { ...s3Config, access_key: '', secret_key: '' };
 			toast.success('S3 configuration saved');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to save S3 configuration');
@@ -73,6 +94,7 @@
 						<p>3. Copy the S3 endpoint from the bucket settings.</p>
 						<p>4. Use region <code>auto</code> unless a jurisdiction requires another value.</p>
 					</div>
+					<p class="mt-4 text-xs text-gray-500 dark:text-gray-400">{s3Configured ? 'S3 backup is configured. Credentials are never returned to the browser; enter the full configuration to replace it.' : 'S3 backup is not configured yet.'}</p>
 				</div>
 				<div class="space-y-4 p-5">
 					<div>
@@ -89,13 +111,13 @@
 					</div>
 					<div>
 						<label class="field-label" for="access-key">Access key</label>
-						<input id="access-key" type="text" bind:value={s3Config.access_key} class="field w-full font-mono text-sm" />
+						<input id="access-key" type="text" autocomplete="off" bind:value={s3Config.access_key} class="field w-full font-mono text-sm" />
 					</div>
 					<div>
 						<label class="field-label" for="secret-key">Secret key</label>
-						<input id="secret-key" type="password" bind:value={s3Config.secret_key} class="field w-full font-mono text-sm" />
+						<input id="secret-key" type="password" autocomplete="new-password" bind:value={s3Config.secret_key} class="field w-full font-mono text-sm" />
 					</div>
-					<ActionButton variant="primary" loading={savingS3} on:click={saveS3Config}>Save S3 config</ActionButton>
+					<ActionButton variant="primary" disabled={!canSaveS3} loading={savingS3} on:click={saveS3Config}>Save S3 config</ActionButton>
 				</div>
 			</div>
 		</SectionPanel>
