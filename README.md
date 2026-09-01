@@ -12,7 +12,7 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - choose repositories available to the connected GitHub account directly from the New Project form, including private repositories;
 - deploy OCI images with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repositories and support base-directory / monorepo deployments;
-- manage encrypted environment variables, resource settings, deployment history, logs, metrics, restart, redeploy, and rollback;
+- manage encrypted environment variables, editable per-source resource defaults with fixed safety floors, deployment history, logs, metrics, restart, redeploy, and rollback;
 - monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
 - inspect MyPaaS runtime port allocations and manage a narrow set of MyPaaS-owned UFW allow rules from the owner UI;
 - provide an owner-only short-lived host shell for trusted VM operators;
@@ -44,9 +44,9 @@ Dockerfile and Compose are the explicit escape hatches for applications with cus
 
 ## Container monitoring
 
-The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include live CPU and memory samples. Search, state/runtime filters, page sizing, and pagination keep larger hosts usable without adding a second observability stack.
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include CPU and memory samples. Search, state/runtime filters, ten-row pagination, and safe removal of non-running containers keep larger hosts usable without adding a second observability stack.
 
-Lifecycle operations remain project-scoped so the host-wide view stays read-oriented and predictable.
+Running containers remain lifecycle-managed through their project. The host-wide view only permits removal after the runtime confirms that a container is stopped.
 
 ## Port management
 

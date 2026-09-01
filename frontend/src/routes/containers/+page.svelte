@@ -1,24 +1,23 @@
 <script lang="ts">
-	import { RefreshCw, Search } from '@lucide/svelte';
+	import { Search, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import ActionButton from '$components/ActionButton.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
-	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
+	import { loadRuntimeContainers, removeRuntimeContainer, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
+	import { toast } from '$stores/toast';
 
 	let rows: RuntimeContainer[] = [];
-	let refreshing = false;
+	let loading = false;
+	let deletingID = '';
 	let error = '';
 	let query = '';
 	let stateFilter = 'all';
 	let runtimeFilter = 'all';
 	let pageIndex = 0;
-	let pageSize = 20;
+	let pageSize = 10;
 
-	$: runningCount = rows.filter((row) => row.state === 'running').length;
-	$: totalCpu = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.cpu : 0), 0);
-	$: totalMemoryMb = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.memoryMb : 0), 0);
 	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
 	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
 	$: searchTerm = query.trim().toLowerCase();
@@ -34,20 +33,14 @@
 	$: if (pageIndex > maxPage) pageIndex = maxPage;
 	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 	$: hasNext = (pageIndex + 1) * pageSize < filteredRows.length;
-	$: inventoryDescription = rows.length > 0
-		? `${rows.length} total · ${runningCount} running · ${totalCpu.toFixed(1)}% CPU · ${formatMemory(totalMemoryMb)} RAM`
-		: 'Host-wide Docker-compatible runtime inventory, including MyPaaS and application containers.';
-
 	onMount(() => {
 		void load();
-		const timer = window.setInterval(() => void load(true), 5000);
-		return () => window.clearInterval(timer);
 	});
 
-	async function load(background = false) {
-		if (refreshing) return;
-		refreshing = true;
-		const finishMainLoading = !background && rows.length === 0 ? beginMainContentLoading() : null;
+	async function load() {
+		if (loading) return;
+		loading = true;
+		const finishMainLoading = rows.length === 0 ? beginMainContentLoading() : null;
 		error = '';
 		try {
 			const next = await loadRuntimeContainers();
@@ -60,8 +53,27 @@
 			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
 			finishMainLoading?.();
-			refreshing = false;
+			loading = false;
 		}
+	}
+
+	async function removeContainer(row: RuntimeContainer) {
+		if (!canRemove(row) || deletingID) return;
+		if (!window.confirm(`Remove stopped container ${row.name}?`)) return;
+		deletingID = row.id;
+		try {
+			await removeRuntimeContainer(row.id);
+			rows = rows.filter((item) => item.id !== row.id);
+			toast.success('Container removed');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to remove container');
+		} finally {
+			deletingID = '';
+		}
+	}
+
+	function canRemove(row: RuntimeContainer) {
+		return !['running', 'paused', 'restarting'].includes(row.state);
 	}
 
 	function resetPage() {
@@ -102,8 +114,7 @@
 
 <div class="page-shell">
 	<TableShell
-		title="Host containers"
-		description={inventoryDescription}
+		title="Containers"
 		loading={false}
 		{error}
 		empty={filteredRows.length === 0}
@@ -111,13 +122,6 @@
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
-		<svelte:fragment slot="actions">
-			<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => load()}>
-				<RefreshCw slot="icon" class="h-4 w-4" />
-				Refresh
-			</ActionButton>
-		</svelte:fragment>
-
 		<svelte:fragment slot="notice">
 			<div class="grid gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end lg:px-5">
 				<label class="block min-w-0" for="container-search">
@@ -156,7 +160,7 @@
 			</div>
 		</svelte:fragment>
 
-		<table class="data-table table-fixed min-w-[64rem]">
+		<table class="data-table table-fixed min-w-[68rem]">
 			<colgroup>
 				<col class="w-[16%]" />
 				<col class="w-[18%]" />
@@ -164,7 +168,8 @@
 				<col class="w-[10%]" />
 				<col class="w-[8%]" />
 				<col class="w-[12%]" />
-				<col class="w-[13%]" />
+				<col class="w-[9%]" />
+				<col class="w-[4%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -175,6 +180,7 @@
 					<th class="text-right">CPU</th>
 					<th class="text-right">Memory</th>
 					<th>Status</th>
+					<th><span class="sr-only">Actions</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -200,6 +206,13 @@
 							{:else}—{/if}
 						</td>
 						<td><p class="truncate text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
+						<td class="text-right">
+							{#if canRemove(row)}
+								<IconButton label={`Remove ${row.name}`} variant="ghostDanger" loading={deletingID === row.id} disabled={Boolean(deletingID) && deletingID !== row.id} on:click={() => void removeContainer(row)}>
+									<Trash2 class="h-4 w-4" aria-hidden="true" />
+								</IconButton>
+							{/if}
+						</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -207,7 +220,7 @@
 
 		<svelte:fragment slot="footer">
 			{#if filteredRows.length > 0}
-				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={refreshing} label="Containers" />
+				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={loading} label="Containers" />
 			{/if}
 		</svelte:fragment>
 	</TableShell>

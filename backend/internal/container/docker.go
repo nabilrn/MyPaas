@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mypaas/internal/errs"
 )
 
 type DockerCLI struct {
@@ -499,7 +501,7 @@ func (d *DockerCLI) Logs(ctx context.Context, name string, tail int) ([]string, 
 }
 
 func (d *DockerCLI) Stats(ctx context.Context, name string) (Metrics, error) {
-	out, err := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}", name).CombinedOutput()
+	out, err := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}", name).CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if isNoContainerMessage(msg) {
@@ -553,6 +555,26 @@ func parseStatsLine(line string) (Metrics, error) {
 	if line == "" {
 		return Metrics{}, ErrNoContainer
 	}
+	if !strings.HasPrefix(line, "{") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			return Metrics{}, fmt.Errorf("parse docker stats columns: expected name, CPU, and memory usage")
+		}
+		cpu, err := parsePercent(parts[1])
+		if err != nil {
+			return Metrics{}, err
+		}
+		used, limit, err := parseMemoryUsage(parts[2])
+		if err != nil {
+			return Metrics{}, err
+		}
+		return Metrics{
+			Service:       strings.TrimSpace(parts[0]),
+			CPUPercent:    cpu,
+			MemoryMB:      used,
+			MemoryLimitMB: limit,
+		}, nil
+	}
 
 	var raw dockerStatsLine
 	if err := json.Unmarshal([]byte(line), &raw); err != nil {
@@ -574,6 +596,36 @@ func parseStatsLine(line string) (Metrics, error) {
 		MemoryMB:      used,
 		MemoryLimitMB: limit,
 	}, nil
+}
+
+func (d *DockerCLI) RemoveStopped(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" || strings.HasPrefix(id, "-") {
+		return fmt.Errorf("%w: container identifier is required", errs.ErrValidation)
+	}
+
+	out, err := commandContext(ctx, "docker", "inspect", "--format", "{{.State.Status}}", id).CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(out))
+		if isNoContainerMessage(message) {
+			return ErrNoContainer
+		}
+		return fmt.Errorf("inspect container state: %w: %s", err, message)
+	}
+	state := strings.ToLower(strings.TrimSpace(string(out)))
+	if state == "running" || state == "paused" || state == "restarting" {
+		return fmt.Errorf("%w: current state is %s", errs.ErrContainerRunning, state)
+	}
+
+	out, err = commandContext(ctx, "docker", "rm", id).CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(out))
+		if isNoContainerMessage(message) {
+			return ErrNoContainer
+		}
+		return fmt.Errorf("remove stopped container: %w: %s", err, message)
+	}
+	return nil
 }
 
 func parsePercent(value string) (float64, error) {
@@ -871,7 +923,7 @@ func removeLabeledResources(ctx context.Context, resource, projectName string) e
 	return runSimple(ctx, "docker", append([]string{resource, "rm"}, ids...)...)
 }
 
-var ErrNoContainer = errors.New("container not found")
+var ErrNoContainer = errs.ErrContainerNotFound
 
 func commandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)

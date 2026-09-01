@@ -8,10 +8,8 @@
 	export let className = '';
 	export let imageClass = '';
 
-	// Keep the product mark visible without overpowering the navigation chrome.
-	// Expanded sizing is width-led; compact sizing is height-led.
 	$: sources = compact ? { light: markBlack, dark: markWhite } : { light: wordmarkBlack, dark: wordmarkWhite };
-	$: sizing = compact ? 'h-[22px] w-auto' : 'w-28 h-auto';
+	$: sizing = compact ? 'h-[22px] w-auto' : 'h-[22px] w-auto max-w-28';
 </script>
 
 <span class={`inline-flex min-w-0 items-center ${className}`.trim()}>

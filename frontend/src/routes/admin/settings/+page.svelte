@@ -1,20 +1,47 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 
-	type SettingKey = 'user_ram_quota_gb' | 'user_cpu_quota' | 'max_projects' | 'build_timeout_minutes';
+	type SettingKey =
+		| 'build_timeout_minutes'
+		| 'profile_static_memory_mb'
+		| 'profile_static_cpu_limit'
+		| 'profile_go_small_memory_mb'
+		| 'profile_go_small_cpu_limit'
+		| 'profile_node_python_memory_mb'
+		| 'profile_node_python_cpu_limit'
+		| 'profile_compose_main_memory_mb'
+		| 'profile_compose_main_cpu_limit';
 	type NumericSettings = Record<SettingKey, number>;
+	type ProfileSetting = {
+		name: string;
+		memoryKey: Extract<SettingKey, `${string}_memory_mb`>;
+		cpuKey: Extract<SettingKey, `${string}_cpu_limit`>;
+		minimumMemory: number;
+		minimumCPU: number;
+	};
 
 	const defaultSettings: NumericSettings = {
-		user_ram_quota_gb: 0,
-		user_cpu_quota: 0,
-		max_projects: 0,
-		build_timeout_minutes: 0
+		build_timeout_minutes: 0,
+		profile_static_memory_mb: 64,
+		profile_static_cpu_limit: 0.1,
+		profile_go_small_memory_mb: 128,
+		profile_go_small_cpu_limit: 0.2,
+		profile_node_python_memory_mb: 256,
+		profile_node_python_cpu_limit: 0.35,
+		profile_compose_main_memory_mb: 256,
+		profile_compose_main_cpu_limit: 0.35
 	};
+	const profileSettings: ProfileSetting[] = [
+		{ name: 'Static', memoryKey: 'profile_static_memory_mb', cpuKey: 'profile_static_cpu_limit', minimumMemory: 64, minimumCPU: 0.1 },
+		{ name: 'Go small', memoryKey: 'profile_go_small_memory_mb', cpuKey: 'profile_go_small_cpu_limit', minimumMemory: 128, minimumCPU: 0.2 },
+		{ name: 'Node / Python', memoryKey: 'profile_node_python_memory_mb', cpuKey: 'profile_node_python_cpu_limit', minimumMemory: 256, minimumCPU: 0.35 },
+		{ name: 'Compose main', memoryKey: 'profile_compose_main_memory_mb', cpuKey: 'profile_compose_main_cpu_limit', minimumMemory: 256, minimumCPU: 0.35 }
+	];
 
 	let settings: NumericSettings = { ...defaultSettings };
 	let savedSettings: NumericSettings = { ...defaultSettings };
@@ -24,13 +51,20 @@
 	let triggeringUpdate = false;
 	let updateOverlayOpen = false;
 	let currentBuildSha = '';
+	let updatePoll: ReturnType<typeof setInterval> | undefined;
+	let updatePollTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	$: settingsChanged = (Object.keys(defaultSettings) as SettingKey[]).some((key) => settings[key] !== savedSettings[key]);
 	$: validationErrors = {
-		user_ram_quota_gb: numberError(settings.user_ram_quota_gb, 0, 64, false, 'RAM quota must be greater than 0 and at most 64 GB.'),
-		user_cpu_quota: numberError(settings.user_cpu_quota, 0, 32, false, 'CPU quota must be greater than 0 and at most 32 cores.'),
-		max_projects: numberError(settings.max_projects, 1, 500, true, 'Maximum projects must be a whole number between 1 and 500.'),
-		build_timeout_minutes: numberError(settings.build_timeout_minutes, 1, 1440, true, 'Build timeout must be a whole number between 1 and 1440 minutes.')
+		build_timeout_minutes: numberError(settings.build_timeout_minutes, 1, 1440, true, 'Build timeout must be a whole number between 1 and 1440 minutes.'),
+		profile_static_memory_mb: numberError(settings.profile_static_memory_mb, 64, 32768, true, 'Minimum 64 MB.'),
+		profile_static_cpu_limit: numberError(settings.profile_static_cpu_limit, 0.1, 32, false, 'Minimum 0.10 CPU.'),
+		profile_go_small_memory_mb: numberError(settings.profile_go_small_memory_mb, 128, 32768, true, 'Minimum 128 MB.'),
+		profile_go_small_cpu_limit: numberError(settings.profile_go_small_cpu_limit, 0.2, 32, false, 'Minimum 0.20 CPU.'),
+		profile_node_python_memory_mb: numberError(settings.profile_node_python_memory_mb, 256, 32768, true, 'Minimum 256 MB.'),
+		profile_node_python_cpu_limit: numberError(settings.profile_node_python_cpu_limit, 0.35, 32, false, 'Minimum 0.35 CPU.'),
+		profile_compose_main_memory_mb: numberError(settings.profile_compose_main_memory_mb, 256, 32768, true, 'Minimum 256 MB.'),
+		profile_compose_main_cpu_limit: numberError(settings.profile_compose_main_cpu_limit, 0.35, 32, false, 'Minimum 0.35 CPU.')
 	};
 	$: hasValidationErrors = Object.values(validationErrors).some(Boolean);
 	$: hostMemoryTotal = hostStats?.memory?.total_bytes ?? hostStats?.host_ram_bytes ?? 0;
@@ -39,6 +73,10 @@
 
 	onMount(() => {
 		void loadSettings();
+	});
+	onDestroy(() => {
+		if (updatePoll) clearInterval(updatePoll);
+		if (updatePollTimeout) clearTimeout(updatePollTimeout);
 	});
 
 	async function loadSettings() {
@@ -49,10 +87,15 @@
 				api.admin.getHostStats().catch(() => null)
 			]);
 			settings = {
-				user_ram_quota_gb: numericValue(data.user_ram_quota_gb),
-				user_cpu_quota: numericValue(data.user_cpu_quota),
-				max_projects: numericValue(data.max_projects),
-				build_timeout_minutes: numericValue(data.build_timeout_minutes)
+				build_timeout_minutes: numericValue(data.build_timeout_minutes, defaultSettings.build_timeout_minutes),
+				profile_static_memory_mb: numericValue(data.profile_static_memory_mb, 64),
+				profile_static_cpu_limit: numericValue(data.profile_static_cpu_limit, 0.1),
+				profile_go_small_memory_mb: numericValue(data.profile_go_small_memory_mb, 128),
+				profile_go_small_cpu_limit: numericValue(data.profile_go_small_cpu_limit, 0.2),
+				profile_node_python_memory_mb: numericValue(data.profile_node_python_memory_mb, 256),
+				profile_node_python_cpu_limit: numericValue(data.profile_node_python_cpu_limit, 0.35),
+				profile_compose_main_memory_mb: numericValue(data.profile_compose_main_memory_mb, 256),
+				profile_compose_main_cpu_limit: numericValue(data.profile_compose_main_cpu_limit, 0.35)
 			};
 			currentBuildSha = ((data as any).build_sha as string) || '';
 			savedSettings = { ...settings };
@@ -70,12 +113,9 @@
 		savingSettings = true;
 		try {
 			const updated = await api.admin.updateSettings(settings);
-			settings = {
-				user_ram_quota_gb: numericValue(updated.user_ram_quota_gb, settings.user_ram_quota_gb),
-				user_cpu_quota: numericValue(updated.user_cpu_quota, settings.user_cpu_quota),
-				max_projects: numericValue(updated.max_projects, settings.max_projects),
-				build_timeout_minutes: numericValue(updated.build_timeout_minutes, settings.build_timeout_minutes)
-			};
+			settings = Object.fromEntries(
+				(Object.keys(defaultSettings) as SettingKey[]).map((key) => [key, numericValue(updated[key], settings[key])])
+			) as NumericSettings;
 			savedSettings = { ...settings };
 			toast.success('Platform settings saved');
 		} catch (error) {
@@ -102,12 +142,14 @@
 
 	function startUpdatePolling() {
 		let wasDown = false;
-		const poll = setInterval(async () => {
+		if (updatePoll) clearInterval(updatePoll);
+		if (updatePollTimeout) clearTimeout(updatePollTimeout);
+		updatePoll = setInterval(async () => {
 			try {
 				const res = await fetch('/api/health');
 				if (res.ok) {
 					if (wasDown) {
-						clearInterval(poll);
+						if (updatePoll) clearInterval(updatePoll);
 						window.location.href = '/';
 					}
 				} else {
@@ -117,6 +159,13 @@
 				wasDown = true;
 			}
 		}, 3000);
+		updatePollTimeout = setTimeout(() => {
+			if (updatePoll) clearInterval(updatePoll);
+			updatePoll = undefined;
+			updateOverlayOpen = false;
+			toast.info('Update check finished without a control-plane restart');
+			void loadSettings();
+		}, 120_000);
 	}
 
 	function discardChanges() {
@@ -152,8 +201,8 @@
 {#if updateOverlayOpen}
 	<div class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm dark:bg-gray-950/90">
 		<LoadingIndicator label="Updating MyPaaS" size="lg" />
-		<h2 class="mt-5 text-xl font-medium text-gray-900 dark:text-white">Updating MyPaaS</h2>
-		<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Restarting control plane…</p>
+		<h2 class="mt-5 text-xl font-medium text-gray-900 dark:text-white">Checking for updates</h2>
+		<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">The control plane restarts only when a new release is available.</p>
 	</div>
 {/if}
 
@@ -183,41 +232,27 @@
 	</SectionPanel>
 
 	{#if !loadingSettings}
-		<SectionPanel title="Platform limits">
-			<div class="grid gap-5 lg:grid-cols-3">
-				<label class="block" for="user_ram_quota_gb">
-					<span class="field-label">RAM quota per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="user_ram_quota_gb" min="0.25" max="64" step="0.25" bind:value={settings.user_ram_quota_gb} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_ram_quota_gb ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">GB</span></div>
-					{#if validationErrors.user_ram_quota_gb}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.user_ram_quota_gb}</p>{/if}
-				</label>
-				<label class="block" for="user_cpu_quota">
-					<span class="field-label">CPU quota per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="user_cpu_quota" min="0.1" max="32" step="0.1" bind:value={settings.user_cpu_quota} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_cpu_quota ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">cores</span></div>
-					{#if validationErrors.user_cpu_quota}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.user_cpu_quota}</p>{/if}
-				</label>
-				<label class="block" for="max_projects">
-					<span class="field-label">Projects per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="max_projects" min="1" max="500" step="1" bind:value={settings.max_projects} class="field min-w-0 flex-1" aria-invalid={validationErrors.max_projects ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">projects</span></div>
-					{#if validationErrors.max_projects}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.max_projects}</p>{/if}
-				</label>
-			</div>
-		</SectionPanel>
-
-		<SectionPanel title="Project defaults" contentClass="p-0">
-			<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
-				{#each [
-					{ name: 'Static', detail: '64 MB · 0.10 CPU' },
-					{ name: 'Go small', detail: '128 MB · 0.20 CPU' },
-					{ name: 'Node / Python', detail: '256 MB · 0.35 CPU' },
-					{ name: 'Compose main', detail: '256 MB · 0.35 CPU' }
-				] as profile}
-					<div class="p-4 lg:p-5">
-						<p class="text-sm font-medium text-gray-950 dark:text-white">{profile.name}</p>
-						<p class="metric-value mt-1 text-[13px] text-gray-500 dark:text-gray-400">{profile.detail}</p>
+		<SectionPanel title="Resource defaults" description="Applied by project type when no custom limits are selected." contentClass="p-0">
+			<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
+				{#each profileSettings as profile}
+					<div class="grid gap-4 p-4 md:grid-cols-[minmax(10rem,1fr)_minmax(12rem,0.8fr)_minmax(12rem,0.8fr)] md:items-start lg:p-5">
+						<div>
+							<p class="text-sm font-medium text-gray-950 dark:text-white">{profile.name}</p>
+							<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">Floor: {profile.minimumMemory} MB · {profile.minimumCPU.toFixed(2)} CPU</p>
+						</div>
+						<label class="block" for={profile.memoryKey}>
+							<span class="field-label">Memory</span>
+							<div class="flex items-center gap-2"><input type="number" id={profile.memoryKey} min={profile.minimumMemory} max="32768" step="1" bind:value={settings[profile.memoryKey]} class="field min-w-0 flex-1" aria-invalid={validationErrors[profile.memoryKey] ? 'true' : undefined} /><span class="w-12 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">MB</span></div>
+							{#if validationErrors[profile.memoryKey]}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors[profile.memoryKey]}</p>{/if}
+						</label>
+						<label class="block" for={profile.cpuKey}>
+							<span class="field-label">CPU</span>
+							<div class="flex items-center gap-2"><input type="number" id={profile.cpuKey} min={profile.minimumCPU} max="32" step="0.05" bind:value={settings[profile.cpuKey]} class="field min-w-0 flex-1" aria-invalid={validationErrors[profile.cpuKey] ? 'true' : undefined} /><span class="w-12 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">cores</span></div>
+							{#if validationErrors[profile.cpuKey]}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors[profile.cpuKey]}</p>{/if}
+						</label>
 					</div>
 				{/each}
 			</div>
-			<p class="border-t border-gray-100/70 px-4 py-3 text-[13px] text-gray-500 dark:border-neutral-900 dark:text-gray-400 lg:px-5">Selected during project creation; overridable per project.</p>
 		</SectionPanel>
 
 		<SectionPanel title="Deployment">

@@ -225,6 +225,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 		firewallSocket = "/run/mypaas/firewall.sock"
 	}
 	firewallHandler := firewall.NewHandler(portService, firewall.NewClient(firewallSocket), cfg.DockerBindHost)
+	containerHandler := container.NewHandler(container.NewDockerCLI(cfg.DockerBindHost))
 
 	r := chi.NewRouter()
 
@@ -235,9 +236,9 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, shellHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, containerHandler, shellHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, shellHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, containerHandler, shellHandler)
 	})
 
 	return r
@@ -300,6 +301,7 @@ func registerRoutes(
 	settingsHandler *settings.Handler,
 	migrationHandler *migration.Handler,
 	firewallHandler *firewall.Handler,
+	containerHandler *container.Handler,
 	shellHandler *shell.Handler,
 ) {
 	r.Get("/health", handleHealth)
@@ -387,6 +389,8 @@ func registerRoutes(
 			r.Get("/ports", firewallHandler.List)
 			r.Post("/ports/firewall", firewallHandler.Allow)
 			r.Delete("/ports/firewall/{protocol}/{port}", firewallHandler.Delete)
+			r.Get("/containers", containerHandler.List)
+			r.Delete("/containers/{id}", containerHandler.Delete)
 			r.Route("/shell", func(r chi.Router) {
 				r.Post("/sessions", shellHandler.Start)
 				r.Get("/sessions/{id}/stream", shellHandler.Stream)

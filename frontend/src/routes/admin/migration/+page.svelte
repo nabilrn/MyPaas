@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { AlertTriangle, Check, Copy, Download, HardDrive, LoaderCircle, Package, RotateCcw, Server } from '@lucide/svelte';
+	import { AlertTriangle, Check, Copy, Download, LoaderCircle, Package } from '@lucide/svelte';
 	import { api, type MigrationStatus } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -96,52 +96,12 @@
 </svelte:head>
 
 <div class="page-shell">
-	<SectionPanel title="How migration works" description="Move this MyPaaS installation to a new Linux VM through the consistency-aware backend export and restore workflow." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-			<div class="flex gap-3 p-4 lg:p-5">
-				<HardDrive class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Preflight storage</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Before stopping runtimes, MyPaaS checks container storage. Compose projects using engine-managed volumes fail closed instead of producing an incomplete archive.</p>
-				</div>
-			</div>
-			<div class="flex gap-3 p-4 lg:p-5">
-				<Server class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Quiesce and export</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Running Dockerfile, registry-image, and Compose runtimes are stopped temporarily while PostgreSQL and supported host-managed project data are exported. Static projects have no runtime to stop.</p>
-				</div>
-			</div>
-			<div class="flex gap-3 p-4 lg:p-5">
-				<RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Restore running state</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">MyPaaS restarts every runtime it stopped and marks the package ready only after restoration succeeds. Temporary stops do not rewrite the project's desired running state in PostgreSQL.</p>
-				</div>
-			</div>
-		</div>
-	</SectionPanel>
-
-	<SectionPanel title="Before you start" description="Operational boundaries that keep the built-in exporter fail-safe." contentClass="p-0">
-		<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
-			<div class="p-4 lg:p-5">
-				<div class="alert-warning">
-					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-					<div>
-						<p class="font-medium">Expect a maintenance window for container-backed projects.</p>
-						<p class="mt-1">Running application runtimes are stopped briefly while mutable data is exported, then restarted before the package can become ready.</p>
-					</div>
-				</div>
-			</div>
-			<div class="grid gap-4 p-4 text-sm text-gray-600 dark:text-gray-300 md:grid-cols-2 lg:p-5">
-				<div>
-					<p class="font-medium text-gray-950 dark:text-white">Engine-managed volumes are not copied automatically</p>
-					<p class="mt-1">If preflight reports named or other engine-managed Compose volumes, move persistent data to supported bind mounts under <code class="font-mono text-xs">/var/lib/mypaas/volumes</code> or migrate those engine volumes separately.</p>
-				</div>
-				<div>
-					<p class="font-medium text-gray-950 dark:text-white">Use the backend migration workflow</p>
-					<p class="mt-1">The Admin migration workflow is the supported export path. In-place Docker Engine to Podman migration is not supported; a fresh Podman destination can instead be installed with the existing Podman install option.</p>
-				</div>
+	<SectionPanel title="Migration safety">
+		<div class="alert-warning">
+			<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+			<div>
+				<p class="font-medium">Container-backed projects pause briefly while the package is created.</p>
+				<p class="mt-1">Engine-managed Compose volumes are not included. Move them separately if preflight reports any.</p>
 			</div>
 		</div>
 	</SectionPanel>

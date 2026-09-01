@@ -10,7 +10,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -19,28 +18,42 @@ import (
 	"mypaas/internal/db"
 	"mypaas/internal/host"
 	"mypaas/internal/httpx"
+	"mypaas/internal/resourceprofile"
 	"mypaas/internal/statd"
 )
 
 // settingKeys lists numeric settings with an authoritative live runtime
-// consumer. Project defaults live in resource profiles, while deployment
-// concurrency is installation-level because the worker semaphore is created at
-// process startup. Neither is exposed as a misleading live-editable setting.
+// consumer. Deployment concurrency remains installation-level because the
+// worker semaphore is created at process startup.
 var settingKeys = []string{
 	"user_ram_quota_gb",
 	"user_cpu_quota",
 	"max_projects",
 	"build_timeout_minutes",
+	"profile_static_memory_mb",
+	"profile_static_cpu_limit",
+	"profile_go_small_memory_mb",
+	"profile_go_small_cpu_limit",
+	"profile_node_python_memory_mb",
+	"profile_node_python_cpu_limit",
+	"profile_compose_main_memory_mb",
+	"profile_compose_main_cpu_limit",
 }
 
 type Handler struct {
-	queries       *db.Queries
-	cfg           *config.Config
-	backupService *backup.Service
+	queries           *db.Queries
+	cfg               *config.Config
+	backupService     *backup.Service
+	updateRequestPath string
 }
 
 func NewHandler(queries *db.Queries, cfg *config.Config, backupService *backup.Service) *Handler {
-	h := &Handler{queries: queries, cfg: cfg, backupService: backupService}
+	h := &Handler{
+		queries:           queries,
+		cfg:               cfg,
+		backupService:     backupService,
+		updateRequestPath: "/run/mypaas/update.request",
+	}
 	// The DB is the persisted source for owner-edited live settings. Rehydrate
 	// the shared config before the HTTP server starts accepting requests so a
 	// process restart cannot silently revert quota/build behavior to env values.
@@ -176,7 +189,7 @@ func (h *Handler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusServiceUnavailable, "BACKUP_NOT_CONFIGURED", "Backup service is not available", nil)
 		return
 	}
-	
+
 	// Run in background to avoid blocking the HTTP response
 	go func() {
 		// Use a detached context for the background operation
@@ -207,32 +220,24 @@ func (h *Handler) DownloadBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateSystem(w http.ResponseWriter, r *http.Request) {
-	installDir := os.Getenv("MYPAAS_INSTALL_DIR")
-	if installDir == "" {
-		installDir = "/root/MyPaas"
+	requestPath := h.updateRequestPath
+	if requestPath == "" {
+		requestPath = "/run/mypaas/update.request"
 	}
-	
-	scriptPath := installDir + "/scripts/update-vm.sh"
-	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		httpx.Error(w, http.StatusInternalServerError, "SCRIPT_NOT_FOUND", "Update script not found at "+scriptPath, nil)
+	if err := os.MkdirAll(filepath.Dir(requestPath), 0o755); err != nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "UPDATE_TRIGGER_UNAVAILABLE", "Host update trigger is unavailable", nil)
 		return
 	}
-
-	cmd := exec.Command("bash", scriptPath)
-	cmd.SysProcAttr = nil
-	
-	// Start in background
-	if err := cmd.Start(); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "CMD_START_FAILED", "Failed to start update script", nil)
+	file, err := os.OpenFile(requestPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil && !errors.Is(err, os.ErrExist) {
+		httpx.Error(w, http.StatusServiceUnavailable, "UPDATE_TRIGGER_UNAVAILABLE", "Host update trigger is unavailable", nil)
 		return
 	}
-	
-	// Detach the process by not calling Wait in this goroutine
-	go func() {
-		_ = cmd.Wait()
-	}()
+	if file != nil {
+		_ = file.Close()
+	}
 
-	httpx.JSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+	httpx.JSON(w, http.StatusAccepted, map[string]bool{"queued": true})
 }
 
 // Update upserts one or more platform settings and applies the supported
@@ -295,6 +300,30 @@ func validateSettings(values map[string]float64) error {
 		case "build_timeout_minutes":
 			if value < 1 || value > 1440 || value != math.Trunc(value) {
 				return errors.New("build timeout must be a whole number between 1 and 1440 minutes")
+			}
+		case "profile_static_memory_mb":
+			if value < 64 || value > 32768 || value != math.Trunc(value) {
+				return errors.New("static memory must be a whole number between 64 and 32768 MB")
+			}
+		case "profile_go_small_memory_mb":
+			if value < 128 || value > 32768 || value != math.Trunc(value) {
+				return errors.New("Go small memory must be a whole number between 128 and 32768 MB")
+			}
+		case "profile_node_python_memory_mb", "profile_compose_main_memory_mb":
+			if value < 256 || value > 32768 || value != math.Trunc(value) {
+				return errors.New("Node/Python and Compose memory must be a whole number between 256 and 32768 MB")
+			}
+		case "profile_static_cpu_limit":
+			if value < 0.10 || value > 32 {
+				return errors.New("static CPU must be between 0.10 and 32 cores")
+			}
+		case "profile_go_small_cpu_limit":
+			if value < 0.20 || value > 32 {
+				return errors.New("Go small CPU must be between 0.20 and 32 cores")
+			}
+		case "profile_node_python_cpu_limit", "profile_compose_main_cpu_limit":
+			if value < 0.35 || value > 32 {
+				return errors.New("Node/Python and Compose CPU must be between 0.35 and 32 cores")
 			}
 		}
 	}
@@ -416,12 +445,29 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) defaults() map[string]float64 {
-	return map[string]float64{
+	values := map[string]float64{
 		"user_ram_quota_gb":     float64(h.cfg.UserRAMQuotaMB) / 1024,
 		"user_cpu_quota":        h.cfg.UserCPUQuota,
 		"max_projects":          float64(h.cfg.MaxProjects),
 		"build_timeout_minutes": float64(h.cfg.BuildTimeoutMinutes),
 	}
+	for _, profile := range []struct {
+		id     string
+		prefix string
+	}{
+		{resourceprofile.Static, "profile_static"},
+		{resourceprofile.GoSmall, "profile_go_small"},
+		{resourceprofile.NodePython, "profile_node_python"},
+		{resourceprofile.ComposeMain, "profile_compose_main"},
+	} {
+		current, err := resourceprofile.Get(profile.id)
+		if err != nil {
+			continue
+		}
+		values[profile.prefix+"_memory_mb"] = float64(current.MemoryMB)
+		values[profile.prefix+"_cpu_limit"] = current.CPULimit
+	}
+	return values
 }
 
 func (h *Handler) applyToConfig(values map[string]float64) {
@@ -437,4 +483,36 @@ func (h *Handler) applyToConfig(values map[string]float64) {
 	if v, ok := values["build_timeout_minutes"]; ok {
 		h.cfg.BuildTimeoutMinutes = int(v)
 	}
+	h.applyResourceProfileDefaults(values)
+}
+
+func (h *Handler) applyResourceProfileDefaults(values map[string]float64) {
+	configured := make(map[string]resourceprofile.Profile)
+	for _, profile := range []struct {
+		id     string
+		prefix string
+	}{
+		{resourceprofile.Static, "profile_static"},
+		{resourceprofile.GoSmall, "profile_go_small"},
+		{resourceprofile.NodePython, "profile_node_python"},
+		{resourceprofile.ComposeMain, "profile_compose_main"},
+	} {
+		memory, hasMemory := values[profile.prefix+"_memory_mb"]
+		cpu, hasCPU := values[profile.prefix+"_cpu_limit"]
+		if !hasMemory && !hasCPU {
+			continue
+		}
+		current, err := resourceprofile.Get(profile.id)
+		if err != nil {
+			continue
+		}
+		if hasMemory {
+			current.MemoryMB = int32(memory)
+		}
+		if hasCPU {
+			current.CPULimit = cpu
+		}
+		configured[profile.id] = current
+	}
+	_ = resourceprofile.ConfigureDefaults(configured)
 }

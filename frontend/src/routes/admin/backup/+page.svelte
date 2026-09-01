@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Cloud, Download, Database, ShieldCheck } from '@lucide/svelte';
+	import { Download } from '@lucide/svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -62,32 +62,6 @@
 </svelte:head>
 
 <div class="page-shell">
-	<SectionPanel title="How backup works" description="Automated off-site backups and on-demand archives of PostgreSQL and platform configuration." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-			<div class="flex gap-3 p-4 lg:p-5">
-				<Database class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Database snapshot</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">A consistent PostgreSQL dump captures users, projects, and deployment state.</p>
-				</div>
-			</div>
-			<div class="flex gap-3 p-4 lg:p-5">
-				<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Platform config</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Core platform files and configuration are archived with the database.</p>
-				</div>
-			</div>
-			<div class="flex gap-3 p-4 lg:p-5">
-				<Cloud class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">Off-site sync</p>
-					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Configured backups are compressed and synced daily to S3-compatible storage.</p>
-				</div>
-			</div>
-		</div>
-	</SectionPanel>
-
 	{#if !loading}
 		<SectionPanel title="S3 automated backup" description="Configure S3-compatible storage for automated daily backups." contentClass="p-0">
 			<div class="grid lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1fr)]">

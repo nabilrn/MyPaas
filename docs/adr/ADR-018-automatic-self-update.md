@@ -28,8 +28,9 @@ MyPaas needs an updater that keeps source, migrations, Compose configuration, an
    - deploys using the same SHA image tag;
    - verifies API/Caddy/CLI health;
    - restores the previous checkout and locally tagged runtime images if deployment/verification fails.
-5. Automatic polling is opt-in. `scripts/configure-auto-update.sh` installs a systemd oneshot service and timer only when `AUTO_UPDATE_ENABLED=true`. The default interval is 30 minutes and the minimum accepted interval is 5 minutes.
-6. No Watchtower-style Docker socket watcher is used. Updates remain coordinated through MyPaas' own migration and verification scripts.
+5. The host-side systemd service and path trigger are always installed on supported VMs so the authenticated dashboard can queue a manual update through `/run/mypaas/update.request`. The API never executes host scripts from inside its container.
+6. Automatic polling is opt-in. The timer is installed only when `AUTO_UPDATE_ENABLED=true`. The default interval is 30 minutes and the minimum accepted interval is 5 minutes.
+7. No Watchtower-style Docker socket watcher is used. Updates remain coordinated through MyPaas' own migration and verification scripts.
 
 ## Consequences
 
@@ -39,13 +40,13 @@ MyPaas needs an updater that keeps source, migrations, Compose configuration, an
 - Automatic updates cannot deploy a Git revision before its API and dashboard artifacts are published.
 - Source/config/migrations and application images are pinned to one revision during an automatic update.
 - The updater is host-side and does not introduce another privileged Docker-socket container.
-- Existing installs remain unchanged unless automatic updates are explicitly enabled.
+- Scheduled polling remains disabled unless automatic updates are explicitly enabled; the owner-triggered host update path remains available.
 
 ### Trade-offs
 
 - Automatic rollback is best effort. A forward database migration may not be reversible by simply restoring the previous application image. Operators should keep MyPaas backups enabled.
 - SHA image tags consume registry metadata in addition to `latest`.
-- systemd is required for scheduled automatic updates; `scripts/update-vm.sh` can still be run manually on other Linux init systems.
+- systemd is required for dashboard-triggered and scheduled updates; `scripts/update-vm.sh` can still be run manually on other Linux init systems.
 - Mutable development branches are supported because the current project uses `main` operationally, but stable release tags remain preferable for conservative production environments.
 
 ## Operations

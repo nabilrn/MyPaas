@@ -24,6 +24,19 @@ func TestParseStatsLine(t *testing.T) {
 	assertFloat(t, metrics.MemoryLimitMB, 512)
 }
 
+func TestParseStatsColumns(t *testing.T) {
+	metrics, err := parseStatsLine("mypaas-demo\t3.45%\t27.5MiB / 512MiB")
+	if err != nil {
+		t.Fatalf("parseStatsLine() error = %v", err)
+	}
+	if metrics.Service != "mypaas-demo" {
+		t.Fatalf("Service = %q, want mypaas-demo", metrics.Service)
+	}
+	assertFloat(t, metrics.CPUPercent, 3.45)
+	assertFloat(t, metrics.MemoryMB, 27.5)
+	assertFloat(t, metrics.MemoryLimitMB, 512)
+}
+
 func TestParseMemoryUsage(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Bot, Check, ChevronDown, CircleAlert, Copy, Folder, GitBranch, LoaderCircle, Plus, RefreshCw, Rocket, Upload, X } from '@lucide/svelte';
-	import { onDestroy } from 'svelte';
+	import { Bot, Check, ChevronDown, CircleAlert, Copy, Folder, GitBranch, LoaderCircle, Plus, RefreshCw, Rocket, Search, Upload, X } from '@lucide/svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -77,7 +77,7 @@
 		{ id: 'compose', title: 'Compose', body: 'Multi-service' },
 		{ id: 'static', title: 'Static', body: 'File server' }
 	];
-	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: string; cpuLimit: string }> = [
+	let resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: string; cpuLimit: string }> = [
 		{ id: 'node-python', title: 'Node/Python', memoryMb: '256', cpuLimit: '0.35' },
 		{ id: 'go-small', title: 'Go small', memoryMb: '128', cpuLimit: '0.2' },
 		{ id: 'compose-main', title: 'Compose main', memoryMb: '256', cpuLimit: '0.35' },
@@ -128,6 +128,8 @@
 	let githubRepositoryPage = 0;
 	let githubRepositoryHasNext = false;
 	let githubRepositoryRequest = 0;
+	let githubRepositorySearchInput: HTMLInputElement | null = null;
+	let selectingGithubRepositoryId: number | null = null;
 	let form = {
 		name: '',
 		sourceType: 'git' as SourceType,
@@ -148,6 +150,26 @@
 		staticFrontendPath: '',
 		baseDirectory: ''
 	};
+
+	onMount(() => {
+		void loadResourceDefaults();
+	});
+
+	async function loadResourceDefaults() {
+		try {
+			const settings = await api.admin.getSettings();
+			const configured: Partial<Record<ResourceProfile, { memoryMb: string; cpuLimit: string }>> = {
+				static: { memoryMb: String(settings.profile_static_memory_mb ?? 64), cpuLimit: String(settings.profile_static_cpu_limit ?? 0.1) },
+				'go-small': { memoryMb: String(settings.profile_go_small_memory_mb ?? 128), cpuLimit: String(settings.profile_go_small_cpu_limit ?? 0.2) },
+				'node-python': { memoryMb: String(settings.profile_node_python_memory_mb ?? 256), cpuLimit: String(settings.profile_node_python_cpu_limit ?? 0.35) },
+				'compose-main': { memoryMb: String(settings.profile_compose_main_memory_mb ?? 256), cpuLimit: String(settings.profile_compose_main_cpu_limit ?? 0.35) }
+			};
+			resourceProfiles = resourceProfiles.map((profile) => ({ ...profile, ...(configured[profile.id] ?? {}) }));
+			if (form.resourceProfile !== 'custom') applyResourceProfile(form.resourceProfile);
+		} catch {
+			// Built-in defaults remain usable when settings are unavailable.
+		}
+	}
 
 	$: previewHost = projectHost(form.name || 'your-app', $page.url.hostname);
 	$: previewOrigin = projectURL(form.name || 'your-app', $page.url.protocol, $page.url.hostname);
@@ -496,8 +518,12 @@
 	async function openRepositoryPicker() {
 		githubRepositoryPickerOpen = true;
 		githubRepositoriesError = '';
-		if (githubRepositoriesLoaded || githubRepositoriesLoading) return;
-		await loadGithubRepositories(true);
+		await tick();
+		githubRepositorySearchInput?.focus();
+		if (!githubRepositoriesLoaded && !githubRepositoriesLoading) {
+			await loadGithubRepositories(true);
+		}
+		void prefetchGithubRepositories();
 	}
 
 	async function loadGithubRepositories(reset = false) {
@@ -522,7 +548,27 @@
 		}
 	}
 
-	function chooseGithubRepository(repository: GitHubRepository) {
+	async function prefetchGithubRepositories() {
+		let pagesLoaded = 0;
+		while (githubRepositoryPickerOpen && githubRepositoryHasNext && !githubRepositoriesError && pagesLoaded < 9) {
+			await loadGithubRepositories();
+			pagesLoaded += 1;
+		}
+	}
+
+	function closeRepositoryPicker() {
+		if (selectingGithubRepositoryId !== null) return;
+		githubRepositoryPickerOpen = false;
+		githubRepositorySearch = '';
+	}
+
+	function handleRepositoryPickerKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && githubRepositoryPickerOpen) closeRepositoryPicker();
+	}
+
+	async function chooseGithubRepository(repository: GitHubRepository) {
+		if (selectingGithubRepositoryId !== null) return;
+		selectingGithubRepositoryId = repository.id;
 		resetRepositoryInspection();
 		const selectedBranch = repository.defaultBranch.trim();
 		form.repoUrl = repository.cloneUrl;
@@ -530,9 +576,16 @@
 		defaultBranch = selectedBranch;
 		branchOptions = normalizeBranches([], selectedBranch);
 		if (!projectNameTouched) form.name = suggestProjectName(repository.cloneUrl);
-		githubRepositoryPickerOpen = false;
-		githubRepositorySearch = '';
-		void inspectRepository(false, true).catch(() => undefined);
+		await tick();
+		try {
+			await inspectRepository(true, true);
+			githubRepositoryPickerOpen = false;
+			githubRepositorySearch = '';
+		} catch {
+			// Keep the picker open so another repository can be selected immediately.
+		} finally {
+			selectingGithubRepositoryId = null;
+		}
 	}
 
 	function chooseDeployMode(mode: DeployModeChoice, manual = true) {
@@ -1286,50 +1339,6 @@
 								</ActionButton>
 							</div>
 
-							{#if githubRepositoryPickerOpen}
-								<div class="mt-3 overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
-									<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-3 dark:border-gray-800">
-										<div>
-											<h3 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub repositories</h3>
-											<p class="mt-0.5 text-[0.8125rem] text-gray-500 dark:text-gray-400">Accessible to the connected account.</p>
-										</div>
-										<IconButton label="Close repository picker" variant="ghost" type="button" on:click={() => (githubRepositoryPickerOpen = false)}>
-											<X class="h-4 w-4" aria-hidden="true" />
-										</IconButton>
-									</div>
-									<div class="border-b border-gray-100 p-3 dark:border-gray-800">
-										<label class="sr-only" for="repositorySearch">Search repositories</label>
-										<input id="repositorySearch" type="search" bind:value={githubRepositorySearch} placeholder="Search repositories" class="field w-full" autocomplete="off" />
-									</div>
-									{#if githubRepositoriesError}
-										<div class="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-[0.8125rem] text-red-700 dark:text-red-200">
-											<span>{githubRepositoriesError}</span>
-											<a class="font-medium underline underline-offset-2" href="/api/auth/github/login">Reconnect GitHub</a>
-										</div>
-									{:else if filteredGithubRepositories.length > 0}
-										<div class="max-h-72 overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
-											{#each filteredGithubRepositories as repository}
-												<button type="button" class="app-focus flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-900" on:click={() => chooseGithubRepository(repository)}>
-													<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
-													<span class="min-w-0 flex-1">
-														<span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{repository.fullName}</span>
-														<span class="mt-0.5 block truncate text-[0.8125rem] text-gray-500 dark:text-gray-400">{repository.description ? `${repository.description} · ` : ''}{repository.private ? 'Private' : 'Public'} · {repository.defaultBranch}</span>
-													</span>
-												</button>
-											{/each}
-										</div>
-									{:else if githubRepositoriesLoading}
-										<p class="px-3 py-4 text-[0.8125rem] text-gray-500 dark:text-gray-400">Loading repositories...</p>
-									{:else if githubRepositoriesLoaded}
-										<p class="px-3 py-4 text-[0.8125rem] text-gray-500 dark:text-gray-400">{githubRepositorySearch.trim() ? 'No repositories match your search.' : 'No repositories available.'}</p>
-									{/if}
-									{#if githubRepositoryHasNext && !githubRepositoriesError}
-										<div class="border-t border-gray-100 p-3 dark:border-gray-800">
-											<ActionButton type="button" variant="secondary" size="xs" full loading={githubRepositoriesLoading} loadingLabel="Loading..." on:click={() => void loadGithubRepositories()}>Load more</ActionButton>
-										</div>
-									{/if}
-								</div>
-							{/if}
 						</div>
 					{:else}
 						<div>
@@ -1739,8 +1748,8 @@
 							<div class="mb-3 flex items-center gap-1"><h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Resources</h3><InfoDisclosure id="resource-limits-info" label="About resource limits">MyPaas selects a conservative starting profile. Change it only when the workload needs different limits.</InfoDisclosure></div>
 							<div class="grid gap-3 sm:grid-cols-3">
 								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Profile</label><select id="profile" bind:value={form.resourceProfile} on:change={() => applyResourceProfile(form.resourceProfile)} class="field w-full">{#each resourceProfiles as profile}<option value={profile.id}>{profile.title}</option>{/each}</select></div>
-								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="memory">Memory</label><select id="memory" bind:value={form.memoryMb} on:change={markCustomProfile} class="field w-full"><option value="64">64 MB</option><option value="128">128 MB</option><option value="256">256 MB</option><option value="512">512 MB</option><option value="1024">1024 MB</option><option value="2048">2048 MB</option></select></div>
-								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="cpu">CPU</label><select id="cpu" bind:value={form.cpuLimit} on:change={markCustomProfile} class="field w-full"><option value="0.1">0.10</option><option value="0.2">0.20</option><option value="0.25">0.25</option><option value="0.35">0.35</option><option value="0.5">0.50</option><option value="1">1.00</option><option value="2">2.00</option></select></div>
+								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="memory">Memory (MB)</label><input id="memory" type="number" min="64" max="32768" step="1" bind:value={form.memoryMb} on:input={markCustomProfile} class="field w-full" /></div>
+								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="cpu">CPU cores</label><input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={form.cpuLimit} on:input={markCustomProfile} class="field w-full" /></div>
 							</div>
 						</div>
 
@@ -1791,3 +1800,77 @@
 		</form>
 	</div>
 </div>
+
+<svelte:window on:keydown={handleRepositoryPickerKeydown} />
+
+{#if githubRepositoryPickerOpen}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+		<button type="button" class="absolute inset-0 cursor-default bg-black/40" aria-label="Close repository picker" on:click={closeRepositoryPicker}></button>
+		<div class="overlay relative flex max-h-[min(44rem,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="repository-picker-title" aria-busy={githubRepositoriesLoading || selectingGithubRepositoryId !== null}>
+			<div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-neutral-800 sm:px-5">
+				<div class="min-w-0">
+					<h2 id="repository-picker-title" class="text-sm font-semibold text-gray-950 dark:text-white">Choose a GitHub repository</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{githubRepositories.length} loaded</p>
+				</div>
+				<IconButton label="Close repository picker" variant="ghost" type="button" disabled={selectingGithubRepositoryId !== null} on:click={closeRepositoryPicker}>
+					<X class="h-4 w-4" aria-hidden="true" />
+				</IconButton>
+			</div>
+
+			<div class="border-b border-gray-100 p-3 dark:border-neutral-800 sm:px-5">
+				<label class="sr-only" for="repositorySearch">Search repositories</label>
+				<div class="relative">
+					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+					<input bind:this={githubRepositorySearchInput} id="repositorySearch" type="search" bind:value={githubRepositorySearch} placeholder="Search by owner, name, or description" class="field w-full !pl-9" autocomplete="off" />
+				</div>
+			</div>
+
+			{#if githubRepositoriesError}
+				<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm text-red-700 dark:text-red-200 sm:px-5">
+					<span>{githubRepositoriesError}</span>
+					<a class="font-medium underline underline-offset-2" href="/api/auth/github/login">Reconnect GitHub</a>
+				</div>
+			{:else if filteredGithubRepositories.length > 0}
+				<div class="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto dark:divide-neutral-800">
+					{#each filteredGithubRepositories as repository (repository.id)}
+						<button
+							type="button"
+							class="app-focus flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-neutral-900 sm:px-5"
+							disabled={selectingGithubRepositoryId !== null}
+							on:click={() => void chooseGithubRepository(repository)}
+						>
+							{#if selectingGithubRepositoryId === repository.id}
+								<LoaderCircle class="h-4 w-4 shrink-0 animate-spin text-gray-700 dark:text-gray-200" aria-hidden="true" />
+							{:else}
+								<GitBranch class="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+							{/if}
+							<span class="min-w-0 flex-1">
+								<span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{repository.fullName}</span>
+								<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{repository.description || 'No description'}</span>
+							</span>
+							<span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{repository.private ? 'Private' : 'Public'} · {repository.defaultBranch}</span>
+						</button>
+					{/each}
+				</div>
+			{:else if githubRepositoriesLoading}
+				<div class="flex min-h-48 items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400" role="status">
+					<LoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true" />
+					Loading repositories
+				</div>
+			{:else}
+				<div class="min-h-48 px-4 py-10 text-center sm:px-5">
+					<p class="text-sm font-medium text-gray-950 dark:text-white">{githubRepositorySearch.trim() ? 'No matching repositories' : 'No repositories available'}</p>
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{githubRepositorySearch.trim() ? 'Try a shorter owner or repository name.' : 'Reconnect GitHub if repository access changed.'}</p>
+				</div>
+			{/if}
+
+			{#if githubRepositoriesLoading && githubRepositories.length > 0}
+				<p class="border-t border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-neutral-800 dark:text-gray-400" role="status">Loading more repositories…</p>
+			{:else if githubRepositoryHasNext && !githubRepositoriesError}
+				<div class="border-t border-gray-100 p-3 dark:border-neutral-800 sm:px-5">
+					<ActionButton type="button" variant="secondary" size="xs" loading={githubRepositoriesLoading} loadingLabel="Loading" on:click={() => void loadGithubRepositories()}>Load more</ActionButton>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}

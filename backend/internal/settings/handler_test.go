@@ -2,11 +2,31 @@ package settings
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"mypaas/internal/config"
 	"mypaas/internal/statd"
 )
+
+func TestUpdateSystemQueuesHostRequest(t *testing.T) {
+	requestPath := filepath.Join(t.TempDir(), "run", "update.request")
+	h := &Handler{updateRequestPath: requestPath}
+
+	for attempt := 0; attempt < 2; attempt++ {
+		response := httptest.NewRecorder()
+		h.UpdateSystem(response, httptest.NewRequest(http.MethodPost, "/admin/update", nil))
+		if response.Code != http.StatusAccepted {
+			t.Fatalf("attempt %d status = %d, want %d: %s", attempt+1, response.Code, http.StatusAccepted, response.Body.String())
+		}
+	}
+	if _, err := os.Stat(requestPath); err != nil {
+		t.Fatalf("update request was not created: %v", err)
+	}
+}
 
 func TestHostTelemetryErrorCode(t *testing.T) {
 	tests := []struct {
@@ -40,7 +60,9 @@ func TestValidateSettings(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid", values: map[string]float64{"user_ram_quota_gb": 4, "user_cpu_quota": 2, "max_projects": 20, "build_timeout_minutes": 15}},
-		{name: "project defaults are not live settings", values: map[string]float64{"project_default_ram_mb": 512}, wantErr: true},
+		{name: "valid resource defaults", values: map[string]float64{"profile_static_memory_mb": 128, "profile_static_cpu_limit": 0.2, "profile_compose_main_memory_mb": 512, "profile_compose_main_cpu_limit": 0.5}},
+		{name: "static memory below floor", values: map[string]float64{"profile_static_memory_mb": 32}, wantErr: true},
+		{name: "compose CPU below floor", values: map[string]float64{"profile_compose_main_cpu_limit": 0.2}, wantErr: true},
 		{name: "deployment concurrency is installation level", values: map[string]float64{"max_concurrent_deploys": 2}, wantErr: true},
 		{name: "zero quota", values: map[string]float64{"user_ram_quota_gb": 0}, wantErr: true},
 		{name: "fractional projects", values: map[string]float64{"max_projects": 2.5}, wantErr: true},
@@ -58,7 +80,7 @@ func TestValidateSettings(t *testing.T) {
 	}
 }
 
-func TestSettingsDefaultsOnlyExposeRuntimeBackedValues(t *testing.T) {
+func TestSettingsDefaultsExposeRuntimeBackedValues(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{
@@ -78,6 +100,12 @@ func TestSettingsDefaultsOnlyExposeRuntimeBackedValues(t *testing.T) {
 	}
 	if got := defaults["user_ram_quota_gb"]; got != 4 {
 		t.Fatalf("user_ram_quota_gb = %v, want 4", got)
+	}
+	if got := defaults["profile_static_memory_mb"]; got != 64 {
+		t.Fatalf("profile_static_memory_mb = %v, want 64", got)
+	}
+	if got := defaults["profile_compose_main_cpu_limit"]; got != 0.35 {
+		t.Fatalf("profile_compose_main_cpu_limit = %v, want 0.35", got)
 	}
 }
 

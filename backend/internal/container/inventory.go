@@ -60,7 +60,7 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 		})
 	}
 
-	statsOut, statsErr := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{json .}}").CombinedOutput()
+	statsOut, statsErr := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}").CombinedOutput()
 	if statsErr == nil {
 		statsByName := make(map[string]Metrics)
 		for _, line := range fieldsByLine(string(statsOut)) {

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, RefreshCw, User } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Copy, Download, RefreshCw } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
-	import ActionLink from '$components/ActionLink.svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
+	import { toast } from '$stores/toast';
 	import type { AuditLog } from '$types';
 
 	const pageSize = 25;
@@ -66,15 +66,35 @@
 	function formatDateTime(value: string) {
 		return new Date(value).toLocaleString();
 	}
+
+	async function copyLogs() {
+		try {
+			await navigator.clipboard.writeText(JSON.stringify(visibleRows, null, 2));
+			toast.success('Event log copied');
+		} catch {
+			toast.error('Failed to copy event log');
+		}
+	}
+
+	function exportLogs() {
+		const blob = new Blob([JSON.stringify(visibleRows, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `mypaas-system-events-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
 </script>
 
 <svelte:head><title>Audit Logs · MyPaas Admin</title></svelte:head>
 
 <div class="page-shell">
-	<TableShell title="Event stream" description="Authenticated control-plane changes across projects, deployments, environment variables, and owner access." {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Authenticated admin and deployment events will appear here after changes are made." on:retry={load}>
+	<TableShell title="System event log" {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No system events yet." emptyDescription="Events appear after authenticated platform changes." on:retry={load}>
 		<svelte:fragment slot="actions">
+			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={copyLogs}><Copy slot="icon" class="h-4 w-4" />Copy</ActionButton>
+			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={exportLogs}><Download slot="icon" class="h-4 w-4" />Export JSON</ActionButton>
 			<ActionButton variant="secondary" size="sm" loading={loading} loadingLabel="Refreshing" on:click={load}><RefreshCw slot="icon" class="h-4 w-4" />Refresh</ActionButton>
-			<ActionLink href="/admin/users" variant="secondary" size="sm"><User slot="icon" class="h-4 w-4" />User whitelist</ActionLink>
 		</svelte:fragment>
 
 		<table class="data-table table-fixed min-w-[50rem]">
@@ -107,6 +127,6 @@
 				{/each}
 			</tbody>
 		</table>
-		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={visibleRows.length} {hasNext} {loading} label="Audit logs" /></svelte:fragment>
+		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={visibleRows.length} {hasNext} {loading} label="System events" /></svelte:fragment>
 	</TableShell>
 </div>
