@@ -157,88 +157,84 @@
 	</div>
 {/if}
 
-<div class="page-shell space-y-4 py-6">
+<div class="page-shell">
 	<SectionPanel title="Host capacity" contentClass="p-0">
 		{#if hostStats}
-			<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-				<div class="p-4">
+			<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+				<div class="p-4 lg:p-5">
 					<p class="metric-label">Memory</p>
 					<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{formatBytes(hostMemoryTotal)}</p>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)} allocated{hostStats.memory ? ` · ${formatBytes(hostMemoryUsed)} used` : ''}</p>
+					<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)} allocated{hostStats.memory ? ` · ${formatBytes(hostMemoryUsed)} used` : ''}</p>
 				</div>
-				<div class="p-4">
+				<div class="p-4 lg:p-5">
 					<p class="metric-label">CPU</p>
 					<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{hostStats.host_cpu_cores} core{hostStats.host_cpu_cores === 1 ? '' : 's'}</p>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>
+					<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>
 				</div>
-				<div class="p-4">
+				<div class="p-4 lg:p-5">
 					<p class="metric-label">Storage</p>
 					<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{hostStats.storage ? formatBytes(hostStats.storage.total_bytes) : 'Unavailable'}</p>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{hostStats.storage ? `${formatBytes(hostStorageUsed)} used · ${formatBytes(hostStats.storage.available_bytes)} free` : 'Telemetry unavailable'}</p>
+					<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{hostStats.storage ? `${formatBytes(hostStorageUsed)} used · ${formatBytes(hostStats.storage.available_bytes)} free` : 'Telemetry unavailable'}</p>
 				</div>
 			</div>
-		{:else}
-			<p class="p-4 text-sm text-gray-500 dark:text-gray-400">Capacity unavailable.</p>
+		{:else if !loadingSettings}
+			<p class="p-4 text-sm text-gray-500 dark:text-gray-400 lg:p-5">Capacity unavailable.</p>
 		{/if}
 	</SectionPanel>
 
-	{#if loadingSettings}
-		<div class="surface flex h-40 items-center justify-center">
-			<LoadingIndicator label="Loading platform settings" />
-		</div>
-	{:else}
+	{#if !loadingSettings}
 		<SectionPanel title="Platform limits">
 			<div class="grid gap-5 lg:grid-cols-3">
 				<label class="block" for="user_ram_quota_gb">
 					<span class="field-label">RAM quota per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="user_ram_quota_gb" min="0.25" max="64" step="0.25" bind:value={settings.user_ram_quota_gb} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_ram_quota_gb ? 'true' : undefined} /><span class="w-14 shrink-0 text-xs text-gray-500 dark:text-gray-400">GB</span></div>
-					{#if validationErrors.user_ram_quota_gb}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.user_ram_quota_gb}</p>{/if}
+					<div class="flex items-center gap-2"><input type="number" id="user_ram_quota_gb" min="0.25" max="64" step="0.25" bind:value={settings.user_ram_quota_gb} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_ram_quota_gb ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">GB</span></div>
+					{#if validationErrors.user_ram_quota_gb}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.user_ram_quota_gb}</p>{/if}
 				</label>
 				<label class="block" for="user_cpu_quota">
 					<span class="field-label">CPU quota per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="user_cpu_quota" min="0.1" max="32" step="0.1" bind:value={settings.user_cpu_quota} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_cpu_quota ? 'true' : undefined} /><span class="w-14 shrink-0 text-xs text-gray-500 dark:text-gray-400">cores</span></div>
-					{#if validationErrors.user_cpu_quota}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.user_cpu_quota}</p>{/if}
+					<div class="flex items-center gap-2"><input type="number" id="user_cpu_quota" min="0.1" max="32" step="0.1" bind:value={settings.user_cpu_quota} class="field min-w-0 flex-1" aria-invalid={validationErrors.user_cpu_quota ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">cores</span></div>
+					{#if validationErrors.user_cpu_quota}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.user_cpu_quota}</p>{/if}
 				</label>
 				<label class="block" for="max_projects">
 					<span class="field-label">Projects per user</span>
-					<div class="flex items-center gap-2"><input type="number" id="max_projects" min="1" max="500" step="1" bind:value={settings.max_projects} class="field min-w-0 flex-1" aria-invalid={validationErrors.max_projects ? 'true' : undefined} /><span class="w-14 shrink-0 text-xs text-gray-500 dark:text-gray-400">projects</span></div>
-					{#if validationErrors.max_projects}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.max_projects}</p>{/if}
+					<div class="flex items-center gap-2"><input type="number" id="max_projects" min="1" max="500" step="1" bind:value={settings.max_projects} class="field min-w-0 flex-1" aria-invalid={validationErrors.max_projects ? 'true' : undefined} /><span class="w-14 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">projects</span></div>
+					{#if validationErrors.max_projects}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.max_projects}</p>{/if}
 				</label>
 			</div>
 		</SectionPanel>
 
-		<SectionPanel title="Project defaults">
-			<div class="grid gap-px overflow-hidden rounded-md border border-gray-200 bg-gray-100 dark:border-neutral-800 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
+		<SectionPanel title="Project defaults" contentClass="p-0">
+			<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
 				{#each [
 					{ name: 'Static', detail: '64 MB · 0.10 CPU' },
 					{ name: 'Go small', detail: '128 MB · 0.20 CPU' },
 					{ name: 'Node / Python', detail: '256 MB · 0.35 CPU' },
 					{ name: 'Compose main', detail: '256 MB · 0.35 CPU' }
 				] as profile}
-					<div class="bg-white p-3 dark:bg-neutral-950">
+					<div class="p-4 lg:p-5">
 						<p class="text-sm font-medium text-gray-950 dark:text-white">{profile.name}</p>
-						<p class="metric-value mt-1 text-xs text-gray-500 dark:text-gray-400">{profile.detail}</p>
+						<p class="metric-value mt-1 text-[13px] text-gray-500 dark:text-gray-400">{profile.detail}</p>
 					</div>
 				{/each}
 			</div>
-			<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Selected during project creation; overridable per project.</p>
+			<p class="border-t border-gray-100/70 px-4 py-3 text-[13px] text-gray-500 dark:border-neutral-900 dark:text-gray-400 lg:px-5">Selected during project creation; overridable per project.</p>
 		</SectionPanel>
 
 		<SectionPanel title="Deployment">
 			<div class="max-w-md">
 				<label class="block" for="build_timeout_minutes">
 					<span class="field-label">Build timeout</span>
-					<div class="flex items-center gap-2"><input type="number" id="build_timeout_minutes" min="1" max="1440" step="1" bind:value={settings.build_timeout_minutes} class="field min-w-0 flex-1" aria-invalid={validationErrors.build_timeout_minutes ? 'true' : undefined} /><span class="w-16 shrink-0 text-xs text-gray-500 dark:text-gray-400">minutes</span></div>
-					{#if validationErrors.build_timeout_minutes}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.build_timeout_minutes}</p>{/if}
+					<div class="flex items-center gap-2"><input type="number" id="build_timeout_minutes" min="1" max="1440" step="1" bind:value={settings.build_timeout_minutes} class="field min-w-0 flex-1" aria-invalid={validationErrors.build_timeout_minutes ? 'true' : undefined} /><span class="w-16 shrink-0 text-[13px] text-gray-500 dark:text-gray-400">minutes</span></div>
+					{#if validationErrors.build_timeout_minutes}<p class="mt-1 text-[13px] text-red-600 dark:text-red-300">{validationErrors.build_timeout_minutes}</p>{/if}
 				</label>
 			</div>
-			<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Deploy concurrency is configured at process startup with <span class="font-mono">MAX_CONCURRENT_DEPLOYS</span>.</p>
+			<p class="mt-3 text-[13px] text-gray-500 dark:text-gray-400">Deploy concurrency is configured at process startup with <span class="font-mono">MAX_CONCURRENT_DEPLOYS</span>.</p>
 		</SectionPanel>
 
 		<SectionPanel title="System update">
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<div>
-					<p class="text-xs text-gray-500 dark:text-gray-400">Build</p>
+					<p class="text-[13px] text-gray-500 dark:text-gray-400">Build</p>
 					<p class="mt-0.5 font-mono text-sm text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
 				</div>
 				<ActionButton variant="primary" size="sm" loading={triggeringUpdate} on:click={triggerUpdate}>Update MyPaas</ActionButton>
@@ -246,7 +242,7 @@
 		</SectionPanel>
 
 		{#if settingsChanged}
-			<div class="surface flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+			<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100/70 px-4 py-3 dark:border-neutral-900 lg:px-5">
 				<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-amber-500"></span>Unsaved changes</p>
 				<div class="flex items-center gap-2">
 					<ActionButton variant="secondary" size="sm" on:click={discardChanges} disabled={savingSettings}>Discard</ActionButton>
