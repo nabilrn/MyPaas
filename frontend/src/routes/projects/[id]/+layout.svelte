@@ -38,6 +38,7 @@
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
 	$: databaseWorkspace = $page.url.pathname.startsWith(`/projects/${$page.params.id}/database`);
+	$: settingsWorkspace = $page.url.pathname === `/projects/${$page.params.id}/settings`;
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -117,9 +118,7 @@
 			const previousStatus = project?.status ?? lastStreamStatus;
 			lastStreamStatus = parsed.status;
 			if (project) project = { ...project, status: parsed.status };
-			if (previousStatus !== parsed.status && terminalProjectStatuses.has(parsed.status)) {
-				void loadProject(true);
-			}
+			if (previousStatus !== parsed.status && terminalProjectStatuses.has(parsed.status)) void loadProject(true);
 		} catch {
 			// Ignore malformed stream events; EventSource keeps the connection alive.
 		}
@@ -195,7 +194,7 @@
 
 <div class="page-shell">
 	{#if !loading && (error || !project)}
-		<div class="surface overflow-hidden">
+		<div class="workspace-section">
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
 	{:else if project}
@@ -211,6 +210,41 @@
 			/>
 		{/if}
 
-		<slot />
+		{#if settingsWorkspace}
+			<div class="project-settings-shell"><slot /></div>
+		{:else}
+			<slot />
+		{/if}
 	{/if}
 </div>
+
+<style>
+	:global(.project-settings-shell > .space-y-4 > * + *) {
+		margin-top: 0;
+	}
+
+	:global(.project-settings-shell > .space-y-4 > .grid) {
+		gap: 0;
+		background: var(--workspace-divider);
+	}
+
+	:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4) {
+		margin: 0;
+		background: var(--app-surface);
+	}
+
+	:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4 > * + *) {
+		margin-top: 0;
+	}
+
+	@media (min-width: 1024px) {
+		:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4:first-child) {
+			border-right: 1px solid var(--workspace-divider);
+		}
+	}
+
+	:global(.project-settings-shell section.surface) {
+		border: 0;
+		border-radius: 0;
+	}
+</style>
