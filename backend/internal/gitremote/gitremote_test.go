@@ -2,6 +2,7 @@ package gitremote
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -14,15 +15,32 @@ func TestCommandContextUsesEphemeralGitHubCredential(t *testing.T) {
 		t.Fatal("GitHub access token must not be present in command arguments")
 	}
 
+	credential := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
 	joinedEnv := strings.Join(cmd.Env, "\n")
 	for _, want := range []string{
 		"GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
-		"GIT_CONFIG_VALUE_0=AUTHORIZATION: bearer " + token,
+		"GIT_CONFIG_VALUE_0=AUTHORIZATION: basic " + credential,
 		"GIT_TERMINAL_PROMPT=0",
 	} {
 		if !strings.Contains(joinedEnv, want) {
 			t.Fatalf("command environment does not contain %q", want)
 		}
+	}
+	if strings.Contains(joinedEnv, "AUTHORIZATION: bearer ") {
+		t.Fatal("GitHub git authentication must not use bearer auth")
+	}
+}
+
+func TestGithubBasicAuthorizationHeaderUsesTokenAsPassword(t *testing.T) {
+	const token = "oauth-token"
+	header := githubBasicAuthorizationHeader(token)
+	encoded := strings.TrimPrefix(header, "AUTHORIZATION: basic ")
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode authorization header: %v", err)
+	}
+	if got, want := string(decoded), "x-access-token:"+token; got != want {
+		t.Fatalf("authorization credential = %q, want %q", got, want)
 	}
 }
 
