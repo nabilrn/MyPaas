@@ -95,29 +95,27 @@
 	<title>Migration · MyPaas</title>
 </svelte:head>
 
-<div class="page-shell space-y-4 py-6">
-	<p class="px-5 text-sm text-gray-500 dark:text-gray-400">Move this MyPaaS installation to a new Linux VM using the supported backend export and restore workflow.</p>
-
-	<SectionPanel title="How migration works" description="The backend coordinates a consistency-aware export instead of copying a live installation blindly." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100 dark:divide-neutral-800 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-			<div class="flex gap-3 p-4">
+<div class="page-shell">
+	<SectionPanel title="How migration works" description="Move this MyPaaS installation to a new Linux VM through the consistency-aware backend export and restore workflow." contentClass="p-0">
+		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<HardDrive class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">1. Preflight storage</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Preflight storage</p>
 					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Before stopping runtimes, MyPaaS checks container storage. Compose projects using engine-managed volumes fail closed instead of producing an incomplete archive.</p>
 				</div>
 			</div>
-			<div class="flex gap-3 p-4">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<Server class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">2. Quiesce and export</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Quiesce and export</p>
 					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Running Dockerfile, registry-image, and Compose runtimes are stopped temporarily while PostgreSQL and supported host-managed project data are exported. Static projects have no runtime to stop.</p>
 				</div>
 			</div>
-			<div class="flex gap-3 p-4">
+			<div class="flex gap-3 p-4 lg:p-5">
 				<RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 				<div>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">3. Restore running state</p>
+					<p class="text-sm font-medium text-gray-950 dark:text-white">Restore running state</p>
 					<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">MyPaaS restarts every runtime it stopped and marks the package ready only after restoration succeeds. Temporary stops do not rewrite the project's desired running state in PostgreSQL.</p>
 				</div>
 			</div>
@@ -125,15 +123,17 @@
 	</SectionPanel>
 
 	<SectionPanel title="Before you start" description="Operational boundaries that keep the built-in exporter fail-safe." contentClass="p-0">
-		<div class="divide-y divide-gray-100 dark:divide-neutral-800">
-			<div class="alert-warning m-4">
-				<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-				<div>
-					<p class="font-medium">Expect a maintenance window for container-backed projects.</p>
-					<p class="mt-1">Running application runtimes are stopped briefly while mutable data is exported, then restarted before the package can become ready.</p>
+		<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
+			<div class="p-4 lg:p-5">
+				<div class="alert-warning">
+					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+					<div>
+						<p class="font-medium">Expect a maintenance window for container-backed projects.</p>
+						<p class="mt-1">Running application runtimes are stopped briefly while mutable data is exported, then restarted before the package can become ready.</p>
+					</div>
 				</div>
 			</div>
-			<div class="grid gap-4 p-4 text-sm text-gray-600 dark:text-gray-300 md:grid-cols-2">
+			<div class="grid gap-4 p-4 text-sm text-gray-600 dark:text-gray-300 md:grid-cols-2 lg:p-5">
 				<div>
 					<p class="font-medium text-gray-950 dark:text-white">Engine-managed volumes are not copied automatically</p>
 					<p class="mt-1">If preflight reports named or other engine-managed Compose volumes, move persistent data to supported bind mounts under <code class="font-mono text-xs">/var/lib/mypaas/volumes</code> or migrate those engine volumes separately.</p>
@@ -148,7 +148,7 @@
 
 	<SectionPanel title="Migration package" description="Prepare a temporary package and restore it on the destination VM." contentClass="p-0">
 		{#if canPrepare && !preparingMigration}
-			<div class="p-4">
+			<div class="p-4 lg:p-5">
 				{#if migration?.status === 'failed'}
 					<div class="alert-danger mb-4">
 						<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -177,7 +177,7 @@
 			</div>
 		{:else if migration?.status === 'ready'}
 			<div>
-				<div class="flex flex-wrap items-center justify-between gap-3 p-4">
+				<div class="flex flex-wrap items-center justify-between gap-3 p-4 lg:p-5">
 					<div>
 						<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class="status-dot bg-emerald-500"></span>Migration package ready</p>
 						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -190,7 +190,7 @@
 					</ActionLink>
 				</div>
 
-				<div class="border-t border-gray-100 p-4 dark:border-neutral-800">
+				<div class="border-t border-gray-100/70 p-4 dark:border-neutral-900 lg:p-5">
 					<h3 class="text-[0.9375rem] font-semibold text-gray-950 dark:text-white">Restore on the new VM</h3>
 					<p class="mt-1 max-w-3xl text-sm text-gray-600 dark:text-gray-300">SSH into a fresh Linux VM and run the generated command. It clones MyPaaS and passes the temporary migration package URL to the installer for restore.</p>
 					<pre class="console-surface mt-4 overflow-x-auto p-4"><code class="whitespace-pre-wrap">{migrationCommand}</code></pre>
