@@ -523,10 +523,13 @@
 	}
 
 	function chooseGithubRepository(repository: GitHubRepository) {
-		form.repoUrl = repository.cloneUrl;
-		form.branch = repository.defaultBranch;
-		if (!projectNameTouched) form.name = suggestProjectName(repository.cloneUrl);
 		resetRepositoryInspection();
+		const selectedBranch = repository.defaultBranch.trim();
+		form.repoUrl = repository.cloneUrl;
+		form.branch = selectedBranch;
+		defaultBranch = selectedBranch;
+		branchOptions = normalizeBranches([], selectedBranch);
+		if (!projectNameTouched) form.name = suggestProjectName(repository.cloneUrl);
 		githubRepositoryPickerOpen = false;
 		githubRepositorySearch = '';
 		void inspectRepository(false, true).catch(() => undefined);
