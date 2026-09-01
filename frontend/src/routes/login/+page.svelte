@@ -3,7 +3,6 @@
 	import BrandLogo from '$components/BrandLogo.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import IconButton from '$components/IconButton.svelte';
-	import loginBackground from '../../assets/mypaas-login-pixel-background.webp';
 	import { theme } from '$stores/theme';
 </script>
 
@@ -11,10 +10,7 @@
 	<title>Sign in · MyPaas</title>
 </svelte:head>
 
-<div class="login-shell relative flex min-h-screen min-h-[100dvh] items-center justify-center overflow-hidden bg-[var(--app-bg)]">
-	<img src={loginBackground} alt="" aria-hidden="true" class="login-background pointer-events-none absolute inset-0 h-full w-full object-cover" />
-	<div class="login-vignette pointer-events-none absolute inset-0" aria-hidden="true"></div>
-
+<div class="fixed inset-0 flex items-center justify-center overflow-hidden bg-[var(--app-bg)]">
 	<div class="absolute right-4 top-4 z-10">
 		<IconButton label="Toggle appearance" variant="secondary" on:click={() => theme.toggle()}>
 			{#if $theme === 'dark'}
@@ -48,30 +44,7 @@
 </div>
 
 <style>
-	.login-shell {
-		isolation: isolate;
-	}
-
-	.login-background {
-		opacity: 0.94;
-		filter: grayscale(1) contrast(0.98);
-	}
-
-	.login-vignette {
-		background: radial-gradient(circle at center, color-mix(in srgb, var(--app-bg) 58%, transparent) 0 14%, transparent 58%);
-	}
-
 	.login-panel {
-		background: color-mix(in srgb, var(--app-surface) 95%, transparent);
-		backdrop-filter: blur(12px);
-	}
-
-	:global(.dark) .login-background {
-		opacity: 0.72;
-		filter: grayscale(1) invert(1) brightness(0.24) contrast(1.08);
-	}
-
-	:global(.dark) .login-vignette {
-		background: radial-gradient(circle at center, color-mix(in srgb, var(--app-bg) 66%, transparent) 0 16%, transparent 62%);
+		background: var(--app-surface);
 	}
 </style>

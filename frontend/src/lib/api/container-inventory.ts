@@ -22,7 +22,7 @@ interface InventoryEnvelope {
 }
 
 export async function loadRuntimeContainers(): Promise<RuntimeContainer[]> {
-	const response = await fetch('/api/admin/ports?includeContainers=true', {
+	const response = await fetch('/api/admin/containers', {
 		credentials: 'include',
 		headers: { Accept: 'application/json' }
 	});

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { CircleStop, RefreshCw, Terminal, TriangleAlert } from '@lucide/svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import { api } from '$api';
@@ -19,6 +19,7 @@
 	let sending = false;
 	let stopping = false;
 	let outputElement: HTMLPreElement | null = null;
+	let commandInput: HTMLInputElement | null = null;
 	let mounted = false;
 
 	$: statusLabel = {
@@ -75,7 +76,10 @@
 		const nextStream = new EventSource(`/api/admin/shell/sessions/${id}/stream`);
 		stream = nextStream;
 		nextStream.addEventListener('ready', () => {
-			if (mounted) status = 'connected';
+			if (mounted) {
+				status = 'connected';
+				void focusCommandInput();
+			}
 		});
 		nextStream.addEventListener('output', (event) => {
 			const payload = (event as MessageEvent<string>).data;
@@ -120,7 +124,13 @@
 			error = err instanceof Error ? err.message : 'Failed to send shell input';
 		} finally {
 			sending = false;
+			await focusCommandInput();
 		}
+	}
+
+	async function focusCommandInput() {
+		await tick();
+		commandInput?.focus();
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -192,15 +202,15 @@
 		<div class="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700 dark:border-red-950 dark:bg-red-950/30 dark:text-red-300" role="alert">{error}</div>
 	{/if}
 
-	<div class="min-h-0 flex-1 bg-gray-950">
+	<div class="min-h-0 flex-1 bg-neutral-900 dark:bg-neutral-950">
 		{#if session}
 			<pre
 				bind:this={outputElement}
-				class="h-full overflow-auto whitespace-pre-wrap break-words bg-gray-950 p-4 font-mono text-sm leading-6 text-gray-100"
+				class="h-full overflow-auto whitespace-pre-wrap break-words bg-neutral-900 p-4 font-mono text-sm leading-6 text-gray-200 dark:bg-neutral-950"
 				aria-label="Shell output"
 			>{output || 'Waiting for shell output…'}</pre>
 		{:else}
-			<div class="flex h-full items-center justify-center bg-gray-950 p-6">
+			<div class="flex h-full items-center justify-center bg-neutral-900 p-6 dark:bg-neutral-950">
 				<div class="flex flex-col items-center gap-3 text-center">
 					<Terminal class="h-6 w-6 text-gray-600" aria-hidden="true" />
 					<p class="text-sm text-gray-400">{status === 'connecting' ? 'Opening host shell…' : 'No shell session is running.'}</p>
@@ -216,9 +226,10 @@
 	</div>
 
 	{#if session}
-		<form class="flex h-12 shrink-0 items-center gap-2 border-t border-gray-800 bg-gray-950 px-4" on:submit|preventDefault={sendCommand}>
+		<form class="flex h-12 shrink-0 items-center gap-2 border-t border-neutral-700 bg-neutral-900 px-4 dark:border-neutral-800 dark:bg-neutral-950" on:submit|preventDefault={sendCommand}>
 			<label class="font-mono text-sm text-gray-500" for="shell-command">$</label>
 			<input
+				bind:this={commandInput}
 				id="shell-command"
 				class="min-w-0 flex-1 border-0 bg-transparent px-0 font-mono text-sm text-gray-100 outline-none placeholder:text-gray-600 focus:ring-0"
 				bind:value={command}

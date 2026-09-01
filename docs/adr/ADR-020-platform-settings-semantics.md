@@ -16,14 +16,9 @@ That was misleading:
 
 ## Decision
 
-Admin Settings only exposes numeric controls that have an authoritative live consumer:
+Admin Settings exposes build timeout and resource-profile defaults. The former platform-limit controls are not shown in the dashboard; installation-level quota values remain supported for compatibility and enforcement.
 
-- per-user RAM quota;
-- per-user CPU quota;
-- maximum projects per user;
-- build timeout.
-
-`project_default_ram_mb` and `project_default_cpu` are no longer part of the editable Admin Settings contract. Resource profiles remain the single source of truth for new-project defaults, with per-project overrides available in Create Project and Project Settings.
+`project_default_ram_mb` and `project_default_cpu` are not part of the editable Admin Settings contract. Resource profiles remain the single source of truth for new-project defaults. Owners may raise the memory and CPU defaults for `static`, `go-small`, `node-python`, and `compose-main`, but cannot lower them below the built-in profile floors. Changes are persisted, rehydrated on API startup, and used by REST, MCP, Create Project, and Project Settings. Explicit per-project overrides remain available.
 
 `max_concurrent_deploys` is no longer exposed as a live Admin Settings control. It remains an installation-level setting through `MAX_CONCURRENT_DEPLOYS` until MyPaas has a deliberately resizable runtime limiter.
 
@@ -34,7 +29,7 @@ Both API and frontend validate the supported limits. Unknown Admin Settings keys
 ## Consequences
 
 - The owner UI can no longer claim configuration that MyPaas does not enforce.
-- New-project resource defaults remain deterministic and runtime-profile-specific.
+- New-project resource defaults remain runtime-profile-specific and owner-configurable above fixed floors.
 - Saved quota and build-timeout overrides survive API restarts as effective runtime values.
 - Deployment concurrency changes continue to require installation configuration and an API restart.
 - Old database rows for removed keys may remain harmlessly stored; they are not returned or applied by the live settings contract.

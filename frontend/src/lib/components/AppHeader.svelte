@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, FolderKanban, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Terminal, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Terminal, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -14,7 +14,7 @@
 	export let user: User | null = null;
 
 	const navItems = [
-		{ href: '/projects', label: 'Projects', icon: FolderKanban, ownerOnly: false },
+		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
 		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
 		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
 		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true },

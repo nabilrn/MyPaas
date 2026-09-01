@@ -56,7 +56,7 @@
 	let copiedTarget: 'webhook-url' | 'webhook-secret' | '' = '';
 	let copiedResetTimer: ReturnType<typeof setTimeout> | undefined;
 
-	const resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
+	let resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
 		{ id: 'node-python', title: 'Node/Python', memoryMb: 256, cpuLimit: 0.35 },
 		{ id: 'go-small', title: 'Go small', memoryMb: 128, cpuLimit: 0.2 },
 		{ id: 'compose-main', title: 'Compose main', memoryMb: 256, cpuLimit: 0.35 },
@@ -103,7 +103,20 @@
 		loading = true;
 		loadError = '';
 		try {
-			project = await api.projects.get($page.params.id ?? '');
+			const [loadedProject, platformSettings] = await Promise.all([
+				api.projects.get($page.params.id ?? ''),
+				api.admin.getSettings().catch(() => null)
+			]);
+			project = loadedProject;
+			if (platformSettings) {
+				const configured: Partial<Record<ResourceProfile, { memoryMb: number; cpuLimit: number }>> = {
+					static: { memoryMb: platformSettings.profile_static_memory_mb ?? 64, cpuLimit: platformSettings.profile_static_cpu_limit ?? 0.1 },
+					'go-small': { memoryMb: platformSettings.profile_go_small_memory_mb ?? 128, cpuLimit: platformSettings.profile_go_small_cpu_limit ?? 0.2 },
+					'node-python': { memoryMb: platformSettings.profile_node_python_memory_mb ?? 256, cpuLimit: platformSettings.profile_node_python_cpu_limit ?? 0.35 },
+					'compose-main': { memoryMb: platformSettings.profile_compose_main_memory_mb ?? 256, cpuLimit: platformSettings.profile_compose_main_cpu_limit ?? 0.35 }
+				};
+				resourceProfiles = resourceProfiles.map((profile) => ({ ...profile, ...(configured[profile.id] ?? {}) }));
+			}
 			name = project.name;
 			branch = project.branch;
 			imageRef = project.imageRef ?? '';
@@ -477,16 +490,12 @@
 							</select>
 						</div>
 						<div>
-							<label class="field-label" for="mem">Memory</label>
-							<select id="mem" bind:value={memoryMb} on:change={markCustomProfile} class="field w-full">
-								{#each [64, 128, 256, 512, 1024, 2048] as m}<option value={m}>{m} MB</option>{/each}
-							</select>
+							<label class="field-label" for="mem">Memory (MB)</label>
+							<input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" />
 						</div>
 						<div>
-							<label class="field-label" for="cpu">CPU</label>
-							<select id="cpu" bind:value={cpuLimit} on:change={markCustomProfile} class="field w-full">
-								{#each [0.1, 0.2, 0.25, 0.35, 0.5, 1, 2] as c}<option value={c}>{c} core{c !== 1 ? 's' : ''}</option>{/each}
-							</select>
+							<label class="field-label" for="cpu">CPU cores</label>
+							<input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" />
 						</div>
 					</div>
 

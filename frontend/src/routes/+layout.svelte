@@ -22,7 +22,7 @@
 
 	$: isPublic = $page.url.pathname === '/' || $page.url.pathname === '/login' || $page.url.pathname.startsWith('/docs');
 	$: createProjectWorkspace = $page.url.pathname === '/projects/new';
-	$: showMainLoader = Boolean($navigating) || $mainContentLoading;
+	$: showMainLoader = !checked || Boolean($navigating) || $mainContentLoading;
 	$: if (isPublic && unregisterWebMCP) {
 		unregisterWebMCP();
 		unregisterWebMCP = null;
@@ -56,31 +56,23 @@
 	<link rel="icon" type="image/png" href={faviconWhite} />
 </svelte:head>
 
-{#if checked || isPublic}
-	{#if !isPublic && user}
-		<div class="app-shell min-h-screen lg:pl-14">
-			<Navbar {user} />
-			<AppHeader {user} />
-			<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
-				<div
-					class:create-project-workspace={createProjectWorkspace}
-					class:invisible={showMainLoader}
-					class:pointer-events-none={showMainLoader}
-					class:absolute={showMainLoader}
-					class:inset-0={showMainLoader}
-					class:overflow-hidden={showMainLoader}
-					aria-hidden={showMainLoader}
-				>
+{#if isPublic}
+	<main class="min-h-screen">
+		<slot />
+	</main>
+{:else}
+	<div class="app-shell min-h-screen lg:pl-14">
+		<Navbar {user} />
+		<AppHeader {user} />
+		<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
+			{#if checked && user}
+				<div class:create-project-workspace={createProjectWorkspace} class:pointer-events-none={showMainLoader}>
 					<slot />
 				</div>
-				{#if showMainLoader}<MainContentLoader />{/if}
-			</main>
-		</div>
-	{:else}
-		<main class="min-h-screen">
-			<slot />
+			{/if}
+			{#if showMainLoader}<MainContentLoader label={checked ? 'Loading' : 'Loading account'} />{/if}
 		</main>
-	{/if}
+	</div>
 {/if}
 
 <Toast />

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, RefreshCw, Trash2 } from '@lucide/svelte';
+	import { Plus, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
@@ -73,29 +73,9 @@
 </svelte:head>
 
 <div class="page-shell">
-	<SectionPanel title="System ports" description="Critical host ports are visible but locked. MyPaaS never enables or disables UFW from this page." padded={false}>
-		<svelte:fragment slot="actions">
-			<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={load}>
-				<RefreshCw slot="icon" class="h-4 w-4" />
-				Refresh
-			</ActionButton>
-		</svelte:fragment>
-		<div class="overflow-x-auto">
-			<table class="data-table table-fixed">
-				<colgroup><col class="w-[18%]" /><col class="w-[58%]" /><col class="w-[24%]" /></colgroup>
-				<thead><tr><th>Port</th><th>Purpose</th><th>Control</th></tr></thead>
-				<tbody>
-					<tr><td class="whitespace-nowrap font-mono text-[13px]">22/tcp</td><td>SSH access</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Locked</span></td></tr>
-					<tr><td class="whitespace-nowrap font-mono text-[13px]">80/tcp</td><td>Caddy HTTP</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Locked</span></td></tr>
-					<tr><td class="whitespace-nowrap font-mono text-[13px]">443/tcp</td><td>Caddy HTTPS / edge traffic</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Locked</span></td></tr>
-				</tbody>
-			</table>
-		</div>
-	</SectionPanel>
-
 	<TableShell
-		title="Project bindings"
-		description={localBinding ? 'Application host ports are local; public HTTP traffic is routed through Caddy.' : 'This host uses a non-local Docker bind address; review exposure directly on the VM.'}
+		title="Application bindings"
+		description={localBinding ? undefined : 'Warning: the container bind address is not local.'}
 		{loading}
 		{error}
 		empty={(overview?.allocations.length ?? 0) === 0}
@@ -128,7 +108,21 @@
 		</table>
 	</TableShell>
 
-	<SectionPanel title="Managed firewall rules" description="Only UFW allow rules created by MyPaaS can be removed here." contentClass="p-0">
+	<SectionPanel title="Reserved ports" padded={false}>
+		<div class="overflow-x-auto">
+			<table class="data-table table-fixed">
+				<colgroup><col class="w-[22%]" /><col class="w-[54%]" /><col class="w-[24%]" /></colgroup>
+				<thead><tr><th>Port</th><th>Used by</th><th>Status</th></tr></thead>
+				<tbody>
+					<tr><td class="whitespace-nowrap font-mono text-[13px]">22/tcp</td><td>SSH</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Protected</span></td></tr>
+					<tr><td class="whitespace-nowrap font-mono text-[13px]">80/tcp</td><td>Caddy HTTP</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Protected</span></td></tr>
+					<tr><td class="whitespace-nowrap font-mono text-[13px]">443/tcp</td><td>Caddy HTTPS</td><td><span class="text-[13px] text-gray-500 dark:text-gray-400">Protected</span></td></tr>
+				</tbody>
+			</table>
+		</div>
+	</SectionPanel>
+
+	<SectionPanel title="Firewall rules" contentClass="p-0">
 		{#if error && !overview}
 			<div class="px-5 py-4 text-sm text-red-600 dark:text-red-300">{error}</div>
 		{:else if overview && !overview.firewall.available}
@@ -136,9 +130,9 @@
 				Firewall helper unavailable. Project bindings remain visible, but host firewall changes are disabled.
 			</div>
 		{:else if overview}
-			<div class="border-b border-gray-100/70 px-5 py-4 dark:border-neutral-900">
-				<p class="text-sm font-medium text-gray-950 dark:text-white">UFW {overview.firewall.active ? 'active' : 'inactive'}</p>
-				<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{overview.firewall.active ? 'Managed rules are enforced by the host firewall.' : 'Rules can be prepared, but MyPaaS will not activate UFW automatically.'}</p>
+			<div class="flex items-center justify-between gap-3 border-b border-gray-100/70 px-5 py-3 dark:border-neutral-900">
+				<p class="text-sm font-medium text-gray-950 dark:text-white">UFW</p>
+				<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium" class:border-emerald-200={overview.firewall.active} class:bg-emerald-50={overview.firewall.active} class:text-emerald-700={overview.firewall.active} class:border-gray-200={!overview.firewall.active} class:text-gray-500={!overview.firewall.active}>{overview.firewall.active ? 'Active' : 'Inactive'}</span>
 			</div>
 
 			<form class="grid gap-3 border-b border-gray-100/70 px-5 py-4 dark:border-neutral-900 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end" on:submit|preventDefault={openPort}>

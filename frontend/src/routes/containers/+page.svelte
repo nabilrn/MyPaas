@@ -1,24 +1,20 @@
 <script lang="ts">
-	import { RefreshCw, Search } from '@lucide/svelte';
+	import { Search } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import ActionButton from '$components/ActionButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
 
 	let rows: RuntimeContainer[] = [];
-	let refreshing = false;
+	let loading = false;
 	let error = '';
 	let query = '';
 	let stateFilter = 'all';
 	let runtimeFilter = 'all';
 	let pageIndex = 0;
-	let pageSize = 20;
+	let pageSize = 10;
 
-	$: runningCount = rows.filter((row) => row.state === 'running').length;
-	$: totalCpu = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.cpu : 0), 0);
-	$: totalMemoryMb = rows.reduce((sum, row) => sum + (row.metricsAvailable ? row.memoryMb : 0), 0);
 	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
 	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
 	$: searchTerm = query.trim().toLowerCase();
@@ -34,20 +30,14 @@
 	$: if (pageIndex > maxPage) pageIndex = maxPage;
 	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 	$: hasNext = (pageIndex + 1) * pageSize < filteredRows.length;
-	$: inventoryDescription = rows.length > 0
-		? `${rows.length} total · ${runningCount} running · ${totalCpu.toFixed(1)}% CPU · ${formatMemory(totalMemoryMb)} RAM`
-		: 'Host-wide Docker-compatible runtime inventory, including MyPaaS and application containers.';
-
 	onMount(() => {
 		void load();
-		const timer = window.setInterval(() => void load(true), 5000);
-		return () => window.clearInterval(timer);
 	});
 
-	async function load(background = false) {
-		if (refreshing) return;
-		refreshing = true;
-		const finishMainLoading = !background && rows.length === 0 ? beginMainContentLoading() : null;
+	async function load() {
+		if (loading) return;
+		loading = true;
+		const finishMainLoading = rows.length === 0 ? beginMainContentLoading() : null;
 		error = '';
 		try {
 			const next = await loadRuntimeContainers();
@@ -60,7 +50,7 @@
 			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
 			finishMainLoading?.();
-			refreshing = false;
+			loading = false;
 		}
 	}
 
@@ -102,8 +92,8 @@
 
 <div class="page-shell">
 	<TableShell
-		title="Host containers"
-		description={inventoryDescription}
+		title="Containers"
+		description="Read-only host runtime inventory. Manage application lifecycle from each project."
 		loading={false}
 		{error}
 		empty={filteredRows.length === 0}
@@ -111,13 +101,6 @@
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
-		<svelte:fragment slot="actions">
-			<ActionButton variant="secondary" size="sm" loading={refreshing} loadingLabel="Refreshing" on:click={() => load()}>
-				<RefreshCw slot="icon" class="h-4 w-4" />
-				Refresh
-			</ActionButton>
-		</svelte:fragment>
-
 		<svelte:fragment slot="notice">
 			<div class="grid gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end lg:px-5">
 				<label class="block min-w-0" for="container-search">
@@ -158,13 +141,13 @@
 
 		<table class="data-table table-fixed min-w-[64rem]">
 			<colgroup>
-				<col class="w-[16%]" />
-				<col class="w-[18%]" />
-				<col class="w-[23%]" />
-				<col class="w-[10%]" />
+				<col class="w-[17%]" />
+				<col class="w-[19%]" />
+				<col class="w-[24%]" />
+				<col class="w-[11%]" />
 				<col class="w-[8%]" />
 				<col class="w-[12%]" />
-				<col class="w-[13%]" />
+				<col class="w-[9%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -207,7 +190,7 @@
 
 		<svelte:fragment slot="footer">
 			{#if filteredRows.length > 0}
-				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={refreshing} label="Containers" />
+				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={loading} label="Containers" />
 			{/if}
 		</svelte:fragment>
 	</TableShell>

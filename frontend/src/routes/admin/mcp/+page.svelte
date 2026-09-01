@@ -1,34 +1,28 @@
 <script lang="ts">
+	import { Check, Copy, KeyRound, RefreshCw, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import { Activity, Bot, Check, Copy, GitBranch, KeyRound, RefreshCw, Rocket, ShieldCheck, SquareTerminal, X } from '@lucide/svelte';
 	import { api } from '$api';
-	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import AgentBadgeStack from '$components/AgentBadgeStack.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
+	import { toast } from '$stores/toast';
 
 	let mcpToken = '';
 	let loading = true;
 	let regeneratingToken = false;
 	let confirmRegenerateToken = false;
-	let copiedText: string | null = null;
+	let copiedText = '';
 
 	$: origin = typeof window !== 'undefined' ? window.location.origin : 'https://<your-domain>';
-	$: mcpConfig = `{
-  "mcpServers": {
-    "mypaas": {
-      "command": "go",
-      "args": [
-        "run",
-        "/absolute/path/to/MyPaas/backend/cmd/mcp/main.go"
-      ],
-      "env": {
-        "MYPAAS_URL": "${origin}/api",
-        "MYPAAS_API_TOKEN": "${mcpToken || '<your-token>'}"
-      }
-    }
-  }
-}`;
+	$: setupPrompt = `Configure this agent to use the local MyPaaS MCP bridge.
+
+1. Clone https://github.com/nabilrn/MyPaas on the machine running the agent.
+2. Run backend/cmd/mcp/main.go with Go over stdio.
+3. Set MYPAAS_URL=${origin}/api
+4. Set MYPAAS_API_TOKEN=${mcpToken || '<your-token>'}
+5. Verify the connection by listing MyPaaS projects.
+
+Keep the token secret. Do not deploy, restart, delete, or change project configuration unless I explicitly ask.`;
 
 	onMount(loadToken);
 
@@ -38,8 +32,7 @@
 			const data = await api.admin.getSettings();
 			mcpToken = data.mcp_api_token ?? '';
 		} catch (error) {
-			toast.error('Failed to load MCP configuration');
-			console.error(error);
+			toast.error(error instanceof Error ? error.message : 'Failed to load MCP access');
 		} finally {
 			loading = false;
 		}
@@ -51,11 +44,10 @@
 			copiedText = id;
 			toast.success('Copied');
 			setTimeout(() => {
-				if (copiedText === id) copiedText = null;
+				if (copiedText === id) copiedText = '';
 			}, 2000);
-		} catch (error) {
-			console.error(error);
-			toast.error('Failed to copy text');
+		} catch {
+			toast.error('Failed to copy');
 		}
 	}
 
@@ -68,8 +60,7 @@
 			confirmRegenerateToken = false;
 			toast.success('MCP token regenerated');
 		} catch (error) {
-			toast.error('Failed to regenerate MCP token');
-			console.error(error);
+			toast.error(error instanceof Error ? error.message : 'Failed to regenerate MCP token');
 		} finally {
 			regeneratingToken = false;
 		}
@@ -81,44 +72,21 @@
 </svelte:head>
 
 <div class="page-shell">
-	<SectionPanel title="What MCP enables" description="Connect an MCP-compatible agent through the authenticated local bridge. Tool calls are translated into authorized MyPaaS API operations." contentClass="p-0">
+	<SectionPanel title="MCP access" contentClass="p-0">
 		<svelte:fragment slot="actions"><AgentBadgeStack /></svelte:fragment>
-		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-			<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
-				<div class="flex gap-3 p-4">
-					<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Projects and repository inspection</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">List and inspect projects, inspect Git repositories, detect Compose configuration, create projects, and update mutable project settings.</p></div>
-				</div>
-				<div class="flex gap-3 p-4">
-					<Rocket class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Deployments and runtime control</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy, start, stop, and restart projects; inspect deployment history; and roll back to a successful deployment.</p></div>
-				</div>
-			</div>
-			<div class="divide-y divide-gray-100/70 dark:divide-neutral-900">
-				<div class="flex gap-3 p-4">
-					<Activity class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Logs, metrics, and environment</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Read recent logs and metrics snapshots, list environment keys, set environment variables, and delete a variable with explicit key confirmation. Environment values are not revealed by the list operation.</p></div>
-				</div>
-				<div class="flex gap-3 p-4">
-					<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">Capacity and admin context</p><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Inspect quota usage and, with owner access, host resource statistics. The bridge does not bypass API authorization.</p></div>
-				</div>
-			</div>
-		</div>
-	</SectionPanel>
-
-	<SectionPanel title="Access token" description="Credential used by the local MCP bridge to authenticate against this MyPaaS instance." contentClass="p-0">
 		<div class="p-4 lg:p-5">
 			<div class="alert-neutral">
 				<KeyRound class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-				<p>Treat this token like an administrative credential. Any MCP client that receives it can perform the MyPaaS operations allowed to that token.</p>
+				<p>The token grants owner-level MyPaaS API access. Store it only in the local MCP client.</p>
 			</div>
 
-			{#if !loading}
+			{#if loading}
+				<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading token…</p>
+			{:else}
 				<label class="mt-4 block max-w-3xl" for="mcp_token">
-					<span class="field-label">MCP API token</span>
+					<span class="field-label">API token</span>
 					<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-						<input type="text" id="mcp_token" readonly value={mcpToken || 'Not configured'} class="field min-w-0 flex-1 bg-gray-50 font-mono text-sm text-gray-500 dark:bg-neutral-900 dark:text-gray-400" />
+						<input type="password" id="mcp_token" readonly value={mcpToken || 'Not configured'} class="field min-w-0 flex-1 bg-gray-50 font-mono text-sm text-gray-500 dark:bg-neutral-900 dark:text-gray-400" />
 						{#if mcpToken}
 							<ActionButton variant="secondary" size="sm" on:click={() => copyToClipboard(mcpToken, 'token')}>
 								{#if copiedText === 'token'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}
@@ -126,7 +94,6 @@
 							</ActionButton>
 						{/if}
 					</div>
-					<p class="field-hint">Use this value as <code class="font-mono">MYPAAS_API_TOKEN</code> in the MCP client configuration below.</p>
 				</label>
 			{/if}
 		</div>
@@ -134,7 +101,7 @@
 		<div class="border-t border-gray-100/70 p-4 dark:border-neutral-900 lg:px-5">
 			{#if confirmRegenerateToken}
 				<div class="alert-warning flex-wrap items-center justify-between">
-					<div class="min-w-0 flex-1"><p class="font-medium">Regenerate MCP token?</p><p class="mt-0.5">Clients still using the old token will lose access immediately and must be reconfigured.</p></div>
+					<p class="min-w-0 flex-1">Regenerating disconnects clients using the current token.</p>
 					<div class="flex gap-2">
 						<ActionButton variant="ghost" size="xs" on:click={() => (confirmRegenerateToken = false)} disabled={regeneratingToken}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
 						<ActionButton variant="danger" size="xs" on:click={regenerateToken} loading={regeneratingToken} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Regenerate</ActionButton>
@@ -146,27 +113,13 @@
 		</div>
 	</SectionPanel>
 
-	<SectionPanel title="Connect an agent" description="Run the MCP bridge locally over stdio and point it at this remote MyPaaS API." contentClass="p-0">
-		<div class="grid divide-y divide-gray-100/70 dark:divide-neutral-900 lg:grid-cols-[20rem_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
-			<div class="p-4 lg:p-5">
-				<div class="flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><Bot class="h-4 w-4" aria-hidden="true" />Setup</div>
-				<ol class="mt-3 list-decimal space-y-2 pl-5 text-sm text-gray-600 dark:text-gray-300">
-					<li>Install Go on the machine where your MCP-compatible agent runs.</li>
-					<li>Clone the MyPaaS repository locally.</li>
-					<li>Set the absolute path to <code class="font-mono text-xs">backend/cmd/mcp/main.go</code> in your MCP client.</li>
-					<li>Provide this instance URL and MCP token through the two environment variables shown.</li>
-				</ol>
-			</div>
-			<div class="min-w-0 p-4 lg:p-5">
-				<div class="flex flex-wrap items-center justify-between gap-2">
-					<div class="flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><SquareTerminal class="h-4 w-4" aria-hidden="true" />MCP client configuration</div>
-					<ActionButton variant="secondary" size="xs" on:click={() => copyToClipboard(mcpConfig, 'config')}>
-						{#if copiedText === 'config'}<Check slot="icon" class="h-3.5 w-3.5" />{:else}<Copy slot="icon" class="h-3.5 w-3.5" />{/if}
-						{copiedText === 'config' ? 'Copied' : 'Copy config'}
-					</ActionButton>
-				</div>
-				<pre class="console-surface mt-3 overflow-x-auto p-4"><code>{mcpConfig}</code></pre>
-			</div>
+	<SectionPanel title="Agent setup prompt" contentClass="p-0">
+		<div class="p-4 lg:p-5">
+			<pre class="console-surface max-h-96 overflow-auto whitespace-pre-wrap p-4"><code>{setupPrompt}</code></pre>
+			<ActionButton variant="primary" size="sm" className="mt-3" disabled={!mcpToken} on:click={() => copyToClipboard(setupPrompt, 'prompt')}>
+				{#if copiedText === 'prompt'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}
+				{copiedText === 'prompt' ? 'Copied' : 'Copy setup prompt'}
+			</ActionButton>
 		</div>
 	</SectionPanel>
 </div>

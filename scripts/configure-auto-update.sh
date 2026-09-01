@@ -7,6 +7,8 @@ UPDATE_CONFIG_DIR="${MYPAAS_UPDATE_CONFIG_DIR:-/etc/mypaas}"
 UPDATE_CONFIG_FILE="${MYPAAS_UPDATE_CONFIG:-$UPDATE_CONFIG_DIR/update.env}"
 SERVICE_FILE="/etc/systemd/system/mypaas-update.service"
 TIMER_FILE="/etc/systemd/system/mypaas-update.timer"
+PATH_FILE="/etc/systemd/system/mypaas-update.path"
+REQUEST_FILE="/run/mypaas/update.request"
 
 EXPLICIT_ENABLED_SET="${AUTO_UPDATE_ENABLED+x}"
 EXPLICIT_ENABLED="${AUTO_UPDATE_ENABLED-}"
@@ -125,13 +127,12 @@ EOF
   run_root chmod 0644 "$UPDATE_CONFIG_FILE"
 }
 
-remove_units() {
+disable_timer() {
   if ! command_exists systemctl; then
     return
   fi
   run_root systemctl disable --now mypaas-update.timer >/dev/null 2>&1 || true
-  run_root rm -f "$SERVICE_FILE" "$TIMER_FILE"
-  run_root systemctl daemon-reload
+  run_root rm -f "$TIMER_FILE"
 }
 
 main() {
@@ -151,25 +152,21 @@ main() {
   validate_wait "$image_wait"
   persist_policy "$enabled" "$interval" "$ref" "$image_wait"
 
-  if [[ "$enabled" != "true" ]]; then
-    remove_units
-    log "Automatic MyPaas updates are disabled"
-    return 0
-  fi
-
-  command_exists systemctl || die "automatic updates require systemd"
+  command_exists systemctl || die "MyPaas updates require systemd"
 
   local root_q env_q config_q
   root_q="$(quote_systemd_value "$ROOT_DIR")"
   env_q="$(quote_systemd_value "$ENV_FILE")"
   config_q="$(quote_systemd_value "$UPDATE_CONFIG_FILE")"
 
-  log "Installing automatic update timer (${interval} minute interval, ref $ref)"
+  log "Installing host update service (ref $ref)"
+
+  run_root install -d -m 0755 /run/mypaas
 
   run_root tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
 Description=Update MyPaas when a published upstream revision is available
-After=docker.service network-online.target
+After=network-online.target
 Wants=network-online.target
 
 [Service]
@@ -178,13 +175,29 @@ WorkingDirectory="$root_q"
 EnvironmentFile=-$config_q
 Environment="ENV_FILE=$env_q"
 Environment="MYPAAS_INSTALL_DIR=$root_q"
+ExecStartPre=-/usr/bin/rm -f $REQUEST_FILE
 ExecStart=/usr/bin/env bash "$root_q/scripts/update-vm.sh"
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  run_root tee "$TIMER_FILE" >/dev/null <<EOF
+  run_root tee "$PATH_FILE" >/dev/null <<EOF
+[Unit]
+Description=Watch for MyPaas update requests from the control plane
+
+[Path]
+PathExists=$REQUEST_FILE
+Unit=mypaas-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  if [[ "$enabled" == "true" ]]; then
+    log "Installing automatic update timer (${interval} minute interval)"
+
+    run_root tee "$TIMER_FILE" >/dev/null <<EOF
 [Unit]
 Description=Periodically check for MyPaas updates
 
@@ -198,13 +211,24 @@ Unit=mypaas-update.service
 [Install]
 WantedBy=timers.target
 EOF
+  else
+    disable_timer
+  fi
 
   run_root systemctl daemon-reload
-  run_root systemctl enable --now mypaas-update.timer >/dev/null
+  run_root systemctl enable --now mypaas-update.path >/dev/null
+  if [[ "$enabled" == "true" ]]; then
+    run_root systemctl enable --now mypaas-update.timer >/dev/null
+    log "Automatic updates enabled"
+  else
+    log "Automatic updates are disabled; dashboard-triggered updates remain available"
+  fi
 
-  log "Automatic updates enabled"
   printf 'Policy: %s\n' "$UPDATE_CONFIG_FILE"
-  printf 'Check timer: systemctl status mypaas-update.timer\n'
+  printf 'Manual trigger: systemctl status mypaas-update.path\n'
+  if [[ "$enabled" == "true" ]]; then
+    printf 'Check timer: systemctl status mypaas-update.timer\n'
+  fi
   printf 'View updater logs: journalctl -u mypaas-update.service\n'
 }
 

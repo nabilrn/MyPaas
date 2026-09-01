@@ -12,7 +12,7 @@ MyPaaS can:
 - list repositories available to the connected GitHub account from the New Project form and deploy private GitHub repositories;
 - deploy OCI-image projects with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repository structure and configuration before creation, including base-directory / monorepo layouts;
-- manage encrypted environment variables and project resource settings;
+- manage encrypted environment variables, project resource settings, and editable resource-profile defaults that cannot be lowered below built-in floors;
 - manage primary project routing through Caddy;
 - provide up to four derived additional HTTP routes for Compose projects, targeting declared service ports without publishing extra host ports;
 - expose deployment history, logs, metrics, and lifecycle actions;
