@@ -73,5 +73,6 @@ func TestIsGitHubURL(t *testing.T) {
 			if got := IsGitHubURL(tt.url); got != tt.want {
 				t.Fatalf("IsGitHubURL(%q) = %v, want %v", tt.url, got, tt.want)
 			}
+		})
 	}
 }
