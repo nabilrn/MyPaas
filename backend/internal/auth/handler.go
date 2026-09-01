@@ -13,11 +13,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/github"
+	oauthgithub "golang.org/x/oauth2/github"
 
 	"mypaas/internal/config"
 	"mypaas/internal/db"
 	"mypaas/internal/errs"
+	"mypaas/internal/github"
 	"mypaas/internal/httpx"
 )
 
@@ -28,20 +29,22 @@ type Handler struct {
 	oauth   *oauth2.Config
 	queries *db.Queries
 	tokens  *TokenService
+	github  *github.Service
 }
 
-func NewHandler(cfg *config.Config, queries *db.Queries, tokens *TokenService) *Handler {
+func NewHandler(cfg *config.Config, queries *db.Queries, tokens *TokenService, githubService *github.Service) *Handler {
 	return &Handler{
 		cfg: cfg,
 		oauth: &oauth2.Config{
 			ClientID:     cfg.GitHubClientID,
 			ClientSecret: cfg.GitHubClientSecret,
 			RedirectURL:  cfg.GitHubCallbackURL,
-			Scopes:       []string{"read:user", "user:email"},
-			Endpoint:     github.Endpoint,
+			Scopes:       []string{"read:user", "user:email", "repo"},
+			Endpoint:     oauthgithub.Endpoint,
 		},
 		queries: queries,
 		tokens:  tokens,
+		github:  githubService,
 	}
 }
 
@@ -103,6 +106,14 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, err)
 		return
 	}
+	if h.github == nil {
+		httpx.DomainError(w, fmt.Errorf("GitHub repository access is not configured"))
+		return
+	}
+	if err := h.github.SaveAccessToken(r.Context(), user.ID, token.AccessToken); err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
 
 	tokens, err := h.tokens.Issue(user)
 	if err != nil {
@@ -113,6 +124,32 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, h.cookie(AccessCookieName, tokens.AccessToken, time.Until(tokens.ExpiresAt), true))
 	http.SetCookie(w, h.cookie(RefreshCookieName, tokens.RefreshToken, time.Until(tokens.RefreshExpiresAt), true))
 	http.Redirect(w, r, mustJoinURL(h.cfg.FrontendURL, "/projects"), http.StatusFound)
+}
+
+func (h *Handler) Repositories(w http.ResponseWriter, r *http.Request) {
+	if h.github == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "GITHUB_REPOSITORY_ACCESS_UNAVAILABLE", "GitHub repository access is not configured.", nil)
+		return
+	}
+	user, err := CurrentUser(r)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	page := 1
+	if rawPage := r.URL.Query().Get("page"); rawPage != "" {
+		page, err = strconv.Atoi(rawPage)
+		if err != nil {
+			httpx.Error(w, http.StatusBadRequest, "INVALID_REPOSITORY_PAGE", "Repository page must be a number.", nil)
+			return
+		}
+	}
+	result, err := h.github.ListRepositories(r.Context(), user.ID, page)
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {

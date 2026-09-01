@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- GitHub repository picker for New Project, with connected-account repository listing, private-repository inspection/deployment support, encrypted control-plane token storage, and ephemeral Git authentication.
 - Bounded additional HTTP routes for Docker Compose projects, with platform-derived hostnames, service/port validation against the resolved Compose contract, route ownership checks, a four-route maximum, lifecycle reconciliation, and no additional host-port publication. MinIO is the first real-VM-qualified multi-route template. See ADR-023 and PR #157.
 - Bounded private-registry authentication for OCI image-mode deployments using one configured registry credential, isolated temporary Docker configuration, registry-host scoping, and actionable pull diagnostics. See ADR-022.
 - Real-world OSS compatibility catalog/runner and installable application templates for representative image, Dockerfile, stateful, database-backed, multi-service, and multi-route workloads.

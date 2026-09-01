@@ -47,6 +47,8 @@ func DomainError(w http.ResponseWriter, err error) {
 		Error(w, http.StatusForbidden, "FORBIDDEN", "You do not have access to this resource.", nil)
 	case errors.Is(err, errs.ErrEmailNotWhitelisted):
 		Error(w, http.StatusForbidden, "EMAIL_NOT_WHITELISTED", "This GitHub email is not whitelisted.", nil)
+	case errors.Is(err, errs.ErrGitHubAuthorizationRequired):
+		Error(w, http.StatusUnauthorized, "GITHUB_REAUTH_REQUIRED", "Reconnect GitHub to access your repositories.", nil)
 	case errors.Is(err, errs.ErrNotFound):
 		Error(w, http.StatusNotFound, "NOT_FOUND", "Resource not found.", nil)
 	case errors.Is(err, errs.ErrProjectNameTaken):

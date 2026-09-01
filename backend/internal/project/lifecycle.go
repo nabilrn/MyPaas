@@ -71,7 +71,7 @@ func (s *Service) CreateValidated(ctx context.Context, request CreateValidationI
 
 	input.Branch = strings.TrimSpace(input.Branch)
 	if input.Branch == "" {
-		branch, err := resolveDefaultBranch(ctx, input.RepoURL)
+		branch, err := resolveDefaultBranch(ctx, input.RepoURL, input.GitHubAccessToken)
 		if err != nil {
 			return db.Project{}, err
 		}
@@ -82,9 +82,10 @@ func (s *Service) CreateValidated(ctx context.Context, request CreateValidationI
 	// silently coerced to dockerfile by the legacy Create method.
 	if input.DeployMode == "" || input.DeployMode == "auto" {
 		detected, err := s.DetectMode(ctx, DetectInput{
-			RepoURL:       input.RepoURL,
-			Branch:        input.Branch,
-			BaseDirectory: valueOrEmpty(input.BaseDirectory),
+			RepoURL:           input.RepoURL,
+			Branch:            input.Branch,
+			BaseDirectory:     valueOrEmpty(input.BaseDirectory),
+			GitHubAccessToken: input.GitHubAccessToken,
 		})
 		if err != nil {
 			return db.Project{}, err
@@ -158,7 +159,7 @@ func (s *Service) DetectModeValidated(ctx context.Context, input DetectInput) (D
 	ctx, cancel := context.WithTimeout(ctx, 55*time.Second)
 	defer cancel()
 
-	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL)
+	defaultBranch, branches, err := inspectRemoteBranches(ctx, repoURL, input.GitHubAccessToken)
 	if err != nil {
 		return DetectResult{}, err
 	}
@@ -170,7 +171,7 @@ func (s *Service) DetectModeValidated(ctx context.Context, input DetectInput) (D
 		return DetectResult{}, fmt.Errorf("%w: branch is required", errs.ErrValidation)
 	}
 
-	tree, truncated, err := inspectRepositoryTreeScoped(ctx, repoURL, branch, input.BaseDirectory)
+	tree, truncated, err := inspectRepositoryTreeScoped(ctx, repoURL, branch, input.BaseDirectory, input.GitHubAccessToken)
 	if err != nil {
 		return DetectResult{}, err
 	}
@@ -190,7 +191,7 @@ func preflightProjectWorkspace(ctx context.Context, input *CreateInput, envVars 
 	}
 	defer os.RemoveAll(root)
 
-	if err := cloneForDetect(ctx, root, input.RepoURL, input.Branch); err != nil {
+	if err := cloneForDetect(ctx, root, input.RepoURL, input.Branch, input.GitHubAccessToken); err != nil {
 		return err
 	}
 	workspace, err := resolveLifecycleDirectory(root, valueOrEmpty(input.BaseDirectory), "base directory")
@@ -423,14 +424,14 @@ func sortedStringSet(values map[string]struct{}) []string {
 	return out
 }
 
-func inspectRepositoryTreeScoped(ctx context.Context, repoURL, branch, baseDirectory string) ([]RepoTreeEntry, bool, error) {
+func inspectRepositoryTreeScoped(ctx context.Context, repoURL, branch, baseDirectory, accessToken string) ([]RepoTreeEntry, bool, error) {
 	workspace, err := os.MkdirTemp("", "mypaas-repo-preview-*")
 	if err != nil {
 		return nil, false, fmt.Errorf("create repository preview workspace: %w", err)
 	}
 	defer os.RemoveAll(workspace)
 
-	if err := cloneForTreePreview(ctx, workspace, repoURL, branch); err != nil {
+	if err := cloneForTreePreview(ctx, workspace, repoURL, branch, accessToken); err != nil {
 		return nil, false, err
 	}
 	base := strings.TrimSpace(baseDirectory)

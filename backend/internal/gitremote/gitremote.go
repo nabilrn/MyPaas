@@ -1,0 +1,51 @@
+package gitremote
+
+import (
+	"context"
+	"net/url"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// CommandContext supplies a one-process GitHub credential without writing it
+// to the repository's .git/config or exposing it in command arguments.
+func CommandContext(ctx context.Context, repoURL, accessToken string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if strings.TrimSpace(accessToken) == "" || !IsGitHubURL(repoURL) {
+		return cmd
+	}
+	cmd.Env = setEnv(os.Environ(), map[string]string{
+		"GIT_CONFIG_COUNT":    "1",
+		"GIT_CONFIG_KEY_0":    "http.https://github.com/.extraheader",
+		"GIT_CONFIG_VALUE_0":  "AUTHORIZATION: bearer " + accessToken,
+		"GIT_TERMINAL_PROMPT": "0",
+	})
+	return cmd
+}
+
+func setEnv(env []string, values map[string]string) []string {
+	filtered := make([]string, 0, len(env)+len(values))
+	for _, entry := range env {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, replace := values[key]; replace {
+				continue
+			}
+		}
+		filtered = append(filtered, entry)
+	}
+	for key, value := range values {
+		filtered = append(filtered, key+"="+value)
+	}
+	return filtered
+}
+
+func IsGitHubURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme != "https" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "github.com" || host == "www.github.com"
+}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Bot, Check, ChevronDown, CircleAlert, Copy, Folder, LoaderCircle, Plus, RefreshCw, Rocket, Upload, X } from '@lucide/svelte';
+	import { Bot, Check, ChevronDown, CircleAlert, Copy, Folder, GitBranch, LoaderCircle, Plus, RefreshCw, Rocket, Upload, X } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -29,6 +29,7 @@
 		ComposeServicePlan,
 		DeployModeDetection,
 		EnvVarDiscovery,
+		GitHubRepository,
 		RepoInspection,
 		RepoTreeEntry,
 		ResourceProfile
@@ -118,6 +119,15 @@
 	let copiedHandoffPrompt = '';
 	let handoffCopyTimer: ReturnType<typeof setTimeout> | undefined;
 	let staticFrontendCandidates: string[] = [];
+	let githubRepositories: GitHubRepository[] = [];
+	let githubRepositoriesLoaded = false;
+	let githubRepositoriesLoading = false;
+	let githubRepositoriesError = '';
+	let githubRepositoryPickerOpen = false;
+	let githubRepositorySearch = '';
+	let githubRepositoryPage = 0;
+	let githubRepositoryHasNext = false;
+	let githubRepositoryRequest = 0;
 	let form = {
 		name: '',
 		sourceType: 'git' as SourceType,
@@ -218,6 +228,11 @@
 			: creationReadiness.reason;
 	$: nameError = projectNameTouched ? projectNameValidationMessage(form.name) : '';
 	$: directoryChoices = repositoryDirectoryChoices(repoTree);
+	$: filteredGithubRepositories = githubRepositories.filter((repository) => {
+		const query = githubRepositorySearch.trim().toLowerCase();
+		if (!query) return true;
+		return `${repository.fullName} ${repository.description ?? ''}`.toLowerCase().includes(query);
+	});
 	$: orderedEnvRows = envDrafts
 		.map((draft, index) => ({ draft, index, required: requiredEnvKeySet.has(normalizeEnvKey(draft.key)) }))
 		.sort((a, b) => Number(b.required) - Number(a.required) || a.draft.key.localeCompare(b.draft.key));
@@ -478,6 +493,45 @@
 		}
 	}
 
+	async function openRepositoryPicker() {
+		githubRepositoryPickerOpen = true;
+		githubRepositoriesError = '';
+		if (githubRepositoriesLoaded || githubRepositoriesLoading) return;
+		await loadGithubRepositories(true);
+	}
+
+	async function loadGithubRepositories(reset = false) {
+		if (githubRepositoriesLoading) return;
+		if (!reset && !githubRepositoryHasNext) return;
+		const page = reset ? 1 : githubRepositoryPage + 1;
+		const requestId = ++githubRepositoryRequest;
+		githubRepositoriesLoading = true;
+		githubRepositoriesError = '';
+		try {
+			const result = await api.auth.repositories(page);
+			if (requestId !== githubRepositoryRequest) return;
+			githubRepositories = reset ? result.repositories : [...githubRepositories, ...result.repositories];
+			githubRepositoryPage = result.page;
+			githubRepositoryHasNext = result.hasNextPage;
+			githubRepositoriesLoaded = true;
+		} catch (err) {
+			if (requestId !== githubRepositoryRequest) return;
+			githubRepositoriesError = err instanceof Error ? err.message : 'Failed to load repositories';
+		} finally {
+			if (requestId === githubRepositoryRequest) githubRepositoriesLoading = false;
+		}
+	}
+
+	function chooseGithubRepository(repository: GitHubRepository) {
+		form.repoUrl = repository.cloneUrl;
+		form.branch = repository.defaultBranch;
+		if (!projectNameTouched) form.name = suggestProjectName(repository.cloneUrl);
+		resetRepositoryInspection();
+		githubRepositoryPickerOpen = false;
+		githubRepositorySearch = '';
+		void inspectRepository(false, true).catch(() => undefined);
+	}
+
 	function chooseDeployMode(mode: DeployModeChoice, manual = true) {
 		deployModeManual = manual && mode !== 'auto';
 		form.deployMode = mode;
@@ -653,6 +707,7 @@
 		const value = (event.currentTarget as HTMLInputElement).value;
 		if (value === form.repoUrl) return;
 		form.repoUrl = value;
+		githubRepositoryPickerOpen = false;
 		form.branch = '';
 		deployModeManual = false;
 		if (!projectNameTouched) form.name = suggestProjectName(value);
@@ -1209,16 +1264,69 @@
 
 					{#if form.sourceType === 'git'}
 						<div>
-							<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
-							<input
-								id="repo"
-								type="text"
-								value={form.repoUrl}
-								placeholder="https://github.com/username/repo"
-								class="field w-full font-mono"
-								on:input={handleRepoUrlInput}
-								on:blur={() => void inspectRepository(false).catch(() => undefined)}
-							/>
+							<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+								<div>
+									<label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="repo">Repository URL</label>
+									<input
+										id="repo"
+										type="text"
+										value={form.repoUrl}
+										placeholder="https://github.com/username/repo"
+										class="field w-full font-mono"
+										on:input={handleRepoUrlInput}
+										on:blur={() => void inspectRepository(false).catch(() => undefined)}
+									/>
+								</div>
+								<ActionButton type="button" variant="secondary" loading={githubRepositoriesLoading && !githubRepositoriesLoaded} loadingLabel="Loading repositories..." on:click={() => void openRepositoryPicker()}>
+									<GitBranch slot="icon" class="h-4 w-4" />
+									Choose a repository
+								</ActionButton>
+							</div>
+
+							{#if githubRepositoryPickerOpen}
+								<div class="mt-3 overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
+									<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-3 py-3 dark:border-gray-800">
+										<div>
+											<h3 class="text-sm font-semibold text-gray-950 dark:text-white">Choose a repository</h3>
+											<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Repositories available to your GitHub account.</p>
+										</div>
+										<button type="button" class="app-focus rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-white" aria-label="Close repository picker" on:click={() => (githubRepositoryPickerOpen = false)}>
+											<X class="h-4 w-4" aria-hidden="true" />
+										</button>
+									</div>
+									<div class="border-b border-gray-100 p-3 dark:border-gray-800">
+										<label class="sr-only" for="repositorySearch">Search repositories</label>
+										<input id="repositorySearch" type="search" bind:value={githubRepositorySearch} placeholder="Search repositories" class="field w-full" autocomplete="off" />
+									</div>
+									{#if githubRepositoriesError}
+										<div class="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-xs text-red-700 dark:text-red-200">
+											<span>{githubRepositoriesError}</span>
+											<a class="font-medium underline underline-offset-2" href="/api/auth/github/login">Reconnect GitHub</a>
+										</div>
+									{:else if filteredGithubRepositories.length > 0}
+										<div class="max-h-72 overflow-auto divide-y divide-gray-100 dark:divide-gray-800">
+											{#each filteredGithubRepositories as repository}
+												<button type="button" class="app-focus flex w-full items-start gap-3 px-3 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-900" on:click={() => chooseGithubRepository(repository)}>
+											<GitBranch class="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+													<span class="min-w-0 flex-1">
+														<span class="block truncate text-sm font-medium text-gray-950 dark:text-white">{repository.fullName}</span>
+														<span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">{repository.description || 'No description'} · {repository.private ? 'Private' : 'Public'} · {repository.defaultBranch}</span>
+													</span>
+													</button>
+											{/each}
+										</div>
+									{:else if githubRepositoriesLoading}
+										<p class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400">Loading repositories...</p>
+									{:else if githubRepositoriesLoaded}
+										<p class="px-3 py-4 text-xs text-gray-500 dark:text-gray-400">{githubRepositorySearch.trim() ? 'No repositories match your search.' : 'No repositories available.'}</p>
+									{/if}
+									{#if githubRepositoryHasNext && !githubRepositoriesError}
+										<div class="border-t border-gray-100 p-3 dark:border-gray-800">
+											<ActionButton type="button" variant="secondary" size="xs" full loading={githubRepositoriesLoading} loadingLabel="Loading..." on:click={() => void loadGithubRepositories()}>Load more</ActionButton>
+										</div>
+									{/if}
+								</div>
+							{/if}
 						</div>
 					{:else}
 						<div>

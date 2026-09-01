@@ -107,6 +107,24 @@ export interface RepoInspection {
 	treeTruncated: boolean;
 }
 
+export interface GitHubRepository {
+	id: number;
+	name: string;
+	fullName: string;
+	private: boolean;
+	defaultBranch: string;
+	cloneUrl: string;
+	htmlUrl: string;
+	description: string | null;
+	updatedAt: string;
+}
+
+export interface GitHubRepositoryPage {
+	repositories: GitHubRepository[];
+	page: number;
+	hasNextPage: boolean;
+}
+
 export interface ComposeIssue {
 	severity: 'error' | 'warning' | 'info';
 	code: string;

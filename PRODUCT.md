@@ -9,6 +9,7 @@ Its job is to make common deployment and operations work repeatable on a Linux s
 MyPaaS can:
 
 - deploy Git repositories with Dockerfile, Docker Compose, or static output;
+- list repositories available to the connected GitHub account from the New Project form and deploy private GitHub repositories;
 - deploy OCI-image projects with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repository structure and configuration before creation, including base-directory / monorepo layouts;
 - manage encrypted environment variables and project resource settings;
@@ -23,6 +24,12 @@ MyPaaS can:
 - use optional `mypaas-statd` telemetry with an engine-metrics fallback.
 
 Fresh supported Linux installations default to rootful Podman through the Docker-compatible command/socket contract used by the control plane. Docker Engine remains an explicit compatibility mode.
+
+## GitHub repository access
+
+GitHub OAuth is also the repository connection used by the project picker. The picker lists repositories the signed-in administrator can access, including private repositories, and applies the selected repository's clone URL and default branch to project creation.
+
+The control plane encrypts the OAuth access token at rest. Repository Git operations receive it only through an ephemeral Git HTTP authorization header; it is not stored in a project checkout, passed into a workload, or included in command arguments or logs.
 
 ## Bounded registry authentication
 

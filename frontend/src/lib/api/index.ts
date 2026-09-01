@@ -9,6 +9,7 @@ import type {
 	MetricsSnapshot,
 	QuotaUsage,
 	RepoInspection,
+	GitHubRepositoryPage,
 	User,
 	AuditLog,
 	ComposeResourceSummary,
@@ -165,6 +166,7 @@ function keepDetectedTreeRootRelative(data: unknown, result: DeployModeDetection
 export const api = {
 	auth: {
 		me:      (): Promise<User>    => request('/auth/me'),
+		repositories: (page = 1): Promise<GitHubRepositoryPage> => request(`/auth/github/repositories?page=${page}`),
 		logout:  (): Promise<void>   => request('/auth/logout', { method: 'POST' }),
 		refresh: (): Promise<void>   => request('/auth/refresh', { method: 'POST' })
 	},

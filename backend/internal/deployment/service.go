@@ -31,6 +31,8 @@ import (
 	"mypaas/internal/envdiscover"
 	"mypaas/internal/envvar"
 	"mypaas/internal/errs"
+	"mypaas/internal/github"
+	"mypaas/internal/gitremote"
 	"mypaas/internal/monitoring"
 	"mypaas/internal/port"
 	"mypaas/internal/staticdeploy"
@@ -43,15 +45,20 @@ type Service struct {
 	ports     *port.Service
 	caddy     *caddy.Client
 	docker    *container.DockerCLI
+	github    github.TokenReader
 	deploySem chan struct{}
 	lockMu    sync.Mutex
 	locks     map[uuid.UUID]*sync.Mutex
 }
 
-func NewService(cfg *config.Config, queries *db.Queries, envs *envvar.Service, ports *port.Service, caddyClient *caddy.Client, docker *container.DockerCLI) *Service {
+func NewService(cfg *config.Config, queries *db.Queries, envs *envvar.Service, ports *port.Service, caddyClient *caddy.Client, docker *container.DockerCLI, githubTokens ...github.TokenReader) *Service {
 	maxConcurrent := cfg.MaxConcurrentDeploys
 	if maxConcurrent < 1 {
 		maxConcurrent = 1
+	}
+	var githubTokenReader github.TokenReader
+	if len(githubTokens) > 0 {
+		githubTokenReader = githubTokens[0]
 	}
 	return &Service{
 		cfg:       cfg,
@@ -60,6 +67,7 @@ func NewService(cfg *config.Config, queries *db.Queries, envs *envvar.Service, p
 		ports:     ports,
 		caddy:     caddyClient,
 		docker:    docker,
+		github:    githubTokenReader,
 		deploySem: make(chan struct{}, maxConcurrent),
 		locks:     make(map[uuid.UUID]*sync.Mutex),
 	}
@@ -626,13 +634,18 @@ func (s *Service) runDeploymentWithFailureStatus(projectID, deploymentID uuid.UU
 		}
 		return
 	}
+	accessToken, err := s.repositoryAccessToken(ctx, project.UserID)
+	if err != nil {
+		s.fail(ctx, deploymentID, projectID, originalStatus, err)
+		return
+	}
 
 	if err := s.setStatus(ctx, deploymentID, "cloning"); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
 	log("Cloning repository " + project.RepoUrl)
-	if err := runGit(ctx, workspace, log, "clone", "--depth", "1", "--branch", project.Branch, project.RepoUrl, "."); err != nil {
+	if err := runGitRepository(ctx, workspace, log, project.RepoUrl, accessToken, "clone", "--depth", "1", "--branch", project.Branch, project.RepoUrl, "."); err != nil {
 		s.fail(ctx, deploymentID, projectID, originalStatus, err)
 		return
 	}
@@ -1144,8 +1157,12 @@ func (s *Service) checkoutDeploymentCommit(ctx context.Context, project db.Proje
 	if target.CommitSha == nil || strings.TrimSpace(*target.CommitSha) == "" {
 		return fmt.Errorf("%w: rollback target does not have a commit SHA", errs.ErrValidation)
 	}
+	accessToken, err := s.repositoryAccessToken(ctx, project.UserID)
+	if err != nil {
+		return err
+	}
 	log("Cloning repository " + project.RepoUrl)
-	if err := runGit(ctx, workspace, log, "clone", "--branch", project.Branch, project.RepoUrl, "."); err != nil {
+	if err := runGitRepository(ctx, workspace, log, project.RepoUrl, accessToken, "clone", "--branch", project.Branch, project.RepoUrl, "."); err != nil {
 		return err
 	}
 	log("Checking out commit " + *target.CommitSha)
@@ -1699,7 +1716,11 @@ func temporaryContainerName(projectName string, deploymentID uuid.UUID) string {
 }
 
 func runGit(ctx context.Context, dir string, log func(string), args ...string) error {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	return runGitRepository(ctx, dir, log, "", "", args...)
+}
+
+func runGitRepository(ctx context.Context, dir string, log func(string), repoURL, accessToken string, args ...string) error {
+	cmd := gitremote.CommandContext(ctx, repoURL, accessToken, args...)
 	cmd.Dir = dir
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -1721,6 +1742,20 @@ func runGit(ctx context.Context, dir string, log func(string), args ...string) e
 		return fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 	return nil
+}
+
+func (s *Service) repositoryAccessToken(ctx context.Context, userID uuid.UUID) (string, error) {
+	if s.github == nil {
+		return "", nil
+	}
+	accessToken, err := s.github.AccessToken(ctx, userID)
+	if errors.Is(err, errs.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return accessToken, nil
 }
 
 func gitOutput(ctx context.Context, dir string, args ...string) string {

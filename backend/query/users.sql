@@ -35,3 +35,20 @@ ORDER BY created_at DESC;
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1;
+
+-- name: GetGithubAccessToken :one
+SELECT github_access_token_encrypted, github_access_token_nonce
+FROM users
+WHERE id = $1;
+
+-- name: SetGithubAccessToken :exec
+UPDATE users
+SET github_access_token_encrypted = $2,
+    github_access_token_nonce = $3
+WHERE id = $1;
+
+-- name: ClearGithubAccessToken :exec
+UPDATE users
+SET github_access_token_encrypted = NULL,
+    github_access_token_nonce = NULL
+WHERE id = $1;
