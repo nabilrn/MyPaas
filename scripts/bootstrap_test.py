@@ -24,6 +24,7 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn("MYPAAS_REF", result.stdout)
         self.assertIn("MYPAAS_INSTALL_DIR", result.stdout)
         self.assertIn("INSTALL_WIZARD", result.stdout)
+        self.assertIn("USE_PODMAN", result.stdout)
         self.assertIn("AUTO_UPDATE_ENABLED", result.stdout)
         self.assertIn("AUTO_UPDATE_INTERVAL_MINUTES", result.stdout)
         self.assertIn("AUTO_UPDATE_REF", result.stdout)
@@ -34,7 +35,11 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn("https://github.com/nabilrn/MyPaas.git", content)
         self.assertIn('REF="${MYPAAS_REF:-main}"', content)
         self.assertIn('INSTALL_WIZARD="${INSTALL_WIZARD:-true}"', content)
-        self.assertIn('INSTALL_WIZARD="$INSTALL_WIZARD" bash scripts/install-vm.sh', content)
+        self.assertIn('USE_PODMAN="${USE_PODMAN:-true}"', content)
+        self.assertIn(
+            'INSTALL_WIZARD="$INSTALL_WIZARD" USE_PODMAN="$USE_PODMAN" bash scripts/install-vm.sh',
+            content,
+        )
 
     def test_existing_checkout_requires_clean_matching_origin_and_resets_to_fetched_ref(self) -> None:
         content = BOOTSTRAP_PATH.read_text(encoding="utf-8")
@@ -44,6 +49,16 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn("fetch --depth 1 origin", content)
         self.assertIn("reset --hard FETCH_HEAD", content)
         self.assertNotIn("merge --ff-only FETCH_HEAD", content)
+
+    def test_existing_install_preserves_detected_container_engine(self) -> None:
+        content = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("detect_existing_runtime", content)
+        self.assertIn("socket_has_mypaas_containers", content)
+        self.assertIn("Preserving existing Docker Engine runtime", content)
+        self.assertIn("Preserving existing Podman runtime", content)
+        self.assertIn("refusing a split-runtime update", content)
+        self.assertIn("Refusing an in-place Docker/Podman engine switch", content)
 
 
 if __name__ == "__main__":
