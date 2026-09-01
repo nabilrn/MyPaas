@@ -4,14 +4,11 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-
 	"mypaas/internal/httpx"
 )
 
 type RuntimeInventory interface {
 	RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error)
-	RemoveStopped(ctx context.Context, id string) error
 }
 
 type Handler struct {
@@ -33,10 +30,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}{Containers: containers})
 }
 
-func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	if err := h.runtime.RemoveStopped(r.Context(), chi.URLParam(r, "id")); err != nil {
-		httpx.DomainError(w, err)
-		return
-	}
-	httpx.NoContent(w)
+// Delete intentionally keeps the host-wide inventory read-only. Container
+// lifecycle remains project-scoped so removing a stopped project container
+// cannot make a later Start operation unrecoverable.
+func (h *Handler) Delete(w http.ResponseWriter, _ *http.Request) {
+	httpx.Error(w, http.StatusMethodNotAllowed, "CONTAINER_INVENTORY_READ_ONLY", "Container inventory is read-only. Manage application lifecycle from the project page.", nil)
 }
