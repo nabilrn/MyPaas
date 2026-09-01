@@ -19,6 +19,15 @@ class UpdateTriggerContractTest(unittest.TestCase):
 
         self.assertIn('bash "$ROOT_DIR/scripts/configure-auto-update.sh"', deploy)
 
+    def test_uninstall_removes_host_update_units_and_policy(self) -> None:
+        uninstall = (ROOT / "scripts" / "uninstall-vm.sh").read_text(encoding="utf-8")
+
+        for unit in ("mypaas-update.service", "mypaas-update.timer", "mypaas-update.path"):
+            self.assertIn(unit, uninstall)
+        self.assertIn("systemctl stop mypaas-update.timer mypaas-update.path mypaas-update.service", uninstall)
+        self.assertIn("/etc/mypaas/update.env", uninstall)
+        self.assertIn("/run/mypaas/update.request", uninstall)
+
 
 if __name__ == "__main__":
     unittest.main()
