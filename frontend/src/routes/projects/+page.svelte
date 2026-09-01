@@ -1,12 +1,10 @@
 <script lang="ts">
-	import { ExternalLink, FolderGit2, GitBranch, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FolderGit2, GitBranch, Package, Play, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
-	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
-	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectDatabaseShortcut from '$components/ProjectDatabaseShortcut.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
@@ -25,6 +23,7 @@
 
 	let projects: Project[] = [];
 	let hostStats: HostStats | null = null;
+	let hostStatsLoaded = false;
 	let loading = true;
 	let error = '';
 	let projectActionId = '';
@@ -116,7 +115,10 @@
 			const nextHostStats = await api.admin.getHostStats();
 			hostStats = nextHostStats;
 			recordHostTelemetry(nextHostStats, Date.now());
+		} catch {
+			// Keep the last known sample during a telemetry failure.
 		} finally {
+			hostStatsLoaded = true;
 			hostStatsInFlight = false;
 		}
 	}
@@ -309,16 +311,9 @@
 	<title>Projects · MyPaas</title>
 </svelte:head>
 
-<div class="page-shell py-6">
-	<div class="mb-5 flex justify-end px-5">
-		<ActionLink href="/projects/new" variant="primary">
-			<Plus slot="icon" class="h-4 w-4" />
-			New project
-		</ActionLink>
-	</div>
-
+<div class="page-shell">
 	{#if hostRamWarning || cpuAllocationWarning || storageWarning}
-		<div class="alert-warning mb-5" role="alert">
+		<div class="flex gap-3 border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
 			<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
 			<div>
 				<p class="font-semibold">Host capacity needs attention</p>
@@ -332,21 +327,19 @@
 		</div>
 	{/if}
 
-	<SectionPanel title="Host resources" description="CPU, memory, storage, and network." contentClass="p-0" className="mb-5">
+	<SectionPanel title="Host resources" description="CPU, memory, storage, and network." contentClass="p-0">
 		<svelte:fragment slot="actions">
-			<div class="flex items-center gap-3">
-				<a
+			<a
 				href="https://github.com/nabilrn/mypaas-statd"
 				target="_blank"
 				rel="noopener"
-				class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-gray-500 transition-colors hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
+				class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-gray-500 transition-colors hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
 				title="Open mypaas-statd repository"
 			>
 				<GitHubMark class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 				<span>Telemetry by <span class="font-medium">mypaas-statd</span></span>
 				<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
-				</a>
-			</div>
+			</a>
 		</svelte:fragment>
 
 		{#if hostStats}
@@ -390,16 +383,14 @@
 					className="bg-white dark:bg-neutral-900"
 				/>
 			</div>
-		{:else}
-			<div class="flex h-40 items-center justify-center">
-				<LoadingIndicator label="Loading host telemetry" size="sm" />
-			</div>
+		{:else if hostStatsLoaded}
+			<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>
 		{/if}
 	</SectionPanel>
 
 	<TableShell
 		title="Inventory"
-		description="Runtime shape, database access, current service sample, and the next relevant action for each project."
+		description="Projects, runtime, database access, and actions."
 		{loading}
 		loadingRows={3}
 		error={error && projects.length === 0 ? error : ''}
@@ -431,7 +422,7 @@
 
 		<svelte:fragment slot="notice">
 			{#if error}
-				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
 					<span class="min-w-0 flex-1">{error}</span>
 					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying">
 						<RefreshCw slot="icon" class="h-3.5 w-3.5" />
@@ -525,7 +516,7 @@
 							{/if}
 						</td>
 						<td class="metric-value whitespace-nowrap text-right text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
-						<td class="whitespace-nowrap text-center text-xs text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
+						<td class="whitespace-nowrap text-center text-[13px] text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
 						<td class="whitespace-nowrap text-center">
 							<ActionButton
 								variant={projectPrimaryVariant(project)}
@@ -545,7 +536,7 @@
 			</tbody>
 		</table>
 
-		<div class="divide-y divide-gray-100 dark:divide-neutral-800 xl:hidden">
+		<div class="divide-y divide-gray-100/70 dark:divide-neutral-900 xl:hidden">
 			{#each visibleProjects as project}
 				{@const source = describeProjectSource(project)}
 				<div class="px-4 py-3">
