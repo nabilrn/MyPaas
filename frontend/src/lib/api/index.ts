@@ -166,7 +166,7 @@ function keepDetectedTreeRootRelative(data: unknown, result: DeployModeDetection
 export const api = {
 	auth: {
 		me:      (): Promise<User>    => request('/auth/me'),
-		repositories: (page = 1): Promise<GitHubRepositoryPage> => request(`/auth/github/repositories?page=${page}`),
+		repositories: (page = 1): Promise<GitHubRepositoryPage> => request(`/auth/github/repositories?page=${page}`, { cache: 'no-store' }),
 		logout:  (): Promise<void>   => request('/auth/logout', { method: 'POST' }),
 		refresh: (): Promise<void>   => request('/auth/refresh', { method: 'POST' })
 	},
