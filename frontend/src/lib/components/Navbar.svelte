@@ -36,9 +36,9 @@
 
 	function navItemClass(href: string, isExpanded: boolean, currentPath: string) {
 		const layout = isExpanded ? 'justify-start gap-2.5 px-3' : 'justify-center px-0';
-		const base = `group relative flex min-h-9 w-full items-center rounded-md border text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${layout}`;
-		const active = 'border-gray-200 bg-gray-100 text-gray-950 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white';
-		const idle = 'border-transparent text-gray-600 hover:border-gray-200 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:border-neutral-800 dark:hover:bg-neutral-900 dark:hover:text-white';
+		const base = `group relative flex min-h-9 w-full items-center rounded-md text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950 ${layout}`;
+		const active = 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white';
+		const idle = 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-white';
 		return `${base} ${isActive(href, currentPath) ? active : idle}`;
 	}
 
@@ -54,13 +54,13 @@
 
 <aside
 	bind:this={sidebar}
-	class={`fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-gray-200 bg-white transition-[width,box-shadow] duration-150 ease-out dark:border-neutral-800 dark:bg-neutral-950 lg:flex ${expanded ? 'w-60 shadow-[10px_0_28px_rgb(0_0_0/0.10)] dark:shadow-[10px_0_28px_rgb(0_0_0/0.32)]' : 'w-14 shadow-none'}`}
+	class={`fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-gray-100/80 bg-white transition-[width,box-shadow] duration-150 ease-out dark:border-neutral-900 dark:bg-neutral-950 lg:flex ${expanded ? 'w-60 shadow-[10px_0_24px_rgb(0_0_0/0.07)] dark:shadow-[10px_0_24px_rgb(0_0_0/0.24)]' : 'w-14 shadow-none'}`}
 	on:mouseenter={() => (expanded = true)}
 	on:mouseleave={() => (expanded = false)}
 	on:focusin={() => (expanded = true)}
 	on:focusout={handleFocusOut}
 >
-	<div class={`flex h-14 shrink-0 items-center border-b border-gray-200 dark:border-neutral-800 ${expanded ? 'px-4' : 'justify-center px-2'}`}>
+	<div class={`flex h-14 shrink-0 items-center border-b border-gray-100/80 dark:border-neutral-900 ${expanded ? 'px-4' : 'justify-center px-2'}`}>
 		<a
 			href="/projects"
 			class="app-focus flex h-9 min-w-0 items-center rounded-md"
@@ -89,7 +89,7 @@
 		</div>
 
 		{#if visibleAdministrationItems.length > 0}
-			<div class={`my-3 border-t border-gray-200 dark:border-neutral-800 ${expanded ? 'mx-1' : 'mx-1.5'}`}></div>
+			<div class={`my-3 border-t border-gray-100 dark:border-neutral-900 ${expanded ? 'mx-1' : 'mx-1.5'}`}></div>
 			{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Administration</p>{/if}
 			<div class="space-y-1">
 				{#each visibleAdministrationItems as item}
