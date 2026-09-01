@@ -193,6 +193,19 @@ The authenticated pull path:
 
 This is not a general secrets broker, multi-registry credential manager, registry proxy, cache, or mirror.
 
+## GitHub repository credentials
+
+The connected GitHub account can be used to list repositories in the New Project picker and to access private GitHub sources during inspection, deployment, and rollback.
+
+The repository access token:
+
+- is stored encrypted in the control-plane database;
+- is used only by control-plane GitHub API requests and Git subprocesses for GitHub HTTPS URLs;
+- is attached to a Git operation through a process-scoped HTTP authorization configuration rather than command arguments;
+- is not written to a repository's Git configuration, passed to project workloads, or included in build/deployment logs.
+
+The current OAuth integration requests GitHub's `repo` scope so trusted administrators can use private repositories. This grants broader repository permission than a read-only GitHub App token; narrowing that permission is a future authentication-boundary improvement.
+
 ## Native telemetry daemon
 
 `mypaas-statd` is host-native by design. It reads bounded cgroup/host telemetry and exposes it over `/run/mypaas/statd.sock`.
@@ -250,3 +263,4 @@ See `docs/engineering/beta-readiness-gates.md` and ADR-023 for qualification pro
 - [mypaas-statd integration](STATD.md)
 - [ADR-022: bounded private-registry authentication](adr/ADR-022-private-registry-auth.md)
 - [ADR-023: bounded additional Compose HTTP routes](adr/ADR-023-compose-additional-http-routes.md)
+- [ADR-024: GitHub repository picker and private-source access](adr/ADR-024-github-repository-access.md)
