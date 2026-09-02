@@ -330,7 +330,7 @@ echo "Starting MyPaas control plane sequentially..."
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 fi
-for service in api dashboard caddy cloudflared; do
+for service in caddy api dashboard cloudflared; do
   echo "Starting $service..."
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps "$service"
 done
