@@ -260,6 +260,7 @@
 	function driverLabel(value: string) {
 		if (value === 'postgres') return 'PostgreSQL';
 		if (value === 'mariadb') return 'MariaDB';
+		if (value === 'sqlite') return 'SQLite';
 		return 'MySQL';
 	}
 </script>
@@ -270,7 +271,7 @@
 	</div>
 {:else if status && !status.configured}
 	<SectionPanel title="Connection" description="No supported database connection was detected from this project's environment variables.">
-		<EmptyState title="No database connection found." description="Add DATABASE_URL or DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD in Environment, then redeploy or refresh this page." />
+		<EmptyState title="No database connection found." description="Add DATABASE_URL, a SQLite path setting, or DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD in Environment, then redeploy or refresh this page." />
 	</SectionPanel>
 {:else if status}
 	<SectionPanel title="Connection" description="Current database connection and write access." contentClass="p-0">
