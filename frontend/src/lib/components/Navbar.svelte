@@ -5,6 +5,7 @@
 	import type { User } from '$types';
 
 	export let user: User | null = null;
+	export let authPending = false;
 
 	const workspaceItems = [
 		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
@@ -26,8 +27,8 @@
 	let sidebar: HTMLElement | null = null;
 
 	$: pathname = $page.url.pathname;
-	$: visibleWorkspaceItems = workspaceItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
-	$: visibleAdministrationItems = administrationItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
+	$: visibleWorkspaceItems = workspaceItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
+	$: visibleAdministrationItems = administrationItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
 
 	function isActive(href: string, currentPath: string) {
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
@@ -61,12 +62,7 @@
 	on:focusout={handleFocusOut}
 >
 	<div class={`flex h-14 shrink-0 items-center border-b border-gray-100/80 dark:border-neutral-900 ${expanded ? 'px-4' : 'justify-center px-2'}`}>
-		<a
-			href="/projects"
-			class="app-focus flex h-9 min-w-0 items-center rounded-md"
-			aria-label="MyPaaS projects"
-			on:click={chooseNavigation}
-		>
+		<a href="/projects" class="app-focus flex h-9 min-w-0 items-center rounded-md" aria-label="MyPaaS projects" on:click={chooseNavigation}>
 			<BrandLogo compact={!expanded} />
 		</a>
 	</div>
@@ -75,16 +71,17 @@
 		{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Workspace</p>{/if}
 		<div class="space-y-1">
 			{#each visibleWorkspaceItems as item}
-				<a
-					href={item.href}
-					aria-current={isActive(item.href, pathname) ? 'page' : undefined}
-					class={navItemClass(item.href, expanded, pathname)}
-					title={expanded ? undefined : item.label}
-					on:click={chooseNavigation}
-				>
-					<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-					{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
-				</a>
+				{#if authPending && item.ownerOnly}
+					<span class={`${navItemClass(item.href, expanded, pathname)} pointer-events-none opacity-45`} aria-hidden="true">
+						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" />
+						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{/if}
+					</span>
+				{:else}
+					<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, expanded, pathname)} title={expanded ? undefined : item.label} on:click={chooseNavigation}>
+						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
+					</a>
+				{/if}
 			{/each}
 		</div>
 
@@ -93,16 +90,17 @@
 			{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Administration</p>{/if}
 			<div class="space-y-1">
 				{#each visibleAdministrationItems as item}
-					<a
-						href={item.href}
-						aria-current={isActive(item.href, pathname) ? 'page' : undefined}
-						class={navItemClass(item.href, expanded, pathname)}
-						title={expanded ? undefined : item.label}
-						on:click={chooseNavigation}
-					>
-						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
-					</a>
+					{#if authPending}
+						<span class={`${navItemClass(item.href, expanded, pathname)} pointer-events-none opacity-45`} aria-hidden="true">
+							<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" />
+							{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{/if}
+						</span>
+					{:else}
+						<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, expanded, pathname)} title={expanded ? undefined : item.label} on:click={chooseNavigation}>
+							<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+							{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
+						</a>
+					{/if}
 				{/each}
 			</div>
 		{/if}
