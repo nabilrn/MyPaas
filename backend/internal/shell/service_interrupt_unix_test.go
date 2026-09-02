@@ -24,9 +24,10 @@ func TestServiceControlCInterruptsForegroundCommandWithoutEndingSession(t *testi
 	}
 	defer unsubscribe()
 
-	// Build the marker at execution time so PTY input echo cannot satisfy the
-	// output assertion before the foreground command has actually started.
-	if err := service.Write(info.ID, "printf 'mypaas-before-%s\\n' interrupt; sleep 30\n"); err != nil {
+	// Run a dedicated foreground child that emits the marker only after it has
+	// started. This removes the race where Ctrl+C could arrive between a marker
+	// command and the long-running command that followed it.
+	if err := service.Write(info.ID, "sh -c 'printf \"mypaas-before-%s\\n\" interrupt; while :; do sleep 1; done'\n"); err != nil {
 		t.Fatalf("start long-running shell command: %v", err)
 	}
 	waitForShellOutput(t, events, done, "mypaas-before-interrupt", 5*time.Second)
@@ -34,8 +35,8 @@ func TestServiceControlCInterruptsForegroundCommandWithoutEndingSession(t *testi
 	if err := service.Write(info.ID, "\x03"); err != nil {
 		t.Fatalf("interrupt shell command: %v", err)
 	}
-	// Likewise, require output produced by the shell after Ctrl+C instead of
-	// accepting the terminal driver's echo of the command line itself.
+	// Build the marker at execution time so PTY input echo cannot satisfy the
+	// assertion before the parent interactive shell resumes after Ctrl+C.
 	if err := service.Write(info.ID, "printf 'mypaas-shell-%s\\n' survived\n"); err != nil {
 		t.Fatalf("write command after interrupt: %v", err)
 	}
@@ -61,7 +62,6 @@ func waitForShellOutput(t *testing.T, events <-chan Event, done <-chan struct{},
 				if strings.Contains(output.String(), want) {
 					return
 				}
-			}
 		case <-done:
 			t.Fatalf("shell session ended while waiting for %q; output=%q", want, output.String())
 		case <-deadline.C:
