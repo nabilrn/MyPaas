@@ -10,6 +10,7 @@
 	export let suffix = '';
 	export let maxValue: number | null = null;
 	export let heightClass = 'h-56';
+	export let compact = false;
 
 	const width = 720;
 	const height = 180;
@@ -58,16 +59,18 @@
 	}
 </script>
 
-<article class="min-w-0 bg-white p-5 dark:bg-neutral-900" aria-label={label}>
+<article class={`min-w-0 bg-white ${compact ? 'px-4 py-3' : 'p-5'} dark:bg-neutral-900`} aria-label={label}>
 	<div class="flex flex-wrap items-start justify-between gap-x-5 gap-y-2">
 		<div>
-			<p class="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</p>
-			<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{series.length} service{series.length === 1 ? '' : 's'}</p>
+			<p class={`${compact ? 'text-[13px]' : 'text-sm'} font-medium text-gray-700 dark:text-gray-300`}>{label}</p>
+			{#if !compact}
+				<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{series.length} service{series.length === 1 ? '' : 's'}</p>
+			{/if}
 		</div>
 		<div class="flex max-w-full flex-wrap justify-end gap-x-4 gap-y-1.5">
 			{#each paths as item}
 				<div class="inline-flex min-w-0 items-center gap-1.5 text-xs">
-					<span class={`h-2 w-2 shrink-0 rounded-full ${item.dotClass}`}></span>
+					<span class={`h-1.5 w-1.5 shrink-0 rounded-full ${item.dotClass}`}></span>
 					<span class="max-w-32 truncate text-gray-500 dark:text-gray-400" title={item.service}>{item.service}</span>
 					<span class="metric-value font-medium text-gray-950 dark:text-white">{item.value}</span>
 				</div>
@@ -75,20 +78,22 @@
 		</div>
 	</div>
 
-	<div class={`relative mt-4 ${heightClass} overflow-hidden rounded-md border border-gray-200/70 bg-white dark:border-neutral-800/80 dark:bg-neutral-950`}>
+	<div class={`relative ${compact ? 'mt-2' : 'mt-4'} ${heightClass} overflow-hidden ${compact ? '' : 'rounded-md border border-gray-200/70 bg-white dark:border-neutral-800/80 dark:bg-neutral-950'}`}>
 		<svg class="h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-hidden="true">
-			<g class="stroke-gray-100/70 dark:stroke-neutral-800/55" stroke-width="0.8">
-				<line x1="0" x2={width} y1={height * 0.25} y2={height * 0.25} />
-				<line x1="0" x2={width} y1={height * 0.5} y2={height * 0.5} />
-				<line x1="0" x2={width} y1={height * 0.75} y2={height * 0.75} />
-			</g>
+			{#if !compact}
+				<g class="stroke-gray-100/70 dark:stroke-neutral-800/55" stroke-width="0.8">
+					<line x1="0" x2={width} y1={height * 0.25} y2={height * 0.25} />
+					<line x1="0" x2={width} y1={height * 0.5} y2={height * 0.5} />
+					<line x1="0" x2={width} y1={height * 0.75} y2={height * 0.75} />
+				</g>
+			{/if}
 			{#each paths as item}
 				{#if item.path}
 					<path
 						d={item.path}
 						fill="none"
 						class={item.strokeClass}
-						stroke-width="1.8"
+						stroke-width={compact ? 1.45 : 1.8}
 						stroke-linecap="round"
 						stroke-linejoin="round"
 						vector-effect="non-scaling-stroke"
@@ -97,12 +102,14 @@
 			{/each}
 		</svg>
 		{#if paths.every((item) => !item.path)}
-			<div class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 dark:text-gray-600">Waiting for samples</div>
+			<div class={`absolute inset-0 flex items-center justify-center ${compact ? 'text-xs' : 'text-sm'} text-gray-400 dark:text-gray-600`}>Waiting for samples</div>
 		{/if}
 	</div>
 
-	<div class="mt-2 flex justify-between gap-3 text-xs text-gray-400 dark:text-gray-500">
-		<span>rolling samples</span>
-		<span class="font-mono">0–{domainMax.toFixed(domainMax < 10 ? 1 : 0)}{suffix}</span>
-	</div>
+	{#if !compact}
+		<div class="mt-2 flex justify-between gap-3 text-xs text-gray-400 dark:text-gray-500">
+			<span>rolling samples</span>
+			<span class="font-mono">0–{domainMax.toFixed(domainMax < 10 ? 1 : 0)}{suffix}</span>
+		</div>
+	{/if}
 </article>
