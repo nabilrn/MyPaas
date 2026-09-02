@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
+	import EnvironmentVariablesDialog from '$components/EnvironmentVariablesDialog.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
@@ -23,6 +24,7 @@
 	let httpRoutes: ProjectHTTPRoute[] = [];
 	let supportingSummaryLoaded = false;
 	let overviewInFlight = false;
+	let environmentDialogOpen = false;
 	let error = '';
 
 	$: base = `/projects/${$page.params.id}`;
@@ -208,14 +210,14 @@
 					</div>
 				{/if}
 
-				<a href={`${base}/env`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
+				<button type="button" class="group min-w-0 bg-white px-4 py-3 text-left hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900" on:click={() => (environmentDialogOpen = true)}>
 					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
 						<KeyRound class="h-3.5 w-3.5" aria-hidden="true" />
 						Environment
 					</div>
 					<p class="mt-1.5 truncate text-sm font-semibold text-gray-950 dark:text-white">{envCount === null ? (supportingSummaryLoaded ? 'Unavailable' : 'Checking…') : `${envCount} variable${envCount === 1 ? '' : 's'}`}</p>
 					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">configured</p>
-				</a>
+				</button>
 
 				<a href={`${base}/database`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
 					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -289,7 +291,7 @@
 						</div>
 					</div>
 
-					<a href={`${base}/env`} class="group flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50/70 dark:hover:bg-neutral-900/60">
+					<button type="button" class="group flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50/70 dark:hover:bg-neutral-900/60" on:click={() => (environmentDialogOpen = true)}>
 						<div class="flex min-w-0 items-center gap-3">
 							<KeyRound class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 							<div class="min-w-0">
@@ -298,7 +300,7 @@
 							</div>
 						</div>
 						<ArrowRight class="h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-					</a>
+					</button>
 
 					<a href={`${base}/database`} class="group flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50/70 dark:hover:bg-neutral-900/60">
 						<div class="flex min-w-0 items-center gap-3">
@@ -326,4 +328,13 @@
 			</section>
 		</div>
 	</div>
+
+	{#if environmentDialogOpen}
+		<EnvironmentVariablesDialog
+			projectId={project.id}
+			fullPageHref={`${base}/env`}
+			on:close={() => (environmentDialogOpen = false)}
+			on:changed={(event) => (envCount = event.detail)}
+		/>
+	{/if}
 {/if}
