@@ -6,17 +6,17 @@
 	Chart.register(...registerables);
 
 	export let data: TimeseriesDataPoint[] = [];
+	export let compact = false;
 
 	let canvas: HTMLCanvasElement;
 	let chart: Chart | null = null;
 
-	$: labels = data.map(d => {
+	$: labels = data.map((d) => {
 		const date = new Date(d.timestamp);
 		return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	});
-	
-	$: requestsData = data.map(d => d.requests);
-	$: bandwidthData = data.map(d => Number((d.bandwidth / (1024 * 1024)).toFixed(2))); // MB
+	$: requestsData = data.map((d) => d.requests);
+	$: bandwidthData = data.map((d) => Number((d.bandwidth / (1024 * 1024)).toFixed(2)));
 
 	const config = (): ChartConfiguration => ({
 		type: 'line',
@@ -26,25 +26,25 @@
 				{
 					label: 'Requests',
 					data: requestsData,
-					borderColor: '#3b82f6', // blue-500
+					borderColor: '#3b82f6',
 					backgroundColor: '#3b82f620',
-					borderWidth: 2,
+					borderWidth: compact ? 1.5 : 2,
 					pointRadius: 0,
-					pointHoverRadius: 4,
+					pointHoverRadius: compact ? 2 : 4,
 					tension: 0.4,
-					fill: true,
+					fill: !compact,
 					yAxisID: 'y'
 				},
 				{
 					label: 'Bandwidth (MB)',
 					data: bandwidthData,
-					borderColor: '#10b981', // emerald-500
+					borderColor: '#10b981',
 					backgroundColor: '#10b98120',
-					borderWidth: 2,
+					borderWidth: compact ? 1.5 : 2,
 					pointRadius: 0,
-					pointHoverRadius: 4,
+					pointHoverRadius: compact ? 2 : 4,
 					tension: 0.4,
-					fill: true,
+					fill: !compact,
 					yAxisID: 'y1'
 				}
 			]
@@ -52,13 +52,14 @@
 		options: {
 			responsive: true,
 			maintainAspectRatio: false,
+			animation: compact ? false : undefined,
 			interaction: {
 				mode: 'index',
-				intersect: false,
+				intersect: false
 			},
 			plugins: {
-				legend: { 
-					display: true,
+				legend: {
+					display: !compact,
 					position: 'top',
 					labels: {
 						usePointStyle: true,
@@ -66,6 +67,7 @@
 					}
 				},
 				tooltip: {
+					enabled: !compact,
 					backgroundColor: 'rgba(17, 24, 39, 0.9)',
 					titleColor: '#fff',
 					bodyColor: '#e5e7eb',
@@ -78,13 +80,14 @@
 			},
 			scales: {
 				x: {
+					display: !compact,
 					grid: { display: true, color: 'rgba(156, 163, 175, 0.05)', drawTicks: false },
 					border: { display: false },
 					ticks: { color: '#9ca3af', font: { size: 11 }, maxTicksLimit: 8 }
 				},
 				y: {
 					type: 'linear',
-					display: true,
+					display: !compact,
 					position: 'left',
 					beginAtZero: true,
 					grid: { color: 'rgba(156, 163, 175, 0.05)', drawTicks: false },
@@ -96,7 +99,7 @@
 				},
 				y1: {
 					type: 'linear',
-					display: true,
+					display: !compact,
 					position: 'right',
 					beginAtZero: true,
 					grid: { display: false },
@@ -121,10 +124,10 @@
 		chart.data.labels = labels;
 		chart.data.datasets[0].data = requestsData;
 		chart.data.datasets[1].data = bandwidthData;
-		chart.update();
+		chart.update(compact ? 'none' : undefined);
 	}
 </script>
 
-<div class="h-64 w-full relative">
+<div class={`${compact ? 'h-16' : 'h-64'} relative w-full`}>
 	<canvas bind:this={canvas}></canvas>
 </div>
