@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
-	import { CircleStop, RefreshCw, Terminal, TriangleAlert } from '@lucide/svelte';
+	import { CircleStop, RefreshCw, Square, Terminal, TriangleAlert } from '@lucide/svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
@@ -17,6 +17,7 @@
 	let status: ShellStatus = 'idle';
 	let starting = false;
 	let sending = false;
+	let interrupting = false;
 	let stopping = false;
 	let outputElement: HTMLPreElement | null = null;
 	let commandInput: HTMLInputElement | null = null;
@@ -128,12 +129,31 @@
 		}
 	}
 
+	async function interruptCommand() {
+		if (!session || interrupting || status !== 'connected') return;
+		interrupting = true;
+		error = '';
+		try {
+			await api.admin.shell.sendInput(session.id, '\u0003');
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to interrupt shell command';
+		} finally {
+			interrupting = false;
+			await focusCommandInput();
+		}
+	}
+
 	async function focusCommandInput() {
 		await tick();
 		commandInput?.focus();
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
+		if (event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'c') {
+			event.preventDefault();
+			void interruptCommand();
+			return;
+		}
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
 			void sendCommand();
@@ -190,6 +210,10 @@
 				</ActionButton>
 			{/if}
 			{#if session}
+				<ActionButton variant="secondary" size="xs" loading={interrupting} loadingLabel="Interrupting" disabled={status !== 'connected'} on:click={interruptCommand}>
+					<Square slot="icon" class="h-3.5 w-3.5" />
+					Interrupt
+				</ActionButton>
 				<ActionButton variant="ghostDanger" size="xs" loading={stopping} loadingLabel="Ending" on:click={stopSession}>
 					<CircleStop slot="icon" class="h-3.5 w-3.5" />
 					End session
@@ -234,7 +258,7 @@
 				class="min-w-0 flex-1 border-0 bg-transparent px-0 font-mono text-sm text-gray-100 outline-none placeholder:text-gray-600 focus:ring-0"
 				bind:value={command}
 				on:keydown={handleKeydown}
-				placeholder={status === 'connected' ? 'Enter a command' : 'Waiting for shell connection'}
+				placeholder={status === 'connected' ? 'Enter a command · Ctrl+C interrupts the running command' : 'Waiting for shell connection'}
 				disabled={status !== 'connected' || sending}
 				autocomplete="off"
 			/>
