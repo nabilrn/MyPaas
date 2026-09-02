@@ -4,7 +4,7 @@ import type { Deployment, Project } from '$types';
 export type ServingState = 'live' | 'offline' | 'degraded' | 'unknown';
 export type ReleaseState = 'not_deployed' | 'queued' | 'deploying' | 'succeeded' | 'failed';
 export type DesiredState = 'running' | 'stopped';
-export type ProjectOperationalAction = 'deploy' | 'retry' | 'start' | 'view_logs' | 'view_deployment';
+export type ProjectOperationalAction = 'deploy' | 'retry' | 'start' | 'stop' | 'view_logs' | 'view_deployment';
 export type ProjectOperationalAttention = 'none' | 'info' | 'warning' | 'danger';
 export type ProjectOperationalTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 export type RuntimeEvidence = 'available' | 'unavailable' | 'not_applicable';
@@ -183,8 +183,8 @@ export function deriveProjectOperationalState({
 			desired,
 			headline: 'Live',
 			detail: isStatic ? 'The current static release is published and serving traffic.' : 'The active release is serving traffic.',
-			primaryAction: 'deploy',
-			primaryActionLabel: 'Deploy again',
+			primaryAction: 'stop',
+			primaryActionLabel: 'Stop',
 			attention: 'none',
 			statusLabel: 'Live',
 			statusTone: 'success'
