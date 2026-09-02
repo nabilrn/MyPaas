@@ -118,6 +118,7 @@ services:
       - caddy_logs:/var/log/caddy
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+      MYPAAS_BUILD_SHA: ${MYPAAS_BUILD_SHA:-unknown}
       CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"
     depends_on:
       - api
