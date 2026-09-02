@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Copy, Eye, EyeOff, Pencil, RotateCcw, Trash2, X } from '@lucide/svelte';
-	import { createEventDispatcher } from 'svelte';
+	import { afterUpdate, createEventDispatcher } from 'svelte';
 	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
 
@@ -13,7 +13,7 @@
 	export let stateLabel = '';
 
 	let editing = false;
-	let wasDirty = false;
+	let previousDirty = dirty;
 
 	const dispatch = createEventDispatcher<{
 		change: string;
@@ -23,8 +23,10 @@
 		remove: void;
 	}>();
 
-	$: if (wasDirty && !dirty) editing = false;
-	$: wasDirty = dirty;
+	afterUpdate(() => {
+		if (previousDirty && !dirty) editing = false;
+		previousDirty = dirty;
+	});
 
 	function cancelEdit() {
 		if (dirty) dispatch('discard');
