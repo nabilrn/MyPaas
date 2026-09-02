@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveProjectOperationalState, type ProjectOperationalStateInput } from './project-operational-state';
+import {
+	deriveProjectInventoryAction,
+	deriveProjectOperationalState,
+	type ProjectOperationalStateInput
+} from './project-operational-state';
 
 type ProjectFixture = ProjectOperationalStateInput['project'];
 type DeploymentFixture = NonNullable<ProjectOperationalStateInput['latestDeployment']>;
@@ -135,7 +139,7 @@ describe('project operational state matrix', () => {
 		});
 	});
 
-	it('uses Stop as the primary lifecycle action for a healthy container-backed project', () => {
+	it('keeps Deploy again as the project-detail primary action for a healthy project', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
 			latestDeployment: deployment('dep-live', 'running'),
@@ -146,14 +150,15 @@ describe('project operational state matrix', () => {
 			serving: 'live',
 			release: 'succeeded',
 			headline: 'Live',
-			primaryAction: 'stop',
-			primaryActionLabel: 'Stop',
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Deploy again',
 			statusLabel: 'Live',
 			statusTone: 'success'
 		});
+		expect(deriveProjectInventoryAction(result)).toEqual({ action: 'stop', label: 'Stop' });
 	});
 
-	it('uses Stop for an active static release because stopping removes its route', () => {
+	it('uses Stop in inventory for an active static release because stopping removes its route', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', deployMode: 'static', activeDeploymentId: 'dep-static' }),
 			latestDeployment: deployment('dep-static', 'running'),
@@ -165,11 +170,21 @@ describe('project operational state matrix', () => {
 			release: 'succeeded',
 			desired: 'running',
 			headline: 'Live',
-			primaryAction: 'stop',
-			primaryActionLabel: 'Stop',
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Deploy again',
 			statusLabel: 'Live'
 		});
 		expect(result.detail).toContain('published');
+		expect(deriveProjectInventoryAction(result)).toEqual({ action: 'stop', label: 'Stop' });
+	});
+
+	it('preserves warning and diagnostic actions in inventory', () => {
+		const failed = deriveProjectOperationalState({
+			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
+			latestDeployment: deployment('dep-failed', 'failed'),
+			runtimeEvidence: 'available'
+		});
+		expect(deriveProjectInventoryAction(failed)).toEqual({ action: 'view_deployment', label: 'Review failure' });
 	});
 
 	it('does not reinterpret unavailable runtime evidence as a crash', () => {
