@@ -12,6 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.57.0
 	golang.org/x/oauth2 v0.27.0
+	modernc.org/sqlite v1.57.0
 )
 
 require (
@@ -36,7 +37,7 @@ require (
 	github.com/aws/smithy-go v1.27.8 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0baea572 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
