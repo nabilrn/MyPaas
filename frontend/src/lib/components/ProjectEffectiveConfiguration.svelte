@@ -1,10 +1,13 @@
 <script lang="ts">
 	import ProjectStatus from './ProjectStatus.svelte';
+	import { deriveProjectOperationalState } from '$lib/utils/project-operational-state';
 	import type { Project } from '$types';
 
 	export let project: Project;
 	export let publicUrl = '';
 
+	$: operationalState = deriveProjectOperationalState({ project, latestDeployment: undefined });
+	$: desiredLabel = operationalState.desired === 'stopped' ? 'Stopped' : 'Running';
 	$: runtime = project.deployMode === 'compose'
 		? `Docker Compose${project.mainService ? ` · ${project.mainService}` : ''}`
 		: project.deployMode === 'dockerfile'
@@ -48,7 +51,7 @@
 		</div>
 		<div class="min-w-0 bg-white p-4 dark:bg-neutral-950">
 			<p class="metric-label">Desired state</p>
-			<div class="mt-1"><ProjectStatus status={project.status} /></div>
+			<div class="mt-1"><ProjectStatus status={operationalState.desired} label={desiredLabel} tone="neutral" /></div>
 		</div>
 	</div>
 </section>

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { ExternalLink, FolderGit2, GitBranch, Package, Play, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, RefreshCw, Rocket, Search, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
+	import ActionLink from '$components/ActionLink.svelte';
 	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import Pagination from '$components/Pagination.svelte';
@@ -14,9 +15,10 @@
 	import { toast } from '$stores/toast';
 	import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
+	import { deriveProjectOperationalState, type ProjectOperationalState, type RuntimeEvidence } from '$lib/utils/project-operational-state';
 	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
-	import type { Project } from '$types';
+	import type { Deployment, Project } from '$types';
 
 	const pageSize = 20;
 	const telemetrySamples = 40;
@@ -27,12 +29,16 @@
 	let loading = true;
 	let error = '';
 	let projectActionId = '';
-	let projectActionType: 'start' | 'stop' | 'deploy' | '' = '';
+	let projectActionType: 'start' | 'deploy' | '' = '';
 	let currentPage = 0;
 	let searchQuery = '';
 	let projectUptimes: Record<string, string> = {};
 	let projectCpu: Record<string, number> = {};
 	let projectMemory: Record<string, number> = {};
+	let projectRuntimeEvidence: Record<string, RuntimeEvidence> = {};
+	let latestDeployments: Record<string, Deployment | null> = {};
+	let latestDeploymentKeys: Record<string, string> = {};
+	let latestDeploymentLoadingIds = new Set<string>();
 	let uptimeLoadingIds = new Set<string>();
 	let uptimeRefreshToken = 0;
 	let projectsInFlight = false;
@@ -63,16 +69,13 @@
 	$: hostRamWarning = ramAllocationPercent >= 85 || (liveMemoryAvailable && hostMemoryUsagePercent >= 90);
 	$: cpuAllocationWarning = Boolean(hostStats && hostStats.host_cpu_cores > 0 && hostStats.allocated_cpu > hostStats.host_cpu_cores);
 	$: storageWarning = Boolean(hostStats?.storage && storagePercent >= 85);
-	$: getDerivedStatus = (project: Project) => {
-		if (project.deployMode !== 'static' && project.status === 'running' && projectUptimes[project.id] === '-') return 'crashed';
-		return project.status;
-	};
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) currentPage = maxPage;
 	$: pageStart = currentPage * pageSize;
 	$: visibleProjects = filteredProjects.slice(pageStart, pageStart + pageSize);
 	$: hasNext = pageStart + pageSize < filteredProjects.length;
 	$: if (!loading && visibleProjects.length > 0) void loadUptimesFor(visibleProjects);
+	$: if (!loading && visibleProjects.length > 0) void loadLatestDeploymentsFor(visibleProjects);
 
 	onMount(() => {
 		void refreshDashboardData();
@@ -89,6 +92,10 @@
 		projectUptimes = {};
 		projectCpu = {};
 		projectMemory = {};
+		projectRuntimeEvidence = {};
+		latestDeployments = {};
+		latestDeploymentKeys = {};
+		latestDeploymentLoadingIds = new Set();
 		uptimeLoadingIds = new Set();
 		await Promise.all([loadProjects(background), loadHostStats()]);
 	}
@@ -169,39 +176,36 @@
 		}
 	}
 
-	function projectPrimaryAction(project: Project): 'start' | 'stop' | 'deploy' | 'busy' {
-		const status = getDerivedStatus(project);
-		if (status === 'building') return 'busy';
-		if (status === 'running') return 'stop';
-		if (status === 'stopped' || status === 'crashed') return 'start';
-		return 'deploy';
+	function operationalStateFor(project: Project): ProjectOperationalState {
+		const hasLatestDeployment = Object.prototype.hasOwnProperty.call(latestDeployments, project.id);
+		return deriveProjectOperationalState({
+			project,
+			latestDeployment: hasLatestDeployment ? latestDeployments[project.id] : undefined,
+			runtimeEvidence: project.deployMode === 'static' ? 'not_applicable' : projectRuntimeEvidence[project.id]
+		});
 	}
 
 	function projectPrimaryLabel(project: Project) {
-		const action = projectPrimaryAction(project);
-		if (projectActionId === project.id) {
-			if (projectActionType === 'stop') return 'Stopping';
-			if (projectActionType === 'start') return 'Starting';
-			return 'Deploying';
-		}
-		if (action === 'busy') return 'Deploying';
-		if (action === 'stop') return 'Stop';
-		if (action === 'start') return 'Start';
-		return 'Deploy';
-	}
-
-	function projectPrimaryVariant(project: Project): 'secondary' | 'primary' | 'ghostDanger' | 'ghost' {
-		const action = projectPrimaryAction(project);
-		if (action === 'stop') return 'ghostDanger';
-		if (action === 'busy') return 'ghost';
-		return 'primary';
+		if (projectActionId === project.id) return projectActionType === 'start' ? 'Starting' : 'Queueing';
+		return operationalStateFor(project).primaryActionLabel;
 	}
 
 	function projectPrimaryIcon(project: Project) {
-		const action = projectPrimaryAction(project);
-		if (action === 'stop') return Square;
-		if (action === 'deploy' || action === 'busy') return Rocket;
-		return Play;
+		const action = operationalStateFor(project).primaryAction;
+		if (action === 'view_logs') return FileText;
+		if (action === 'view_deployment') return History;
+		if (action === 'start') return Play;
+		return Rocket;
+	}
+
+	function projectPrimaryHref(project: Project) {
+		const operationalState = operationalStateFor(project);
+		if (operationalState.primaryAction === 'view_logs') return `/projects/${project.id}/logs`;
+		if (operationalState.primaryAction === 'view_deployment') {
+			const latestDeployment = latestDeployments[project.id];
+			return `/projects/${project.id}/deployments${latestDeployment ? `?focus=${encodeURIComponent(latestDeployment.id)}` : ''}`;
+		}
+		return '';
 	}
 
 	function runtimeLabel(project: Project) {
@@ -219,16 +223,13 @@
 
 	async function handlePrimaryProjectAction(project: Project) {
 		if (projectActionId) return;
-		const action = projectPrimaryAction(project);
-		if (action === 'busy') return;
+		const action = operationalStateFor(project).primaryAction;
+		if (action === 'view_logs' || action === 'view_deployment') return;
 
 		projectActionId = project.id;
-		projectActionType = action;
+		projectActionType = action === 'start' ? 'start' : 'deploy';
 		try {
-			if (action === 'stop') {
-				await api.projects.stop(project.id);
-				toast.success(`${project.name} stopped`);
-			} else if (action === 'start') {
+			if (action === 'start') {
 				await api.projects.start(project.id);
 				toast.success(`${project.name} started`);
 			} else {
@@ -244,7 +245,8 @@
 		}
 	}
 
-	function formatDate(value: string) {
+	function formatDate(value: string | null | undefined) {
+		if (!value) return '-';
 		return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
@@ -274,9 +276,38 @@
 		currentPage = 0;
 	}
 
+	function deploymentKey(project: Project) {
+		return `${project.updatedAt}:${project.status}:${project.activeDeploymentId ?? ''}`;
+	}
+
+	async function loadLatestDeploymentsFor(rows: Project[]) {
+		const pending = rows.filter((project) => latestDeploymentKeys[project.id] !== deploymentKey(project) && !latestDeploymentLoadingIds.has(project.id));
+		if (pending.length === 0) return;
+
+		latestDeploymentLoadingIds = new Set([...latestDeploymentLoadingIds, ...pending.map((project) => project.id)]);
+		await Promise.all(
+			pending.map(async (project) => {
+				try {
+					const deploymentRows = await api.deployments.list(project.id, 0, 1);
+					latestDeployments = { ...latestDeployments, [project.id]: deploymentRows[0] ?? null };
+				} finally {
+					latestDeploymentKeys = { ...latestDeploymentKeys, [project.id]: deploymentKey(project) };
+					const next = new Set(latestDeploymentLoadingIds);
+					next.delete(project.id);
+					latestDeploymentLoadingIds = next;
+				}
+			})
+		);
+	}
+
 	async function loadUptimesFor(rows: Project[]) {
-		const staticUptimes = Object.fromEntries(rows.filter((project) => project.deployMode === 'static').map((project) => [project.id, 'n/a']));
-		if (Object.keys(staticUptimes).length > 0) projectUptimes = { ...projectUptimes, ...staticUptimes };
+		const staticProjects = rows.filter((project) => project.deployMode === 'static');
+		if (staticProjects.length > 0) {
+			projectRuntimeEvidence = {
+				...projectRuntimeEvidence,
+				...Object.fromEntries(staticProjects.map((project) => [project.id, 'not_applicable' as RuntimeEvidence]))
+			};
+		}
 		const pending = rows.filter((project) => project.deployMode !== 'static' && !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));
 		if (pending.length === 0) return;
 
@@ -289,6 +320,7 @@
 					if (refreshToken !== uptimeRefreshToken) return;
 					const metrics = selectPrimaryProjectMetric(snapshot, project.mainService);
 					projectUptimes = { ...projectUptimes, [project.id]: metrics?.uptime ?? '-' };
+					projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: metrics ? 'available' : 'unavailable' };
 					if (metrics) {
 						projectCpu = { ...projectCpu, [project.id]: metrics.cpu };
 						projectMemory = { ...projectMemory, [project.id]: metrics.memoryMb };
@@ -296,6 +328,7 @@
 				} catch {
 					if (refreshToken !== uptimeRefreshToken) return;
 					projectUptimes = { ...projectUptimes, [project.id]: '-' };
+					projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: 'unavailable' };
 				} finally {
 					if (refreshToken !== uptimeRefreshToken) return;
 					const next = new Set(uptimeLoadingIds);
@@ -454,7 +487,7 @@
 					<th>Runtime</th>
 					<th>Database</th>
 					<th>Usage</th>
-					<th>Uptime</th>
+					<th>Uptime / release</th>
 					<th>Updated</th>
 					<th>Action</th>
 				</tr>
@@ -462,7 +495,8 @@
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
-					{@const derivedStatus = getDerivedStatus(project)}
+					{@const operationalState = operationalStateFor(project)}
+					{@const primaryHref = projectPrimaryHref(project)}
 					<tr class="h-[3.75rem]">
 						<td>
 							<div class="min-w-0">
@@ -475,7 +509,7 @@
 								</a>
 							</div>
 						</td>
-						<td class="whitespace-nowrap text-center"><ProjectStatus status={derivedStatus} /></td>
+						<td class="whitespace-nowrap text-center"><ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} /></td>
 						<td>
 							{#if source.href}
 								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
@@ -515,21 +549,38 @@
 								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
 							{/if}
 						</td>
-						<td class="metric-value whitespace-nowrap text-right text-sm text-gray-800 dark:text-gray-200">{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}</td>
+						<td class="metric-value whitespace-nowrap text-right text-sm text-gray-800 dark:text-gray-200">
+							{#if project.deployMode === 'static'}
+								{#if project.activeDeploymentId}
+									Published{latestDeployments[project.id]?.finishedAt ? ` ${formatDate(latestDeployments[project.id]?.finishedAt)}` : ''}
+								{:else}
+									—
+								{/if}
+							{:else}
+								{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}
+							{/if}
+						</td>
 						<td class="whitespace-nowrap text-center text-[13px] text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
 						<td class="whitespace-nowrap text-center">
-							<ActionButton
-								variant={projectPrimaryVariant(project)}
-								size="xs"
-								className="mx-auto min-w-[5.75rem]"
-								on:click={() => handlePrimaryProjectAction(project)}
-								loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
-								loadingLabel={projectPrimaryLabel(project)}
-								disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
-							>
-								<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-								{projectPrimaryLabel(project)}
-							</ActionButton>
+							{#if primaryHref}
+								<ActionLink href={primaryHref} variant="secondary" size="xs" className="mx-auto min-w-[5.75rem]">
+									<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+									{projectPrimaryLabel(project)}
+								</ActionLink>
+							{:else}
+								<ActionButton
+									variant="primary"
+									size="xs"
+									className="mx-auto min-w-[5.75rem]"
+									on:click={() => handlePrimaryProjectAction(project)}
+									loading={projectActionId === project.id}
+									loadingLabel={projectPrimaryLabel(project)}
+									disabled={projectActionId !== '' && projectActionId !== project.id}
+								>
+									<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+									{projectPrimaryLabel(project)}
+								</ActionButton>
+							{/if}
 						</td>
 					</tr>
 				{/each}
@@ -539,26 +590,35 @@
 		<div class="divide-y divide-gray-100/70 dark:divide-neutral-900 xl:hidden">
 			{#each visibleProjects as project}
 				{@const source = describeProjectSource(project)}
+				{@const operationalState = operationalStateFor(project)}
+				{@const primaryHref = projectPrimaryHref(project)}
 				<div class="px-4 py-3">
 					<div class="flex items-center justify-between gap-3">
 						<div class="min-w-0">
 							<a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
 								<span class="truncate">{project.name}</span>
 							</a>
-							<div class="mt-1"><ProjectStatus status={getDerivedStatus(project)} /></div>
+							<div class="mt-1"><ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} /></div>
 						</div>
-						<ActionButton
-							variant={projectPrimaryVariant(project)}
-							size="xs"
-							className="min-w-[5.75rem]"
-							on:click={() => handlePrimaryProjectAction(project)}
-							loading={projectActionId === project.id || projectPrimaryAction(project) === 'busy'}
-							loadingLabel={projectPrimaryLabel(project)}
-							disabled={(projectActionId !== '' && projectActionId !== project.id) || projectPrimaryAction(project) === 'busy'}
-						>
-							<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-							{projectPrimaryLabel(project)}
-						</ActionButton>
+						{#if primaryHref}
+							<ActionLink href={primaryHref} variant="secondary" size="xs" className="min-w-[5.75rem]">
+								<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+								{projectPrimaryLabel(project)}
+							</ActionLink>
+						{:else}
+							<ActionButton
+								variant="primary"
+								size="xs"
+								className="min-w-[5.75rem]"
+								on:click={() => handlePrimaryProjectAction(project)}
+								loading={projectActionId === project.id}
+								loadingLabel={projectPrimaryLabel(project)}
+								disabled={projectActionId !== '' && projectActionId !== project.id}
+							>
+								<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+								{projectPrimaryLabel(project)}
+							</ActionButton>
+						{/if}
 					</div>
 					<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
 						<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
@@ -583,13 +643,17 @@
 							</span>
 						{/if}
 						<span>{runtimeLabel(project)}</span>
-						<span class="metric-value whitespace-nowrap">
-							{#if project.id in projectMemory}
-								{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
-							{:else}
-								—
-							{/if}
-						</span>
+						{#if project.deployMode === 'static' && project.activeDeploymentId}
+							<span>Published{latestDeployments[project.id]?.finishedAt ? ` ${formatDate(latestDeployments[project.id]?.finishedAt)}` : ''}</span>
+						{:else}
+							<span class="metric-value whitespace-nowrap">
+								{#if project.id in projectMemory}
+									{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
+								{:else}
+									—
+								{/if}
+							</span>
+						{/if}
 					</div>
 				</div>
 			{/each}

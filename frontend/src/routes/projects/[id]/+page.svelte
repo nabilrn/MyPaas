@@ -6,8 +6,11 @@
 	import EmptyState from '$components/EmptyState.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import ProjectStatus from '$components/ProjectStatus.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api, type ProjectHTTPRoute } from '$api';
+	import { deploymentHistoryLabel } from '$lib/utils/deploymentHistory';
+	import { deriveProjectOperationalState } from '$lib/utils/project-operational-state';
 	import { projectRouteURL, projectURL } from '$lib/utils/urls';
 	import type { DBStudioStatus, Deployment, Project } from '$types';
 
@@ -21,8 +24,19 @@
 	let error = '';
 
 	$: base = `/projects/${$page.params.id}`;
-	$: lastDeploy = deployments.find((deployment) => deployment.id === project?.activeDeploymentId) ?? deployments[0];
-	$: applicationState = applicationStateFor(project, lastDeploy);
+	$: latestDeployment = deployments[0] ?? null;
+	$: operationalState = project
+		? deriveProjectOperationalState({
+			project,
+			latestDeployment,
+			runtimeEvidence: project.deployMode === 'static' ? 'not_applicable' : undefined
+		})
+		: null;
+	$: attentionActionHref = operationalState?.primaryAction === 'view_logs'
+		? `${base}/logs`
+		: operationalState?.primaryAction === 'view_deployment'
+			? `${base}/deployments${latestDeployment ? `?focus=${encodeURIComponent(latestDeployment.id)}` : ''}`
+			: '';
 	$: runtimeLabel = project
 		? project.deployMode === 'compose'
 			? 'Docker Compose'
@@ -92,38 +106,6 @@
 		supportingSummaryLoaded = true;
 	}
 
-	function applicationStateFor(currentProject: Project | null, currentDeployment: Deployment | undefined) {
-		if (!currentProject) {
-			return { title: 'Loading application', body: 'Reading current project state.', action: null as null | { label: string; href: string } };
-		}
-		if (currentProject.status === 'building') {
-			return {
-				title: 'Deployment in progress',
-				body: currentDeployment ? `MyPaas is processing the latest ${titleCase(currentDeployment.status)} stage.` : 'MyPaas is building the current deployment.',
-				action: { label: 'View deployment', href: `${base}/deployments${currentDeployment ? `?focus=${encodeURIComponent(currentDeployment.id)}` : ''}` }
-			};
-		}
-		if (currentProject.status === 'crashed') {
-			return {
-				title: 'Application crashed',
-				body: 'The runtime exited unexpectedly. Check logs before restarting it.',
-				action: { label: 'View logs', href: `${base}/logs` }
-			};
-		}
-		if (currentProject.status === 'stopped') {
-			return {
-				title: 'Application is stopped',
-				body: 'No runtime is currently serving traffic for this project.',
-				action: { label: 'View deployments', href: `${base}/deployments` }
-			};
-		}
-		return {
-			title: currentDeployment ? 'Application is waiting' : 'Project ready to deploy',
-			body: currentDeployment ? 'The project exists but no runtime is currently serving traffic.' : 'Source and configuration are saved. Use Deploy above to publish the first version.',
-			action: currentDeployment ? { label: 'View deployments', href: `${base}/deployments` } : null
-		};
-	}
-
 	function formatDuration(start: string, end: string | null): string {
 		if (!end) return 'In progress';
 		const seconds = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000));
@@ -134,14 +116,10 @@
 		if (!value) return '-';
 		return new Date(value).toLocaleString();
 	}
-
-	function titleCase(value: string) {
-		return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-	}
 </script>
 
 <svelte:head>
-	<title>{project?.name ?? 'Project'} · MyPaas</title>
+	<title>{project?.name ?? 'Project'} · MyPaaS</title>
 </svelte:head>
 
 {#if error && !project}
@@ -157,20 +135,20 @@
 			</div>
 		{/if}
 
-		{#if project.status === 'building' || project.status === 'crashed' || project.status === 'pending'}
+		{#if operationalState && operationalState.attention !== 'none'}
 			<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
 				<div class="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-2">
-							<StatusBadge status={project.status} pulse />
-							<h2 class="text-base font-semibold text-gray-950 dark:text-white">{applicationState.title}</h2>
+							<ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} />
+							<h2 class="text-base font-semibold text-gray-950 dark:text-white">{operationalState.headline}</h2>
 						</div>
-						<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{applicationState.body}</p>
+						<p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{operationalState.detail}</p>
 					</div>
-					{#if applicationState.action}
-						<ActionLink href={applicationState.action.href} variant="secondary" size="xs">
+					{#if attentionActionHref}
+						<ActionLink href={attentionActionHref} variant="secondary" size="xs">
 							<ArrowRight slot="icon" class="h-3.5 w-3.5" />
-							{applicationState.action.label}
+							{operationalState.primaryActionLabel}
 						</ActionLink>
 					{/if}
 				</div>
@@ -192,21 +170,24 @@
 					</ActionLink>
 				</div>
 
-				{#if lastDeploy}
+				{#if latestDeployment}
 					<div class="p-5">
 						<div class="flex flex-wrap items-center justify-between gap-3">
 							<div class="flex min-w-0 items-center gap-3">
-								<StatusBadge status={lastDeploy.status} />
+								<StatusBadge
+									status={latestDeployment.status}
+									label={deploymentHistoryLabel(latestDeployment.status, latestDeployment.id, project.activeDeploymentId, project.status, project.deployMode)}
+								/>
 								<p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white">
-									{project.sourceType === 'registry' ? (lastDeploy.imageTag ?? project.imageRef ?? '-') : (lastDeploy.commitSha?.slice(0, 8) ?? '-')}
+									{project.sourceType === 'registry' ? (latestDeployment.imageTag ?? project.imageRef ?? '-') : (latestDeployment.commitSha?.slice(0, 8) ?? '-')}
 								</p>
 							</div>
-							<p class="metric-value text-[13px] text-gray-500 dark:text-gray-400">{formatDuration(lastDeploy.startedAt, lastDeploy.finishedAt)}</p>
+							<p class="metric-value text-[13px] text-gray-500 dark:text-gray-400">{formatDuration(latestDeployment.startedAt, latestDeployment.finishedAt)}</p>
 						</div>
-						<p class="mt-4 text-sm text-gray-800 dark:text-gray-200">{lastDeploy.commitMessage || 'No deployment message'}</p>
+						<p class="mt-4 text-sm text-gray-800 dark:text-gray-200">{latestDeployment.commitMessage || 'No deployment message'}</p>
 						<div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-gray-500 dark:text-gray-400">
-							<span>Triggered by <span class="capitalize text-gray-700 dark:text-gray-300">{lastDeploy.triggeredBy}</span></span>
-							<span>{formatDate(lastDeploy.startedAt)}</span>
+							<span>Triggered by <span class="capitalize text-gray-700 dark:text-gray-300">{latestDeployment.triggeredBy}</span></span>
+							<span>{formatDate(latestDeployment.startedAt)}</span>
 						</div>
 					</div>
 				{:else}

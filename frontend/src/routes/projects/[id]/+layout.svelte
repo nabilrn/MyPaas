@@ -17,15 +17,16 @@
 		setProjectStreamReconnect
 	} from '$stores/project-stream';
 	import { projectStreamTopics } from '$lib/utils/project-stream-topics';
-	import type { MetricsSnapshot, Project, ProjectStatus } from '$types';
+	import type { Deployment, MetricsSnapshot, Project, ProjectStatus } from '$types';
 	import { projectHost, projectURL } from '$lib/utils/urls';
 
 	const terminalProjectStatuses = new Set<ProjectStatus>(['running', 'stopped', 'crashed', 'pending']);
 
 	let project: Project | null = null;
+	let latestDeployment: Deployment | null | undefined = undefined;
 	let loading = true;
 	let error = '';
-	let pendingAction: 'stop' | 'restart' | 'deploy' | null = null;
+	let pendingAction: 'start' | 'stop' | 'restart' | 'deploy' | null = null;
 	let projectRefreshInFlight = false;
 	let stream: EventSource | null = null;
 	let lastStreamStatus: ProjectStatus | null = null;
@@ -110,6 +111,7 @@
 			if (parsed.status === 'deleted') {
 				stream?.close();
 				project = null;
+				latestDeployment = undefined;
 				error = 'Project not found';
 				return;
 			}
@@ -138,7 +140,14 @@
 			error = '';
 		}
 		try {
-			project = await api.projects.get($page.params.id ?? '');
+			const projectId = $page.params.id ?? '';
+			const [projectResult, deploymentResult] = await Promise.allSettled([
+				api.projects.get(projectId),
+				api.deployments.list(projectId, 0, 1)
+			]);
+			if (projectResult.status === 'rejected') throw projectResult.reason;
+			project = projectResult.value;
+			latestDeployment = deploymentResult.status === 'fulfilled' ? (deploymentResult.value[0] ?? null) : undefined;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Failed to load project';
 			if (!background || !project) error = message;
@@ -146,6 +155,20 @@
 			if (!background || !project) loading = false;
 			finishMainLoading?.();
 			projectRefreshInFlight = false;
+		}
+	}
+
+	async function handleStart() {
+		if (!project || pendingAction) return;
+		pendingAction = 'start';
+		try {
+			await api.projects.start(project.id);
+			toast.success(`Started ${project.name}`);
+			await loadProject(true);
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Failed to start project');
+		} finally {
+			pendingAction = null;
 		}
 	}
 
@@ -183,6 +206,7 @@
 		try {
 			const deployment = await api.projects.deploy(project.id);
 			toast.success(`Deployment queued for ${project.name}`);
+			latestDeployment = deployment;
 			await goto(`/projects/${project.id}/deployments?focus=${encodeURIComponent(deployment.id)}`);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to deploy project');
@@ -201,9 +225,11 @@
 		{#if !databaseWorkspace}
 			<DeployControlPanel
 				{project}
+				{latestDeployment}
 				{publicProjectHost}
 				{publicProjectURL}
 				{pendingAction}
+				on:start={handleStart}
 				on:stop={handleStop}
 				on:restart={handleRestart}
 				on:deploy={handleDeploy}
