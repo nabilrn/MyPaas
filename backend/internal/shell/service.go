@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/google/uuid"
 
 	"mypaas/internal/errs"
@@ -43,7 +44,7 @@ type Service struct {
 type session struct {
 	info         SessionInfo
 	cmd          *exec.Cmd
-	stdin        io.WriteCloser
+	terminal     *os.File
 	cancel       context.CancelFunc
 	done         chan struct{}
 	finishOnce   sync.Once
@@ -69,30 +70,10 @@ func (s *Service) Start(ctx context.Context) (SessionInfo, error) {
 	}
 	cmd.Env = append(os.Environ(), "TERM=dumb", "PS1=mypaas$ ")
 
-	stdin, err := cmd.StdinPipe()
+	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 40, Cols: 120})
 	if err != nil {
 		cancel()
-		return SessionInfo{}, fmt.Errorf("open shell input: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		cancel()
-		return SessionInfo{}, fmt.Errorf("open shell output: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		cancel()
-		return SessionInfo{}, fmt.Errorf("open shell errors: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		_ = stdin.Close()
-		_ = stdout.Close()
-		_ = stderr.Close()
-		cancel()
-		return SessionInfo{}, fmt.Errorf("start shell: %w", err)
+		return SessionInfo{}, fmt.Errorf("start shell pty: %w", err)
 	}
 
 	startedAt := time.Now().UTC()
@@ -104,7 +85,7 @@ func (s *Service) Start(ctx context.Context) (SessionInfo, error) {
 			ExpiresAt: startedAt.Add(sessionDuration),
 		},
 		cmd:          cmd,
-		stdin:        stdin,
+		terminal:     terminal,
 		cancel:       cancel,
 		done:         make(chan struct{}),
 		subscribers:  make(map[chan Event]struct{}),
@@ -115,7 +96,7 @@ func (s *Service) Start(ctx context.Context) (SessionInfo, error) {
 	s.sessions[sess.info.ID] = sess
 	s.mu.Unlock()
 
-	go s.consume(sess, stdout, stderr)
+	go s.consume(sess)
 	go s.watch(sess)
 	return sess.info, nil
 }
@@ -162,10 +143,10 @@ func (s *Service) Write(id uuid.UUID, data string) error {
 	default:
 	}
 	sess.lastActivity = time.Now().UTC()
-	stdin := sess.stdin
+	terminal := sess.terminal
 	sess.mu.Unlock()
 
-	if _, err := io.WriteString(stdin, data); err != nil {
+	if _, err := io.WriteString(terminal, data); err != nil {
 		select {
 		case <-sess.done:
 			return errs.ErrShellSessionClosed
@@ -199,26 +180,18 @@ func (s *Service) Close() {
 	}
 }
 
-func (s *Service) consume(sess *session, stdout, stderr io.ReadCloser) {
-	var readers sync.WaitGroup
-	read := func(reader io.Reader) {
-		defer readers.Done()
-		buffer := make([]byte, 16*1024)
-		for {
-			n, err := reader.Read(buffer)
-			if n > 0 {
-				sess.publish(Event{Type: "output", Data: string(buffer[:n])})
-			}
-			if err != nil {
-				return
-			}
+func (s *Service) consume(sess *session) {
+	buffer := make([]byte, 16*1024)
+	for {
+		n, err := sess.terminal.Read(buffer)
+		if n > 0 {
+			sess.publish(Event{Type: "output", Data: string(buffer[:n])})
+		}
+		if err != nil {
+			break
 		}
 	}
 
-	readers.Add(2)
-	go read(stdout)
-	go read(stderr)
-	readers.Wait()
 	_ = sess.cmd.Wait()
 	sess.publish(Event{Type: "exit", Data: "Shell session ended."})
 	sess.finish()
@@ -260,15 +233,21 @@ func (sess *session) publish(event Event) {
 }
 
 func (sess *session) stop() {
-	_ = sess.stdin.Close()
+	sess.mu.Lock()
+	terminal := sess.terminal
+	cmd := sess.cmd
+	sess.mu.Unlock()
+
+	_ = terminal.Close()
 	sess.cancel()
-	if sess.cmd.Process != nil {
-		_ = sess.cmd.Process.Kill()
+	if cmd.Process != nil {
+		_ = cmd.Process.Kill()
 	}
 }
 
 func (sess *session) finish() {
 	sess.finishOnce.Do(func() {
+		_ = sess.terminal.Close()
 		sess.cancel()
 		close(sess.done)
 	})
