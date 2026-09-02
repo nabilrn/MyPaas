@@ -36,23 +36,46 @@
 	];
 
 	$: allValues = series.flatMap((item) => item.values).filter((value) => Number.isFinite(value));
+	$: observedMin = allValues.length > 0 ? Math.min(...allValues) : 0;
 	$: observedMax = allValues.length > 0 ? Math.max(...allValues) : 0;
-	$: domainMax = maxValue !== null
-		? maxValue
-		: Math.max(1, Math.ceil((observedMax * 1.15) / 5) * 5);
+	$: domain = buildDomain(observedMin, observedMax, maxValue);
 	$: paths = series.map((item, index) => ({
 		...item,
-		path: buildPath(item.values, domainMax),
+		path: buildPath(item.values, domain.min, domain.max),
 		strokeClass: palette[index % palette.length],
 		dotClass: dotPalette[index % dotPalette.length]
 	}));
+	$: rangeLabel = allValues.length > 0
+		? `${formatRangeValue(observedMin)}–${formatRangeValue(observedMax)}${suffix}`
+		: '';
 
-	function buildPath(values: number[], ceiling: number) {
+	function buildDomain(min: number, max: number, ceiling: number | null) {
+		if (ceiling !== null) return { min: 0, max: Math.max(ceiling, 0.0001) };
+		const span = max - min;
+		const baselinePadding = suffix.includes('MB')
+			? Math.max(0.5, Math.abs(max) * 0.02)
+			: Math.max(0.03, Math.abs(max) * 0.08);
+		const padding = span > 0 ? span * 0.18 : baselinePadding;
+		const domainMin = Math.max(0, min - padding);
+		let domainMax = max + padding;
+		if (domainMax <= domainMin) domainMax = domainMin + baselinePadding * 2;
+		return { min: domainMin, max: domainMax };
+	}
+
+	function formatRangeValue(value: number) {
+		if (suffix.includes('MB')) return value.toFixed(value >= 100 ? 0 : 1);
+		if (Math.abs(value) < 1) return value.toFixed(2);
+		if (Math.abs(value) < 10) return value.toFixed(1);
+		return value.toFixed(0);
+	}
+
+	function buildPath(values: number[], floor: number, ceiling: number) {
 		const clean = values.filter((value) => Number.isFinite(value));
 		if (clean.length === 0) return '';
+		const span = Math.max(ceiling - floor, 0.0001);
 		return clean.map((value, index) => {
 			const x = clean.length === 1 ? width : (index / Math.max(1, clean.length - 1)) * width;
-			const ratio = Math.max(0, Math.min(1, value / Math.max(ceiling, 0.0001)));
+			const ratio = Math.max(0, Math.min(1, (value - floor) / span));
 			const y = 8 + (1 - ratio) * (height - 16);
 			return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
 		}).join(' ');
@@ -106,10 +129,15 @@
 		{/if}
 	</div>
 
-	{#if !compact}
+	{#if rangeLabel}
+		<div class={`${compact ? 'mt-1.5' : 'mt-2'} flex justify-between gap-3 text-[11px] text-gray-400 dark:text-gray-500`}>
+			<span>{compact ? 'observed range' : 'rolling samples'}</span>
+			<span class="font-mono">{rangeLabel}</span>
+		</div>
+	{:else if !compact}
 		<div class="mt-2 flex justify-between gap-3 text-xs text-gray-400 dark:text-gray-500">
 			<span>rolling samples</span>
-			<span class="font-mono">0–{domainMax.toFixed(domainMax < 10 ? 1 : 0)}{suffix}</span>
+			<span class="font-mono">waiting</span>
 		</div>
 	{/if}
 </article>
