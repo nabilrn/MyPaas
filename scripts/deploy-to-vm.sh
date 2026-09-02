@@ -335,9 +335,14 @@ echo "Starting dashboard..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard
 
 if managed_container_running mypaas-caddy-prod; then
-  echo "Reloading caddy configuration without restarting the proxy..."
+  echo "Reloading caddy configuration from the current checkout without restarting the proxy..."
+  # A single-file bind mount can keep pointing at the inode that existed before
+  # git reset/checkout replaced Caddyfile.prod. Stream the checked-out config
+  # into the running container so hot reload always uses this release's bytes.
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
-    caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+    sh -c 'cat > /tmp/mypaas-Caddyfile.next' < "$ROOT_DIR/Caddyfile.prod"
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    caddy reload --config /tmp/mypaas-Caddyfile.next --adapter caddyfile \
     --address unix//run/mypaas/caddy-admin.sock
 else
   echo "Starting caddy..."
