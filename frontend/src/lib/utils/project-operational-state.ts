@@ -184,7 +184,7 @@ export function deriveProjectOperationalState({
 			headline: 'Live',
 			detail: isStatic ? 'The current static release is published and serving traffic.' : 'The active release is serving traffic.',
 			primaryAction: 'deploy',
-			primaryActionLabel: 'Redeploy',
+			primaryActionLabel: 'Deploy again',
 			attention: 'none',
 			statusLabel: 'Live',
 			statusTone: 'success'
