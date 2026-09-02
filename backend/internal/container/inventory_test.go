@@ -41,3 +41,34 @@ func TestMergeRuntimeStatsMarksOnlyMatchedRowsAvailable(t *testing.T) {
 		t.Fatal("expected unmatched app-b metrics to remain unavailable")
 	}
 }
+
+func TestMissingRuntimeStatsIndicesRetriesOnlyUnmatchedRunningRows(t *testing.T) {
+	containers := []RuntimeContainer{
+		{Name: "app-a", State: "running", MetricsAvailable: true},
+		{Name: "app-b", State: "running"},
+		{Name: "app-c", State: "exited"},
+		{Name: "", State: "running"},
+		{Name: "app-d", State: "running"},
+	}
+
+	got := missingRuntimeStatsIndices(containers)
+	want := []int{1, 4}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("missingRuntimeStatsIndices() = %#v, want %#v", got, want)
+	}
+}
+
+func TestMissingRuntimeStatsIndicesAfterPartialBatchMerge(t *testing.T) {
+	containers := []RuntimeContainer{
+		{Name: "app-a", State: "running"},
+		{Name: "app-b", State: "running"},
+	}
+
+	mergeRuntimeStats(containers, []byte("app-a\t0.50%\t64MiB / 256MiB\n"))
+
+	got := missingRuntimeStatsIndices(containers)
+	want := []int{1}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("missingRuntimeStatsIndices() = %#v, want %#v", got, want)
+	}
+}
