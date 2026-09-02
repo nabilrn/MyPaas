@@ -19,6 +19,7 @@ type sqliteRuntimeInspect struct {
 		WorkingDir string `json:"WorkingDir"`
 	} `json:"Config"`
 	Mounts []struct {
+		Type        string `json:"Type"`
 		Destination string `json:"Destination"`
 		RW          bool   `json:"RW"`
 	} `json:"Mounts"`
@@ -80,20 +81,29 @@ func resolveSQLiteConnection(ctx context.Context, project db.Project, envs map[s
 }
 
 func sqlitePathFromEnv(envs map[string]string) (string, string, bool) {
-	for _, key := range []string{"DATABASE_URL", "SQLITE_URL"} {
-		if value := strings.TrimSpace(envs[key]); value != "" {
-			if path, ok := sqlitePathFromURL(value); ok {
-				return path, key, true
-			}
+	if value := strings.TrimSpace(envs["DATABASE_URL"]); value != "" {
+		if path, ok := sqlitePathFromURL(value); ok {
+			return path, "DATABASE_URL", true
+		}
+		if _, err := connectionFromURL(value, "DATABASE_URL"); err == nil {
+			return "", "", false
 		}
 	}
-	for _, key := range []string{"SQLITE_PATH", "SQLITE_DATABASE", "SQLITE_DB", "DATABASE_PATH"} {
+	if value := strings.TrimSpace(envs["SQLITE_URL"]); value != "" {
+		if path, ok := sqlitePathFromURL(value); ok {
+			return path, "SQLITE_URL", true
+		}
+	}
+	for _, key := range []string{"SQLITE_PATH", "SQLITE_DATABASE", "SQLITE_DB"} {
 		if value := strings.TrimSpace(envs[key]); value != "" {
 			return value, key, true
 		}
 	}
 	hint := strings.ToLower(firstEnv(envs, "DB_CONNECTION", "DB_DRIVER", "DATABASE_CLIENT"))
 	if strings.Contains(hint, "sqlite") {
+		if value := strings.TrimSpace(envs["DATABASE_PATH"]); value != "" {
+			return value, "DATABASE_PATH", true
+		}
 		if value := firstEnv(envs, "DB_DATABASE", "DB_NAME", "DATABASE_NAME"); value != "" {
 			return value, "env-parts", true
 		}
@@ -199,6 +209,9 @@ func resolveSQLiteContainerPath(rawPath, workingDir string) (string, error) {
 
 func sqlitePathOnPersistentMount(databasePath string, inspect sqliteRuntimeInspect) bool {
 	for _, mount := range inspect.Mounts {
+		if mount.Type != "bind" && mount.Type != "volume" {
+			continue
+		}
 		destination := pathpkg.Clean(strings.TrimSpace(mount.Destination))
 		if destination == "." || destination == "/" || destination == "" {
 			continue
