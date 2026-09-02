@@ -47,12 +47,14 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
 
         self.assertLess(target_reset, target_deploy)
         self.assertLess(rollback_reset, rollback_deploy)
-        self.assertIn("sh -c 'cat > /tmp/mypaas-Caddyfile.next'", deploy)
+        self.assertIn('mktemp /tmp/mypaas-Caddyfile.XXXXXX', deploy)
         self.assertIn('< "$ROOT_DIR/Caddyfile.prod"', deploy)
         self.assertIn(
-            'caddy reload --config /tmp/mypaas-Caddyfile.next --adapter caddyfile',
+            'caddy reload --config "$caddy_stage_path" --adapter caddyfile',
             deploy,
         )
+        self.assertIn('rm -f "$caddy_stage_path"', deploy)
+        self.assertNotIn('/tmp/mypaas-Caddyfile.next', deploy)
         self.assertNotIn(
             'caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile',
             deploy,
