@@ -36,6 +36,13 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn('verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"', updater)
         self.assertIn('previous runtime could not be verified after rollback', updater)
 
+    def test_updater_surfaces_final_verification_failure(self):
+        updater = self.text("scripts/update-vm.sh")
+        self.assertIn('verify_log="$(mktemp)"', updater)
+        self.assertIn('MYPAAS_IMAGE_TAG="$expected_image_tag" MYPAAS_BUILD_SHA="$expected_build_sha"', updater)
+        self.assertIn('Production verification failed after %s attempts. Last verifier output:', updater)
+        self.assertIn('cat "$verify_log" >&2', updater)
+
     def test_updater_skips_migration_helper_when_tree_is_unchanged(self):
         updater = self.text("scripts/update-vm.sh")
         self.assertIn(
