@@ -67,7 +67,7 @@
 			aria-label="MyPaaS projects"
 			on:click={chooseNavigation}
 		>
-			<BrandLogo compact />
+			<BrandLogo compact={!expanded} />
 		</a>
 	</div>
 

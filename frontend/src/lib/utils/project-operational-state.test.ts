@@ -135,6 +135,22 @@ describe('project operational state matrix', () => {
 		});
 	});
 
+	it('uses Running for a healthy container-backed project', () => {
+		const result = deriveProjectOperationalState({
+			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
+			latestDeployment: deployment('dep-live', 'running'),
+			runtimeEvidence: 'available'
+		});
+
+		expect(result).toMatchObject({
+			serving: 'live',
+			release: 'succeeded',
+			headline: 'Live',
+			statusLabel: 'Running',
+			statusTone: 'success'
+		});
+	});
+
 	it('uses Live and Redeploy language for an active static release', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', deployMode: 'static', activeDeploymentId: 'dep-static' }),
