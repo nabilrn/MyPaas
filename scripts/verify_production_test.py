@@ -4,6 +4,9 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 VERIFY_SCRIPT = ROOT_DIR / "scripts" / "verify-production.sh"
+CADDY_FILE = ROOT_DIR / "Caddyfile.prod"
+SVELTE_CONFIG = ROOT_DIR / "frontend" / "svelte.config.js"
+ROOT_LAYOUT = ROOT_DIR / "frontend" / "src" / "routes" / "+layout.svelte"
 
 
 class VerifyProductionTest(unittest.TestCase):
@@ -46,6 +49,22 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('exec -T api test -S "$CADDY_ADMIN_SOCKET"', content)
         self.assertIn('port mypaas-caddy-prod 2019/tcp', content)
         self.assertNotIn("http://127.0.0.1:2019", content)
+
+    def test_dashboard_release_assets_cannot_drift_from_html_shell(self) -> None:
+        verify = VERIFY_SCRIPT.read_text(encoding="utf-8")
+        caddy = CADDY_FILE.read_text(encoding="utf-8")
+        config = SVELTE_CONFIG.read_text(encoding="utf-8")
+        layout = ROOT_LAYOUT.read_text(encoding="utf-8")
+
+        self.assertIn('header >Cache-Control "no-store"', caddy)
+        self.assertIn("match header Content-Type text/html*", caddy)
+        self.assertIn("dashboard_asset_paths", verify)
+        self.assertIn("Dashboard HTML must be served with Cache-Control: no-store.", verify)
+        self.assertIn("Dashboard HTML references an unavailable release asset", verify)
+        self.assertIn("pollInterval: 60_000", config)
+        self.assertIn("beforeNavigate", layout)
+        self.assertIn("updated.current", layout)
+        self.assertIn("location.href = to.url.href", layout)
 
 
 if __name__ == "__main__":

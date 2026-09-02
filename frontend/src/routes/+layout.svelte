@@ -9,7 +9,8 @@
 	import Navbar from '$components/Navbar.svelte';
 	import Toast from '$components/Toast.svelte';
 	import { navigating, page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
+	import { updated } from '$app/state';
 	import { api } from '$api';
 	import { registerWebMCPTools } from '$lib/webmcp';
 	import { mainContentLoading } from '$stores/main-loading';
@@ -27,6 +28,12 @@
 		unregisterWebMCP();
 		unregisterWebMCP = null;
 	}
+
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url) {
+			location.href = to.url.href;
+		}
+	});
 
 	onMount(() => {
 		void bootstrap();

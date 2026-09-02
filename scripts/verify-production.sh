@@ -108,6 +108,16 @@ for host in hosts:
 ' "$domain"
 }
 
+dashboard_asset_paths() {
+  python3 -c '
+import re, sys
+
+assets = sorted(set(re.findall(r"(?:src|href)=\"(/_app/immutable/[^\"]+)\"", sys.stdin.read())))
+for asset in assets:
+    print(asset)
+'
+}
+
 echo "Checking production containers..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 
@@ -167,6 +177,28 @@ fi
 
 echo "Checking dashboard reachability..."
 curl -fsS http://127.0.0.1:3000/ >/dev/null
+
+echo "Checking dashboard release asset coherence..."
+dashboard_headers="$(mktemp)"
+dashboard_html="$(curl -fsS -D "$dashboard_headers" -H "Host: $PUBLIC_DOMAIN" -H "Accept: text/html" http://127.0.0.1/)"
+if ! grep -Eiq '^cache-control:.*no-store' "$dashboard_headers"; then
+  rm -f "$dashboard_headers"
+  echo "Dashboard HTML must be served with Cache-Control: no-store." >&2
+  exit 1
+fi
+rm -f "$dashboard_headers"
+dashboard_assets="$(printf '%s' "$dashboard_html" | dashboard_asset_paths)"
+if [[ -z "$dashboard_assets" ]]; then
+  echo "Dashboard HTML did not reference any immutable SvelteKit assets." >&2
+  exit 1
+fi
+while IFS= read -r asset; do
+  [[ -n "$asset" ]] || continue
+  if ! curl -fsS -H "Host: $PUBLIC_DOMAIN" "http://127.0.0.1${asset}" >/dev/null; then
+    echo "Dashboard HTML references an unavailable release asset: $asset" >&2
+    exit 1
+  fi
+done <<< "$dashboard_assets"
 
 echo "Checking running release identity..."
 actual_build_sha="$(container_env_value mypaas-api MYPAAS_BUILD_SHA)"
