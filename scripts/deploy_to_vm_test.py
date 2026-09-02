@@ -44,9 +44,17 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn('COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"', content)
         self.assertIn("COMPOSE_PARALLEL_LIMIT must be a positive integer.", content)
         self.assertIn("export COMPOSE_PARALLEL_LIMIT", content)
-        self.assertIn("for service in api dashboard caddy cloudflared; do", content)
+        self.assertIn("for service in caddy api dashboard cloudflared; do", content)
         self.assertIn('up -d --no-deps "$service"', content)
         self.assertIn('up -d --force-recreate --no-deps api', content)
+
+    def test_caddy_reloads_release_config_before_api_reconciliation(self) -> None:
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        compose = PROD_COMPOSE.read_text(encoding="utf-8")
+        caddy_section = compose.split("\n  caddy:\n", 1)[1].split("\n  cloudflared:\n", 1)[0]
+
+        self.assertIn('MYPAAS_BUILD_SHA: ${MYPAAS_BUILD_SHA:-unknown}', caddy_section)
+        self.assertIn("for service in caddy api dashboard cloudflared; do", script)
 
     def test_deploy_preflights_control_plane_port_ownership(self) -> None:
         content = DEPLOY_SCRIPT.read_text(encoding="utf-8")
