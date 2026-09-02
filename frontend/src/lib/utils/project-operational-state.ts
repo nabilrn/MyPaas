@@ -32,6 +32,25 @@ export interface ProjectOperationalState {
 	statusTone: ProjectOperationalTone;
 }
 
+export interface ProjectInventoryAction {
+	action: ProjectOperationalAction;
+	label: string;
+}
+
+export function deriveProjectInventoryAction(operationalState: ProjectOperationalState): ProjectInventoryAction {
+	if (
+		operationalState.serving === 'live' &&
+		operationalState.release === 'succeeded' &&
+		operationalState.attention === 'none'
+	) {
+		return { action: 'stop', label: 'Stop' };
+	}
+	return {
+		action: operationalState.primaryAction,
+		label: operationalState.primaryActionLabel
+	};
+}
+
 export function deriveProjectOperationalState({
 	project,
 	latestDeployment,
@@ -183,8 +202,8 @@ export function deriveProjectOperationalState({
 			desired,
 			headline: 'Live',
 			detail: isStatic ? 'The current static release is published and serving traffic.' : 'The active release is serving traffic.',
-			primaryAction: 'stop',
-			primaryActionLabel: 'Stop',
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Deploy again',
 			attention: 'none',
 			statusLabel: 'Live',
 			statusTone: 'success'
