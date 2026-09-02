@@ -11,6 +11,10 @@ type RuntimeInventory interface {
 	RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error)
 }
 
+type RuntimeMetadataInventory interface {
+	RuntimeContainerMetadata(ctx context.Context) ([]RuntimeContainer, error)
+}
+
 type Handler struct {
 	runtime RuntimeInventory
 }
@@ -20,7 +24,7 @@ func NewHandler(runtime RuntimeInventory) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	containers, err := h.runtime.RuntimeContainers(r.Context())
+	containers, err := h.listContainers(r)
 	if err != nil {
 		httpx.Error(w, http.StatusServiceUnavailable, "CONTAINER_INVENTORY_FAILED", err.Error(), nil)
 		return
@@ -28,6 +32,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, struct {
 		Containers []RuntimeContainer `json:"containers"`
 	}{Containers: containers})
+}
+
+func (h *Handler) listContainers(r *http.Request) ([]RuntimeContainer, error) {
+	if r.URL.Query().Get("telemetry") == "false" {
+		if metadata, ok := h.runtime.(RuntimeMetadataInventory); ok {
+			return metadata.RuntimeContainerMetadata(r.Context())
+		}
+	}
+	return h.runtime.RuntimeContainers(r.Context())
 }
 
 // Delete intentionally keeps the host-wide inventory read-only. Container

@@ -36,11 +36,9 @@ type dockerPSLine struct {
 
 const runtimeStatsFormat = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
-// RuntimeContainers returns every container visible to the Docker-compatible
-// runtime. A stats failure does not hide the inventory: metadata is still
-// returned and MetricsAvailable remains false only for rows whose stats could
-// not be collected.
-func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error) {
+// RuntimeContainerMetadata returns every container visible to the
+// Docker-compatible runtime without waiting for CPU/RAM telemetry.
+func (d *DockerCLI) RuntimeContainerMetadata(ctx context.Context) ([]RuntimeContainer, error) {
 	out, err := commandContext(ctx, "docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("docker ps inventory: %w: %s", err, strings.TrimSpace(string(out)))
@@ -62,7 +60,21 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 			Service:        dockerLabel(raw.Labels, "com.docker.compose.service"),
 		})
 	}
+	if containers == nil {
+		containers = []RuntimeContainer{}
+	}
+	return containers, nil
+}
 
+// RuntimeContainers returns every container visible to the Docker-compatible
+// runtime with best-effort CPU/RAM telemetry. A stats failure does not hide the
+// inventory: metadata is still returned and MetricsAvailable remains false only
+// for rows whose stats could not be collected.
+func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error) {
+	containers, err := d.RuntimeContainerMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
 	targets := runtimeStatsTargets(containers)
 	if len(targets) > 0 {
 		args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
@@ -85,9 +97,6 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 		}
 	}
 
-	if containers == nil {
-		containers = []RuntimeContainer{}
-	}
 	return containers, nil
 }
 
