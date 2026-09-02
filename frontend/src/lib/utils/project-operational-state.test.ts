@@ -135,7 +135,7 @@ describe('project operational state matrix', () => {
 		});
 	});
 
-	it('uses Running and Redeploy for a healthy container-backed project', () => {
+	it('uses Live and Redeploy for a healthy container-backed project', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
 			latestDeployment: deployment('dep-live', 'running'),
@@ -148,7 +148,7 @@ describe('project operational state matrix', () => {
 			headline: 'Live',
 			primaryAction: 'deploy',
 			primaryActionLabel: 'Redeploy',
-			statusLabel: 'Running',
+			statusLabel: 'Live',
 			statusTone: 'success'
 		});
 	});
