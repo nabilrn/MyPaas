@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, AlertTriangle, Globe, LoaderCircle, Radio, SlidersHorizontal } from '@lucide/svelte';
+	import { Activity, AlertTriangle, ChevronDown, Globe, LoaderCircle, Radio, SlidersHorizontal } from '@lucide/svelte';
 	import { api } from '$api';
 	import CloudflareChart from '$components/CloudflareChart.svelte';
 	import CloudflareSetup from '$components/CloudflareSetup.svelte';
-	import EmptyState from '$components/EmptyState.svelte';
 	import MultiServiceMetricChart from '$components/MultiServiceMetricChart.svelte';
-	import SectionPanel from '$components/SectionPanel.svelte';
 	import { projectStreamConnection, projectStreamMetrics } from '$stores/project-stream';
 	import { appendProjectMetricHistory, type ProjectMetricHistory } from '$lib/utils/project-metric-history';
 	import type { CloudflareAnalytics, Project } from '$types';
@@ -87,103 +85,134 @@
 
 <section aria-label="Runtime and edge observability">
 	{#if analyticsLoading && !analytics}
-		<SectionPanel title="Edge traffic" description="Requests, bandwidth, and errors over the last 24 hours." contentClass="p-0">
-			<div class="flex min-h-28 items-center gap-2 px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-				<LoaderCircle class="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-				Loading edge analytics…
+		<div class="workspace-section flex items-center justify-between gap-4 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900">
+			<div class="min-w-0">
+				<p class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</p>
+				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Requests, bandwidth, and errors over the last 24 hours.</p>
 			</div>
-		</SectionPanel>
+			<div class="flex shrink-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+				<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+				Loading analytics…
+			</div>
+		</div>
 	{:else if cloudflareConfigured === false}
-		<CloudflareSetup on:success={() => { cloudflareConfigured = true; void loadAnalytics(); }} />
+		<details class="group workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+			<summary class="app-focus flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 [&::-webkit-details-marker]:hidden">
+				<div class="min-w-0">
+					<div class="flex items-center gap-2">
+						<p class="text-sm font-semibold text-gray-950 dark:text-white">Cloudflare analytics</p>
+						<span class="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500 dark:bg-neutral-900 dark:text-gray-400">Not configured</span>
+					</div>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Optional edge traffic analytics. Runtime telemetry is unaffected.</p>
+				</div>
+				<div class="flex shrink-0 items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+					Configure
+					<ChevronDown class="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
+				</div>
+			</summary>
+			<div class="border-t border-gray-100/70 bg-gray-50/40 p-4 dark:border-neutral-900 dark:bg-neutral-950/40">
+				<CloudflareSetup on:success={() => { cloudflareConfigured = true; void loadAnalytics(); }} />
+			</div>
+		</details>
 	{:else if analytics}
-		<SectionPanel title="Edge traffic" description="Requests, bandwidth, and errors over the last 24 hours." contentClass="p-0">
-			<div class="grid grid-cols-3 divide-x divide-gray-100/70 border-b border-gray-100/70 dark:divide-neutral-900 dark:border-neutral-900">
-				<div class="p-4 sm:p-5">
-					<div class="flex items-center gap-2 text-[13px] font-medium text-gray-500 dark:text-gray-400"><Activity class="h-3.5 w-3.5" /> Requests</div>
-					<p class="metric-value mt-2 text-2xl font-semibold text-gray-950 dark:text-white">{analytics.total_requests.toLocaleString()}</p>
+		<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+			<div class="flex items-center justify-between gap-3 px-4 py-3">
+				<div>
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Last 24 hours</p>
 				</div>
-				<div class="p-4 sm:p-5">
-					<div class="flex items-center gap-2 text-[13px] font-medium text-gray-500 dark:text-gray-400"><Globe class="h-3.5 w-3.5" /> Bandwidth</div>
-					<p class="metric-value mt-2 text-2xl font-semibold text-gray-950 dark:text-white">{(analytics.bandwidth / (1024 * 1024)).toFixed(2)} <span class="text-sm font-medium text-gray-500">MB</span></p>
+				<span class="text-xs text-gray-400 dark:text-gray-500">Cloudflare</span>
+			</div>
+			<div class="grid border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 sm:grid-cols-3 lg:grid-cols-[minmax(8rem,0.55fr)_minmax(9rem,0.65fr)_minmax(8rem,0.55fr)_minmax(18rem,1.6fr)]">
+				<div class="bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><Activity class="h-3.5 w-3.5" /> Requests</div>
+					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.total_requests.toLocaleString()}</p>
 				</div>
-				<div class="p-4 sm:p-5">
-					<div class="flex items-center gap-2 text-[13px] font-medium text-gray-500 dark:text-gray-400"><AlertTriangle class="h-3.5 w-3.5 {analytics.errors > 0 ? 'text-amber-500' : ''}" /> Edge errors</div>
-					<p class="metric-value mt-2 text-2xl font-semibold text-gray-950 dark:text-white">{analytics.errors.toLocaleString()}</p>
+				<div class="bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><Globe class="h-3.5 w-3.5" /> Bandwidth</div>
+					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{(analytics.bandwidth / (1024 * 1024)).toFixed(2)} <span class="text-xs font-medium text-gray-500">MB</span></p>
+				</div>
+				<div class="bg-white px-4 py-3 dark:bg-neutral-950 lg:border-r lg:border-gray-100/70 lg:dark:border-neutral-900">
+					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><AlertTriangle class="h-3.5 w-3.5 {analytics.errors > 0 ? 'text-amber-500' : ''}" /> Edge errors</div>
+					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.errors.toLocaleString()}</p>
+				</div>
+				<div class="col-span-full flex min-h-20 items-center bg-white px-4 py-2 dark:bg-neutral-950 lg:col-span-1">
+					{#if analytics.timeseries?.length > 0}
+						<CloudflareChart data={analytics.timeseries} compact />
+					{:else}
+						<p class="text-xs text-gray-400 dark:text-gray-500">Waiting for enough traffic to draw a trend.</p>
+					{/if}
 				</div>
 			</div>
-			<div class="min-w-0 p-4 sm:p-5">
-				{#if analytics.timeseries?.length > 0}
-					<CloudflareChart data={analytics.timeseries} />
-				{:else}
-					<div class="flex h-48 items-center justify-center text-sm text-gray-500 dark:text-gray-400">Not enough edge traffic yet to draw a 24-hour chart.</div>
-				{/if}
-			</div>
-		</SectionPanel>
+		</section>
 	{:else if analyticsError}
-		<SectionPanel title="Edge traffic" description="Requests, bandwidth, and errors over the last 24 hours." contentClass="p-0">
-			<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Edge analytics unavailable. {analyticsError}</div>
-		</SectionPanel>
+		<div class="workspace-section flex items-center justify-between gap-4 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900">
+			<div>
+				<p class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</p>
+				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Edge analytics unavailable. {analyticsError}</p>
+			</div>
+		</div>
 	{/if}
 
 	{#if project.deployMode !== 'static'}
-		{#if metricItems.length > 0}
-			<SectionPanel title="Runtime" description="CPU and memory across running services." contentClass="p-0">
-				<svelte:fragment slot="actions">
-					<div class="flex items-center gap-2">
-						<div class="flex items-center gap-1.5 text-[13px] text-gray-500 dark:text-gray-400" aria-live="polite">
-							{#if $projectStreamConnection === 'connecting'}
-								<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Connecting…
-							{:else if $projectStreamConnection === 'reconnecting'}
-								<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Reconnecting{sampleLabel ? ` · ${sampleLabel}` : '…'}
-							{:else}
-								<Radio class="h-3.5 w-3.5" aria-hidden="true" /> Live{sampleLabel ? ` · ${sampleLabel}` : ''}
-							{/if}
-						</div>
-						{#if services.length > 1}
-							<details class="group relative">
-								<summary class="app-focus flex h-8 cursor-pointer list-none items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900">
-									<SlidersHorizontal class="h-3.5 w-3.5" aria-hidden="true" />
-									Services {visibleServices.length}/{services.length}
-								</summary>
-								<div class="overlay absolute right-0 z-30 mt-2 w-56 p-2">
-									<button type="button" class="app-focus mb-1 flex w-full items-center rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-900" on:click={showAllServices}>
-										All services
-									</button>
-									<div class="border-t border-gray-100 pt-1 dark:border-neutral-800">
-										{#each services as service}
-											<label class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-neutral-900">
-												<input type="checkbox" checked={!hiddenServices.has(service)} on:change={(event) => toggleService(service, (event.currentTarget as HTMLInputElement).checked)} />
-												<span class="truncate" title={service}>{service}</span>
-											</label>
-										{/each}
-									</div>
-								</div>
-							</details>
+		<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+			<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+				<div>
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">CPU and memory across running services.</p>
+				</div>
+				<div class="flex items-center gap-2">
+					<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+						{#if $projectStreamConnection === 'connecting'}
+							<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Connecting…
+						{:else if $projectStreamConnection === 'reconnecting'}
+							<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Reconnecting{sampleLabel ? ` · ${sampleLabel}` : '…'}
+						{:else}
+							<Radio class="h-3.5 w-3.5" aria-hidden="true" /> Live{sampleLabel ? ` · ${sampleLabel}` : ''}
 						{/if}
 					</div>
-				</svelte:fragment>
-
-				{#if visibleItems.length > 0}
-					<div class="grid gap-px bg-gray-100/70 dark:bg-neutral-900 xl:grid-cols-2">
-						<MultiServiceMetricChart label="CPU" series={cpuSeries} suffix="%" heightClass="h-64" />
-						<MultiServiceMetricChart label="Memory" series={memorySeries} suffix="%" maxValue={100} heightClass="h-64" />
-					</div>
-				{:else}
-					<div class="flex min-h-72 items-center justify-center bg-white text-sm text-gray-500 dark:bg-neutral-950 dark:text-gray-400">
-						All service lines are hidden. Use Services to show one or more.
-					</div>
-				{/if}
-			</SectionPanel>
-		{:else if $projectStreamConnection === 'connecting' || $projectStreamConnection === 'reconnecting'}
-			<SectionPanel title="Runtime" description="CPU and memory across running services." contentClass="p-0">
-				<div class="flex min-h-28 items-center gap-2 px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-					<LoaderCircle class="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {$projectStreamConnection === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
+					{#if services.length > 1}
+						<details class="group relative">
+							<summary class="app-focus flex h-8 cursor-pointer list-none items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900 [&::-webkit-details-marker]:hidden">
+								<SlidersHorizontal class="h-3.5 w-3.5" aria-hidden="true" />
+								Services {visibleServices.length}/{services.length}
+							</summary>
+							<div class="overlay absolute right-0 z-30 mt-2 w-56 p-2">
+								<button type="button" class="app-focus mb-1 flex w-full items-center rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-900" on:click={showAllServices}>
+									All services
+								</button>
+								<div class="border-t border-gray-100 pt-1 dark:border-neutral-800">
+									{#each services as service}
+										<label class="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-[13px] text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-neutral-900">
+											<input type="checkbox" checked={!hiddenServices.has(service)} on:change={(event) => toggleService(service, (event.currentTarget as HTMLInputElement).checked)} />
+											<span class="truncate" title={service}>{service}</span>
+										</label>
+									{/each}
+								</div>
+							</div>
+						</details>
+					{/if}
 				</div>
-			</SectionPanel>
-		{:else}
-			<SectionPanel title="Runtime" description="CPU and memory across running services." contentClass="p-0">
-				<EmptyState title="No active runtime metrics." description="CPU and memory appear while application services are running." compact />
-			</SectionPanel>
-		{/if}
+			</div>
+
+			{#if metricItems.length > 0 && visibleItems.length > 0}
+				<div class="grid gap-px border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 xl:grid-cols-2">
+					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" heightClass="h-16" compact />
+					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix="%" maxValue={100} heightClass="h-16" compact />
+				</div>
+			{:else if metricItems.length > 0}
+				<div class="border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+					All service lines are hidden. Use Services to show one or more.
+				</div>
+			{:else if $projectStreamConnection === 'connecting' || $projectStreamConnection === 'reconnecting'}
+				<div class="flex items-center gap-2 border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+					<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {$projectStreamConnection === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
+				</div>
+			{:else}
+				<div class="border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+					No active runtime metrics. CPU and memory appear while application services are running.
+				</div>
+			{/if}
+		</section>
 	{/if}
 </section>
