@@ -70,20 +70,18 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 		statsOut, statsErr := commandContext(ctx, "docker", args...).CombinedOutput()
 		if statsErr == nil {
 			mergeRuntimeStats(containers, statsOut)
-		} else {
-			// Some Docker-compatible runtimes are less reliable when stats is
-			// requested for multiple containers. Reuse the proven single-target
-			// Stats path so one runtime incompatibility does not blank every row.
-			for i := range containers {
-				if containers[i].State != "running" {
-					continue
-				}
-				metric, err := d.Stats(ctx, containers[i].Name)
-				if err != nil {
-					continue
-				}
-				applyRuntimeMetric(&containers[i], metric)
+		}
+
+		// Docker-compatible runtimes can return exit 0 for multi-target stats
+		// while omitting or formatting one or more rows differently. Always
+		// retry any still-unmatched running container through the existing
+		// single-target Stats path, which is also used by project metrics.
+		for _, index := range missingRuntimeStatsIndices(containers) {
+			metric, err := d.Stats(ctx, containers[index].Name)
+			if err != nil {
+				continue
 			}
+			applyRuntimeMetric(&containers[index], metric)
 		}
 	}
 
@@ -102,6 +100,17 @@ func runtimeStatsTargets(containers []RuntimeContainer) []string {
 		targets = append(targets, container.Name)
 	}
 	return targets
+}
+
+func missingRuntimeStatsIndices(containers []RuntimeContainer) []int {
+	indices := make([]int, 0)
+	for i := range containers {
+		if containers[i].State != "running" || strings.TrimSpace(containers[i].Name) == "" || containers[i].MetricsAvailable {
+			continue
+		}
+		indices = append(indices, i)
+	}
+	return indices
 }
 
 func mergeRuntimeStats(containers []RuntimeContainer, raw []byte) {
