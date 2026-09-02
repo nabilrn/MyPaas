@@ -269,22 +269,26 @@
 
 	:global(.project-settings-shell > div.grid > aside) {
 		border-color: var(--workspace-divider);
-		background: color-mix(in oklch, var(--app-surface-muted) 58%, var(--app-surface));
 	}
 
 	:global(.project-settings-shell > div.grid > main) {
-		padding: 1rem 1.125rem;
+		padding: 0.75rem 0.875rem;
 	}
 
-	:global(.project-settings-shell main > .max-w-6xl) {
-		width: 100%;
-		max-width: none;
-		margin-inline: 0;
+	:global(.project-settings-shell main > .max-w-6xl),
+	:global(.project-settings-shell main > .max-w-4xl) {
+		width: 100% !important;
+		max-width: none !important;
+		margin-inline: 0 !important;
+	}
+
+	:global(.project-settings-shell main > .space-y-4 > * + *) {
+		margin-top: 0.75rem;
 	}
 
 	@media (min-width: 1024px) {
 		:global(.project-settings-shell > div.grid) {
-			grid-template-columns: 13rem minmax(0, 1fr);
+			grid-template-columns: 12rem minmax(0, 1fr);
 		}
 
 		:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4:first-child) {
