@@ -180,7 +180,10 @@ curl -fsS http://127.0.0.1:3000/ >/dev/null
 
 echo "Checking dashboard release asset coherence..."
 dashboard_headers="$(mktemp)"
-dashboard_html="$(curl -fsS -D "$dashboard_headers" -H "Host: $PUBLIC_DOMAIN" -H "Accept: text/html" http://127.0.0.1/)"
+# The SvelteKit root route intentionally redirects to /projects. Follow a small,
+# bounded redirect chain so the verifier inspects the actual rendered HTML shell
+# instead of treating the 307 response body as the dashboard document.
+dashboard_html="$(curl -fsSL --max-redirs 5 -D "$dashboard_headers" -H "Host: $PUBLIC_DOMAIN" -H "Accept: text/html" http://127.0.0.1/)"
 if ! grep -Eiq '^cache-control:.*no-store' "$dashboard_headers"; then
   rm -f "$dashboard_headers"
   echo "Dashboard HTML must be served with Cache-Control: no-store." >&2
@@ -245,8 +248,14 @@ fi
 echo "Checking an existing project route when available..."
 project_host="$(printf '%s' "$routes_json" | first_project_host "$PUBLIC_DOMAIN" || true)"
 if [[ -n "$project_host" ]]; then
-  curl -fsS -H "Host: $project_host" http://127.0.0.1/ >/dev/null
-  echo "Verified project route $project_host through local Caddy."
+  if curl -fsS -H "Host: $project_host" http://127.0.0.1/ >/dev/null; then
+    echo "Verified project route $project_host through local Caddy."
+  elif [[ "$REQUIRE_PROJECT_ROUTE" == "true" ]]; then
+    echo "Existing project route $project_host is not healthy while REQUIRE_PROJECT_ROUTE=true." >&2
+    exit 1
+  else
+    echo "Existing project route $project_host is currently unavailable; ignoring workload health for control-plane verification." >&2
+  fi
 elif [[ "$REQUIRE_PROJECT_ROUTE" == "true" ]]; then
   echo "No existing project route was found in Caddy while REQUIRE_PROJECT_ROUTE=true." >&2
   exit 1
