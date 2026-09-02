@@ -222,7 +222,7 @@ func sqliteWhereClause(columns []Column, query RowQuery) (string, []any, error) 
 			pattern := likePattern(search)
 			parts := make([]string, 0, len(searchable))
 			for _, column := range searchable {
-				parts = append(parts, "CAST("+quoteSQLiteIdent(column.Name)+" AS TEXT) LIKE ? ESCAPE '\\\\'")
+				parts = append(parts, "CAST("+quoteSQLiteIdent(column.Name)+" AS TEXT) LIKE ? ESCAPE '\\'")
 				args = append(args, pattern)
 			}
 			clauses = append(clauses, "("+strings.Join(parts, " OR ")+")")
