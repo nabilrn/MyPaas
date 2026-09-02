@@ -344,6 +344,8 @@ if managed_container_running mypaas-caddy-prod; then
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
     caddy reload --config /tmp/mypaas-Caddyfile.next --adapter caddyfile \
     --address unix//run/mypaas/caddy-admin.sock
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    rm -f /tmp/mypaas-Caddyfile.next
 else
   echo "Starting caddy..."
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps caddy
