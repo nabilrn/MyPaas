@@ -46,101 +46,192 @@ export function deriveProjectOperationalState({
 
 	if (desired === 'stopped') {
 		return state({
-			serving: 'offline', release, desired, headline: 'Stopped',
+			serving: 'offline',
+			release,
+			desired,
+			headline: 'Stopped',
 			detail: 'Traffic is intentionally stopped for this project.',
-			primaryAction: 'start', primaryActionLabel: 'Start', attention: 'none', statusLabel: 'Stopped', statusTone: 'neutral'
+			primaryAction: 'start',
+			primaryActionLabel: 'Start',
+			attention: 'none',
+			statusLabel: 'Stopped',
+			statusTone: 'neutral'
 		});
 	}
 
 	if (project.status === 'crashed') {
 		return state({
-			serving: 'offline', release, desired, headline: 'Crashed',
+			serving: 'offline',
+			release,
+			desired,
+			headline: 'Crashed',
 			detail: 'The runtime exited unexpectedly and is not serving traffic.',
-			primaryAction: 'view_logs', primaryActionLabel: 'View logs', attention: 'danger', statusLabel: 'Crashed', statusTone: 'danger'
+			primaryAction: 'view_logs',
+			primaryActionLabel: 'View logs',
+			attention: 'danger',
+			statusLabel: 'Crashed',
+			statusTone: 'danger'
 		});
 	}
 
 	if (pipelineActive) {
 		if (serving === 'live') {
 			return state({
-				serving, release, desired, headline: 'Deploying update',
+				serving,
+				release,
+				desired,
+				headline: 'Deploying update',
 				detail: 'A new deployment is in progress while the current release remains live.',
-				primaryAction: 'view_deployment', primaryActionLabel: 'View deployment', attention: 'info', statusLabel: 'Deploying · live', statusTone: 'warning'
+				primaryAction: 'view_deployment',
+				primaryActionLabel: 'View deployment',
+				attention: 'info',
+				statusLabel: 'Deploying · live',
+				statusTone: 'warning'
 			});
 		}
 		if (serving === 'unknown') {
 			return state({
-				serving, release, desired, headline: 'Deploying; serving status unknown',
+				serving,
+				release,
+				desired,
+				headline: 'Deploying; serving status unknown',
 				detail: 'The deployment is in progress, but current runtime evidence is unavailable.',
-				primaryAction: 'view_deployment', primaryActionLabel: 'View deployment', attention: 'warning', statusLabel: 'Deploying · unknown', statusTone: 'warning'
+				primaryAction: 'view_deployment',
+				primaryActionLabel: 'View deployment',
+				attention: 'warning',
+				statusLabel: 'Deploying · unknown',
+				statusTone: 'warning'
 			});
 		}
 		return state({
-			serving, release, desired, headline: 'Deploying',
+			serving,
+			release,
+			desired,
+			headline: 'Deploying',
 			detail: 'The deployment pipeline is active and no release is serving traffic yet.',
-			primaryAction: 'view_deployment', primaryActionLabel: 'View deployment', attention: 'info', statusLabel: 'Deploying', statusTone: 'warning'
+			primaryAction: 'view_deployment',
+			primaryActionLabel: 'View deployment',
+			attention: 'info',
+			statusLabel: 'Deploying',
+			statusTone: 'warning'
 		});
 	}
 
 	if (latestFailed) {
 		if (serving === 'live') {
 			return state({
-				serving, release, desired, headline: 'Live; latest deploy failed',
+				serving,
+				release,
+				desired,
+				headline: 'Live; latest deploy failed',
 				detail: 'The previous release is still serving traffic. Review the failed attempt before retrying.',
-				primaryAction: 'view_deployment', primaryActionLabel: 'Review failure', attention: 'warning', statusLabel: 'Live · deploy failed', statusTone: 'warning'
+				primaryAction: 'view_deployment',
+				primaryActionLabel: 'Review failure',
+				attention: 'warning',
+				statusLabel: 'Live · deploy failed',
+				statusTone: 'warning'
 			});
 		}
 		if (serving === 'unknown' && hasActiveRelease) {
 			return state({
-				serving, release, desired, headline: 'Latest deploy failed; serving status unknown',
+				serving,
+				release,
+				desired,
+				headline: 'Latest deploy failed; serving status unknown',
 				detail: 'A previous release is selected, but current runtime evidence is unavailable.',
-				primaryAction: 'view_deployment', primaryActionLabel: 'Review failure', attention: 'warning', statusLabel: 'Unknown · deploy failed', statusTone: 'warning'
+				primaryAction: 'view_deployment',
+				primaryActionLabel: 'Review failure',
+				attention: 'warning',
+				statusLabel: 'Unknown · deploy failed',
+				statusTone: 'warning'
 			});
 		}
 		return state({
-			serving: 'offline', release, desired, headline: 'Deployment failed',
+			serving: 'offline',
+			release,
+			desired,
+			headline: 'Deployment failed',
 			detail: 'The latest deployment failed and no release is serving traffic.',
-			primaryAction: 'retry', primaryActionLabel: 'Retry', attention: 'danger', statusLabel: 'Deploy failed', statusTone: 'danger'
+			primaryAction: 'retry',
+			primaryActionLabel: 'Retry',
+			attention: 'danger',
+			statusLabel: 'Deploy failed',
+			statusTone: 'danger'
 		});
 	}
 
 	if (serving === 'unknown') {
 		return state({
-			serving, release, desired, headline: 'Status unknown',
+			serving,
+			release,
+			desired,
+			headline: 'Status unknown',
 			detail: 'Current runtime evidence is unavailable, so serving status cannot be confirmed.',
-			primaryAction: 'view_logs', primaryActionLabel: 'View logs', attention: 'warning', statusLabel: 'Unknown', statusTone: 'neutral'
+			primaryAction: 'view_logs',
+			primaryActionLabel: 'View logs',
+			attention: 'warning',
+			statusLabel: 'Unknown',
+			statusTone: 'neutral'
 		});
 	}
 
 	if (serving === 'live') {
 		const isStatic = project.deployMode === 'static';
 		return state({
-			serving, release, desired, headline: 'Live',
+			serving,
+			release,
+			desired,
+			headline: 'Live',
 			detail: isStatic ? 'The current static release is published and serving traffic.' : 'The active release is serving traffic.',
-			primaryAction: 'deploy', primaryActionLabel: 'Redeploy', attention: 'none', statusLabel: 'Live', statusTone: 'success'
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Redeploy',
+			attention: 'none',
+			statusLabel: 'Live',
+			statusTone: 'success'
 		});
 	}
 
 	if (latestDeployment === null && !hasActiveRelease) {
 		return state({
-			serving: 'offline', release: 'not_deployed', desired, headline: 'Not deployed',
+			serving: 'offline',
+			release: 'not_deployed',
+			desired,
+			headline: 'Not deployed',
 			detail: 'Source and configuration are saved, but no release has been published yet.',
-			primaryAction: 'deploy', primaryActionLabel: 'Deploy', attention: 'none', statusLabel: 'Not deployed', statusTone: 'info'
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Deploy',
+			attention: 'none',
+			statusLabel: 'Not deployed',
+			statusTone: 'info'
 		});
 	}
 
 	if (latestDeployment === undefined && project.status === 'pending' && !hasActiveRelease) {
 		return state({
-			serving: 'offline', release, desired, headline: 'Pending',
+			serving: 'offline',
+			release,
+			desired,
+			headline: 'Pending',
 			detail: 'Deployment history is not available yet.',
-			primaryAction: 'deploy', primaryActionLabel: 'Deploy', attention: 'none', statusLabel: 'Pending', statusTone: 'info'
+			primaryAction: 'deploy',
+			primaryActionLabel: 'Deploy',
+			attention: 'none',
+			statusLabel: 'Pending',
+			statusTone: 'info'
 		});
 	}
 
 	return state({
-		serving: hasActiveRelease ? 'degraded' : 'unknown', release, desired, headline: 'Status unknown',
+		serving: hasActiveRelease ? 'degraded' : 'unknown',
+		release,
+		desired,
+		headline: 'Status unknown',
 		detail: 'Project state and release evidence do not establish a reliable serving state.',
-		primaryAction: hasActiveRelease ? 'view_deployment' : 'deploy', primaryActionLabel: hasActiveRelease ? 'View deployment' : 'Deploy', attention: 'warning', statusLabel: 'Unknown', statusTone: 'neutral'
+		primaryAction: hasActiveRelease ? 'view_deployment' : 'deploy',
+		primaryActionLabel: hasActiveRelease ? 'View deployment' : 'Deploy',
+		attention: 'warning',
+		statusLabel: 'Unknown',
+		statusTone: 'neutral'
 	});
 }
 
@@ -154,7 +245,9 @@ function deriveReleaseState(project: OperationalProject, latestDeployment: Opera
 	if (latestDeployment.status === 'failed') return 'failed';
 	return latestDeployment.status === 'running' || isCurrentDeployment(latestDeployment.id, project.activeDeploymentId)
 		? 'succeeded'
-		: project.activeDeploymentId ? 'succeeded' : 'not_deployed';
+		: project.activeDeploymentId
+			? 'succeeded'
+			: 'not_deployed';
 }
 
 function deriveServingState(project: OperationalProject, runtimeEvidence: RuntimeEvidence | undefined): ServingState {
