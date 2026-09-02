@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Network, Plus, Settings, Sun, Terminal, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Network, Settings, Sun, Terminal, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
-	import ActionLink from './ActionLink.svelte';
 	import IconButton from './IconButton.svelte';
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
@@ -147,13 +146,6 @@
 		</div>
 
 		<div class="flex shrink-0 items-center gap-1">
-			{#if pathname === '/projects'}
-				<ActionLink href="/projects/new" variant="primary" size="xs" className="mr-1 hidden sm:inline-flex">
-					<Plus slot="icon" class="h-3.5 w-3.5" />
-					New project
-				</ActionLink>
-			{/if}
-
 			<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
 				<IconButton label="Notifications" variant="ghost" on:click={toggleNotifications}>
 					<Bell class="h-[18px] w-[18px]" aria-hidden="true" />
