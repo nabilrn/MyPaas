@@ -34,12 +34,31 @@ http://{$PUBLIC_DOMAIN} {
 		}
 	}
 
-	# Reverse proxy to SvelteKit dashboard. HTML must always be revalidated by
-	# the browser/CDN so it cannot outlive the hashed assets from its build.
-	handle {
-		header >Cache-Control "no-store" {
-			match header Content-Type text/html*
+	# Content-hashed SvelteKit assets may be cached for a year when they exist.
+	# A missing immutable asset must never inherit that policy: it represents a
+	# stale release reference and has to remain retryable after a deploy/rollback.
+	handle /_app/immutable/* {
+		reverse_proxy dashboard:3000 {
+			header_up -User-Agent
+			header_down Cache-Control "public, max-age=31536000, immutable"
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+			@asset_error status 4xx 5xx
+			handle_response @asset_error {
+				copy_response_headers {
+					exclude Cache-Control
+				}
+				header Cache-Control "no-store"
+				copy_response
+			}
 		}
+	}
+
+	# Every non-immutable dashboard response is release metadata from the current
+	# server build (HTML, redirects, SvelteKit data). Never let it outlive the
+	# hashed assets it references.
+	handle {
+		header >Cache-Control "no-store"
 		reverse_proxy dashboard:3000 {
 			header_up -User-Agent
 			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
