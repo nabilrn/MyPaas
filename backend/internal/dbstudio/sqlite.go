@@ -18,7 +18,7 @@ func openSQLiteDatabase(ctx context.Context, databasePath string) (*sql.DB, erro
 	if databasePath == "" {
 		return nil, fmt.Errorf("%w: SQLite database path is required", errs.ErrValidation)
 	}
-	conn, err := sql.Open("sqlite", "file:"+databasePath+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", "file:"+databasePath+"?mode=rw&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -357,42 +357,57 @@ ORDER BY seq`, table)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	out := make([]Index, 0)
 	for rows.Next() {
-		var name, origin string
+		var item Index
 		var unique int
-		if err := rows.Scan(&name, &unique, &origin); err != nil {
+		var origin string
+		if err := rows.Scan(&item.Name, &unique, &origin); err != nil {
+			_ = rows.Close()
 			return nil, err
 		}
-		columnRows, err := conn.QueryContext(ctx, `SELECT name FROM pragma_index_info(?) ORDER BY seqno`, name)
+		item.Unique = unique != 0
+		item.Primary = origin == "pk"
+		item.Method = "btree"
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	for index := range out {
+		columnRows, err := conn.QueryContext(ctx, `SELECT name FROM pragma_index_info(?) ORDER BY seqno`, out[index].Name)
 		if err != nil {
 			return nil, err
 		}
 		columns := make([]string, 0)
 		for columnRows.Next() {
-			var column string
+			var column sql.NullString
 			if err := columnRows.Scan(&column); err != nil {
 				_ = columnRows.Close()
 				return nil, err
 			}
-			columns = append(columns, column)
+			if column.Valid && strings.TrimSpace(column.String) != "" {
+				columns = append(columns, column.String)
+			}
 		}
 		if err := columnRows.Err(); err != nil {
 			_ = columnRows.Close()
 			return nil, err
 		}
 		_ = columnRows.Close()
+		out[index].Columns = columns
 
 		var definition sql.NullString
-		_ = conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = ?`, name).Scan(&definition)
-		out = append(out, Index{
-			Name: name, Columns: columns, Unique: unique != 0, Primary: origin == "pk",
-			Method: "btree", Definition: definition.String,
-		})
+		_ = conn.QueryRowContext(ctx, `SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = ?`, out[index].Name).Scan(&definition)
+		out[index].Definition = definition.String
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func sqliteConstraints(columns []Column, foreignKeys []ForeignKey, indexes []Index) []Constraint {
