@@ -15,6 +15,7 @@ describe('appendProjectMetricHistory', () => {
 		let history = appendProjectMetricHistory({}, [metric('app', 2, 10)], 3);
 		history = appendProjectMetricHistory(history, [metric('app', 2, 10)], 3);
 		expect(history.app.cpu).toEqual([2, 2]);
+		expect(history.app.memoryMb).toEqual([10, 10]);
 		expect(history.app.memoryPercent).toEqual([10, 10]);
 	});
 
@@ -23,6 +24,8 @@ describe('appendProjectMetricHistory', () => {
 		history = appendProjectMetricHistory(history, [metric('api', 2, 20)], 2);
 		history = appendProjectMetricHistory(history, [metric('api', 3, 30)], 2);
 		expect(history.api.cpu).toEqual([2, 3]);
+		expect(history.api.memoryMb).toEqual([20, 30]);
 		expect(history.worker.cpu).toEqual([4]);
+		expect(history.worker.memoryMb).toEqual([40]);
 	});
 });

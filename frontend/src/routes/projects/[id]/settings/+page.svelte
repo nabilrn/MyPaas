@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Check, CircleAlert, Copy, Eye, EyeOff, RefreshCw, RotateCcw, Trash2, X } from '@lucide/svelte';
+	import { Box, Check, CircleAlert, Copy, Eye, EyeOff, GitBranch, RefreshCw, RotateCcw, Settings2, Trash2, Webhook, X } from '@lucide/svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -14,6 +14,8 @@
 	import type { ComposeResourceSummary, Project, RepoTreeEntry, ResourceProfile } from '$types';
 	import { projectURL, webhookURL } from '$lib/utils/urls';
 
+	type SettingsSection = 'general' | 'source' | 'resources' | 'webhook' | 'danger';
+
 	let project: Project | null = null;
 	let composeResources: ComposeResourceSummary | null = null;
 	let loading = true;
@@ -26,6 +28,7 @@
 	let inspectingRepo = false;
 	let repoInspectRequest = 0;
 	let lastRepoInspectKey = '';
+	let activeSection: SettingsSection = 'general';
 
 	let name = '';
 	let branch = '';
@@ -376,171 +379,270 @@
 		<ErrorState title="Could not load settings" message={loadError || 'Project not found'} on:retry={() => void load()} />
 	</div>
 {:else if project}
-	<div class="space-y-4">
-		<ProjectEffectiveConfiguration {project} publicUrl={effectivePublicURL} />
-
-		<div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-			<div class="space-y-4">
-				<SectionPanel title="General" description="Saved source and runtime configuration. Redeploy after saving to apply runtime-affecting changes to the running application.">
-					<div class="grid gap-4 sm:grid-cols-2">
-						<div class="sm:col-span-2">
-							<label class="field-label" for="pname">Project name</label>
-							<input id="pname" type="text" value={name} class="field w-full bg-gray-50 text-gray-500 dark:bg-neutral-900 dark:text-gray-400" readonly />
-							<p class="field-hint">Project identity and subdomain are fixed after creation.</p>
-						</div>
-
-						{#if project.sourceType === 'registry'}
-							<div class="sm:col-span-2">
-								<label class="field-label" for="imageRef">Container image</label>
-								<input id="imageRef" type="text" bind:value={imageRef} placeholder="ghcr.io/example/app:latest" class="field w-full font-mono" />
-								<p class="field-hint">Saved immediately, then pulled on the next deployment. Saving alone does not replace the current runtime.</p>
-							</div>
-						{:else}
-							<div>
-								<label class="field-label" for="pbranch">Deploy branch</label>
-								<input id="pbranch" type="text" value={branch} on:input={handleBranchInput} class="field w-full font-mono" />
-								<p class="field-hint">Used by the next deployment after repository validation.</p>
-							</div>
-							<div>
-								<label class="field-label" for="baseDirectory">Base directory</label>
-								<input id="baseDirectory" type="text" value={baseDirectory} on:input={handleBaseDirectoryInput} placeholder="apps/api" class="field w-full font-mono" />
-								<p class="field-hint">Leave blank for repository root. Use a repository-relative path such as <span class="font-mono">apps/api</span>.</p>
-							</div>
-							<div class="sm:col-span-2 border-t border-gray-100 pt-3 dark:border-neutral-800">
-								<div class="flex flex-wrap items-center justify-between gap-3">
-									<p class="inline-flex min-w-0 items-center gap-2 text-sm {repoInspectError ? 'text-red-700 dark:text-red-300' : repoInspectMessage && !repoValidationStale ? 'text-gray-600 dark:text-gray-300' : 'text-amber-700 dark:text-amber-200'}">
-										<span class="status-dot {repoInspectError ? 'bg-red-500' : inspectingRepo ? 'animate-pulse bg-gray-400' : repoInspectMessage && !repoValidationStale ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
-										{inspectingRepo ? 'Validating repository source…' : repoInspectError || (repoInspectMessage && !repoValidationStale ? repoInspectMessage : 'Validate the repository before saving source changes.')}
-									</p>
-									<ActionButton size="xs" variant="secondary" on:click={() => void inspectRepository(true, true)} loading={inspectingRepo} loadingLabel="Validating">
-										<RefreshCw slot="icon" class="h-3.5 w-3.5" />
-										Validate source
-									</ActionButton>
-								</div>
-								{#if repoDirectorySuggestions.length > 0}
-									<div class="mt-2 flex flex-wrap gap-1.5">
-										{#each repoDirectorySuggestions as entry}
-											<button type="button" class="app-focus rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:text-white" on:click={() => { baseDirectory = entry.path; clearRepositoryValidation(); }}>
-												{entry.path}
-											</button>
-										{/each}
-									</div>
-								{/if}
-								{#if repoTreeTruncated}<p class="field-hint">Repository tree is truncated; enter deeper paths manually if needed.</p>{/if}
-							</div>
-						{/if}
-
-						{#if project.deployMode !== 'static'}
-							<div>
-								<label class="field-label" for="appPort">App port</label>
-								<input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" />
-								<p class="field-hint">Container port used when the next runtime is created. Saving does not reconfigure the current container.</p>
-							</div>
-						{/if}
-						{#if project.deployMode === 'compose'}
-							<div>
-								<label class="field-label" for="mainService">Main service</label>
-								<input id="mainService" type="text" bind:value={mainService} placeholder="app" class="field w-full font-mono" />
-								<p class="field-hint">Public Compose service selected on the next deployment.</p>
-							</div>
-						{/if}
-						{#if project.sourceType === 'git' && (project.deployMode === 'compose' || project.deployMode === 'dockerfile')}
-							<div>
-								<label class="field-label" for="staticFrontendPath">Static frontend path</label>
-								<input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} placeholder="frontend" class="field w-full font-mono" />
-								<p class="field-hint">Build and serve this directory statically alongside the backend on the next deploy.</p>
-							</div>
-						{/if}
+	<div class="grid min-h-[calc(100vh-11rem)] border-t border-gray-100 dark:border-neutral-900 lg:grid-cols-[15rem_minmax(0,1fr)]">
+		<aside class="border-b border-gray-100 bg-gray-50/35 px-3 py-4 dark:border-neutral-900 dark:bg-neutral-950/40 lg:border-b-0 lg:border-r">
+			<nav aria-label="Project settings" class="space-y-5 lg:sticky lg:top-4">
+				<div>
+					<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Configuration</p>
+					<div class="mt-2 space-y-1">
+						<button type="button" on:click={() => (activeSection = 'general')} aria-current={activeSection === 'general' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'general' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
+							<Settings2 class="h-4 w-4" aria-hidden="true" /> General
+						</button>
+						<button type="button" on:click={() => (activeSection = 'source')} aria-current={activeSection === 'source' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'source' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
+							<GitBranch class="h-4 w-4" aria-hidden="true" /> Source
+						</button>
+						<button type="button" on:click={() => (activeSection = 'resources')} aria-current={activeSection === 'resources' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'resources' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
+							<Box class="h-4 w-4" aria-hidden="true" /> Resources
+						</button>
 					</div>
-				</SectionPanel>
+				</div>
 
-				{#if project.deployMode === 'compose'}
-					<SectionPanel title="Compose configuration" description="Compose overrides are persisted now and applied when the next deployment is created.">
+				{#if project.sourceType === 'git'}
+					<div class="border-t border-gray-100 pt-4 dark:border-neutral-900">
+						<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Integrations</p>
+						<div class="mt-2">
+							<button type="button" on:click={() => (activeSection = 'webhook')} aria-current={activeSection === 'webhook' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'webhook' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
+								<Webhook class="h-4 w-4" aria-hidden="true" /> Webhook
+							</button>
+						</div>
+					</div>
+				{/if}
+
+				<div class="border-t border-gray-100 pt-4 dark:border-neutral-900">
+					<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Advanced</p>
+					<div class="mt-2">
+						<button type="button" on:click={() => (activeSection = 'danger')} aria-current={activeSection === 'danger' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'danger' ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' : 'text-gray-600 hover:bg-red-50 hover:text-red-700 dark:text-gray-400 dark:hover:bg-red-950/20 dark:hover:text-red-300'}">
+							<CircleAlert class="h-4 w-4" aria-hidden="true" /> Danger zone
+						</button>
+					</div>
+				</div>
+			</nav>
+		</aside>
+
+		<main class="min-w-0 px-4 py-5 sm:px-5 lg:px-6">
+			{#if activeSection === 'general'}
+				<div class="mx-auto max-w-6xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">General settings</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Project identity and effective control-plane configuration.</p>
+					</div>
+
+					<ProjectEffectiveConfiguration {project} publicUrl={effectivePublicURL} />
+
+					<SectionPanel title="Project" description="Project identity is fixed after creation.">
 						<div class="grid gap-4 sm:grid-cols-2">
 							<div>
-								<label class="field-label" for="composeFilePath">Compose file path</label>
-								<input id="composeFilePath" type="text" bind:value={composeFilePath} placeholder="auto-detect" class="field w-full font-mono" />
-								<p class="field-hint">Repo-relative, for example <span class="font-mono">infra/docker-compose.yml</span>.</p>
+								<label class="field-label" for="pname">Project name</label>
+								<input id="pname" type="text" value={name} class="field w-full bg-gray-50 text-gray-500 dark:bg-neutral-900 dark:text-gray-400" readonly />
 							</div>
 							<div>
-								<label class="field-label" for="composeWorkdir">Working directory override</label>
-								<input id="composeWorkdir" type="text" bind:value={composeWorkdir} placeholder="auto" class="field w-full font-mono" />
-								<p class="field-hint">Use only when build contexts or env files resolve from another directory.</p>
-							</div>
-							<div>
-								<label class="field-label" for="composeOverridePaths">Override files</label>
-								<input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} placeholder="docker-compose.prod.yml" class="field w-full font-mono" />
-								<p class="field-hint">Comma-separated repo-relative files applied before the generated override.</p>
-							</div>
-							<div>
-								<label class="field-label" for="composeProfiles">Profiles</label>
-								<input id="composeProfiles" type="text" bind:value={composeProfiles} placeholder="app, worker" class="field w-full font-mono" />
-								<p class="field-hint">Comma-separated <span class="font-mono">COMPOSE_PROFILES</span> values.</p>
+								<label class="field-label" for="publicUrl">Public route</label>
+								<input id="publicUrl" type="text" value={effectivePublicURL} class="field w-full bg-gray-50 font-mono text-gray-500 dark:bg-neutral-900 dark:text-gray-400" readonly />
 							</div>
 						</div>
 					</SectionPanel>
-				{/if}
-
-				<SectionPanel title="Resource limits" description="Limits stored for the next runtime creation. Saving alone does not recreate the currently running runtime." contentClass="p-0">
-					<div class="grid gap-4 p-4 sm:grid-cols-3">
-						<div>
-							<label class="field-label" for="profile">Profile</label>
-							<select id="profile" bind:value={resourceProfile} on:change={() => applyResourceProfile(resourceProfile)} class="field w-full">
-								{#each resourceProfiles as profile}<option value={profile.id}>{profile.title} ({profile.memoryMb} MB / {profile.cpuLimit} CPU)</option>{/each}
-							</select>
-						</div>
-						<div>
-							<label class="field-label" for="mem">Memory (MB)</label>
-							<input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" />
-						</div>
-						<div>
-							<label class="field-label" for="cpu">CPU cores</label>
-							<input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" />
-						</div>
+				</div>
+			{:else if activeSection === 'source'}
+				<div class="mx-auto max-w-6xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Source</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Repository, deployment target, and runtime-facing source configuration.</p>
 					</div>
 
-					<div class="border-t border-gray-100 p-4 dark:border-neutral-800">
-						<label class="field-label" for="service_resources">Other service limits (JSON)</label>
-						<textarea id="service_resources" bind:value={serviceResourcesStr} rows="4" class="field w-full font-mono text-sm" placeholder='&#123;&#10;  "db": &#123;&#10;    "memoryLimitMb": 512,&#10;    "cpuLimit": 0.5&#10;  &#125;&#10;&#125;'></textarea>
-						<p class="field-hint">Set memory and CPU limits for non-main services. Keys are Compose service names.</p>
-						<details class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-							<summary class="app-focus cursor-pointer select-none font-medium text-gray-700 dark:text-gray-300">Example JSON</summary>
-							<pre class="code-surface mt-2">&#123;
+					<SectionPanel title={project.sourceType === 'registry' ? 'Registry source' : 'Repository source'} description="Saved changes apply on the next deployment.">
+						<div class="grid gap-4 sm:grid-cols-2">
+							{#if project.sourceType === 'registry'}
+								<div class="sm:col-span-2">
+									<label class="field-label" for="imageRef">Container image</label>
+									<input id="imageRef" type="text" bind:value={imageRef} placeholder="ghcr.io/example/app:latest" class="field w-full font-mono" />
+									<p class="field-hint">Pulled on the next deployment. Saving alone does not replace the current runtime.</p>
+								</div>
+							{:else}
+								<div>
+									<label class="field-label" for="pbranch">Deploy branch</label>
+									<input id="pbranch" type="text" value={branch} on:input={handleBranchInput} class="field w-full font-mono" />
+									<p class="field-hint">Used by the next deployment after repository validation.</p>
+								</div>
+								<div>
+									<label class="field-label" for="baseDirectory">Base directory</label>
+									<input id="baseDirectory" type="text" value={baseDirectory} on:input={handleBaseDirectoryInput} placeholder="apps/api" class="field w-full font-mono" />
+									<p class="field-hint">Leave blank for repository root.</p>
+								</div>
+								<div class="sm:col-span-2 border-t border-gray-100 pt-3 dark:border-neutral-800">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<p class="inline-flex min-w-0 items-center gap-2 text-sm {repoInspectError ? 'text-red-700 dark:text-red-300' : repoInspectMessage && !repoValidationStale ? 'text-gray-600 dark:text-gray-300' : 'text-amber-700 dark:text-amber-200'}">
+											<span class="status-dot {repoInspectError ? 'bg-red-500' : inspectingRepo ? 'animate-pulse bg-gray-400' : repoInspectMessage && !repoValidationStale ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+											{inspectingRepo ? 'Validating repository source…' : repoInspectError || (repoInspectMessage && !repoValidationStale ? repoInspectMessage : 'Validate the repository before saving source changes.')}
+										</p>
+										<ActionButton size="xs" variant="secondary" on:click={() => void inspectRepository(true, true)} loading={inspectingRepo} loadingLabel="Validating">
+											<RefreshCw slot="icon" class="h-3.5 w-3.5" /> Validate source
+										</ActionButton>
+									</div>
+									{#if repoDirectorySuggestions.length > 0}
+										<div class="mt-2 flex flex-wrap gap-1.5">
+											{#each repoDirectorySuggestions as entry}
+												<button type="button" class="app-focus rounded-md border border-gray-200 bg-white px-2 py-1 font-mono text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:text-white" on:click={() => { baseDirectory = entry.path; clearRepositoryValidation(); }}>{entry.path}</button>
+											{/each}
+										</div>
+									{/if}
+									{#if repoTreeTruncated}<p class="field-hint">Repository tree is truncated; enter deeper paths manually if needed.</p>{/if}
+								</div>
+							{/if}
+
+							{#if project.deployMode !== 'static'}
+								<div>
+									<label class="field-label" for="appPort">App port</label>
+									<input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" />
+									<p class="field-hint">Container port used when the next runtime is created.</p>
+								</div>
+							{/if}
+							{#if project.deployMode === 'compose'}
+								<div>
+									<label class="field-label" for="mainService">Main service</label>
+									<input id="mainService" type="text" bind:value={mainService} placeholder="app" class="field w-full font-mono" />
+									<p class="field-hint">Public Compose service selected on the next deployment.</p>
+								</div>
+							{/if}
+							{#if project.sourceType === 'git' && (project.deployMode === 'compose' || project.deployMode === 'dockerfile')}
+								<div>
+									<label class="field-label" for="staticFrontendPath">Static frontend path</label>
+									<input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} placeholder="frontend" class="field w-full font-mono" />
+									<p class="field-hint">Build and serve this directory statically alongside the backend on the next deploy.</p>
+								</div>
+							{/if}
+						</div>
+					</SectionPanel>
+
+					{#if project.deployMode === 'compose'}
+						<SectionPanel title="Compose configuration" description="Compose overrides are persisted now and applied when the next deployment is created.">
+							<div class="grid gap-4 sm:grid-cols-2">
+								<div>
+									<label class="field-label" for="composeFilePath">Compose file path</label>
+									<input id="composeFilePath" type="text" bind:value={composeFilePath} placeholder="auto-detect" class="field w-full font-mono" />
+									<p class="field-hint">Repo-relative, for example <span class="font-mono">infra/docker-compose.yml</span>.</p>
+								</div>
+								<div>
+									<label class="field-label" for="composeWorkdir">Working directory override</label>
+									<input id="composeWorkdir" type="text" bind:value={composeWorkdir} placeholder="auto" class="field w-full font-mono" />
+									<p class="field-hint">Use only when build contexts or env files resolve from another directory.</p>
+								</div>
+								<div>
+									<label class="field-label" for="composeOverridePaths">Override files</label>
+									<input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} placeholder="docker-compose.prod.yml" class="field w-full font-mono" />
+									<p class="field-hint">Comma-separated repo-relative files applied before the generated override.</p>
+								</div>
+								<div>
+									<label class="field-label" for="composeProfiles">Profiles</label>
+									<input id="composeProfiles" type="text" bind:value={composeProfiles} placeholder="app, worker" class="field w-full font-mono" />
+									<p class="field-hint">Comma-separated <span class="font-mono">COMPOSE_PROFILES</span> values.</p>
+								</div>
+							</div>
+						</SectionPanel>
+					{/if}
+
+					{#if settingsChanged}
+						<div class="flex flex-wrap items-center justify-between gap-3 border border-gray-200 bg-gray-50/60 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900/40">
+							<div>
+								<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200"><span class="status-dot bg-amber-500"></span>Unsaved project configuration</p>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Save now, then redeploy to recreate runtime-affecting configuration.</p>
+							</div>
+							<ActionButton variant="primary" on:click={handleSave} disabled={project.sourceType === 'git' && repoValidationStale && !repoInspectError} loading={savingSettings} loadingLabel="Saving">Save changes</ActionButton>
+						</div>
+					{/if}
+				</div>
+			{:else if activeSection === 'resources'}
+				<div class="mx-auto max-w-6xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Resources</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Runtime limits and project-owned Compose resources.</p>
+					</div>
+
+					<SectionPanel title="Resource limits" description="Limits stored for the next runtime creation. Saving alone does not recreate the currently running runtime." contentClass="p-0">
+						<div class="grid gap-4 p-4 sm:grid-cols-3">
+							<div>
+								<label class="field-label" for="profile">Profile</label>
+								<select id="profile" bind:value={resourceProfile} on:change={() => applyResourceProfile(resourceProfile)} class="field w-full">
+									{#each resourceProfiles as profile}<option value={profile.id}>{profile.title} ({profile.memoryMb} MB / {profile.cpuLimit} CPU)</option>{/each}
+								</select>
+							</div>
+							<div>
+								<label class="field-label" for="mem">Memory (MB)</label>
+								<input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" />
+							</div>
+							<div>
+								<label class="field-label" for="cpu">CPU cores</label>
+								<input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" />
+							</div>
+						</div>
+						<div class="border-t border-gray-100 p-4 dark:border-neutral-800">
+							<label class="field-label" for="service_resources">Other service limits (JSON)</label>
+							<textarea id="service_resources" bind:value={serviceResourcesStr} rows="4" class="field w-full font-mono text-sm" placeholder='&#123;&#10;  "db": &#123;&#10;    "memoryLimitMb": 512,&#10;    "cpuLimit": 0.5&#10;  &#125;&#10;&#125;'></textarea>
+							<p class="field-hint">Set memory and CPU limits for non-main services. Keys are Compose service names.</p>
+							<details class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+								<summary class="app-focus cursor-pointer select-none font-medium text-gray-700 dark:text-gray-300">Example JSON</summary>
+								<pre class="code-surface mt-2">&#123;
   "db": &#123;
     "memoryLimitMb": 256,
     "cpuLimit": 0.25
   &#125;
 &#125;</pre>
-						</details>
-					</div>
+							</details>
+						</div>
+					</SectionPanel>
+
+					{#if project.deployMode === 'compose'}
+						<SectionPanel title="Compose resources" description="Tracked container, volume, and network resources owned by this project." contentClass="p-0">
+							<div class="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 text-center dark:divide-neutral-800 dark:border-neutral-800">
+								<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.containers ?? 0}</p><p class="metric-label mt-1">Containers</p></div>
+								<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.volumes ?? 0}</p><p class="metric-label mt-1">Volumes</p></div>
+								<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.networks ?? 0}</p><p class="metric-label mt-1">Networks</p></div>
+							</div>
+							<div class="space-y-3 p-4">
+								{#if composeResourceTotal > 0 && !project.activeDeploymentId}<div class="alert-warning">Compose resources exist but this project has no active deployment. Reset them before deploy if they are stale leftovers.</div>{/if}
+								{#if composeResourceError}<div class="alert-danger flex-wrap items-center justify-between"><span class="min-w-0 flex-1">{composeResourceError}</span><ActionButton variant="ghost" size="xs" on:click={() => loadComposeResources()}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Retry</ActionButton></div>{/if}
+								<div class="flex flex-wrap gap-2">
+									<ActionButton variant="secondary" size="sm" on:click={() => loadComposeResources()} loading={loadingComposeResources} loadingLabel="Checking"><RefreshCw slot="icon" class="h-4 w-4" />Check resources</ActionButton>
+									<ActionButton variant="ghostDanger" size="sm" on:click={requestResetComposeResources} disabled={composeResourceTotal === 0 || confirmResetComposeResources}><RotateCcw slot="icon" class="h-4 w-4" />Reset resources</ActionButton>
+								</div>
+								{#if confirmResetComposeResources}
+									<div class="alert-danger flex-wrap items-center justify-between">
+										<p class="min-w-0 flex-1">This removes Compose containers, volumes, networks, route, and allocated port for this project.</p>
+										<div class="flex gap-2">
+											<ActionButton variant="ghost" size="xs" on:click={() => (confirmResetComposeResources = false)} disabled={resettingComposeResources}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
+											<ActionButton variant="danger" size="xs" on:click={handleResetComposeResources} loading={resettingComposeResources} loadingLabel="Resetting"><RotateCcw slot="icon" class="h-3.5 w-3.5" />Reset now</ActionButton>
+										</div>
+									</div>
+								{/if}
+							</div>
+						</SectionPanel>
+					{/if}
 
 					{#if settingsChanged}
-						<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/50 p-4 dark:border-neutral-800 dark:bg-neutral-900/40">
+						<div class="flex flex-wrap items-center justify-between gap-3 border border-gray-200 bg-gray-50/60 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900/40">
 							<div>
 								<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-800 dark:text-gray-200"><span class="status-dot bg-amber-500"></span>Unsaved project configuration</p>
-								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Save updates the control-plane configuration. Redeploy to recreate the runtime with source, port, Compose, or resource changes.</p>
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Save resource changes now; redeploy to recreate the running runtime with the new limits.</p>
 							</div>
 							<ActionButton variant="primary" on:click={handleSave} disabled={project.sourceType === 'git' && repoValidationStale && !repoInspectError} loading={savingSettings} loadingLabel="Saving">Save changes</ActionButton>
 						</div>
 					{/if}
-				</SectionPanel>
-			</div>
+				</div>
+			{:else if activeSection === 'webhook' && project.sourceType === 'git'}
+				<div class="mx-auto max-w-4xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">GitHub push deployment endpoint and signing secret.</p>
+					</div>
 
-			<div class="space-y-4">
-				{#if project.sourceType === 'git'}
-					<SectionPanel title="Webhook" description="GitHub push deployments." contentClass="p-0">
+					<SectionPanel title="GitHub webhook" description="Configure repository push deployments." contentClass="p-0">
 						<svelte:fragment slot="actions">
-							<IconButton label="Webhook setup instructions" variant="ghost" on:click={() => (showWebhookHelp = true)}>
-								<CircleAlert class="h-4 w-4" aria-hidden="true" />
-							</IconButton>
+							<IconButton label="Webhook setup instructions" variant="ghost" on:click={() => (showWebhookHelp = true)}><CircleAlert class="h-4 w-4" aria-hidden="true" /></IconButton>
 						</svelte:fragment>
 						<div class="divide-y divide-gray-100 dark:divide-neutral-800">
 							<div class="p-4">
 								<div class="mb-1.5 flex items-center justify-between gap-2">
 									<p class="field-label !mb-0">Payload URL</p>
-									<IconButton label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyWebhookURL(project?.id ?? '')}>
-										{#if copiedTarget === 'webhook-url'}<Check class="h-4 w-4" aria-hidden="true" />{:else}<Copy class="h-4 w-4" aria-hidden="true" />{/if}
-									</IconButton>
+									<IconButton label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyWebhookURL(project?.id ?? '')}>{#if copiedTarget === 'webhook-url'}<Check class="h-4 w-4" aria-hidden="true" />{:else}<Copy class="h-4 w-4" aria-hidden="true" />{/if}</IconButton>
 								</div>
 								<code class="code-surface block break-all">{publicWebhookURL}</code>
 							</div>
@@ -548,12 +650,8 @@
 								<div class="mb-1.5 flex items-center justify-between gap-2">
 									<p class="field-label !mb-0">Secret</p>
 									<div class="flex gap-1">
-										<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Show webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>
-											{#if showWebhookSecret}<EyeOff class="h-4 w-4" aria-hidden="true" />{:else}<Eye class="h-4 w-4" aria-hidden="true" />{/if}
-										</IconButton>
-										<IconButton label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}>
-											{#if copiedTarget === 'webhook-secret'}<Check class="h-4 w-4" aria-hidden="true" />{:else}<Copy class="h-4 w-4" aria-hidden="true" />{/if}
-										</IconButton>
+										<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Show webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>{#if showWebhookSecret}<EyeOff class="h-4 w-4" aria-hidden="true" />{:else}<Eye class="h-4 w-4" aria-hidden="true" />{/if}</IconButton>
+										<IconButton label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}>{#if copiedTarget === 'webhook-secret'}<Check class="h-4 w-4" aria-hidden="true" />{:else}<Copy class="h-4 w-4" aria-hidden="true" />{/if}</IconButton>
 									</div>
 								</div>
 								<code class="code-surface block break-all">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••••••••••••••••••'}</code>
@@ -563,78 +661,39 @@
 									<div class="alert-warning flex-wrap items-center justify-between">
 										<p class="min-w-0 flex-1">Regenerating the secret invalidates existing GitHub webhook signatures.</p>
 										<div class="flex gap-2">
-											<ActionButton variant="ghost" size="xs" on:click={() => (confirmRegenerateSecret = false)} disabled={regeneratingSecret}>
-												<X slot="icon" class="h-3.5 w-3.5" />
-												Cancel
-											</ActionButton>
-											<ActionButton variant="danger" size="xs" on:click={handleRegenerateSecret} loading={regeneratingSecret} loadingLabel="Regenerating">
-												<RefreshCw slot="icon" class="h-3.5 w-3.5" />
-												Regenerate
-											</ActionButton>
+											<ActionButton variant="ghost" size="xs" on:click={() => (confirmRegenerateSecret = false)} disabled={regeneratingSecret}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
+											<ActionButton variant="danger" size="xs" on:click={handleRegenerateSecret} loading={regeneratingSecret} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Regenerate</ActionButton>
 										</div>
 									</div>
 								{:else}
-									<ActionButton variant="secondary" size="sm" on:click={requestRegenerateSecret}>
-										<RefreshCw slot="icon" class="h-4 w-4" />
-										Regenerate secret
-									</ActionButton>
+									<ActionButton variant="secondary" size="sm" on:click={requestRegenerateSecret}><RefreshCw slot="icon" class="h-4 w-4" />Regenerate secret</ActionButton>
 								{/if}
 							</div>
 						</div>
 					</SectionPanel>
-				{/if}
-
-				{#if project.deployMode === 'compose'}
-					<SectionPanel title="Compose resources" description="Tracked Docker resources for this project." contentClass="p-0">
-						<div class="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 text-center dark:divide-neutral-800 dark:border-neutral-800">
-							<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.containers ?? 0}</p><p class="metric-label mt-1">Containers</p></div>
-							<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.volumes ?? 0}</p><p class="metric-label mt-1">Volumes</p></div>
-							<div class="p-3"><p class="metric-value text-xl font-semibold text-gray-950 dark:text-white">{composeResources?.networks ?? 0}</p><p class="metric-label mt-1">Networks</p></div>
+				</div>
+			{:else if activeSection === 'danger'}
+				<div class="mx-auto max-w-4xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-red-700 dark:text-red-300">Danger zone</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Destructive project operations are isolated here.</p>
+					</div>
+					<section class="surface overflow-hidden border-red-200 dark:border-red-900/60">
+						<div class="border-b border-red-100 px-4 py-3 dark:border-red-900/50">
+							<h2 class="panel-title text-red-700 dark:text-red-300">Delete project</h2>
 						</div>
 						<div class="space-y-3 p-4">
-							{#if composeResourceTotal > 0 && !project.activeDeploymentId}<div class="alert-warning">Compose resources exist but this project has no active deployment. Reset them before deploy if they are stale leftovers.</div>{/if}
-							{#if composeResourceError}<div class="alert-danger flex-wrap items-center justify-between"><span class="min-w-0 flex-1">{composeResourceError}</span><ActionButton variant="ghost" size="xs" on:click={() => loadComposeResources()}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Retry</ActionButton></div>{/if}
-							<div class="flex flex-wrap gap-2">
-								<ActionButton variant="secondary" size="sm" on:click={() => loadComposeResources()} loading={loadingComposeResources} loadingLabel="Checking">
-									<RefreshCw slot="icon" class="h-4 w-4" />
-									Check resources
-								</ActionButton>
-								<ActionButton variant="ghostDanger" size="sm" on:click={requestResetComposeResources} disabled={composeResourceTotal === 0 || confirmResetComposeResources}>
-									<RotateCcw slot="icon" class="h-4 w-4" />
-									Reset resources
-								</ActionButton>
-							</div>
-							{#if confirmResetComposeResources}
-								<div class="alert-danger flex-wrap items-center justify-between">
-									<p class="min-w-0 flex-1">This removes Compose containers, volumes, networks, route, and allocated port for this project.</p>
-									<div class="flex gap-2">
-										<ActionButton variant="ghost" size="xs" on:click={() => (confirmResetComposeResources = false)} disabled={resettingComposeResources}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
-										<ActionButton variant="danger" size="xs" on:click={handleResetComposeResources} loading={resettingComposeResources} loadingLabel="Resetting"><RotateCcw slot="icon" class="h-3.5 w-3.5" />Reset now</ActionButton>
-									</div>
-								</div>
-							{/if}
+							<p class="text-sm text-gray-600 dark:text-gray-400">Delete this project, stop containers, remove routing, and release ports.</p>
+							<label class="block">
+								<span class="field-label">Type <span class="font-mono text-gray-950 dark:text-white">{project.name}</span> to confirm</span>
+								<input type="text" bind:value={deleteInput} placeholder={project.name} class="field w-full border-red-300 focus:border-red-600 focus:ring-red-600 dark:border-red-900" />
+							</label>
+							<ActionButton variant="danger" on:click={handleDelete} disabled={deleteInput !== project.name} loading={deletingProject} loadingLabel="Deleting"><Trash2 slot="icon" class="h-4 w-4" />Delete project</ActionButton>
 						</div>
-					</SectionPanel>
-				{/if}
-
-				<section class="surface overflow-hidden border-red-200 dark:border-red-900/60">
-					<div class="border-b border-red-100 px-4 py-3 dark:border-red-900/50">
-						<h2 class="panel-title text-red-700 dark:text-red-300">Danger zone</h2>
-					</div>
-					<div class="space-y-3 p-4">
-						<p class="text-sm text-gray-600 dark:text-gray-400">Delete this project, stop containers, remove routing, and release ports.</p>
-						<label class="block">
-							<span class="field-label">Type <span class="font-mono text-gray-950 dark:text-white">{project.name}</span> to confirm</span>
-							<input type="text" bind:value={deleteInput} placeholder={project.name} class="field w-full border-red-300 focus:border-red-600 focus:ring-red-600 dark:border-red-900" />
-						</label>
-						<ActionButton variant="danger" on:click={handleDelete} disabled={deleteInput !== project.name} loading={deletingProject} loadingLabel="Deleting" full>
-							<Trash2 slot="icon" class="h-4 w-4" />
-							Delete project
-						</ActionButton>
-					</div>
-				</section>
-			</div>
-		</div>
+					</section>
+				</div>
+			{/if}
+		</main>
 	</div>
 {/if}
 
