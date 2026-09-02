@@ -34,9 +34,12 @@ type dockerPSLine struct {
 	Labels string `json:"Labels"`
 }
 
+const runtimeStatsFormat = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+
 // RuntimeContainers returns every container visible to the Docker-compatible
 // runtime. A stats failure does not hide the inventory: metadata is still
-// returned and MetricsAvailable remains false for the affected rows.
+// returned and MetricsAvailable remains false only for rows whose stats could
+// not be collected.
 func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error) {
 	out, err := commandContext(ctx, "docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}").CombinedOutput()
 	if err != nil {
@@ -60,25 +63,27 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 		})
 	}
 
-	statsOut, statsErr := commandContext(ctx, "docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}").CombinedOutput()
-	if statsErr == nil {
-		statsByName := make(map[string]Metrics)
-		for _, line := range fieldsByLine(string(statsOut)) {
-			metric, err := parseStatsLine(line)
-			if err != nil {
-				continue
+	targets := runtimeStatsTargets(containers)
+	if len(targets) > 0 {
+		args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
+		args = append(args, targets...)
+		statsOut, statsErr := commandContext(ctx, "docker", args...).CombinedOutput()
+		if statsErr == nil {
+			mergeRuntimeStats(containers, statsOut)
+		} else {
+			// Some Docker-compatible runtimes are less reliable when stats is
+			// requested for multiple containers. Reuse the proven single-target
+			// Stats path so one runtime incompatibility does not blank every row.
+			for i := range containers {
+				if containers[i].State != "running" {
+					continue
+				}
+				metric, err := d.Stats(ctx, containers[i].Name)
+				if err != nil {
+					continue
+				}
+				applyRuntimeMetric(&containers[i], metric)
 			}
-			statsByName[metric.Service] = metric
-		}
-		for i := range containers {
-			metric, ok := statsByName[containers[i].Name]
-			if !ok {
-				continue
-			}
-			containers[i].CPUPercent = metric.CPUPercent
-			containers[i].MemoryMB = metric.MemoryMB
-			containers[i].MemoryLimitMB = metric.MemoryLimitMB
-			containers[i].MetricsAvailable = true
 		}
 	}
 
@@ -86,6 +91,42 @@ func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, 
 		containers = []RuntimeContainer{}
 	}
 	return containers, nil
+}
+
+func runtimeStatsTargets(containers []RuntimeContainer) []string {
+	targets := make([]string, 0, len(containers))
+	for _, container := range containers {
+		if container.State != "running" || strings.TrimSpace(container.Name) == "" {
+			continue
+		}
+		targets = append(targets, container.Name)
+	}
+	return targets
+}
+
+func mergeRuntimeStats(containers []RuntimeContainer, raw []byte) {
+	statsByName := make(map[string]Metrics)
+	for _, line := range fieldsByLine(string(raw)) {
+		metric, err := parseStatsLine(line)
+		if err != nil {
+			continue
+		}
+		statsByName[metric.Service] = metric
+	}
+	for i := range containers {
+		metric, ok := statsByName[containers[i].Name]
+		if !ok {
+			continue
+		}
+		applyRuntimeMetric(&containers[i], metric)
+	}
+}
+
+func applyRuntimeMetric(container *RuntimeContainer, metric Metrics) {
+	container.CPUPercent = metric.CPUPercent
+	container.MemoryMB = metric.MemoryMB
+	container.MemoryLimitMB = metric.MemoryLimitMB
+	container.MetricsAvailable = true
 }
 
 func dockerLabel(labels, key string) string {
