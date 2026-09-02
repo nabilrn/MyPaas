@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
-	import { CircleStop, RefreshCw, Square, Terminal, TriangleAlert } from '@lucide/svelte';
+	import { CircleStop, Copy, RefreshCw, Square, Terminal } from '@lucide/svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import { api } from '$api';
+	import { sanitizeTerminalOutput } from '$lib/utils/terminal-output';
 	import { toast } from '$stores/toast';
 	import type { ShellSession } from '$types';
 
@@ -19,6 +20,7 @@
 	let sending = false;
 	let interrupting = false;
 	let stopping = false;
+	let copying = false;
 	let outputElement: HTMLPreElement | null = null;
 	let commandInput: HTMLInputElement | null = null;
 	let mounted = false;
@@ -65,7 +67,7 @@
 			session = nextSession;
 			connectStream(nextSession.id);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to start host shell';
+			error = err instanceof Error ? err.message : 'Failed to start shell';
 			status = 'ended';
 		} finally {
 			starting = false;
@@ -107,10 +109,23 @@
 	}
 
 	function appendOutput(chunk: string) {
-		output = `${output}${chunk}`.slice(-MAX_OUTPUT_CHARS);
+		output = sanitizeTerminalOutput(`${output}${chunk}`).slice(-MAX_OUTPUT_CHARS);
 		requestAnimationFrame(() => {
 			if (outputElement) outputElement.scrollTop = outputElement.scrollHeight;
 		});
+	}
+
+	async function copyOutput() {
+		if (!output || copying) return;
+		copying = true;
+		try {
+			await navigator.clipboard.writeText(output);
+			toast.success('Shell output copied');
+		} catch {
+			toast.error('Failed to copy shell output');
+		} finally {
+			copying = false;
+		}
 	}
 
 	async function sendCommand() {
@@ -199,10 +214,12 @@
 		</div>
 
 		<div class="flex min-w-0 items-center gap-2">
-			<span class="hidden items-center gap-1.5 text-[13px] text-gray-500 dark:text-gray-400 xl:inline-flex">
-				<TriangleAlert class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-				Commands affect the entire host
-			</span>
+			{#if output}
+				<ActionButton variant="secondary" size="xs" loading={copying} loadingLabel="Copying" on:click={copyOutput}>
+					<Copy slot="icon" class="h-3.5 w-3.5" />
+					Copy output
+				</ActionButton>
+			{/if}
 			{#if session && status === 'disconnected'}
 				<ActionButton variant="secondary" size="xs" on:click={reconnect}>
 					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
@@ -230,14 +247,14 @@
 		{#if session}
 			<pre
 				bind:this={outputElement}
-				class="h-full overflow-auto whitespace-pre-wrap break-words bg-neutral-900 p-4 font-mono text-sm leading-6 text-gray-200 dark:bg-neutral-950"
+				class="h-full select-text overflow-auto whitespace-pre-wrap break-words bg-neutral-900 p-4 font-mono text-sm leading-6 text-gray-200 dark:bg-neutral-950"
 				aria-label="Shell output"
 			>{output || 'Waiting for shell output…'}</pre>
 		{:else}
 			<div class="flex h-full items-center justify-center bg-neutral-900 p-6 dark:bg-neutral-950">
 				<div class="flex flex-col items-center gap-3 text-center">
 					<Terminal class="h-6 w-6 text-gray-600" aria-hidden="true" />
-					<p class="text-sm text-gray-400">{status === 'connecting' ? 'Opening host shell…' : 'No shell session is running.'}</p>
+					<p class="text-sm text-gray-400">{status === 'connecting' ? 'Opening shell…' : 'No shell session is running.'}</p>
 					{#if status !== 'connecting'}
 						<ActionButton variant="secondary" size="sm" on:click={startSession} loading={starting} loadingLabel="Starting">
 							<Terminal slot="icon" class="h-4 w-4" />
