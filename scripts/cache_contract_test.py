@@ -9,6 +9,7 @@ APP_HTML = ROOT / "frontend" / "src" / "app.html"
 
 class DashboardCacheContractTest(unittest.TestCase):
     def test_dashboard_documents_are_never_cached_across_releases(self) -> None:
+        """Dashboard documents must never outlive the release that generated them."""
         caddy = CADDY.read_text(encoding="utf-8")
 
         self.assertIn('handle /_app/immutable/* {', caddy)
@@ -16,6 +17,7 @@ class DashboardCacheContractTest(unittest.TestCase):
         self.assertNotIn("match header Content-Type text/html*", caddy)
 
     def test_immutable_assets_cache_only_successful_responses(self) -> None:
+        """Successful hashed assets are immutable while missing assets remain retryable."""
         caddy = CADDY.read_text(encoding="utf-8")
 
         self.assertIn(
@@ -29,15 +31,21 @@ class DashboardCacheContractTest(unittest.TestCase):
         self.assertIn("copy_response", caddy)
 
     def test_bootstrap_recovers_once_from_stale_release_assets(self) -> None:
+        """Automatic stale-asset recovery must be bounded across document reloads."""
         app = APP_HTML.read_text(encoding="utf-8")
 
         self.assertIn("mypaas:asset-recovery-at", app)
+        self.assertIn("mypaas_asset_recovery_at", app)
         self.assertIn("vite:preloadError", app)
         self.assertIn("unhandledrejection", app)
         self.assertIn("/_app/immutable/", app)
         self.assertIn("location.reload()", app)
         self.assertIn("event.preventDefault()", app)
         self.assertIn("recoveryCooldownMs = 30_000", app)
+        self.assertIn("document.cookie", app)
+        self.assertIn("if (!persistRecovery(now)) return false", app)
+        self.assertIn("return readRecoveryCookie() === timestamp", app)
+        self.assertIn("setTimeout(clearRecovery, recoveryCooldownMs)", app)
 
 
 if __name__ == "__main__":
