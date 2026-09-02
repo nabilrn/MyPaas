@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, AlertTriangle, ChevronDown, Globe, LoaderCircle, Radio, SlidersHorizontal } from '@lucide/svelte';
+	import { AlertTriangle, ChevronDown, LoaderCircle, Radio, SlidersHorizontal } from '@lucide/svelte';
 	import { api } from '$api';
 	import CloudflareChart from '$components/CloudflareChart.svelte';
 	import CloudflareSetup from '$components/CloudflareSetup.svelte';
@@ -35,7 +35,7 @@
 	}));
 	$: memorySeries = visibleItems.map((item) => ({
 		service: item.service,
-		values: metricHistory[item.service]?.memoryPercent ?? [],
+		values: metricHistory[item.service]?.memoryMb ?? [],
 		value: `${item.memoryMb.toFixed(1)} MB`
 	}));
 	$: sampleLabel = $projectStreamMetrics?.collectedAt ? new Date($projectStreamMetrics.collectedAt).toLocaleTimeString() : '';
@@ -123,25 +123,45 @@
 				</div>
 				<span class="text-xs text-gray-400 dark:text-gray-500">Cloudflare</span>
 			</div>
-			<div class="grid border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 sm:grid-cols-3 lg:grid-cols-[minmax(8rem,0.55fr)_minmax(9rem,0.65fr)_minmax(8rem,0.55fr)_minmax(18rem,1.6fr)]">
-				<div class="bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
-					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><Activity class="h-3.5 w-3.5" /> Requests</div>
+			<div class="grid border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 sm:grid-cols-3">
+				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+					<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Requests</p>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.total_requests.toLocaleString()}</p>
+					<div class="mt-1.5">
+						{#if analytics.timeseries?.length > 0}
+							<CloudflareChart data={analytics.timeseries} metric="requests" compact />
+						{:else}
+							<div class="flex h-14 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
+						{/if}
+					</div>
 				</div>
-				<div class="bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
-					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><Globe class="h-3.5 w-3.5" /> Bandwidth</div>
+
+				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+					<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Bandwidth</p>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{(analytics.bandwidth / (1024 * 1024)).toFixed(2)} <span class="text-xs font-medium text-gray-500">MB</span></p>
+					<div class="mt-1.5">
+						{#if analytics.timeseries?.length > 0}
+							<CloudflareChart data={analytics.timeseries} metric="bandwidth" compact />
+						{:else}
+							<div class="flex h-14 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
+						{/if}
+					</div>
 				</div>
-				<div class="bg-white px-4 py-3 dark:bg-neutral-950 lg:border-r lg:border-gray-100/70 lg:dark:border-neutral-900">
-					<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400"><AlertTriangle class="h-3.5 w-3.5 {analytics.errors > 0 ? 'text-amber-500' : ''}" /> Edge errors</div>
+
+				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950">
+					<div class="flex items-center gap-2">
+						<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Edge errors</p>
+						{#if analytics.errors > 0}<AlertTriangle class="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />{/if}
+					</div>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.errors.toLocaleString()}</p>
-				</div>
-				<div class="col-span-full flex min-h-20 items-center bg-white px-4 py-2 dark:bg-neutral-950 lg:col-span-1">
-					{#if analytics.timeseries?.length > 0}
-						<CloudflareChart data={analytics.timeseries} compact />
-					{:else}
-						<p class="text-xs text-gray-400 dark:text-gray-500">Waiting for enough traffic to draw a trend.</p>
-					{/if}
+					<div class="relative mt-1.5 flex h-14 items-center">
+						{#if analytics.errors === 0}
+							<div class="h-px w-full bg-gray-200 dark:bg-neutral-800"></div>
+							<span class="absolute bottom-0 text-[11px] text-gray-400 dark:text-gray-500">No errors observed</span>
+						{:else}
+							<p class="text-xs text-gray-400 dark:text-gray-500">Aggregate only; interval error series is unavailable.</p>
+						{/if}
+					</div>
 				</div>
 			</div>
 		</section>
@@ -197,8 +217,8 @@
 
 			{#if metricItems.length > 0 && visibleItems.length > 0}
 				<div class="grid gap-px border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 xl:grid-cols-2">
-					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" heightClass="h-16" compact />
-					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix="%" maxValue={100} heightClass="h-16" compact />
+					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" heightClass="h-14" compact />
+					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix=" MB" heightClass="h-14" compact />
 				</div>
 			{:else if metricItems.length > 0}
 				<div class="border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
