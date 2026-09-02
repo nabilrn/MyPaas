@@ -61,31 +61,31 @@ func (s *Service) ConfigurationStatus(ctx context.Context, projectID uuid.UUID) 
 
 func (s *Service) Schemas(ctx context.Context, projectID uuid.UUID) ([]Schema, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) ([]Schema, error) {
-		return handle.adapter.Schemas(ctx, handle.conn)
+		return handle.Schemas(ctx)
 	})
 }
 
 func (s *Service) Tables(ctx context.Context, projectID uuid.UUID, schema string) ([]Table, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) ([]Table, error) {
-		return handle.adapter.Tables(ctx, handle.conn, schema)
+		return handle.Tables(ctx, schema)
 	})
 }
 
 func (s *Service) Columns(ctx context.Context, projectID uuid.UUID, schema, table string) ([]Column, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) ([]Column, error) {
-		return handle.adapter.Columns(ctx, handle.conn, schema, table)
+		return handle.Columns(ctx, schema, table)
 	})
 }
 
 func (s *Service) TableDetails(ctx context.Context, projectID uuid.UUID, schema, table string) (TableDetails, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) (TableDetails, error) {
-		return handle.adapter.TableDetails(ctx, handle.conn, schema, table)
+		return handle.TableDetails(ctx, schema, table)
 	})
 }
 
 func (s *Service) Rows(ctx context.Context, projectID uuid.UUID, query RowQuery) (RowPage, error) {
 	return withResult(ctx, s, projectID, func(handle *dbHandle) (RowPage, error) {
-		return handle.adapter.Rows(ctx, handle.conn, query)
+		return handle.Rows(ctx, query)
 	})
 }
 
@@ -126,7 +126,7 @@ func (s *Service) Insert(ctx context.Context, projectID, userID uuid.UUID, mutat
 		return err
 	}
 	err = s.withConnection(ctx, conn, func(handle *dbHandle) error {
-		return handle.adapter.Insert(ctx, handle.conn, mutation)
+		return handle.Insert(ctx, mutation)
 	})
 	return s.auditMutation(ctx, userID, projectID, "dbstudio.row_inserted", mutation, err)
 }
@@ -140,7 +140,7 @@ func (s *Service) Update(ctx context.Context, projectID, userID uuid.UUID, mutat
 		return err
 	}
 	err = s.withConnection(ctx, conn, func(handle *dbHandle) error {
-		return handle.adapter.Update(ctx, handle.conn, mutation)
+		return handle.Update(ctx, mutation)
 	})
 	return s.auditMutation(ctx, userID, projectID, "dbstudio.row_updated", mutation, err)
 }
@@ -154,7 +154,7 @@ func (s *Service) Delete(ctx context.Context, projectID, userID uuid.UUID, mutat
 		return err
 	}
 	err = s.withConnection(ctx, conn, func(handle *dbHandle) error {
-		return handle.adapter.Delete(ctx, handle.conn, mutation)
+		return handle.Delete(ctx, mutation)
 	})
 	return s.auditMutation(ctx, userID, projectID, "dbstudio.row_deleted", mutation, err)
 }
@@ -168,23 +168,90 @@ func (s *Service) resolve(ctx context.Context, projectID uuid.UUID) (Connection,
 	if err != nil {
 		return Connection{}, err
 	}
+	if conn, ok, err := resolveSQLiteConnection(ctx, project, envs); ok || err != nil {
+		return conn, err
+	}
 	return resolveConnection(ctx, project, envs)
 }
 
 type dbHandle struct {
 	conn    *sql.DB
 	adapter Adapter
+	sqlite  *sqliteRuntimeClient
 }
 
 func (s *Service) withConnection(ctx context.Context, conn Connection, fn func(*dbHandle) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
+	if conn.Driver == DriverSQLite {
+		client := &sqliteRuntimeClient{container: conn.runtimeContainer, databasePath: conn.databasePath}
+		if err := client.Ping(ctx); err != nil {
+			return err
+		}
+		return fn(&dbHandle{sqlite: client})
+	}
 	sqlDB, adapter, err := openConnection(ctx, conn)
 	if err != nil {
 		return err
 	}
 	defer sqlDB.Close()
 	return fn(&dbHandle{conn: sqlDB, adapter: adapter})
+}
+
+func (h *dbHandle) Schemas(ctx context.Context) ([]Schema, error) {
+	if h.sqlite != nil {
+		return h.sqlite.Schemas(ctx)
+	}
+	return h.adapter.Schemas(ctx, h.conn)
+}
+
+func (h *dbHandle) Tables(ctx context.Context, schema string) ([]Table, error) {
+	if h.sqlite != nil {
+		return h.sqlite.Tables(ctx, schema)
+	}
+	return h.adapter.Tables(ctx, h.conn, schema)
+}
+
+func (h *dbHandle) Columns(ctx context.Context, schema, table string) ([]Column, error) {
+	if h.sqlite != nil {
+		return h.sqlite.Columns(ctx, schema, table)
+	}
+	return h.adapter.Columns(ctx, h.conn, schema, table)
+}
+
+func (h *dbHandle) TableDetails(ctx context.Context, schema, table string) (TableDetails, error) {
+	if h.sqlite != nil {
+		return h.sqlite.TableDetails(ctx, schema, table)
+	}
+	return h.adapter.TableDetails(ctx, h.conn, schema, table)
+}
+
+func (h *dbHandle) Rows(ctx context.Context, query RowQuery) (RowPage, error) {
+	if h.sqlite != nil {
+		return h.sqlite.Rows(ctx, query)
+	}
+	return h.adapter.Rows(ctx, h.conn, query)
+}
+
+func (h *dbHandle) Insert(ctx context.Context, mutation Mutation) error {
+	if h.sqlite != nil {
+		return h.sqlite.Insert(ctx, mutation)
+	}
+	return h.adapter.Insert(ctx, h.conn, mutation)
+}
+
+func (h *dbHandle) Update(ctx context.Context, mutation Mutation) error {
+	if h.sqlite != nil {
+		return h.sqlite.Update(ctx, mutation)
+	}
+	return h.adapter.Update(ctx, h.conn, mutation)
+}
+
+func (h *dbHandle) Delete(ctx context.Context, mutation Mutation) error {
+	if h.sqlite != nil {
+		return h.sqlite.Delete(ctx, mutation)
+	}
+	return h.adapter.Delete(ctx, h.conn, mutation)
 }
 
 func withResult[T any](ctx context.Context, s *Service, projectID uuid.UUID, fn func(*dbHandle) (T, error)) (T, error) {
