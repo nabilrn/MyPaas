@@ -62,13 +62,15 @@ class DeployToVmTest(unittest.TestCase):
         script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if managed_container_running mypaas-caddy-prod; then', script)
-        self.assertIn("sh -c 'cat > /tmp/mypaas-Caddyfile.next'", script)
+        self.assertIn('mktemp /tmp/mypaas-Caddyfile.XXXXXX', script)
+        self.assertIn("sh -c 'cat > \"$1\"' sh \"$caddy_stage_path\"", script)
         self.assertIn('< "$ROOT_DIR/Caddyfile.prod"', script)
         self.assertIn(
-            'caddy reload --config /tmp/mypaas-Caddyfile.next --adapter caddyfile',
+            'caddy reload --config "$caddy_stage_path" --adapter caddyfile',
             script,
         )
-        self.assertIn('rm -f /tmp/mypaas-Caddyfile.next', script)
+        self.assertIn('rm -f "$caddy_stage_path"', script)
+        self.assertNotIn('/tmp/mypaas-Caddyfile.next', script)
         self.assertNotIn(
             'caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile',
             script,
