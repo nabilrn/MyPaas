@@ -186,7 +186,7 @@ export function deriveProjectOperationalState({
 			primaryAction: 'deploy',
 			primaryActionLabel: 'Redeploy',
 			attention: 'none',
-			statusLabel: isStatic ? 'Live' : 'Running',
+			statusLabel: 'Live',
 			statusTone: 'success'
 		});
 	}
