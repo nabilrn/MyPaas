@@ -68,6 +68,7 @@ class DeployToVmTest(unittest.TestCase):
             'caddy reload --config /tmp/mypaas-Caddyfile.next --adapter caddyfile',
             script,
         )
+        self.assertIn('rm -f /tmp/mypaas-Caddyfile.next', script)
         self.assertNotIn(
             'caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile',
             script,
