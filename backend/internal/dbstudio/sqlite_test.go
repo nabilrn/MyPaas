@@ -2,9 +2,14 @@ package dbstudio
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"mypaas/internal/db"
 )
 
 func TestSQLitePathFromEnv(t *testing.T) {
@@ -68,6 +73,182 @@ func TestSQLitePathOnPersistentMount(t *testing.T) {
 	}
 	if sqlitePathOnPersistentMount("/app/app.db", inspect) {
 		t.Fatal("did not expect writable-layer database to be accepted")
+	}
+	if sqlitePathOnPersistentMount("/app/data-other/app.db", inspect) {
+		t.Fatal("did not expect a sibling path outside the persistent mount to be accepted")
+	}
+}
+
+func TestDiscoverSQLiteFilesFindsWagoShapedDatabaseGenerically(t *testing.T) {
+	ctx := context.Background()
+	dataRoot := t.TempDir()
+	databasePath := filepath.Join(dataRoot, "wago.db")
+	if err := os.WriteFile(databasePath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := openSQLiteDatabase(ctx, databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := discoverSQLiteFiles(ctx, []string{dataRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.ToSlash(databasePath)
+	if len(candidates) != 1 || candidates[0] != want {
+		t.Fatalf("candidates = %#v, want [%q]", candidates, want)
+	}
+}
+
+func TestDiscoverSQLiteFilesRejectsNonSQLiteAndSymlinkEscape(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "not-a-database.db"), []byte("not sqlite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside.db")
+	if err := os.WriteFile(outside, make([]byte, 100), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "escape.db")
+	if err := os.Symlink(outside, link); err == nil {
+		candidates, err := discoverSQLiteFiles(ctx, []string{root})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(candidates) != 0 {
+			t.Fatalf("symlink escape was discovered: %#v", candidates)
+		}
+	} else {
+		t.Logf("symlink test unavailable on this host: %v", err)
+	}
+
+	if _, err := discoverSQLiteFiles(ctx, []string{"relative/data"}); err == nil {
+		t.Fatal("expected relative discovery root to fail")
+	}
+	if _, err := discoverSQLiteFiles(ctx, []string{"/"}); err == nil {
+		t.Fatal("expected filesystem root discovery to fail")
+	}
+}
+
+func TestDiscoverSQLiteFilesHonorsDepthAndSizeBounds(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	deepRoot := filepath.Join(root, "one", "two", "three", "four")
+	if err := os.MkdirAll(deepRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	deepPath := filepath.Join(deepRoot, "deep.db")
+	if err := os.WriteFile(deepPath, append([]byte("SQLite format 3\x00"), make([]byte, 84)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	largePath := filepath.Join(root, "large.db")
+	file, err := os.Create(largePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte("SQLite format 3\x00")); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxSQLiteCandidateBytes + 1); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := discoverSQLiteFiles(ctx, []string{root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 0 {
+		t.Fatalf("bounded discovery returned out-of-bound candidates: %#v", candidates)
+	}
+}
+
+func TestSelectSQLiteRuntimeCandidateRejectsAmbiguity(t *testing.T) {
+	candidates := []sqliteRuntimeCandidate{
+		{container: "container-b", path: "/app/data/second.db"},
+		{container: "container-a", path: "/app/data/first.db"},
+	}
+	selected, ambiguous := selectSQLiteRuntimeCandidate(candidates)
+	if !ambiguous || selected.path != "" {
+		t.Fatalf("selection = %#v, ambiguous = %v; want safe ambiguity", selected, ambiguous)
+	}
+
+	selected, ambiguous = selectSQLiteRuntimeCandidate([]sqliteRuntimeCandidate{{container: "container-a", path: "/app/data/wago.db"}})
+	if ambiguous || selected.path != "/app/data/wago.db" {
+		t.Fatalf("selection = %#v, ambiguous = %v; want the single candidate", selected, ambiguous)
+	}
+}
+
+func TestResolveConnectionPreservesServerDatabasePrecedence(t *testing.T) {
+	called := false
+	previous := sqliteRuntimeCommand
+	sqliteRuntimeCommand = func(context.Context, ...string) ([]byte, error) {
+		called = true
+		return nil, fmt.Errorf("runtime discovery should not run")
+	}
+	t.Cleanup(func() { sqliteRuntimeCommand = previous })
+
+	project := db.Project{Name: "server-first", DeployMode: "dockerfile"}
+	conn, err := resolveConnection(context.Background(), project, map[string]string{
+		"DATABASE_URL": "postgres://app:secret@db:5432/appdb",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn.Driver != DriverPostgres || called {
+		t.Fatalf("connection = %#v, runtime command called = %v; server connection must win", conn, called)
+	}
+	if strings.Contains(conn.Source, "runtime") {
+		t.Fatalf("server connection was replaced by runtime discovery: %#v", conn)
+	}
+}
+
+func TestResolveSQLiteRuntimeConnectionUsesPersistentMountDiscovery(t *testing.T) {
+	previousRuntimeCommand := sqliteRuntimeCommand
+	previousHelperCommand := sqliteRuntimeHelperCommand
+	sqliteRuntimeCommand = func(_ context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "inspect" {
+			return []byte(`[{"Config":{"WorkingDir":"/app"},"Mounts":[{"Type":"volume","Destination":"/app/data","RW":true}]}]`), nil
+		}
+		return nil, fmt.Errorf("unexpected runtime command: %v", args)
+	}
+	sqliteRuntimeHelperCommand = func(_ context.Context, _ []string, payload []byte) ([]byte, error) {
+		var request SQLiteHelperRequest
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return nil, err
+		}
+		if request.Operation != "discover" || len(request.DiscoveryRoots) != 1 || request.DiscoveryRoots[0] != "/app/data" {
+			return nil, fmt.Errorf("unexpected discovery request: %#v", request)
+		}
+		return []byte(`{"ok":true,"response":{"sqliteCandidates":["/app/data/wago.db"]}}`), nil
+	}
+	t.Setenv("MYPAAS_SQLITE_HELPER_IMAGE", "mypaas-api:test")
+	t.Cleanup(func() {
+		sqliteRuntimeCommand = previousRuntimeCommand
+		sqliteRuntimeHelperCommand = previousHelperCommand
+	})
+
+	conn, ok, err := resolveSQLiteRuntimeConnection(context.Background(), db.Project{Name: "wago", DeployMode: "dockerfile"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || conn.Driver != DriverSQLite || conn.Database != "/app/data/wago.db" || conn.Source != "runtime-discovery" || conn.runtimeContainer != "mypaas-wago" {
+		t.Fatalf("connection = %#v, ok = %v; want generic persistent runtime discovery", conn, ok)
 	}
 }
 

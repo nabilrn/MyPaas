@@ -15,7 +15,7 @@ Full database IDE functionality would add too much security and UX surface for t
 Add a project-level DB Studio Lite:
 
 - Support PostgreSQL, MySQL, MariaDB, and persistent SQLite databases.
-- Discover server-database connection details and SQLite paths from encrypted project environment variables.
+- Discover server-database connection details from encrypted project environment variables. Prefer explicit SQLite paths from those variables, with conservative runtime discovery as a fallback for eligible persistent mounts.
 - Provide schema/table browsing, paginated row viewing, insert, update, and delete.
 - Keep raw SQL console out of MVP.
 - Require explicit temporary write mode before insert/update/delete.
@@ -33,5 +33,5 @@ SQLite has a different runtime contract from server databases. DB Studio accepts
 - The dashboard can offer a Prisma Studio-like workflow for small CRUD tasks across PostgreSQL, MySQL, MariaDB, and persistent SQLite.
 - The feature stays intentionally limited and safer than a full DB client.
 - Compose server-database access requires MyPaas API to reach the project Compose network; the service can connect the API container to the project default network when needed.
-- SQLite projects must place the database under a persistent runtime mount and expose its path through a supported database environment variable.
+- SQLite projects must place the database under a persistent runtime mount. An explicit supported database environment variable remains authoritative; when it is absent, DB Studio may discover a bounded, positively identified SQLite candidate through the isolated helper.
 - SQL Server, Oracle, MongoDB, and Redis remain out of scope for this ADR.
