@@ -59,12 +59,26 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('header >Cache-Control "no-store"', caddy)
         self.assertIn("match header Content-Type text/html*", caddy)
         self.assertIn("dashboard_asset_paths", verify)
+        self.assertIn("curl -fsSL --max-redirs 5", verify)
         self.assertIn("Dashboard HTML must be served with Cache-Control: no-store.", verify)
         self.assertIn("Dashboard HTML references an unavailable release asset", verify)
         self.assertIn("pollInterval: 60_000", config)
         self.assertIn("beforeNavigate", layout)
         self.assertIn("updated.current", layout)
         self.assertIn("location.href = to.url.href", layout)
+
+    def test_optional_project_route_health_does_not_block_control_plane_verification(self) -> None:
+        verify = VERIFY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('elif [[ "$REQUIRE_PROJECT_ROUTE" == "true" ]]; then', verify)
+        self.assertIn(
+            "ignoring workload health for control-plane verification",
+            verify,
+        )
+        self.assertIn(
+            "Existing project route $project_host is not healthy while REQUIRE_PROJECT_ROUTE=true.",
+            verify,
+        )
 
 
 if __name__ == "__main__":
