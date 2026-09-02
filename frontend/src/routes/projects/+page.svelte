@@ -186,7 +186,7 @@
 	}
 
 	function inventoryActionFor(project: Project) {
-		return deriveProjectInventoryAction(operationalStateFor(project));
+		return deriveProjectInventoryAction(operationalStateFor(project), project.deployMode);
 	}
 
 	function projectPrimaryLabel(project: Project) {

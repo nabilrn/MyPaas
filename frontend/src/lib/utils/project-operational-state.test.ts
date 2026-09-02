@@ -155,10 +155,10 @@ describe('project operational state matrix', () => {
 			statusLabel: 'Live',
 			statusTone: 'success'
 		});
-		expect(deriveProjectInventoryAction(result)).toEqual({ action: 'stop', label: 'Stop' });
+		expect(deriveProjectInventoryAction(result, 'dockerfile')).toEqual({ action: 'stop', label: 'Stop' });
 	});
 
-	it('uses Stop in inventory for an active static release because stopping removes its route', () => {
+	it('uses Deploy again in inventory for an active static release', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', deployMode: 'static', activeDeploymentId: 'dep-static' }),
 			latestDeployment: deployment('dep-static', 'running'),
@@ -175,7 +175,30 @@ describe('project operational state matrix', () => {
 			statusLabel: 'Live'
 		});
 		expect(result.detail).toContain('published');
-		expect(deriveProjectInventoryAction(result)).toEqual({ action: 'stop', label: 'Stop' });
+		expect(deriveProjectInventoryAction(result, 'static')).toEqual({ action: 'deploy', label: 'Deploy again' });
+	});
+
+	it('uses Stop in inventory for active Compose and image releases', () => {
+		for (const deployMode of ['compose', 'image'] as const) {
+			const result = deriveProjectOperationalState({
+				project: project({ status: 'running', deployMode, activeDeploymentId: `dep-${deployMode}` }),
+				latestDeployment: deployment(`dep-${deployMode}`, 'running'),
+				runtimeEvidence: 'available'
+			});
+
+			expect(deriveProjectInventoryAction(result, deployMode)).toEqual({ action: 'stop', label: 'Stop' });
+		}
+	});
+
+	it('preserves Start for a stopped project and Deploy for a project without a release', () => {
+		const stopped = deriveProjectOperationalState({
+			project: project({ status: 'stopped', activeDeploymentId: 'dep-stopped' }),
+			latestDeployment: deployment('dep-stopped', 'stopped')
+		});
+		const notDeployed = deriveProjectOperationalState({ project: project(), latestDeployment: null });
+
+		expect(deriveProjectInventoryAction(stopped, 'dockerfile')).toEqual({ action: 'start', label: 'Start' });
+		expect(deriveProjectInventoryAction(notDeployed, 'dockerfile')).toEqual({ action: 'deploy', label: 'Deploy' });
 	});
 
 	it('preserves warning and diagnostic actions in inventory', () => {
@@ -184,7 +207,7 @@ describe('project operational state matrix', () => {
 			latestDeployment: deployment('dep-failed', 'failed'),
 			runtimeEvidence: 'available'
 		});
-		expect(deriveProjectInventoryAction(failed)).toEqual({ action: 'view_deployment', label: 'Review failure' });
+		expect(deriveProjectInventoryAction(failed, 'dockerfile')).toEqual({ action: 'view_deployment', label: 'Review failure' });
 	});
 
 	it('does not reinterpret unavailable runtime evidence as a crash', () => {
