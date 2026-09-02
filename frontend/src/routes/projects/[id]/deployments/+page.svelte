@@ -202,7 +202,7 @@
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
 							<span class="max-w-full truncate font-mono text-sm font-semibold text-gray-950 dark:text-white" title={deploymentSource(d)}>{deploymentSource(d)}</span>
-							<StatusBadge status={d.status} label={deploymentHistoryLabel(d.status, d.id, project?.activeDeploymentId, project?.status)} />
+							<StatusBadge status={d.status} label={deploymentHistoryLabel(d.status, d.id, project?.activeDeploymentId, project?.status, project?.deployMode)} />
 							<span class="text-xs capitalize text-gray-500 dark:text-gray-400">{d.triggeredBy}</span>
 						</div>
 						<p class="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">{deploymentSummary(d)}</p>
