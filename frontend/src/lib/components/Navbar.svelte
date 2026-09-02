@@ -5,6 +5,7 @@
 	import type { User } from '$types';
 
 	export let user: User | null = null;
+	export let authPending = false;
 
 	const workspaceItems = [
 		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
@@ -26,8 +27,8 @@
 	let sidebar: HTMLElement | null = null;
 
 	$: pathname = $page.url.pathname;
-	$: visibleWorkspaceItems = workspaceItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
-	$: visibleAdministrationItems = administrationItems.filter((item) => !item.ownerOnly || user?.role === 'owner');
+	$: visibleWorkspaceItems = workspaceItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
+	$: visibleAdministrationItems = administrationItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
 
 	function isActive(href: string, currentPath: string) {
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
@@ -47,7 +48,15 @@
 		if (!sidebar || !(next instanceof Node) || !sidebar.contains(next)) expanded = false;
 	}
 
-	function chooseNavigation() {
+	function authorizationPending(ownerOnly: boolean) {
+		return authPending && ownerOnly && user === null;
+	}
+
+	function chooseNavigation(event: MouseEvent, ownerOnly: boolean) {
+		if (authorizationPending(ownerOnly)) {
+			event.preventDefault();
+			return;
+		}
 		expanded = false;
 	}
 </script>
@@ -65,7 +74,7 @@
 			href="/projects"
 			class="app-focus flex h-9 min-w-0 items-center rounded-md"
 			aria-label="MyPaaS projects"
-			on:click={chooseNavigation}
+			on:click={(event) => chooseNavigation(event, false)}
 		>
 			<BrandLogo compact={!expanded} />
 		</a>
@@ -78,9 +87,11 @@
 				<a
 					href={item.href}
 					aria-current={isActive(item.href, pathname) ? 'page' : undefined}
+					aria-disabled={authorizationPending(item.ownerOnly) ? 'true' : undefined}
+					tabindex={authorizationPending(item.ownerOnly) ? -1 : undefined}
 					class={navItemClass(item.href, expanded, pathname)}
 					title={expanded ? undefined : item.label}
-					on:click={chooseNavigation}
+					on:click={(event) => chooseNavigation(event, item.ownerOnly)}
 				>
 					<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
 					{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
@@ -96,9 +107,11 @@
 					<a
 						href={item.href}
 						aria-current={isActive(item.href, pathname) ? 'page' : undefined}
+						aria-disabled={authorizationPending(item.ownerOnly) ? 'true' : undefined}
+						tabindex={authorizationPending(item.ownerOnly) ? -1 : undefined}
 						class={navItemClass(item.href, expanded, pathname)}
 						title={expanded ? undefined : item.label}
-						on:click={chooseNavigation}
+						on:click={(event) => chooseNavigation(event, item.ownerOnly)}
 					>
 						<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
 						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
