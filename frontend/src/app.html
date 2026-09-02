@@ -4,6 +4,114 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>MyPaas</title>
+		<script>
+			(() => {
+				const recoveryKey = 'mypaas:asset-recovery-at';
+				const recoveryCookie = 'mypaas_asset_recovery_at';
+				const recoveryCooldownMs = 30_000;
+				let reloading = false;
+
+				const staleImportError = (reason) => {
+					const message = String(reason?.message ?? reason ?? '');
+					return /failed to fetch dynamically imported module|importing a module script failed|error loading dynamically imported module/i.test(
+						message
+					);
+				};
+
+				const readRecoveryCookie = () => {
+					try {
+						const prefix = `${recoveryCookie}=`;
+						const entry = document.cookie.split('; ').find((value) => value.startsWith(prefix));
+						return entry ? Number(entry.slice(prefix.length)) : 0;
+					} catch {
+						return 0;
+					}
+				};
+
+				const readLastRecovery = () => {
+					try {
+						return Number(sessionStorage.getItem(recoveryKey) ?? 0) || readRecoveryCookie();
+					} catch {
+						return readRecoveryCookie();
+					}
+				};
+
+				const persistRecovery = (timestamp) => {
+					const encoded = String(timestamp);
+					try {
+						sessionStorage.setItem(recoveryKey, encoded);
+						if (sessionStorage.getItem(recoveryKey) === encoded) return true;
+					} catch {
+						// Fall through to a short-lived same-origin cookie.
+					}
+
+					try {
+						document.cookie = `${recoveryCookie}=${encoded}; Max-Age=${Math.ceil(recoveryCooldownMs / 1000)}; Path=/; SameSite=Lax`;
+						return readRecoveryCookie() === timestamp;
+					} catch {
+						return false;
+					}
+				};
+
+				const clearRecovery = () => {
+					try {
+						sessionStorage.removeItem(recoveryKey);
+					} catch {
+						// Session storage may be unavailable by browser policy.
+					}
+					try {
+						document.cookie = `${recoveryCookie}=; Max-Age=0; Path=/; SameSite=Lax`;
+					} catch {
+						// Nothing to clear when cookies are unavailable.
+					}
+				};
+
+				const recoverFromStaleAssets = () => {
+					if (reloading) return false;
+
+					const now = Date.now();
+					const lastRecovery = readLastRecovery();
+					if (Number.isFinite(lastRecovery) && lastRecovery > 0 && now - lastRecovery < recoveryCooldownMs) {
+						return false;
+					}
+					if (!persistRecovery(now)) return false;
+
+					reloading = true;
+					location.reload();
+					return true;
+				};
+
+				addEventListener('vite:preloadError', (event) => {
+					if (recoverFromStaleAssets()) event.preventDefault();
+				});
+
+				addEventListener('unhandledrejection', (event) => {
+					if (staleImportError(event.reason) && recoverFromStaleAssets()) {
+						event.preventDefault();
+					}
+				});
+
+				addEventListener(
+					'error',
+					(event) => {
+						const target = event.target;
+						if (!(target instanceof Element)) return;
+						const rawUrl = target.getAttribute('src') ?? target.getAttribute('href');
+						if (!rawUrl) return;
+						try {
+							if (new URL(rawUrl, location.href).pathname.startsWith('/_app/immutable/')) {
+								recoverFromStaleAssets();
+							}
+						} catch {
+							// Ignore malformed third-party asset URLs.
+						}
+					},
+					true
+				);
+
+				setTimeout(clearRecovery, recoveryCooldownMs);
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover" class="antialiased">

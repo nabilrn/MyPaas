@@ -56,8 +56,11 @@ class VerifyProductionTest(unittest.TestCase):
         config = SVELTE_CONFIG.read_text(encoding="utf-8")
         layout = ROOT_LAYOUT.read_text(encoding="utf-8")
 
+        self.assertIn('handle /_app/immutable/* {', caddy)
         self.assertIn('header >Cache-Control "no-store"', caddy)
-        self.assertIn("match header Content-Type text/html*", caddy)
+        self.assertIn('header_down Cache-Control "public, max-age=31536000, immutable"', caddy)
+        self.assertIn("@asset_error status 4xx 5xx", caddy)
+        self.assertIn('header Cache-Control "no-store"', caddy)
         self.assertIn("dashboard_asset_paths", verify)
         self.assertIn("curl -fsSL --max-redirs 5", verify)
         self.assertIn("Dashboard HTML must be served with Cache-Control: no-store.", verify)
