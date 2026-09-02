@@ -1,0 +1,180 @@
+package dbstudio
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestSQLitePathFromEnv(t *testing.T) {
+	tests := []struct {
+		name   string
+		envs   map[string]string
+		path   string
+		source string
+		ok     bool
+	}{
+		{name: "prisma file url", envs: map[string]string{"DATABASE_URL": "file:/data/app.db"}, path: "/data/app.db", source: "DATABASE_URL", ok: true},
+		{name: "sqlite url", envs: map[string]string{"DATABASE_URL": "sqlite:///var/lib/app/app.sqlite3"}, path: "/var/lib/app/app.sqlite3", source: "DATABASE_URL", ok: true},
+		{name: "explicit path", envs: map[string]string{"SQLITE_PATH": "/data/app.db"}, path: "/data/app.db", source: "SQLITE_PATH", ok: true},
+		{name: "driver parts", envs: map[string]string{"DB_CONNECTION": "sqlite", "DB_DATABASE": "./data/app.db"}, path: "./data/app.db", source: "env-parts", ok: true},
+		{name: "driver generic path", envs: map[string]string{"DB_CONNECTION": "sqlite", "DATABASE_PATH": "/data/app.db"}, path: "/data/app.db", source: "DATABASE_PATH", ok: true},
+		{name: "generic path without sqlite hint ignored", envs: map[string]string{"DATABASE_PATH": "/data/app.db"}, ok: false},
+		{name: "postgres ignored", envs: map[string]string{"DATABASE_URL": "postgres://db/app"}, ok: false},
+		{name: "server url wins over sqlite path", envs: map[string]string{"DATABASE_URL": "postgres://db/app", "SQLITE_PATH": "/data/app.db"}, ok: false},
+		{name: "postgres hint does not claim generic path", envs: map[string]string{"DB_CONNECTION": "postgres", "DATABASE_PATH": "/data/app.db"}, ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, source, ok := sqlitePathFromEnv(tt.envs)
+			if ok != tt.ok || path != tt.path || source != tt.source {
+				t.Fatalf("sqlitePathFromEnv() = %q, %q, %v; want %q, %q, %v", path, source, ok, tt.path, tt.source, tt.ok)
+			}
+		})
+	}
+}
+
+func TestResolveSQLiteContainerPath(t *testing.T) {
+	path, err := resolveSQLiteContainerPath("./data/app.db", "/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "/app/data/app.db" {
+		t.Fatalf("path = %q, want /app/data/app.db", path)
+	}
+	if _, err := resolveSQLiteContainerPath("relative.db", ""); err == nil {
+		t.Fatal("expected relative path without working directory to fail")
+	}
+}
+
+func TestSQLitePathOnPersistentMount(t *testing.T) {
+	inspect := sqliteRuntimeInspect{}
+	inspect.Mounts = append(inspect.Mounts, struct {
+		Type        string `json:"Type"`
+		Destination string `json:"Destination"`
+		RW          bool   `json:"RW"`
+	}{Type: "volume", Destination: "/app/data", RW: true})
+	inspect.Mounts = append(inspect.Mounts, struct {
+		Type        string `json:"Type"`
+		Destination string `json:"Destination"`
+		RW          bool   `json:"RW"`
+	}{Type: "tmpfs", Destination: "/app/cache", RW: true})
+	if !sqlitePathOnPersistentMount("/app/data/app.db", inspect) {
+		t.Fatal("expected database inside persistent volume")
+	}
+	if sqlitePathOnPersistentMount("/app/cache/app.db", inspect) {
+		t.Fatal("did not expect tmpfs database to be accepted as persistent")
+	}
+	if sqlitePathOnPersistentMount("/app/app.db", inspect) {
+		t.Fatal("did not expect writable-layer database to be accepted")
+	}
+}
+
+func TestOpenSQLiteDatabaseDoesNotCreateMissingFile(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "missing.db")
+	conn, err := openSQLiteDatabase(ctx, databasePath)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("expected missing SQLite database to fail")
+	}
+	if _, statErr := os.Stat(databasePath); !os.IsNotExist(statErr) {
+		t.Fatalf("missing SQLite path was created or stat failed unexpectedly: %v", statErr)
+	}
+}
+
+func TestSQLiteAdapterCRUDAndMetadata(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "app.db")
+	if err := os.WriteFile(databasePath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := openSQLiteDatabase(ctx, databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, `
+CREATE TABLE teams (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE
+);
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  team_id INTEGER,
+  FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE SET NULL
+);
+CREATE INDEX users_lower_email_idx ON users(lower(email));`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO teams(name) VALUES ('infra')`); err != nil {
+		t.Fatal(err)
+	}
+
+	adapter := sqliteAdapter{}
+	schemas, err := adapter.Schemas(ctx, conn)
+	if err != nil || len(schemas) != 1 || schemas[0].Name != "main" {
+		t.Fatalf("schemas = %#v, err = %v", schemas, err)
+	}
+	tables, err := adapter.Tables(ctx, conn, "main")
+	if err != nil || len(tables) != 2 {
+		t.Fatalf("tables = %#v, err = %v", tables, err)
+	}
+	columns, err := adapter.Columns(ctx, conn, "main", "users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(columns) != 4 || columns[0].Name != "id" || !columns[0].PrimaryKey || !columns[0].AutoGenerated {
+		t.Fatalf("unexpected users columns: %#v", columns)
+	}
+	details, err := adapter.TableDetails(ctx, conn, "main", "users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(details.ForeignKeys) != 1 || details.ForeignKeys[0].ReferencedTable != "teams" {
+		t.Fatalf("unexpected foreign keys: %#v", details.ForeignKeys)
+	}
+	foundExpressionIndex := false
+	for _, index := range details.Indexes {
+		if index.Name == "users_lower_email_idx" {
+			foundExpressionIndex = true
+			if index.Definition == "" {
+				t.Fatalf("expression index definition is empty: %#v", index)
+			}
+		}
+	}
+	if !foundExpressionIndex {
+		t.Fatalf("expression index missing from table details: %#v", details.Indexes)
+	}
+
+	if err := adapter.Insert(ctx, conn, Mutation{Schema: "main", Table: "users", Values: map[string]any{"name": "Nabil", "email": "nabil@example.test", "team_id": 1}}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := adapter.Rows(ctx, conn, RowQuery{Schema: "main", Table: "users", Limit: 20, Search: "Nabil"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Rows) != 1 || page.Rows[0]["name"] != "Nabil" {
+		t.Fatalf("unexpected rows: %#v", page.Rows)
+	}
+	id := page.Rows[0]["id"]
+	if err := adapter.Update(ctx, conn, Mutation{Schema: "main", Table: "users", Values: map[string]any{"name": "Nabil R"}, PrimaryKey: map[string]any{"id": id}}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = adapter.Rows(ctx, conn, RowQuery{Schema: "main", Table: "users", Limit: 20, Search: "Nabil R"})
+	if err != nil || len(page.Rows) != 1 {
+		t.Fatalf("updated rows = %#v, err = %v", page.Rows, err)
+	}
+	if err := adapter.Delete(ctx, conn, Mutation{Schema: "main", Table: "users", PrimaryKey: map[string]any{"id": id}}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = adapter.Rows(ctx, conn, RowQuery{Schema: "main", Table: "users", Limit: 20})
+	if err != nil || len(page.Rows) != 0 {
+		t.Fatalf("rows after delete = %#v, err = %v", page.Rows, err)
+	}
+}

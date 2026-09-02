@@ -12,6 +12,7 @@ const (
 	DriverPostgres DriverID = "postgres"
 	DriverMySQL    DriverID = "mysql"
 	DriverMariaDB  DriverID = "mariadb"
+	DriverSQLite   DriverID = "sqlite"
 )
 
 type Connection struct {
@@ -23,8 +24,10 @@ type Connection struct {
 	Source   string   `json:"source"`
 	DSN      string   `json:"-"`
 
-	password string
-	query    map[string][]string
+	password         string
+	query            map[string][]string
+	runtimeContainer string
+	databasePath     string
 }
 
 type Status struct {
