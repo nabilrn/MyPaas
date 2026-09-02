@@ -3,6 +3,7 @@
 	import { CircleStop, RefreshCw, Square, Terminal, TriangleAlert } from '@lucide/svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import { api } from '$api';
+	import { sanitizeShellOutput, shouldPreserveCopyShortcut } from '$lib/utils/shell-output';
 	import { toast } from '$stores/toast';
 	import type { ShellSession } from '$types';
 
@@ -107,7 +108,7 @@
 	}
 
 	function appendOutput(chunk: string) {
-		output = `${output}${chunk}`.slice(-MAX_OUTPUT_CHARS);
+		output = sanitizeShellOutput(`${output}${chunk}`).slice(-MAX_OUTPUT_CHARS);
 		requestAnimationFrame(() => {
 			if (outputElement) outputElement.scrollTop = outputElement.scrollHeight;
 		});
@@ -150,6 +151,16 @@
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'c') {
+			const pageSelection = window.getSelection()?.toString() ?? '';
+			if (
+				shouldPreserveCopyShortcut(
+					pageSelection,
+					commandInput?.selectionStart ?? null,
+					commandInput?.selectionEnd ?? null
+				)
+			) {
+				return;
+			}
 			event.preventDefault();
 			void interruptCommand();
 			return;
@@ -230,7 +241,7 @@
 		{#if session}
 			<pre
 				bind:this={outputElement}
-				class="h-full overflow-auto whitespace-pre-wrap break-words bg-neutral-900 p-4 font-mono text-sm leading-6 text-gray-200 dark:bg-neutral-950"
+				class="h-full cursor-text select-text overflow-auto whitespace-pre-wrap break-words bg-neutral-900 p-4 font-mono text-sm leading-6 text-gray-200 dark:bg-neutral-950"
 				aria-label="Shell output"
 			>{output || 'Waiting for shell output…'}</pre>
 		{:else}
@@ -258,7 +269,7 @@
 				class="min-w-0 flex-1 border-0 bg-transparent px-0 font-mono text-sm text-gray-100 outline-none placeholder:text-gray-600 focus:ring-0"
 				bind:value={command}
 				on:keydown={handleKeydown}
-				placeholder={status === 'connected' ? 'Enter a command · Ctrl+C interrupts the running command' : 'Waiting for shell connection'}
+				placeholder={status === 'connected' ? 'Enter a command · Ctrl+C interrupts unless text is selected' : 'Waiting for shell connection'}
 				disabled={status !== 'connected' || sending}
 				autocomplete="off"
 			/>
