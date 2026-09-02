@@ -58,11 +58,6 @@
 		pageIndex = 0;
 	}
 
-	function changePageSize(event: Event) {
-		pageSize = Number((event.currentTarget as HTMLSelectElement).value);
-		pageIndex = 0;
-	}
-
 	function formatMemory(value: number) {
 		if (!Number.isFinite(value)) return '—';
 		return value >= 1024 ? `${(value / 1024).toFixed(2)} GB` : `${value.toFixed(0)} MB`;
@@ -129,11 +124,11 @@
 
 				<label class="block" for="container-page-size">
 					<span class="field-label">Rows</span>
-					<select id="container-page-size" class="field" value={pageSize} on:change={changePageSize}>
-						<option value="10">10</option>
-						<option value="20">20</option>
-						<option value="50">50</option>
-						<option value="100">100</option>
+					<select id="container-page-size" class="field min-w-20" bind:value={pageSize} on:change={resetPage}>
+						<option value={10}>10</option>
+						<option value={20}>20</option>
+						<option value={50}>50</option>
+						<option value={100}>100</option>
 					</select>
 				</label>
 			</div>
