@@ -24,7 +24,9 @@ func TestServiceControlCInterruptsForegroundCommandWithoutEndingSession(t *testi
 	}
 	defer unsubscribe()
 
-	if err := service.Write(info.ID, "echo mypaas-before-interrupt; sleep 30\n"); err != nil {
+	// Build the marker at execution time so PTY input echo cannot satisfy the
+	// output assertion before the foreground command has actually started.
+	if err := service.Write(info.ID, "printf 'mypaas-before-%s\\n' interrupt; sleep 30\n"); err != nil {
 		t.Fatalf("start long-running shell command: %v", err)
 	}
 	waitForShellOutput(t, events, done, "mypaas-before-interrupt", 5*time.Second)
@@ -32,7 +34,9 @@ func TestServiceControlCInterruptsForegroundCommandWithoutEndingSession(t *testi
 	if err := service.Write(info.ID, "\x03"); err != nil {
 		t.Fatalf("interrupt shell command: %v", err)
 	}
-	if err := service.Write(info.ID, "echo mypaas-shell-survived\n"); err != nil {
+	// Likewise, require output produced by the shell after Ctrl+C instead of
+	// accepting the terminal driver's echo of the command line itself.
+	if err := service.Write(info.ID, "printf 'mypaas-shell-%s\\n' survived\n"); err != nil {
 		t.Fatalf("write command after interrupt: %v", err)
 	}
 	waitForShellOutput(t, events, done, "mypaas-shell-survived", 5*time.Second)
