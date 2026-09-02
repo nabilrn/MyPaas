@@ -34,6 +34,10 @@ func ExecuteSQLiteHelper(ctx context.Context, request SQLiteHelperRequest) (SQLi
 		return SQLiteHelperResponse{}, err
 	}
 	defer conn.Close()
+	// Table metadata can require nested PRAGMA reads while the index-list rows are
+	// still open. Allow a small bounded pool; SQLite locking remains enforced by
+	// the database itself and busy_timeout.
+	conn.SetMaxOpenConns(4)
 
 	adapter := sqliteAdapter{}
 	switch request.Operation {
