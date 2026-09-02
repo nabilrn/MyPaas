@@ -22,6 +22,10 @@ describe('deployment history state', () => {
 		expect(deploymentHistoryLabel('running', 'dep-2', 'dep-1', 'running')).toBe('Succeeded');
 	});
 
+	it('uses Published for the active static release', () => {
+		expect(deploymentHistoryLabel('running', 'dep-1', 'dep-1', 'running', 'static')).toBe('Published');
+	});
+
 	it('shows Current when the project runtime is stopped but the release remains selected', () => {
 		expect(deploymentHistoryLabel('running', 'dep-1', 'dep-1', 'stopped')).toBe('Current');
 	});
