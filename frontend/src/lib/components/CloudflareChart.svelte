@@ -22,8 +22,8 @@
 		? point.requests
 		: Number((point.bandwidth / (1024 * 1024)).toFixed(3)));
 	$: metricLabel = metric === 'requests' ? 'Requests' : 'Bandwidth (MB)';
-	$: strokeColor = metric === 'requests' ? '#3b82f6' : '#10b981';
-	$: fillColor = metric === 'requests' ? '#3b82f614' : '#10b98114';
+	$: barColor = metric === 'requests' ? 'rgba(59, 130, 246, 0.72)' : 'rgba(16, 185, 129, 0.72)';
+	$: hoverColor = metric === 'requests' ? 'rgba(37, 99, 235, 0.9)' : 'rgba(5, 150, 105, 0.9)';
 	$: domain = adaptiveDomain(values, metric);
 
 	function adaptiveDomain(series: number[], selectedMetric: EdgeMetric) {
@@ -43,21 +43,22 @@
 		return { min, max };
 	}
 
-	const config = (): ChartConfiguration => ({
-		type: 'line',
+	const config = (): ChartConfiguration<'bar'> => ({
+		type: 'bar',
 		data: {
 			labels,
 			datasets: [
 				{
 					label: metricLabel,
 					data: values,
-					borderColor: strokeColor,
-					backgroundColor: fillColor,
-					borderWidth: compact ? 1.5 : 2,
-					pointRadius: 0,
-					pointHoverRadius: compact ? 3 : 4,
-					tension: 0.35,
-					fill: !compact
+					backgroundColor: barColor,
+					hoverBackgroundColor: hoverColor,
+					borderWidth: 0,
+					borderRadius: compact ? 2 : 3,
+					borderSkipped: false,
+					barPercentage: compact ? 0.78 : 0.72,
+					categoryPercentage: compact ? 0.92 : 0.86,
+					minBarLength: 2
 				}
 			]
 		},
@@ -86,7 +87,7 @@
 			scales: {
 				x: {
 					display: !compact,
-					grid: { display: true, color: 'rgba(156, 163, 175, 0.05)', drawTicks: false },
+					grid: { display: false, drawTicks: false },
 					border: { display: false },
 					ticks: { color: '#9ca3af', font: { size: 11 }, maxTicksLimit: 8 }
 				},
@@ -97,7 +98,7 @@
 					beginAtZero: false,
 					min: domain.min,
 					max: domain.max,
-					grid: { color: 'rgba(156, 163, 175, 0.05)', drawTicks: false },
+					grid: { color: 'rgba(156, 163, 175, 0.08)', drawTicks: false },
 					border: { display: false },
 					ticks: {
 						color: '#9ca3af',
@@ -119,8 +120,8 @@
 		chart.data.labels = labels;
 		chart.data.datasets[0].label = metricLabel;
 		chart.data.datasets[0].data = values;
-		chart.data.datasets[0].borderColor = strokeColor;
-		chart.data.datasets[0].backgroundColor = fillColor;
+		chart.data.datasets[0].backgroundColor = barColor;
+		chart.data.datasets[0].hoverBackgroundColor = hoverColor;
 		if (chart.options.scales?.y) {
 			chart.options.scales.y.min = domain.min;
 			chart.options.scales.y.max = domain.max;
