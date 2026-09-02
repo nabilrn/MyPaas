@@ -213,7 +213,7 @@ export interface ShellSession {
 	expiresAt: string;
 }
 
-export type DBStudioDriver = 'postgres' | 'mysql' | 'mariadb';
+export type DBStudioDriver = 'postgres' | 'mysql' | 'mariadb' | 'sqlite';
 
 export interface DBStudioConnection {
 	driver: DBStudioDriver;
