@@ -45,7 +45,9 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn("COMPOSE_PARALLEL_LIMIT must be a positive integer.", content)
         self.assertIn("export COMPOSE_PARALLEL_LIMIT", content)
         dashboard = content.index('echo "Starting dashboard..."')
-        caddy = content.index('echo "Reloading caddy configuration without restarting the proxy..."')
+        caddy = content.index(
+            'echo "Reloading caddy configuration from the current checkout without restarting the proxy..."'
+        )
         api = content.index('echo "Starting api..."')
         cloudflared = content.index('echo "Starting cloudflared..."')
         self.assertLess(dashboard, caddy)
@@ -56,11 +58,23 @@ class DeployToVmTest(unittest.TestCase):
         self.assertIn('up -d --no-deps cloudflared', content)
         self.assertIn('up -d --force-recreate --no-deps api', content)
 
-    def test_caddy_config_is_hot_reloaded_before_api_reconciliation(self) -> None:
+    def test_caddy_config_is_hot_reloaded_from_current_checkout_before_api_reconciliation(self) -> None:
         script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if managed_container_running mypaas-caddy-prod; then', script)
-        self.assertIn('caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile', script)
+        self.assertIn('mktemp /tmp/mypaas-Caddyfile.XXXXXX', script)
+        self.assertIn("sh -c 'cat > \"$1\"' sh \"$caddy_stage_path\"", script)
+        self.assertIn('< "$ROOT_DIR/Caddyfile.prod"', script)
+        self.assertIn(
+            'caddy reload --config "$caddy_stage_path" --adapter caddyfile',
+            script,
+        )
+        self.assertIn('rm -f "$caddy_stage_path"', script)
+        self.assertNotIn('/tmp/mypaas-Caddyfile.next', script)
+        self.assertNotIn(
+            'caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile',
+            script,
+        )
         self.assertIn('--address unix//run/mypaas/caddy-admin.sock', script)
         self.assertNotIn("for service in caddy api dashboard cloudflared; do", script)
 

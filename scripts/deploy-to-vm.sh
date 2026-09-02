@@ -335,10 +335,28 @@ echo "Starting dashboard..."
 $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard
 
 if managed_container_running mypaas-caddy-prod; then
-  echo "Reloading caddy configuration without restarting the proxy..."
+  echo "Reloading caddy configuration from the current checkout without restarting the proxy..."
+  # A single-file bind mount can keep pointing at the inode that existed before
+  # git reset/checkout replaced Caddyfile.prod. Stage this release's bytes at a
+  # unique path inside the container so overlapping deploys cannot share or
+  # partially overwrite the file being reloaded.
+  caddy_stage_path="$($COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    mktemp /tmp/mypaas-Caddyfile.XXXXXX)"
+  if ! $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    sh -c 'cat > "$1"' sh "$caddy_stage_path" < "$ROOT_DIR/Caddyfile.prod"; then
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+      rm -f "$caddy_stage_path" >/dev/null 2>&1 || true
+    false
+  fi
+  if ! $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    caddy reload --config "$caddy_stage_path" --adapter caddyfile \
+    --address unix//run/mypaas/caddy-admin.sock; then
+    $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+      rm -f "$caddy_stage_path" >/dev/null 2>&1 || true
+    false
+  fi
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
-    caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
-    --address unix//run/mypaas/caddy-admin.sock
+    rm -f "$caddy_stage_path"
 else
   echo "Starting caddy..."
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps caddy

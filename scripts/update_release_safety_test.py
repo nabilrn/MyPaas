@@ -36,6 +36,30 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn('verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"', updater)
         self.assertIn('previous runtime could not be verified after rollback', updater)
 
+    def test_updater_deploys_after_each_checkout_reset(self):
+        updater = self.text("scripts/update-vm.sh")
+        deploy = self.text("scripts/deploy-to-vm.sh")
+
+        target_reset = updater.index('git_repo reset --hard "$target_sha"')
+        target_deploy = updater.index('bash "$ROOT_DIR/scripts/deploy-to-vm.sh"', target_reset)
+        rollback_reset = updater.index('git_repo reset --hard "$current_sha"', target_deploy)
+        rollback_deploy = updater.index('bash "$ROOT_DIR/scripts/deploy-to-vm.sh"', rollback_reset)
+
+        self.assertLess(target_reset, target_deploy)
+        self.assertLess(rollback_reset, rollback_deploy)
+        self.assertIn('mktemp /tmp/mypaas-Caddyfile.XXXXXX', deploy)
+        self.assertIn('< "$ROOT_DIR/Caddyfile.prod"', deploy)
+        self.assertIn(
+            'caddy reload --config "$caddy_stage_path" --adapter caddyfile',
+            deploy,
+        )
+        self.assertIn('rm -f "$caddy_stage_path"', deploy)
+        self.assertNotIn('/tmp/mypaas-Caddyfile.next', deploy)
+        self.assertNotIn(
+            'caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile',
+            deploy,
+        )
+
     def test_updater_surfaces_final_verification_failure(self):
         updater = self.text("scripts/update-vm.sh")
         self.assertIn('verify_log="$(mktemp)"', updater)
