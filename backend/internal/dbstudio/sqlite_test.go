@@ -65,6 +65,7 @@ func TestSQLiteAdapterCRUDAndMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	conn.SetMaxOpenConns(4)
 
 	_, err = conn.ExecContext(ctx, `
 CREATE TABLE teams (
