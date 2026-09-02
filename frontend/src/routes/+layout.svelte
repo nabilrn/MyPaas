@@ -23,7 +23,8 @@
 
 	$: isPublic = $page.url.pathname === '/' || $page.url.pathname === '/login' || $page.url.pathname.startsWith('/docs');
 	$: createProjectWorkspace = $page.url.pathname === '/projects/new';
-	$: showMainLoader = !checked || Boolean($navigating) || $mainContentLoading;
+	$: authPending = !checked;
+	$: showMainLoader = authPending || Boolean($navigating) || $mainContentLoading;
 	$: if (isPublic && unregisterWebMCP) {
 		unregisterWebMCP();
 		unregisterWebMCP = null;
@@ -69,14 +70,20 @@
 	</main>
 {:else}
 	<div class="app-shell min-h-screen lg:pl-14">
-		<Navbar {user} />
+		<Navbar {user} {authPending} />
 		<AppHeader {user} />
 		<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
-			{#if checked && user}
-				<div class:create-project-workspace={createProjectWorkspace} class:pointer-events-none={showMainLoader}>
-					<slot />
-				</div>
-			{/if}
+			<div
+				class:create-project-workspace={createProjectWorkspace}
+				class:pointer-events-none={showMainLoader}
+				class:invisible={showMainLoader}
+				class:absolute={showMainLoader}
+				class:inset-0={showMainLoader}
+				class:overflow-hidden={showMainLoader}
+				aria-hidden={showMainLoader ? 'true' : undefined}
+			>
+				<slot />
+			</div>
 			{#if showMainLoader}<MainContentLoader label={checked ? 'Loading' : 'Loading account'} />{/if}
 		</main>
 	</div>
