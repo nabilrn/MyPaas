@@ -20,6 +20,10 @@ Technical documentation for the current single-host MyPaaS beta.
 | [mypaas-statd](STATD.md) | Optional native telemetry integration |
 | [Architecture decisions](adr/) | Accepted design decisions |
 
+## UX planning
+
+- [Control-plane UI reliability and refinement plan](ux/control-plane-ui-refactor-plan.md) — proposed, implementation-grounded work packages for operational state, high-trust actions, telemetry, responsive tables, and theme parity.
+
 ## Source of truth
 
 When documentation disagrees, use this order:
