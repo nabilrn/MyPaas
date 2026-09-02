@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, RefreshCw, Rocket, Search, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -15,7 +15,7 @@
 	import { toast } from '$stores/toast';
 	import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
-	import { deriveProjectOperationalState, type ProjectOperationalState, type RuntimeEvidence } from '$lib/utils/project-operational-state';
+	import { deriveProjectInventoryAction, deriveProjectOperationalState, type ProjectOperationalState, type RuntimeEvidence } from '$lib/utils/project-operational-state';
 	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Deployment, Project } from '$types';
@@ -29,7 +29,7 @@
 	let loading = true;
 	let error = '';
 	let projectActionId = '';
-	let projectActionType: 'start' | 'deploy' | '' = '';
+	let projectActionType: 'start' | 'stop' | 'deploy' | '' = '';
 	let currentPage = 0;
 	let searchQuery = '';
 	let projectUptimes: Record<string, string> = {};
@@ -185,23 +185,32 @@
 		});
 	}
 
+	function inventoryActionFor(project: Project) {
+		return deriveProjectInventoryAction(operationalStateFor(project));
+	}
+
 	function projectPrimaryLabel(project: Project) {
-		if (projectActionId === project.id) return projectActionType === 'start' ? 'Starting' : 'Queueing';
-		return operationalStateFor(project).primaryActionLabel;
+		if (projectActionId === project.id) {
+			if (projectActionType === 'start') return 'Starting';
+			if (projectActionType === 'stop') return 'Stopping';
+			return 'Queueing';
+		}
+		return inventoryActionFor(project).label;
 	}
 
 	function projectPrimaryIcon(project: Project) {
-		const action = operationalStateFor(project).primaryAction;
+		const action = inventoryActionFor(project).action;
 		if (action === 'view_logs') return FileText;
 		if (action === 'view_deployment') return History;
 		if (action === 'start') return Play;
+		if (action === 'stop') return Square;
 		return Rocket;
 	}
 
 	function projectPrimaryHref(project: Project) {
-		const operationalState = operationalStateFor(project);
-		if (operationalState.primaryAction === 'view_logs') return `/projects/${project.id}/logs`;
-		if (operationalState.primaryAction === 'view_deployment') {
+		const action = inventoryActionFor(project).action;
+		if (action === 'view_logs') return `/projects/${project.id}/logs`;
+		if (action === 'view_deployment') {
 			const latestDeployment = latestDeployments[project.id];
 			return `/projects/${project.id}/deployments${latestDeployment ? `?focus=${encodeURIComponent(latestDeployment.id)}` : ''}`;
 		}
@@ -223,15 +232,18 @@
 
 	async function handlePrimaryProjectAction(project: Project) {
 		if (projectActionId) return;
-		const action = operationalStateFor(project).primaryAction;
+		const action = inventoryActionFor(project).action;
 		if (action === 'view_logs' || action === 'view_deployment') return;
 
 		projectActionId = project.id;
-		projectActionType = action === 'start' ? 'start' : 'deploy';
+		projectActionType = action === 'start' ? 'start' : action === 'stop' ? 'stop' : 'deploy';
 		try {
 			if (action === 'start') {
 				await api.projects.start(project.id);
 				toast.success(`${project.name} started`);
+			} else if (action === 'stop') {
+				await api.projects.stop(project.id);
+				toast.success(`${project.name} stopped`);
 			} else {
 				await api.projects.deploy(project.id);
 				toast.success(`Deployment queued for ${project.name}`);
@@ -423,7 +435,7 @@
 
 	<TableShell
 		title="Inventory"
-		description="Projects, runtime, database access, and actions."
+		description="Projects, runtime, database access, and lifecycle controls."
 		{loading}
 		loadingRows={3}
 		error={error && projects.length === 0 ? error : ''}
@@ -434,23 +446,29 @@
 		on:retry={() => refreshDashboardData()}
 	>
 		<svelte:fragment slot="actions">
-			<label class="relative block w-full sm:w-72">
-				<span class="sr-only">Search projects</span>
-				<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-				<input
-					type="text"
-					inputmode="search"
-					value={searchQuery}
-					on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
-					placeholder="Search projects"
-					class="field h-9 w-full !pl-9"
-				/>
-				{#if searchQuery}
-					<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
-						<X class="h-4 w-4" aria-hidden="true" />
-					</button>
-				{/if}
-			</label>
+			<div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+				<label class="relative block w-full sm:w-72">
+					<span class="sr-only">Search projects</span>
+					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<input
+						type="text"
+						inputmode="search"
+						value={searchQuery}
+						on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
+						placeholder="Search projects"
+						class="field h-9 w-full !pl-9"
+					/>
+					{#if searchQuery}
+						<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
+							<X class="h-4 w-4" aria-hidden="true" />
+						</button>
+					{/if}
+				</label>
+				<ActionLink href="/projects/new" variant="primary" size="xs" className="shrink-0">
+					<Plus slot="icon" class="h-3.5 w-3.5" aria-hidden="true" />
+					New project
+				</ActionLink>
+			</div>
 		</svelte:fragment>
 
 		<svelte:fragment slot="notice">
@@ -489,13 +507,14 @@
 					<th>Usage</th>
 					<th>Uptime / release</th>
 					<th>Updated</th>
-					<th>Action</th>
+					<th>Next action</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
 					{@const operationalState = operationalStateFor(project)}
+					{@const inventoryAction = inventoryActionFor(project)}
 					{@const primaryHref = projectPrimaryHref(project)}
 					<tr class="h-[3.75rem]">
 						<td>
@@ -569,7 +588,7 @@
 								</ActionLink>
 							{:else}
 								<ActionButton
-									variant="primary"
+									variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'}
 									size="xs"
 									className="mx-auto min-w-[5.75rem]"
 									on:click={() => handlePrimaryProjectAction(project)}
@@ -591,6 +610,7 @@
 			{#each visibleProjects as project}
 				{@const source = describeProjectSource(project)}
 				{@const operationalState = operationalStateFor(project)}
+				{@const inventoryAction = inventoryActionFor(project)}
 				{@const primaryHref = projectPrimaryHref(project)}
 				<div class="px-4 py-3">
 					<div class="flex items-center justify-between gap-3">
@@ -607,7 +627,7 @@
 							</ActionLink>
 						{:else}
 							<ActionButton
-								variant="primary"
+								variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'}
 								size="xs"
 								className="min-w-[5.75rem]"
 								on:click={() => handlePrimaryProjectAction(project)}

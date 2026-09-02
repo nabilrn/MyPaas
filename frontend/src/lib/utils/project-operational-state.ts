@@ -4,7 +4,7 @@ import type { Deployment, Project } from '$types';
 export type ServingState = 'live' | 'offline' | 'degraded' | 'unknown';
 export type ReleaseState = 'not_deployed' | 'queued' | 'deploying' | 'succeeded' | 'failed';
 export type DesiredState = 'running' | 'stopped';
-export type ProjectOperationalAction = 'deploy' | 'retry' | 'start' | 'view_logs' | 'view_deployment';
+export type ProjectOperationalAction = 'deploy' | 'retry' | 'start' | 'stop' | 'view_logs' | 'view_deployment';
 export type ProjectOperationalAttention = 'none' | 'info' | 'warning' | 'danger';
 export type ProjectOperationalTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 export type RuntimeEvidence = 'available' | 'unavailable' | 'not_applicable';
@@ -30,6 +30,25 @@ export interface ProjectOperationalState {
 	attention: ProjectOperationalAttention;
 	statusLabel: string;
 	statusTone: ProjectOperationalTone;
+}
+
+export interface ProjectInventoryAction {
+	action: ProjectOperationalAction;
+	label: string;
+}
+
+export function deriveProjectInventoryAction(operationalState: ProjectOperationalState): ProjectInventoryAction {
+	if (
+		operationalState.serving === 'live' &&
+		operationalState.release === 'succeeded' &&
+		operationalState.attention === 'none'
+	) {
+		return { action: 'stop', label: 'Stop' };
+	}
+	return {
+		action: operationalState.primaryAction,
+		label: operationalState.primaryActionLabel
+	};
 }
 
 export function deriveProjectOperationalState({
