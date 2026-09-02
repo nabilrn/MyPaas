@@ -62,6 +62,7 @@ func waitForShellOutput(t *testing.T, events <-chan Event, done <-chan struct{},
 				if strings.Contains(output.String(), want) {
 					return
 				}
+			}
 		case <-done:
 			t.Fatalf("shell session ended while waiting for %q; output=%q", want, output.String())
 		case <-deadline.C:
