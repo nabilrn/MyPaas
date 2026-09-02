@@ -69,7 +69,7 @@
 	</main>
 {:else}
 	<div class="app-shell min-h-screen lg:pl-14">
-		<Navbar {user} />
+		<Navbar {user} authPending={!checked} />
 		<AppHeader {user} />
 		<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
 			{#if checked && user}
