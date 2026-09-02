@@ -25,14 +25,14 @@
 		'stroke-lime-600 dark:stroke-lime-300'
 	];
 	const fillPalette = [
-		'fill-sky-500/14 dark:fill-sky-300/16',
-		'fill-emerald-500/14 dark:fill-emerald-300/16',
-		'fill-violet-500/14 dark:fill-violet-300/16',
-		'fill-amber-500/14 dark:fill-amber-300/16',
-		'fill-rose-500/14 dark:fill-rose-300/16',
-		'fill-cyan-500/14 dark:fill-cyan-300/16',
-		'fill-fuchsia-500/14 dark:fill-fuchsia-300/16',
-		'fill-lime-600/14 dark:fill-lime-300/16'
+		'fill-sky-500/10 dark:fill-sky-300/20',
+		'fill-emerald-500/10 dark:fill-emerald-300/20',
+		'fill-violet-500/10 dark:fill-violet-300/20',
+		'fill-amber-500/10 dark:fill-amber-300/20',
+		'fill-rose-500/10 dark:fill-rose-300/20',
+		'fill-cyan-500/10 dark:fill-cyan-300/20',
+		'fill-fuchsia-500/10 dark:fill-fuchsia-300/20',
+		'fill-lime-600/10 dark:fill-lime-300/20'
 	];
 	const dotPalette = [
 		'bg-sky-500 dark:bg-sky-300',
