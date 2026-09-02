@@ -14,21 +14,24 @@ Full database IDE functionality would add too much security and UX surface for t
 
 Add a project-level DB Studio Lite:
 
-- Support PostgreSQL, MySQL, and MariaDB first.
-- Discover connection details from encrypted project environment variables.
+- Support PostgreSQL, MySQL, MariaDB, and persistent SQLite databases.
+- Discover server-database connection details and SQLite paths from encrypted project environment variables.
 - Provide schema/table browsing, paginated row viewing, insert, update, and delete.
 - Keep raw SQL console out of MVP.
 - Require explicit temporary write mode before insert/update/delete.
 - Allow update/delete only when a table has a primary key.
-- Block system schemas.
+- Block system schemas; SQLite exposes only its `main` schema through DB Studio.
 - Quote identifiers through driver-specific adapters after validating them against introspection results.
 - Audit write actions.
 
 This feature may use dynamic SQL only inside `internal/dbstudio` adapters because it targets user project databases with dynamic schemas. MyPaas application database queries remain sqlc-managed.
 
+SQLite has a different runtime contract from server databases. DB Studio accepts SQLite only when the resolved database file is inside a persistent mount of a container-backed project. A file that exists only in the container writable layer is rejected because it is not durable across recreate/redeploy. The control-plane API does not mount container-engine storage directly; SQLite operations run through a short-lived, network-disabled helper container that shares the project's existing mounts.
+
 ## Consequences
 
-- The dashboard can offer a Prisma Studio-like workflow for small CRUD tasks.
-- The first version stays intentionally limited and safer than a full DB client.
-- Compose database access requires MyPaas API to reach the project Compose network; the service can connect the API container to the project default network when needed.
-- SQLite, SQL Server, Oracle, MongoDB, and Redis are out of scope for this ADR.
+- The dashboard can offer a Prisma Studio-like workflow for small CRUD tasks across PostgreSQL, MySQL, MariaDB, and persistent SQLite.
+- The feature stays intentionally limited and safer than a full DB client.
+- Compose server-database access requires MyPaas API to reach the project Compose network; the service can connect the API container to the project default network when needed.
+- SQLite projects must place the database under a persistent runtime mount and expose its path through a supported database environment variable.
+- SQL Server, Oracle, MongoDB, and Redis remain out of scope for this ADR.
