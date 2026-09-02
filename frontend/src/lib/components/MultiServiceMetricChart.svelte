@@ -24,6 +24,16 @@
 		'stroke-fuchsia-500 dark:stroke-fuchsia-300',
 		'stroke-lime-600 dark:stroke-lime-300'
 	];
+	const fillPalette = [
+		'fill-sky-500/10 dark:fill-sky-300/20',
+		'fill-emerald-500/10 dark:fill-emerald-300/20',
+		'fill-violet-500/10 dark:fill-violet-300/20',
+		'fill-amber-500/10 dark:fill-amber-300/20',
+		'fill-rose-500/10 dark:fill-rose-300/20',
+		'fill-cyan-500/10 dark:fill-cyan-300/20',
+		'fill-fuchsia-500/10 dark:fill-fuchsia-300/20',
+		'fill-lime-600/10 dark:fill-lime-300/20'
+	];
 	const dotPalette = [
 		'bg-sky-500 dark:bg-sky-300',
 		'bg-emerald-500 dark:bg-emerald-300',
@@ -42,7 +52,9 @@
 	$: paths = series.map((item, index) => ({
 		...item,
 		path: buildPath(item.values, domain.min, domain.max),
+		areaPath: buildAreaPath(item.values, domain.min, domain.max),
 		strokeClass: palette[index % palette.length],
+		fillClass: fillPalette[index % fillPalette.length],
 		dotClass: dotPalette[index % dotPalette.length]
 	}));
 	$: rangeLabel = allValues.length > 0
@@ -69,16 +81,36 @@
 		return value.toFixed(0);
 	}
 
-	function buildPath(values: number[], floor: number, ceiling: number) {
+	function points(values: number[], floor: number, ceiling: number) {
 		const clean = values.filter((value) => Number.isFinite(value));
-		if (clean.length === 0) return '';
+		if (clean.length === 0) return [];
 		const span = Math.max(ceiling - floor, 0.0001);
 		return clean.map((value, index) => {
-			const x = clean.length === 1 ? width : (index / Math.max(1, clean.length - 1)) * width;
+			const x = clean.length === 1 ? width / 2 : (index / Math.max(1, clean.length - 1)) * width;
 			const ratio = Math.max(0, Math.min(1, (value - floor) / span));
 			const y = 8 + (1 - ratio) * (height - 16);
-			return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-		}).join(' ');
+			return { x, y };
+		});
+	}
+
+	function buildPath(values: number[], floor: number, ceiling: number) {
+		return points(values, floor, ceiling)
+			.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+			.join(' ');
+	}
+
+	function buildAreaPath(values: number[], floor: number, ceiling: number) {
+		const chartPoints = points(values, floor, ceiling);
+		if (chartPoints.length === 0) return '';
+		if (chartPoints.length === 1) {
+			const point = chartPoints[0];
+			const halfWidth = 18;
+			return `M ${(point.x - halfWidth).toFixed(2)} ${height} L ${(point.x - halfWidth).toFixed(2)} ${point.y.toFixed(2)} L ${(point.x + halfWidth).toFixed(2)} ${point.y.toFixed(2)} L ${(point.x + halfWidth).toFixed(2)} ${height} Z`;
+		}
+		const first = chartPoints[0];
+		const last = chartPoints[chartPoints.length - 1];
+		const line = chartPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+		return `${line} L ${last.x.toFixed(2)} ${height} L ${first.x.toFixed(2)} ${height} Z`;
 	}
 </script>
 
@@ -101,7 +133,7 @@
 		</div>
 	</div>
 
-	<div class={`relative ${compact ? 'mt-2' : 'mt-4'} ${heightClass} overflow-hidden ${compact ? '' : 'rounded-md border border-gray-200/70 bg-white dark:border-neutral-800/80 dark:bg-neutral-950'}`}>
+	<div class={`relative ${compact ? 'mt-2' : 'mt-4'} ${heightClass} overflow-hidden ${compact ? 'rounded-sm bg-gray-50/55 dark:bg-neutral-950/55' : 'rounded-md border border-gray-200/70 bg-white dark:border-neutral-800/80 dark:bg-neutral-950'}`}>
 		<svg class="h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-hidden="true">
 			{#if !compact}
 				<g class="stroke-gray-100/70 dark:stroke-neutral-800/55" stroke-width="0.8">
@@ -111,12 +143,15 @@
 				</g>
 			{/if}
 			{#each paths as item}
+				{#if item.areaPath}
+					<path d={item.areaPath} class={item.fillClass} />
+				{/if}
 				{#if item.path}
 					<path
 						d={item.path}
 						fill="none"
 						class={item.strokeClass}
-						stroke-width={compact ? 1.45 : 1.8}
+						stroke-width={compact ? 1.8 : 2}
 						stroke-linecap="round"
 						stroke-linejoin="round"
 						vector-effect="non-scaling-stroke"

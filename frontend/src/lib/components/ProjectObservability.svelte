@@ -85,7 +85,7 @@
 
 <section aria-label="Runtime and edge observability">
 	{#if analyticsLoading && !analytics}
-		<div class="workspace-section flex items-center justify-between gap-4 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900">
+		<div class="workspace-section flex items-center justify-between gap-4 border-b border-[color:var(--workspace-divider)] px-4 py-3">
 			<div class="min-w-0">
 				<p class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</p>
 				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Requests, bandwidth, and errors over the last 24 hours.</p>
@@ -96,7 +96,7 @@
 			</div>
 		</div>
 	{:else if cloudflareConfigured === false}
-		<details class="group workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+		<details class="group workspace-section border-b border-[color:var(--workspace-divider)]">
 			<summary class="app-focus flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 [&::-webkit-details-marker]:hidden">
 				<div class="min-w-0">
 					<div class="flex items-center gap-2">
@@ -110,12 +110,12 @@
 					<ChevronDown class="h-3.5 w-3.5 transition-transform group-open:rotate-180" aria-hidden="true" />
 				</div>
 			</summary>
-			<div class="border-t border-gray-100/70 bg-gray-50/40 p-4 dark:border-neutral-900 dark:bg-neutral-950/40">
+			<div class="border-t border-[color:var(--workspace-divider)] bg-gray-50/40 p-4 dark:bg-neutral-950/40">
 				<CloudflareSetup on:success={() => { cloudflareConfigured = true; void loadAnalytics(); }} />
 			</div>
 		</details>
 	{:else if analytics}
-		<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+		<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
 			<div class="flex items-center justify-between gap-3 px-4 py-3">
 				<div>
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</h2>
@@ -123,8 +123,8 @@
 				</div>
 				<span class="text-xs text-gray-400 dark:text-gray-500">Cloudflare</span>
 			</div>
-			<div class="grid border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 sm:grid-cols-3">
-				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+			<div class="grid border-t border-[color:var(--workspace-divider)] bg-[var(--workspace-divider)] sm:grid-cols-3">
+				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-[color:var(--workspace-divider)]">
 					<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Requests</p>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.total_requests.toLocaleString()}</p>
 					<div class="mt-1.5">
@@ -136,7 +136,7 @@
 					</div>
 				</div>
 
-				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-gray-100/70 sm:dark:border-neutral-900">
+				<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950 sm:border-r sm:border-[color:var(--workspace-divider)]">
 					<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Bandwidth</p>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{(analytics.bandwidth / (1024 * 1024)).toFixed(2)} <span class="text-xs font-medium text-gray-500">MB</span></p>
 					<div class="mt-1.5">
@@ -166,7 +166,7 @@
 			</div>
 		</section>
 	{:else if analyticsError}
-		<div class="workspace-section flex items-center justify-between gap-4 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900">
+		<div class="workspace-section flex items-center justify-between gap-4 border-b border-[color:var(--workspace-divider)] px-4 py-3">
 			<div>
 				<p class="text-sm font-semibold text-gray-950 dark:text-white">Edge traffic</p>
 				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Edge analytics unavailable. {analyticsError}</p>
@@ -175,7 +175,7 @@
 	{/if}
 
 	{#if project.deployMode !== 'static'}
-		<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
+		<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
 			<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 				<div>
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime</h2>
@@ -216,20 +216,20 @@
 			</div>
 
 			{#if metricItems.length > 0 && visibleItems.length > 0}
-				<div class="grid gap-px border-t border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900 xl:grid-cols-2">
+				<div class="grid gap-px border-t border-[color:var(--workspace-divider)] bg-[var(--workspace-divider)] xl:grid-cols-2">
 					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" heightClass="h-14" compact />
 					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix=" MB" heightClass="h-14" compact />
 				</div>
 			{:else if metricItems.length > 0}
-				<div class="border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-4 text-xs text-gray-500 dark:text-gray-400">
 					All service lines are hidden. Use Services to show one or more.
 				</div>
 			{:else if $projectStreamConnection === 'connecting' || $projectStreamConnection === 'reconnecting'}
-				<div class="flex items-center gap-2 border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+				<div class="flex items-center gap-2 border-t border-[color:var(--workspace-divider)] px-4 py-4 text-xs text-gray-500 dark:text-gray-400">
 					<LoaderCircle class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> {$projectStreamConnection === 'reconnecting' ? 'Reconnecting…' : 'Connecting…'}
 				</div>
 			{:else}
-				<div class="border-t border-gray-100/70 px-4 py-4 text-xs text-gray-500 dark:border-neutral-900 dark:text-gray-400">
+				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-4 text-xs text-gray-500 dark:text-gray-400">
 					No active runtime metrics. CPU and memory appear while application services are running.
 				</div>
 			{/if}
