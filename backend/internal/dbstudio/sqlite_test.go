@@ -2,6 +2,7 @@ package dbstudio
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -18,7 +19,11 @@ func TestSQLitePathFromEnv(t *testing.T) {
 		{name: "sqlite url", envs: map[string]string{"DATABASE_URL": "sqlite:///var/lib/app/app.sqlite3"}, path: "/var/lib/app/app.sqlite3", source: "DATABASE_URL", ok: true},
 		{name: "explicit path", envs: map[string]string{"SQLITE_PATH": "/data/app.db"}, path: "/data/app.db", source: "SQLITE_PATH", ok: true},
 		{name: "driver parts", envs: map[string]string{"DB_CONNECTION": "sqlite", "DB_DATABASE": "./data/app.db"}, path: "./data/app.db", source: "env-parts", ok: true},
+		{name: "driver generic path", envs: map[string]string{"DB_CONNECTION": "sqlite", "DATABASE_PATH": "/data/app.db"}, path: "/data/app.db", source: "DATABASE_PATH", ok: true},
+		{name: "generic path without sqlite hint ignored", envs: map[string]string{"DATABASE_PATH": "/data/app.db"}, ok: false},
 		{name: "postgres ignored", envs: map[string]string{"DATABASE_URL": "postgres://db/app"}, ok: false},
+		{name: "server url wins over sqlite path", envs: map[string]string{"DATABASE_URL": "postgres://db/app", "SQLITE_PATH": "/data/app.db"}, ok: false},
+		{name: "postgres hint does not claim generic path", envs: map[string]string{"DB_CONNECTION": "postgres", "DATABASE_PATH": "/data/app.db"}, ok: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -46,26 +51,50 @@ func TestResolveSQLiteContainerPath(t *testing.T) {
 func TestSQLitePathOnPersistentMount(t *testing.T) {
 	inspect := sqliteRuntimeInspect{}
 	inspect.Mounts = append(inspect.Mounts, struct {
+		Type        string `json:"Type"`
 		Destination string `json:"Destination"`
 		RW          bool   `json:"RW"`
-	}{Destination: "/app/data", RW: true})
+	}{Type: "volume", Destination: "/app/data", RW: true})
+	inspect.Mounts = append(inspect.Mounts, struct {
+		Type        string `json:"Type"`
+		Destination string `json:"Destination"`
+		RW          bool   `json:"RW"`
+	}{Type: "tmpfs", Destination: "/app/cache", RW: true})
 	if !sqlitePathOnPersistentMount("/app/data/app.db", inspect) {
-		t.Fatal("expected database inside persistent mount")
+		t.Fatal("expected database inside persistent volume")
+	}
+	if sqlitePathOnPersistentMount("/app/cache/app.db", inspect) {
+		t.Fatal("did not expect tmpfs database to be accepted as persistent")
 	}
 	if sqlitePathOnPersistentMount("/app/app.db", inspect) {
 		t.Fatal("did not expect writable-layer database to be accepted")
 	}
 }
 
+func TestOpenSQLiteDatabaseDoesNotCreateMissingFile(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "missing.db")
+	conn, err := openSQLiteDatabase(ctx, databasePath)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("expected missing SQLite database to fail")
+	}
+	if _, statErr := os.Stat(databasePath); !os.IsNotExist(statErr) {
+		t.Fatalf("missing SQLite path was created or stat failed unexpectedly: %v", statErr)
+	}
+}
+
 func TestSQLiteAdapterCRUDAndMetadata(t *testing.T) {
 	ctx := context.Background()
 	databasePath := filepath.Join(t.TempDir(), "app.db")
+	if err := os.WriteFile(databasePath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	conn, err := openSQLiteDatabase(ctx, databasePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	conn.SetMaxOpenConns(4)
 
 	_, err = conn.ExecContext(ctx, `
 CREATE TABLE teams (
@@ -78,7 +107,8 @@ CREATE TABLE users (
   email TEXT UNIQUE,
   team_id INTEGER,
   FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE SET NULL
-);`)
+);
+CREATE INDEX users_lower_email_idx ON users(lower(email));`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +138,18 @@ CREATE TABLE users (
 	}
 	if len(details.ForeignKeys) != 1 || details.ForeignKeys[0].ReferencedTable != "teams" {
 		t.Fatalf("unexpected foreign keys: %#v", details.ForeignKeys)
+	}
+	foundExpressionIndex := false
+	for _, index := range details.Indexes {
+		if index.Name == "users_lower_email_idx" {
+			foundExpressionIndex = true
+			if index.Definition == "" {
+				t.Fatalf("expression index definition is empty: %#v", index)
+			}
+		}
+	}
+	if !foundExpressionIndex {
+		t.Fatalf("expression index missing from table details: %#v", details.Indexes)
 	}
 
 	if err := adapter.Insert(ctx, conn, Mutation{Schema: "main", Table: "users", Values: map[string]any{"name": "Nabil", "email": "nabil@example.test", "team_id": 1}}); err != nil {
