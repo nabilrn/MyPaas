@@ -144,16 +144,24 @@ verify_stack() {
   local docker_cmd="$1"
   local expected_build_sha="${2:-}"
   local expected_image_tag="${3:-$expected_build_sha}"
-  local attempt
+  local attempt verify_log
+  verify_log="$(mktemp)"
   for ((attempt = 1; attempt <= VERIFY_ATTEMPTS; attempt++)); do
-    if DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" \
+    if MYPAAS_IMAGE_TAG="$expected_image_tag" MYPAAS_BUILD_SHA="$expected_build_sha" \
+      DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" \
       EXPECTED_BUILD_SHA="$expected_build_sha" EXPECTED_IMAGE_TAG="$expected_image_tag" \
       REQUIRE_PROJECT_ROUTE="${AUTO_UPDATE_REQUIRE_PROJECT_ROUTE:-false}" \
-      bash "$ROOT_DIR/scripts/verify-production.sh" >/dev/null 2>&1; then
+      bash "$ROOT_DIR/scripts/verify-production.sh" >"$verify_log" 2>&1; then
+      rm -f "$verify_log"
       return 0
     fi
-    sleep "$VERIFY_DELAY_SECONDS"
+    if (( attempt < VERIFY_ATTEMPTS )); then
+      sleep "$VERIFY_DELAY_SECONDS"
+    fi
   done
+  printf 'Production verification failed after %s attempts. Last verifier output:\n' "$VERIFY_ATTEMPTS" >&2
+  cat "$verify_log" >&2 || true
+  rm -f "$verify_log"
   return 1
 }
 

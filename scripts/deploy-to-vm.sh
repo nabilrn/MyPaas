@@ -330,10 +330,26 @@ echo "Starting MyPaas control plane sequentially..."
 if [[ "$SKIP_IMAGE_PULL" != "true" ]]; then
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull
 fi
-for service in caddy api dashboard cloudflared; do
-  echo "Starting $service..."
-  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps "$service"
-done
+
+echo "Starting dashboard..."
+$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard
+
+if managed_container_running mypaas-caddy-prod; then
+  echo "Reloading caddy configuration without restarting the proxy..."
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T caddy \
+    caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+    --address unix//run/mypaas/caddy-admin.sock
+else
+  echo "Starting caddy..."
+  $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps caddy
+fi
+
+echo "Starting api..."
+$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps api
+
+echo "Starting cloudflared..."
+$COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps cloudflared
+
 if [[ "$RESTORED_CONTROL_PLANE_DB" == "true" ]]; then
   echo "Recreating API after database restore to trigger runtime reconciliation..."
   $COMPOSE_BIN -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate --no-deps api
