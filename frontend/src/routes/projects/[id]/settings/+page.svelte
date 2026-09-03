@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Box, Check, CircleAlert, Copy, Eye, EyeOff, GitBranch, RefreshCw, RotateCcw, Settings2, Trash2, Webhook, X } from '@lucide/svelte';
+	import { Box, Check, CircleAlert, Copy, Eye, EyeOff, GitBranch, KeyRound, RefreshCw, RotateCcw, Settings2, Trash2, Webhook, X } from '@lucide/svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -8,13 +8,14 @@
 	import IconButton from '$components/IconButton.svelte';
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import ProjectEffectiveConfiguration from '$components/ProjectEffectiveConfiguration.svelte';
+	import ProjectEnvironmentSettings from '$components/ProjectEnvironmentSettings.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import type { ComposeResourceSummary, Project, RepoTreeEntry, ResourceProfile } from '$types';
 	import { projectURL, webhookURL } from '$lib/utils/urls';
 
-	type SettingsSection = 'general' | 'source' | 'resources' | 'webhook' | 'danger';
+	type SettingsSection = 'general' | 'source' | 'resources' | 'environment' | 'webhook' | 'danger';
 
 	let project: Project | null = null;
 	let composeResources: ComposeResourceSummary | null = null;
@@ -394,6 +395,9 @@
 						<button type="button" on:click={() => (activeSection = 'resources')} aria-current={activeSection === 'resources' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'resources' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
 							<Box class="h-4 w-4" aria-hidden="true" /> Resources
 						</button>
+						<button type="button" on:click={() => (activeSection = 'environment')} aria-current={activeSection === 'environment' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'environment' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
+							<KeyRound class="h-4 w-4" aria-hidden="true" /> Environment
+						</button>
 					</div>
 				</div>
 
@@ -626,6 +630,13 @@
 							<ActionButton variant="primary" on:click={handleSave} disabled={project.sourceType === 'git' && repoValidationStale && !repoInspectError} loading={savingSettings} loadingLabel="Saving">Save changes</ActionButton>
 						</div>
 					{/if}
+				</div>
+			{:else if activeSection === 'environment'}
+				<div class="mx-auto max-w-6xl space-y-4">
+					<div>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Environment</h1>
+					</div>
+					<ProjectEnvironmentSettings projectId={project.id} />
 				</div>
 			{:else if activeSection === 'webhook' && project.sourceType === 'git'}
 				<div class="mx-auto max-w-4xl space-y-4">
