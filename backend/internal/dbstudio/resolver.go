@@ -538,12 +538,12 @@ func isAlreadyConnected(output string) bool {
 
 func isDockerUnavailable(output string) bool {
 	output = strings.ToLower(output)
-	return strings.Contains(output, "no such container") || strings.Contains(output, "cannot connect to the docker daemon")
+	return strings.Contains(output, "no such container") || strings.Contains(output, "no such object") || strings.Contains(output, "cannot connect to the docker daemon")
 }
 
 func isNoSuchContainer(output string) bool {
 	output = strings.ToLower(output)
-	return strings.Contains(output, "no such container")
+	return strings.Contains(output, "no such container") || strings.Contains(output, "no such object")
 }
 
 func shouldConnectComposeNetwork(host string) bool {

@@ -62,13 +62,13 @@ The project overview's fallback for a pending project with a deployment record i
 
 ### 4. High-trust actions use route-local confirmation patterns
 
-MCP regeneration, webhook regeneration, Compose resource reset, rollback, database write mode, project lifecycle actions, firewall rules, shell sessions, backup, and migration each implement impact and confirmation differently. There is no shared confirmation primitive or impact vocabulary.
+MCP regeneration, webhook regeneration, Compose resource reset, rollback, database write mode, project lifecycle actions, shell sessions, backup, and migration each implement impact and confirmation differently. There is no shared confirmation primitive or impact vocabulary.
 
 **User risk:** similarly styled buttons can have very different scope, reversibility, and side effects.
 
 ### 5. Table responsiveness is inconsistent
 
-Projects has a compact fallback, while Containers, Ports, Users, Audit, and some database/environment tables primarily depend on fixed `min-width` tables and horizontal scrolling.
+Projects has a compact fallback, while Containers, Users, Audit, and some database/environment tables primarily depend on fixed `min-width` tables and horizontal scrolling.
 
 **User risk:** the rightmost state or action can leave the viewport, especially on laptop and mobile widths.
 
@@ -169,7 +169,6 @@ Apply it according to risk, not mechanically to every mutation:
 | Regenerate MCP/webhook token | state that old credential is immediately invalidated |
 | Reset Compose resources | preserve existing strong confirmation and migrate to shared pattern |
 | Rollback | identify source and target release and expected traffic change |
-| Open/remove firewall rule | show protocol, port, firewall state, and host scope |
 | End shell session | local pending state; no modal unless unsent/running work would be lost |
 | Prepare migration | summarize pause/exclusion impact before starting |
 
@@ -272,7 +271,7 @@ Acceptance criteria:
 Primary files:
 
 - add a shared confirmation/impact component under `frontend/src/lib/components/`;
-- apply it first to database write/delete, MCP token regeneration, webhook regeneration, Compose reset, rollback, project stop, firewall rules, and migration preparation;
+- apply it first to database write/delete, MCP token regeneration, webhook regeneration, Compose reset, rollback, project stop, and migration preparation;
 - keep all API calls in `frontend/src/lib/api/`;
 - add focused component/utility tests and route-level tests for independent pending flags.
 
@@ -281,7 +280,7 @@ Acceptance criteria:
 - double submit is impossible;
 - cancel restores focus to the trigger;
 - failure preserves the dialog/context and shows a recovery action;
-- token invalidation, database write duration, firewall host scope, and migration pause are explicit;
+- token invalidation, database write duration, and migration pause are explicit;
 - benign actions do not acquire unnecessary confirmation friction.
 
 ### PR 5 — `ux/operational-table-responsiveness`

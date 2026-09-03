@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"mypaas/internal/errs"
@@ -22,6 +23,9 @@ import (
 type DockerCLI struct {
 	bindHost       string
 	projectNetwork string
+
+	telemetryMu      sync.RWMutex
+	runtimeTelemetry map[string]Metrics
 }
 
 type Metrics struct {
@@ -77,7 +81,11 @@ func NewDockerCLI(bindHost string, projectNetwork ...string) *DockerCLI {
 	if len(projectNetwork) > 0 {
 		network = strings.TrimSpace(projectNetwork[0])
 	}
-	return &DockerCLI{bindHost: bindHost, projectNetwork: network}
+	return &DockerCLI{
+		bindHost:         bindHost,
+		projectNetwork:   network,
+		runtimeTelemetry: make(map[string]Metrics),
+	}
 }
 
 func (d *DockerCLI) Build(ctx context.Context, dir, image string, log func(string)) error {

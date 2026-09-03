@@ -33,7 +33,6 @@ Owners additionally receive:
 
 - `get_host_stats`
 - `list_containers`
-- `list_ports`
 - `get_database_schema`
 
 The browser-facing names intentionally align with the existing MCP bridge where the operation already exists.
@@ -46,7 +45,6 @@ WebMCP v1 deliberately does not register tools for:
 - environment-value reveal;
 - environment mutation;
 - DB Studio writes;
-- firewall mutation;
 - platform update;
 - backup/restore mutation;
 - arbitrary shell or host commands.

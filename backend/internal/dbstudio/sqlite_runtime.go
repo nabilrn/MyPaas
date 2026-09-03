@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	pathpkg "path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"mypaas/internal/db"
@@ -29,6 +30,7 @@ type sqliteRuntimeInspect struct {
 type sqliteRuntimeClient struct {
 	container    string
 	databasePath string
+	runtimeUser  string
 }
 
 type sqliteRuntimeCandidate struct {
@@ -225,8 +227,20 @@ func sqlitePathFromURL(value string) (string, bool) {
 
 func sqliteRuntimeCandidates(ctx context.Context, project db.Project) ([]string, error) {
 	if project.DeployMode != "compose" {
-		return []string{"mypaas-" + project.Name}, nil
+		stable := "mypaas-" + project.Name
+		if raw, err := sqliteRuntimeCommand(ctx, "inspect", stable); err == nil {
+			return []string{stable}, nil
+		} else if !isNoSuchContainer(string(raw)) {
+			// Preserve the stable candidate so the normal inspection path can
+			// return the original runtime error with its operational context.
+			return []string{stable}, nil
+		}
+		// A few compatible runtimes keep Compose labels and names even when
+		// the project is recorded as dockerfile/image. Fall back to the owned
+		// Compose project labels when the stable container is absent.
+		return sqliteComposeRuntimeCandidates(ctx, project.Name)
 	}
+
 	seen := map[string]struct{}{}
 	out := make([]string, 0)
 	add := func(values ...string) {
@@ -252,6 +266,33 @@ func sqliteRuntimeCandidates(ctx context.Context, project db.Project) ([]string,
 		}
 	}
 	for _, composeProject := range composeProjectCandidates(project.Name) {
+		raw, err := sqliteRuntimeCommand(ctx, "ps", "-aq", "--filter", "label=com.docker.compose.project="+composeProject)
+		if err != nil {
+			return nil, fmt.Errorf("%w: find SQLite Compose containers: %s", errs.ErrValidation, strings.TrimSpace(string(raw)))
+		}
+		add(strings.Fields(string(raw))...)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func sqliteComposeRuntimeCandidates(ctx context.Context, projectName string) ([]string, error) {
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	add := func(values ...string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			out = append(out, value)
+		}
+	}
+	for _, composeProject := range composeProjectCandidates(projectName) {
 		raw, err := sqliteRuntimeCommand(ctx, "ps", "-aq", "--filter", "label=com.docker.compose.project="+composeProject)
 		if err != nil {
 			return nil, fmt.Errorf("%w: find SQLite Compose containers: %s", errs.ErrValidation, strings.TrimSpace(string(raw)))
@@ -332,6 +373,13 @@ func persistentSQLiteMountRoots(inspect sqliteRuntimeInspect) []string {
 func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequest) (SQLiteHelperResponse, error) {
 	if c.databasePath != "" {
 		request.DatabasePath = c.databasePath
+		if c.runtimeUser == "" {
+			user, err := sqliteRuntimeUser(ctx, c.container)
+			if err != nil {
+				return SQLiteHelperResponse{}, err
+			}
+			c.runtimeUser = user
+		}
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
@@ -342,12 +390,18 @@ func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequ
 		return SQLiteHelperResponse{}, err
 	}
 	args := []string{
-		"run", "--rm", "--network", "none", "--read-only",
+		"run", "--rm", "-i",
 		"--tmpfs", "/tmp:rw,nosuid,nodev,size=16m",
+	}
+	if c.runtimeUser != "" {
+		args = append(args, "--user", c.runtimeUser)
+	}
+	args = append(args,
+		"--network", "none", "--read-only",
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
 		"--volumes-from", c.container,
 		"--entrypoint", "/app/mypaas-sqlite-helper", image,
-	}
+	)
 	out, err := sqliteRuntimeHelperCommand(ctx, args, payload)
 	if err != nil {
 		return SQLiteHelperResponse{}, fmt.Errorf("SQLite helper failed: %s", strings.TrimSpace(string(out)))
@@ -369,6 +423,30 @@ var sqliteRuntimeHelperCommand = func(ctx context.Context, args []string, payloa
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = bytes.NewReader(append(payload, '\n'))
 	return cmd.CombinedOutput()
+}
+
+func sqliteRuntimeUser(ctx context.Context, container string) (string, error) {
+	uid, err := sqliteRuntimeIdentityValue(ctx, container, "-u")
+	if err != nil {
+		return "", err
+	}
+	gid, err := sqliteRuntimeIdentityValue(ctx, container, "-g")
+	if err != nil {
+		return "", err
+	}
+	return uid + ":" + gid, nil
+}
+
+func sqliteRuntimeIdentityValue(ctx context.Context, container, flag string) (string, error) {
+	out, err := sqliteRuntimeCommand(ctx, "exec", container, "id", flag)
+	if err != nil {
+		return "", fmt.Errorf("resolve SQLite runtime identity: %s", strings.TrimSpace(string(out)))
+	}
+	value := strings.TrimSpace(string(out))
+	if _, err := strconv.ParseUint(value, 10, 32); err != nil {
+		return "", fmt.Errorf("resolve SQLite runtime identity: invalid numeric id %q", value)
+	}
+	return value, nil
 }
 
 func sqliteHelperImage(ctx context.Context) (string, error) {

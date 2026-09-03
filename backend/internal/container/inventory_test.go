@@ -42,33 +42,37 @@ func TestMergeRuntimeStatsMarksOnlyMatchedRowsAvailable(t *testing.T) {
 	}
 }
 
-func TestMissingRuntimeStatsIndicesRetriesOnlyUnmatchedRunningRows(t *testing.T) {
-	containers := []RuntimeContainer{
-		{Name: "app-a", State: "running", MetricsAvailable: true},
-		{Name: "app-b", State: "running"},
-		{Name: "app-c", State: "exited"},
-		{Name: "", State: "running"},
-		{Name: "app-d", State: "running"},
-	}
-
-	got := missingRuntimeStatsIndices(containers)
-	want := []int{1, 4}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("missingRuntimeStatsIndices() = %#v, want %#v", got, want)
-	}
-}
-
-func TestMissingRuntimeStatsIndicesAfterPartialBatchMerge(t *testing.T) {
+func TestApplyCachedRuntimeTelemetry(t *testing.T) {
+	cli := NewDockerCLI("127.0.0.1")
+	cli.runtimeTelemetry["app-a"] = Metrics{CPUPercent: 1.25, MemoryMB: 128, MemoryLimitMB: 512}
 	containers := []RuntimeContainer{
 		{Name: "app-a", State: "running"},
 		{Name: "app-b", State: "running"},
 	}
 
-	mergeRuntimeStats(containers, []byte("app-a\t0.50%\t64MiB / 256MiB\n"))
+	cli.applyCachedRuntimeTelemetry(containers)
+	if !containers[0].MetricsAvailable {
+		t.Fatal("expected cached app-a metrics to be available")
+	}
+	if containers[0].CPUPercent != 1.25 || containers[0].MemoryMB != 128 || containers[0].MemoryLimitMB != 512 {
+		t.Fatalf("cached metrics = %+v", containers[0])
+	}
+	if containers[1].MetricsAvailable {
+		t.Fatal("expected cache miss for app-b")
+	}
+}
 
-	got := missingRuntimeStatsIndices(containers)
-	want := []int{1}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("missingRuntimeStatsIndices() = %#v, want %#v", got, want)
+func TestApplyCachedRuntimeTelemetrySkipsStoppedContainer(t *testing.T) {
+	cli := NewDockerCLI("127.0.0.1")
+	cli.runtimeTelemetry["app-a"] = Metrics{CPUPercent: 9.5, MemoryMB: 256, MemoryLimitMB: 512}
+	containers := []RuntimeContainer{{Name: "app-a", State: "exited"}}
+
+	cli.applyCachedRuntimeTelemetry(containers)
+
+	if containers[0].MetricsAvailable {
+		t.Fatal("stopped container must not expose stale cached telemetry")
+	}
+	if containers[0].CPUPercent != 0 || containers[0].MemoryMB != 0 || containers[0].MemoryLimitMB != 0 {
+		t.Fatalf("stopped container inherited stale telemetry: %+v", containers[0])
 	}
 }

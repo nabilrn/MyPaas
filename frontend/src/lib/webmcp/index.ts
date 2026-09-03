@@ -249,14 +249,6 @@ function ownerTools(): WebMCPTool[] {
 			execute: async () => toText(await loadRuntimeContainers())
 		},
 		{
-			name: 'list_ports',
-			title: 'List ports',
-			description: 'Read MyPaaS project port allocations and MyPaaS-managed firewall status. This tool does not change firewall rules. Owner access only.',
-			inputSchema: emptyObjectSchema,
-			annotations: { readOnlyHint: true, untrustedContentHint: true },
-			execute: async () => toText(await api.admin.ports())
-		},
-		{
 			name: 'get_database_schema',
 			title: 'Get database schema',
 			description: 'Read DB Studio schema metadata for an existing project, including tables, columns, keys, indexes and constraints. Owner access only.',

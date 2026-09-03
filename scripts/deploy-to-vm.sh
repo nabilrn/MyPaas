@@ -141,12 +141,8 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
-  echo "Installing MyPaaS managed firewall helper..."
-  bash "$ROOT_DIR/scripts/install-firewall-helper.sh"
   echo "Installing MyPaaS host update trigger..."
   MYPAAS_INSTALL_DIR="$ROOT_DIR" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
-else
-  echo "systemd unavailable; firewall management and dashboard-triggered updates are disabled."
 fi
 
 for dir in \

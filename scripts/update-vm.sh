@@ -136,6 +136,48 @@ env_file_value() {
   grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
 }
 
+preflight_existing_runtime() {
+  local docker_cmd="$1"
+  local control_network networks network
+
+  # A missing API is handled by the normal deployment path. When it exists,
+  # prove that it is in a safe state before any checkout reset or container
+  # recreation. This specifically protects Podman/Netavark from stale project
+  # network references left by older DB Studio Compose access.
+  if ! $docker_cmd inspect mypaas-api >/dev/null 2>&1; then
+    return 0
+  fi
+
+  control_network="$(env_file_value CONTROL_NETWORK)"
+  control_network="${control_network:-mypaas-control}"
+  networks="$($docker_cmd inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' mypaas-api 2>/dev/null || true)"
+
+  while IFS= read -r network; do
+    network="$(printf '%s' "$network" | xargs)"
+    [[ -n "$network" ]] || continue
+    [[ "$network" == "$control_network" ]] && continue
+
+    if ! $docker_cmd network inspect "$network" >/dev/null 2>&1; then
+      die "mypaas-api references missing network $network; refusing to update before runtime state is repaired"
+    fi
+
+    log "Detaching mypaas-api from unexpected network $network before update"
+    if ! $docker_cmd network disconnect -f "$network" mypaas-api >/dev/null; then
+      die "failed to detach mypaas-api from unexpected network $network"
+    fi
+  done <<< "$networks"
+
+  networks="$($docker_cmd inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' mypaas-api 2>/dev/null || true)"
+  if [[ "$(printf '%s\n' "$networks" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')" != "1" ]] \
+    || ! printf '%s\n' "$networks" | grep -Fxq "$control_network"; then
+    die "mypaas-api network membership is not isolated to $control_network after preflight"
+  fi
+
+  if ! curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
+    die "existing MyPaas API is not healthy through 127.0.0.1:8080; refusing to update before host-port networking is repaired"
+  fi
+}
+
 reconcile_statd() {
   ENV_FILE="$ENV_FILE" MYPAAS_INSTALL_DIR="$ROOT_DIR" bash "$ROOT_DIR/scripts/reconcile-statd.sh"
 }
@@ -172,6 +214,7 @@ redeploy_current_for_env_drift() {
   desired_socket="$(env_file_value STATD_SOCKET)"
   api_socket="$(container_env_value "$docker_cmd" mypaas-api STATD_SOCKET)"
   if [[ -n "$desired_socket" && "$api_socket" != "$desired_socket" ]]; then
+    preflight_existing_runtime "$docker_cmd"
     log "API runtime environment is missing the reconciled STATD_SOCKET; recreating the current stack"
     MYPAAS_IMAGE_TAG="$current_sha" MYPAAS_BUILD_SHA="$current_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
       ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
@@ -245,6 +288,11 @@ main() {
       return 0
     fi
   fi
+
+  # From this point onward the update is actually ready to mutate runtime state.
+  # Clean any live DB Studio network attachment and prove the host-port path is
+  # healthy before tagging rollback images or resetting the checkout.
+  preflight_existing_runtime "$docker_cmd"
 
   local rollback_tag api_image_id dashboard_image_id rollback_ready=false
   rollback_tag="rollback-${current_sha:0:12}"

@@ -34,7 +34,6 @@ import (
 	"mypaas/internal/dbstudio"
 	"mypaas/internal/deployment"
 	"mypaas/internal/envvar"
-	"mypaas/internal/firewall"
 	"mypaas/internal/github"
 	"mypaas/internal/logger"
 	"mypaas/internal/migration"
@@ -140,7 +139,7 @@ func run() error {
 	shellService := shell.NewService()
 	defer shellService.Close()
 
-	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler)
+	backgroundDone := startBackgroundJobs(appCtx, backupService, routeReconciler, dockerClient)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -220,12 +219,7 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	settingsHandler := settings.NewHandler(queries, cfg, backupService)
 	migrationHandler := migration.NewHandler(migration.NewService(cfg))
 	shellHandler := shell.NewHandler(shellService)
-	firewallSocket := strings.TrimSpace(os.Getenv("FIREWALL_SOCKET"))
-	if firewallSocket == "" {
-		firewallSocket = "/run/mypaas/firewall.sock"
-	}
-	firewallHandler := firewall.NewHandler(portService, firewall.NewClient(firewallSocket), cfg.DockerBindHost)
-	containerHandler := container.NewHandler(container.NewDockerCLI(cfg.DockerBindHost))
+	containerHandler := container.NewHandler(dockerClient)
 
 	r := chi.NewRouter()
 
@@ -236,23 +230,25 @@ func buildRouter(cfg *config.Config, pool *pgxpool.Pool, tokenService *auth.Toke
 	r.Use(timeoutExceptStreams(60 * time.Second))
 
 	r.Get("/metrics", handleMetrics(cfg, processStartedAt))
-	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, containerHandler, shellHandler)
+	registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, containerHandler, shellHandler)
 	r.Route("/api", func(r chi.Router) {
-		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, firewallHandler, containerHandler, shellHandler)
+		registerRoutes(r, pool, authMiddleware, auditMiddleware, authHandler, projectHandler, deploymentHandler, envHandler, dbStudioHandler, quotaHandler, userHandler, webhookHandler, auditHandler, settingsHandler, migrationHandler, containerHandler, shellHandler)
 	})
 
 	return r
 }
 
-func startBackgroundJobs(ctx context.Context, backupService *backup.Service, routeReconciler *deployment.Service) <-chan struct{} {
+func startBackgroundJobs(ctx context.Context, backupService *backup.Service, routeReconciler *deployment.Service, dockerClient *container.DockerCLI) <-chan struct{} {
 	done := make(chan struct{})
 	backupDone := backupService.Start(ctx)
 	routeDone := startRouteReconciler(ctx, routeReconciler, 30*time.Second)
+	runtimeTelemetryDone := dockerClient.StartRuntimeTelemetry(ctx, 15*time.Second)
 
 	go func() {
 		defer close(done)
 		<-backupDone
 		<-routeDone
+		<-runtimeTelemetryDone
 	}()
 	return done
 }
@@ -300,7 +296,6 @@ func registerRoutes(
 	auditHandler *audit.Handler,
 	settingsHandler *settings.Handler,
 	migrationHandler *migration.Handler,
-	firewallHandler *firewall.Handler,
 	containerHandler *container.Handler,
 	shellHandler *shell.Handler,
 ) {
@@ -386,9 +381,6 @@ func registerRoutes(
 			r.Post("/update", settingsHandler.UpdateSystem)
 			r.Post("/backup", settingsHandler.TriggerBackup)
 			r.Get("/backup/download", settingsHandler.DownloadBackup)
-			r.Get("/ports", firewallHandler.List)
-			r.Post("/ports/firewall", firewallHandler.Allow)
-			r.Delete("/ports/firewall/{protocol}/{port}", firewallHandler.Delete)
 			r.Get("/containers", containerHandler.List)
 			r.Delete("/containers/{id}", containerHandler.Delete)
 			r.Route("/shell", func(r chi.Router) {

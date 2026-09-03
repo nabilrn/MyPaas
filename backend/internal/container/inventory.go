@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // RuntimeContainer is a host-wide read-only view of a container visible through
@@ -34,7 +35,11 @@ type dockerPSLine struct {
 	Labels string `json:"Labels"`
 }
 
-const runtimeStatsFormat = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+const (
+	runtimeStatsFormat           = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+	runtimeTelemetryRefreshEvery = 15 * time.Second
+	runtimeTelemetryTimeout      = 5 * time.Second
+)
 
 // RuntimeContainerMetadata returns every container visible to the
 // Docker-compatible runtime without waiting for CPU/RAM telemetry.
@@ -67,37 +72,83 @@ func (d *DockerCLI) RuntimeContainerMetadata(ctx context.Context) ([]RuntimeCont
 }
 
 // RuntimeContainers returns every container visible to the Docker-compatible
-// runtime with best-effort CPU/RAM telemetry. A stats failure does not hide the
-// inventory: metadata is still returned and MetricsAvailable remains false only
-// for rows whose stats could not be collected.
+// runtime and merges the latest best-effort CPU/RAM telemetry snapshot. It does
+// not invoke docker stats on the request path; telemetry is refreshed by
+// StartRuntimeTelemetry so inventory latency stays bounded as hosts grow.
 func (d *DockerCLI) RuntimeContainers(ctx context.Context) ([]RuntimeContainer, error) {
 	containers, err := d.RuntimeContainerMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
-	targets := runtimeStatsTargets(containers)
-	if len(targets) > 0 {
-		args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
-		args = append(args, targets...)
-		statsOut, statsErr := commandContext(ctx, "docker", args...).CombinedOutput()
-		if statsErr == nil {
-			mergeRuntimeStats(containers, statsOut)
-		}
+	d.applyCachedRuntimeTelemetry(containers)
+	return containers, nil
+}
 
-		// Docker-compatible runtimes can return exit 0 for multi-target stats
-		// while omitting or formatting one or more rows differently. Always
-		// retry any still-unmatched running container through the existing
-		// single-target Stats path, which is also used by project metrics.
-		for _, index := range missingRuntimeStatsIndices(containers) {
-			metric, err := d.Stats(ctx, containers[index].Name)
-			if err != nil {
-				continue
-			}
-			applyRuntimeMetric(&containers[index], metric)
-		}
+// StartRuntimeTelemetry refreshes one bulk telemetry snapshot in the
+// background. The returned channel closes when the caller's context is done.
+func (d *DockerCLI) StartRuntimeTelemetry(ctx context.Context, interval time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+	if interval <= 0 {
+		interval = runtimeTelemetryRefreshEvery
 	}
 
-	return containers, nil
+	go func() {
+		defer close(done)
+		refresh := func() {
+			refreshCtx, cancel := context.WithTimeout(ctx, runtimeTelemetryTimeout)
+			defer cancel()
+			_ = d.refreshRuntimeTelemetry(refreshCtx)
+		}
+
+		refresh()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				refresh()
+			}
+		}
+	}()
+
+	return done
+}
+
+func (d *DockerCLI) refreshRuntimeTelemetry(ctx context.Context) error {
+	containers, err := d.RuntimeContainerMetadata(ctx)
+	if err != nil {
+		return err
+	}
+	stats, err := collectRuntimeStats(ctx, containers)
+	if err != nil {
+		return err
+	}
+
+	// Treat each successful collection as an immutable snapshot. Merging into
+	// the previous map would retain metrics for stopped/deleted containers and
+	// can leak those values to a later container that reuses the same name.
+	d.telemetryMu.Lock()
+	d.runtimeTelemetry = stats
+	d.telemetryMu.Unlock()
+	return nil
+}
+
+func collectRuntimeStats(ctx context.Context, containers []RuntimeContainer) (map[string]Metrics, error) {
+	targets := runtimeStatsTargets(containers)
+	if len(targets) == 0 {
+		return map[string]Metrics{}, nil
+	}
+
+	args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
+	args = append(args, targets...)
+	statsOut, err := commandContext(ctx, "docker", args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("docker stats inventory: %w: %s", err, strings.TrimSpace(string(statsOut)))
+	}
+
+	return parseRuntimeStats(statsOut, len(targets)), nil
 }
 
 func runtimeStatsTargets(containers []RuntimeContainer) []string {
@@ -111,26 +162,26 @@ func runtimeStatsTargets(containers []RuntimeContainer) []string {
 	return targets
 }
 
-func missingRuntimeStatsIndices(containers []RuntimeContainer) []int {
-	indices := make([]int, 0)
+func (d *DockerCLI) applyCachedRuntimeTelemetry(containers []RuntimeContainer) {
+	d.telemetryMu.RLock()
+	defer d.telemetryMu.RUnlock()
 	for i := range containers {
-		if containers[i].State != "running" || strings.TrimSpace(containers[i].Name) == "" || containers[i].MetricsAvailable {
+		// Metadata is authoritative for lifecycle state. A container may stop
+		// between telemetry refreshes, so never render the last running sample
+		// on a row that is no longer running.
+		if containers[i].State != "running" {
 			continue
 		}
-		indices = append(indices, i)
+		metric, ok := d.runtimeTelemetry[containers[i].Name]
+		if !ok {
+			continue
+		}
+		applyRuntimeMetric(&containers[i], metric)
 	}
-	return indices
 }
 
 func mergeRuntimeStats(containers []RuntimeContainer, raw []byte) {
-	statsByName := make(map[string]Metrics)
-	for _, line := range fieldsByLine(string(raw)) {
-		metric, err := parseStatsLine(line)
-		if err != nil {
-			continue
-		}
-		statsByName[metric.Service] = metric
-	}
+	statsByName := parseRuntimeStats(raw, 0)
 	for i := range containers {
 		metric, ok := statsByName[containers[i].Name]
 		if !ok {
@@ -138,6 +189,21 @@ func mergeRuntimeStats(containers []RuntimeContainer, raw []byte) {
 		}
 		applyRuntimeMetric(&containers[i], metric)
 	}
+}
+
+func parseRuntimeStats(raw []byte, capacity int) map[string]Metrics {
+	if capacity < 0 {
+		capacity = 0
+	}
+	stats := make(map[string]Metrics, capacity)
+	for _, line := range fieldsByLine(string(raw)) {
+		metric, err := parseStatsLine(line)
+		if err != nil {
+			continue
+		}
+		stats[metric.Service] = metric
+	}
+	return stats
 }
 
 func applyRuntimeMetric(container *RuntimeContainer, metric Metrics) {
