@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { Check, Copy, KeyRound, RefreshCw, X } from '@lucide/svelte';
+	import { Check, Copy, Eye, EyeOff, RefreshCw, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { api } from '$api';
 	import ActionButton from '$components/ActionButton.svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import AgentBadgeStack from '$components/AgentBadgeStack.svelte';
-	import SectionPanel from '$components/SectionPanel.svelte';
+	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import { toast } from '$stores/toast';
 
 	let mcpToken = '';
 	let loading = true;
+	let showToken = false;
 	let regeneratingToken = false;
 	let confirmRegenerateToken = false;
 	let copiedText = '';
@@ -57,6 +59,7 @@ Keep the token secret. Do not deploy, restart, delete, or change project configu
 		try {
 			const data = await api.admin.regenerateMCPToken();
 			mcpToken = data.mcp_api_token ?? '';
+			showToken = true;
 			confirmRegenerateToken = false;
 			toast.success('MCP token regenerated');
 		} catch (error) {
@@ -72,54 +75,44 @@ Keep the token secret. Do not deploy, restart, delete, or change project configu
 </svelte:head>
 
 <div class="page-shell">
-	<SectionPanel title="MCP access" contentClass="p-0">
-		<svelte:fragment slot="actions"><AgentBadgeStack /></svelte:fragment>
-		<div class="p-4 lg:p-5">
-			<div class="alert-neutral">
-				<KeyRound class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-				<p>The token grants owner-level MyPaaS API access. Store it only in the local MCP client.</p>
-			</div>
-
-			{#if loading}
-				<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading token…</p>
-			{:else}
-				<label class="mt-4 block max-w-3xl" for="mcp_token">
-					<span class="field-label">API token</span>
-					<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-						<input type="password" id="mcp_token" readonly value={mcpToken || 'Not configured'} class="field min-w-0 flex-1 bg-gray-50 font-mono text-sm text-gray-500 dark:bg-neutral-900 dark:text-gray-400" />
-						{#if mcpToken}
-							<ActionButton variant="secondary" size="sm" on:click={() => copyToClipboard(mcpToken, 'token')}>
-								{#if copiedText === 'token'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}
-								{copiedText === 'token' ? 'Copied' : 'Copy token'}
-							</ActionButton>
-						{/if}
-					</div>
-				</label>
-			{/if}
-		</div>
-
-		<div class="border-t border-gray-100/70 p-4 dark:border-neutral-900 lg:px-5">
-			{#if confirmRegenerateToken}
-				<div class="alert-warning flex-wrap items-center justify-between">
-					<p class="min-w-0 flex-1">Regenerating disconnects clients using the current token.</p>
-					<div class="flex gap-2">
-						<ActionButton variant="ghost" size="xs" on:click={() => (confirmRegenerateToken = false)} disabled={regeneratingToken}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
-						<ActionButton variant="danger" size="xs" on:click={regenerateToken} loading={regeneratingToken} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Regenerate</ActionButton>
-					</div>
+	{#if loading}
+		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading MCP access" /></div>
+	{:else}
+		<section>
+			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Access</h2>
+			<div class="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
+				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
+					<p class="text-sm text-gray-500 dark:text-gray-400">API token</p>
+					<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{mcpToken ? (showToken ? mcpToken : '••••••••••••••••') : 'Not configured'}</p>
+					{#if mcpToken}
+						<div class="flex items-center gap-1">
+							<IconButton label={showToken ? 'Hide API token' : 'Reveal API token'} variant="ghost" on:click={() => (showToken = !showToken)}>{#if showToken}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}</IconButton>
+							<IconButton label={copiedText === 'token' ? 'API token copied' : 'Copy API token'} variant="ghost" on:click={() => copyToClipboard(mcpToken, 'token')}>{#if copiedText === 'token'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+						</div>
+					{/if}
 				</div>
-			{:else}
-				<ActionButton variant="secondary" size="sm" on:click={() => (confirmRegenerateToken = true)} disabled={loading}><RefreshCw slot="icon" class="h-4 w-4" />Regenerate token</ActionButton>
-			{/if}
-		</div>
-	</SectionPanel>
+				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
+					<p class="text-sm text-gray-500 dark:text-gray-400">Clients</p>
+					<AgentBadgeStack />
+				</div>
+			</div>
+			<div class="mt-3 flex flex-wrap items-center gap-2">
+				{#if confirmRegenerateToken}
+					<span class="text-sm text-gray-500 dark:text-gray-400">Existing clients will disconnect.</span>
+					<ActionButton variant="ghost" size="sm" on:click={() => (confirmRegenerateToken = false)} disabled={regeneratingToken}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
+					<ActionButton variant="danger" size="sm" on:click={regenerateToken} loading={regeneratingToken} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-4 w-4" />Regenerate</ActionButton>
+				{:else}
+					<ActionButton variant="secondary" size="sm" on:click={() => (confirmRegenerateToken = true)}><RefreshCw slot="icon" class="h-4 w-4" />Regenerate token</ActionButton>
+				{/if}
+			</div>
+		</section>
 
-	<SectionPanel title="Agent setup prompt" contentClass="p-0">
-		<div class="p-4 lg:p-5">
-			<pre class="console-surface max-h-96 overflow-auto whitespace-pre-wrap p-4"><code>{setupPrompt}</code></pre>
-			<ActionButton variant="primary" size="sm" className="mt-3" disabled={!mcpToken} on:click={() => copyToClipboard(setupPrompt, 'prompt')}>
-				{#if copiedText === 'prompt'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}
-				{copiedText === 'prompt' ? 'Copied' : 'Copy setup prompt'}
-			</ActionButton>
-		</div>
-	</SectionPanel>
+		<details class="border-y border-gray-100 py-3 dark:border-neutral-800">
+			<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Agent setup</summary>
+			<div class="mt-3">
+				<pre class="console-surface max-h-96 overflow-auto whitespace-pre-wrap p-4"><code>{setupPrompt}</code></pre>
+				<ActionButton variant="secondary" size="sm" className="mt-2" disabled={!mcpToken} on:click={() => copyToClipboard(setupPrompt, 'prompt')}>{#if copiedText === 'prompt'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}{copiedText === 'prompt' ? 'Copied' : 'Copy setup'}</ActionButton>
+			</div>
+		</details>
+	{/if}
 </div>
