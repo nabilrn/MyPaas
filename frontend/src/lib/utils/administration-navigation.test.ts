@@ -79,6 +79,11 @@ describe("administration navigation contract", () => {
   it("uses the Project Settings geometry for the admin shell without changing excluded routes", () => {
     expect(adminLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
     expect(adminLayout).toContain("lg:border-r");
+    expect(adminLayout).toContain("min-w-0 px-4 py-5 sm:px-5 lg:px-6");
+    expect(adminLayout).toContain("mx-auto max-w-6xl space-y-4");
+    expect(adminLayout).toContain("currentSection.title");
+    expect(adminLayout).toContain("currentSection.description");
+    expect(adminLayout).toContain(".admin-content > .page-shell");
     expect(adminLayout).toContain("<slot />");
     expect(adminSidebar).toContain("border-l-2");
     expect(adminSidebar).toContain("bg-transparent");
@@ -88,5 +93,16 @@ describe("administration navigation contract", () => {
     expect(projectLayout).toContain("main > .max-w-5xl");
     expect(createProjectPage).not.toContain("AdminSidebar");
     expect(projectLogsPage).not.toContain("AdminSidebar");
+  });
+
+  it("provides simple page-level headings for every administration section", () => {
+    expect(administrationNavItemForPath("/admin/settings")).toMatchObject({
+      title: "General information",
+      description: "Platform settings and host configuration.",
+    });
+    expect(administrationNavItemForPath("/admin/mcp").title).toBe("MCP integration");
+    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe(
+      "Review authenticated changes made through the control plane.",
+    );
   });
 });

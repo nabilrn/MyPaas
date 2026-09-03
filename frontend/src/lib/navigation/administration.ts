@@ -10,6 +10,8 @@ export type AdministrationNavItem = {
   key: AdministrationNavKey;
   href: string;
   label: string;
+  title: string;
+  description: string;
 };
 
 export type AdministrationNavGroup = {
@@ -21,25 +23,63 @@ export const administrationNavGroups: readonly AdministrationNavGroup[] = [
   {
     label: "Platform",
     items: [
-      { key: "general", href: "/admin/settings", label: "General" },
-      { key: "users", href: "/admin/users", label: "Users" },
+      {
+        key: "general",
+        href: "/admin/settings",
+        label: "General",
+        title: "General information",
+        description: "Platform settings and host configuration.",
+      },
+      {
+        key: "users",
+        href: "/admin/users",
+        label: "Users",
+        title: "Users",
+        description: "Manage who can access this MyPaaS instance.",
+      },
     ],
   },
   {
     label: "Operations",
     items: [
-      { key: "backup", href: "/admin/backup", label: "Backup" },
-      { key: "migration", href: "/admin/migration", label: "Migration" },
+      {
+        key: "backup",
+        href: "/admin/backup",
+        label: "Backup",
+        title: "Backup",
+        description: "Configure and download platform backups.",
+      },
+      {
+        key: "migration",
+        href: "/admin/migration",
+        label: "Migration",
+        title: "Migration",
+        description: "Move this MyPaaS installation to another server.",
+      },
     ],
   },
   {
     label: "Integrations",
-    items: [{ key: "mcp", href: "/admin/mcp", label: "MCP" }],
+    items: [
+      {
+        key: "mcp",
+        href: "/admin/mcp",
+        label: "MCP",
+        title: "MCP integration",
+        description: "Connect local agents to this MyPaaS instance.",
+      },
+    ],
   },
   {
     label: "Activity",
     items: [
-      { key: "audit-logs", href: "/admin/audit-logs", label: "Audit logs" },
+      {
+        key: "audit-logs",
+        href: "/admin/audit-logs",
+        label: "Audit logs",
+        title: "Audit logs",
+        description: "Review authenticated changes made through the control plane.",
+      },
     ],
   },
 ] as const;

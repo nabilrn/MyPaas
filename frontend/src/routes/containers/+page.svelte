@@ -4,14 +4,11 @@
 	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
-	import { loadRuntimeContainers, mergeRuntimeContainerTelemetry, type RuntimeContainer } from '$lib/api/container-inventory';
+	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
-
-	const telemetryRefreshMs = 15_000;
 
 	let rows: RuntimeContainer[] = [];
 	let loading = false;
-	let telemetryError = '';
 	let error = '';
 	let query = '';
 	let stateFilter = 'all';
@@ -20,8 +17,6 @@
 	let pageSize = 10;
 	let expanded = new Set<string>();
 	let metadataController: AbortController | null = null;
-	let telemetryController: AbortController | null = null;
-	let telemetryPoll: ReturnType<typeof setInterval> | undefined;
 
 	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
 	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
@@ -42,13 +37,10 @@
 
 	onMount(() => {
 		void load();
-		telemetryPoll = setInterval(() => void loadTelemetry(), telemetryRefreshMs);
 	});
 
 	onDestroy(() => {
 		metadataController?.abort();
-		telemetryController?.abort();
-		if (telemetryPoll) clearInterval(telemetryPoll);
 	});
 
 	async function load() {
@@ -60,42 +52,19 @@
 		const finishMainLoading = rows.length === 0 ? beginMainContentLoading() : null;
 		error = '';
 		try {
-			const next = await loadRuntimeContainers({ telemetry: false, signal: controller.signal });
+			const next = await loadRuntimeContainers({ signal: controller.signal });
 			if (controller.signal.aborted) return;
 			rows = next.sort((a, b) => {
 				const runningOrder = Number(b.state === 'running') - Number(a.state === 'running');
 				if (runningOrder !== 0) return runningOrder;
 				return (a.composeProject || '').localeCompare(b.composeProject || '') || a.name.localeCompare(b.name);
 			});
-			void loadTelemetry();
 		} catch (err) {
 			if (controller.signal.aborted) return;
 			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
 			finishMainLoading?.();
 			loading = false;
-		}
-	}
-
-	async function loadTelemetry() {
-		if (rows.length === 0) return;
-		telemetryController?.abort();
-		const controller = new AbortController();
-		telemetryController = controller;
-		try {
-			const telemetryRows = await loadRuntimeContainers({ signal: controller.signal });
-			if (controller.signal.aborted) return;
-			rows = mergeRuntimeContainerTelemetry(rows, telemetryRows);
-			const runningRows = rows.filter((row) => row.state === 'running');
-			const missingSamples = runningRows.filter((row) => !row.metricsAvailable).length;
-			telemetryError = missingSamples === 0
-				? ''
-				: missingSamples === runningRows.length
-					? 'CPU/RAM telemetry has not produced a sample yet. Container metadata is still current.'
-					: `CPU/RAM telemetry is unavailable for ${missingSamples} running container${missingSamples === 1 ? '' : 's'}.`;
-		} catch (err) {
-			if (controller.signal.aborted) return;
-			telemetryError = err instanceof Error ? err.message : 'Live CPU/RAM telemetry is unavailable';
 		}
 	}
 
@@ -106,11 +75,6 @@
 	function toggleDetails(id: string) {
 		expanded.has(id) ? expanded.delete(id) : expanded.add(id);
 		expanded = new Set(expanded);
-	}
-
-	function formatMemory(value: number) {
-		if (!Number.isFinite(value)) return '—';
-		return value >= 1024 ? `${(value / 1024).toFixed(2)} GB` : `${value.toFixed(0)} MB`;
 	}
 
 	function stateDot(state: string) {
@@ -197,26 +161,16 @@
 			</div>
 		</svelte:fragment>
 
-		<svelte:fragment slot="notice">
-			{#if telemetryError}
-				<div class="border-b border-amber-200/70 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:text-amber-200" role="status">
-					{telemetryError}
-				</div>
-			{/if}
-		</svelte:fragment>
-
-		<table class="data-table table-fixed min-w-[90rem]">
+		<table class="data-table table-fixed min-w-[76rem]">
 			<colgroup>
-				<col class="w-[15%]" />
-				<col class="w-[15%]" />
-				<col class="w-[19%]" />
-				<col class="w-[10%]" />
-				<col class="w-[6%]" />
-				<col class="w-[10%]" />
+				<col class="w-[18%]" />
+				<col class="w-[17%]" />
+				<col class="w-[23%]" />
+				<col class="w-[12%]" />
+				<col class="w-[8%]" />
+				<col class="w-[12%]" />
 				<col class="w-[7%]" />
-				<col class="w-[10%]" />
-				<col class="w-[6%]" />
-				<col class="w-[2%]" />
+				<col class="w-[3%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -224,8 +178,6 @@
 					<th>Project / service</th>
 					<th>Image</th>
 					<th>State</th>
-					<th class="text-right">CPU</th>
-					<th class="text-right">Memory</th>
 					<th class="text-right">Restarts</th>
 					<th>Ports</th>
 					<th>Uptime</th>
@@ -251,12 +203,6 @@
 								{#if row.health}<p class={`mt-0.5 text-xs capitalize ${healthClass(row.health)}`}>{row.health}</p>{/if}
 							</div>
 						</td>
-						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.cpuAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
-						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">
-							{#if row.memoryAvailable}
-								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
-							{:else}—{/if}
-						</td>
 						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.detailsAvailable ? row.restartCount : '—'}</td>
 						<td><p class="truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.ports}>{row.ports || '—'}</p></td>
 						<td class="whitespace-nowrap text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.state === 'running' ? row.uptime || '—' : '—'}</td>
@@ -268,7 +214,7 @@
 					</tr>
 					{#if expanded.has(row.id)}
 						<tr>
-							<td colspan="10" class="!p-0">
+							<td colspan="8" class="!p-0">
 								<div class="grid gap-5 border-t border-gray-100/70 px-4 py-4 dark:border-neutral-900 md:grid-cols-3 lg:px-5">
 									<div class="min-w-0">
 										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Identity</p>
