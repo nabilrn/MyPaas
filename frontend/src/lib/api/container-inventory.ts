@@ -18,8 +18,10 @@ export interface RuntimeContainer {
 	composeProject: string;
 	service: string;
 	cpu: number;
+	cpuAvailable: boolean;
 	memoryMb: number;
 	memoryLimitMb: number;
+	memoryAvailable: boolean;
 	metricsAvailable: boolean;
 }
 
@@ -52,6 +54,7 @@ export async function loadRuntimeContainers(options: RuntimeContainerLoadOptions
 }
 
 function normalizeRuntimeContainer(row: Partial<RuntimeContainer> & Pick<RuntimeContainer, 'id' | 'name'>): RuntimeContainer {
+	const legacyMetricsAvailable = Boolean(row.metricsAvailable);
 	return {
 		id: row.id,
 		name: row.name,
@@ -69,9 +72,11 @@ function normalizeRuntimeContainer(row: Partial<RuntimeContainer> & Pick<Runtime
 		composeProject: row.composeProject ?? '',
 		service: row.service ?? '',
 		cpu: Number.isFinite(row.cpu) ? Number(row.cpu) : 0,
+		cpuAvailable: row.cpuAvailable === undefined ? legacyMetricsAvailable : Boolean(row.cpuAvailable),
 		memoryMb: Number.isFinite(row.memoryMb) ? Number(row.memoryMb) : 0,
 		memoryLimitMb: Number.isFinite(row.memoryLimitMb) ? Number(row.memoryLimitMb) : 0,
-		metricsAvailable: Boolean(row.metricsAvailable)
+		memoryAvailable: row.memoryAvailable === undefined ? legacyMetricsAvailable : Boolean(row.memoryAvailable),
+		metricsAvailable: legacyMetricsAvailable
 	};
 }
 
@@ -80,13 +85,23 @@ export function mergeRuntimeContainerTelemetry(rows: RuntimeContainer[], telemet
 	return rows.map((row) => {
 		const telemetry = metricsByID.get(row.id);
 		if (!telemetry) {
-			return { ...row, cpu: 0, memoryMb: 0, memoryLimitMb: 0, metricsAvailable: false };
+			return {
+				...row,
+				cpu: 0,
+				cpuAvailable: false,
+				memoryMb: 0,
+				memoryLimitMb: 0,
+				memoryAvailable: false,
+				metricsAvailable: false
+			};
 		}
 		return {
 			...row,
 			cpu: telemetry.cpu,
+			cpuAvailable: telemetry.cpuAvailable,
 			memoryMb: telemetry.memoryMb,
 			memoryLimitMb: telemetry.memoryLimitMb,
+			memoryAvailable: telemetry.memoryAvailable,
 			metricsAvailable: telemetry.metricsAvailable
 		};
 	});
