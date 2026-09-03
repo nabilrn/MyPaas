@@ -5,3 +5,18 @@
 <div class="project-settings-resources">
 	<ProjectSettingsSection section="resources" />
 </div>
+
+<style>
+	.project-settings-resources :global(button[aria-label='Resource profile']),
+	.project-settings-resources :global(div[role='listbox'][aria-label='Resource profile']) {
+		max-width: 32rem;
+	}
+
+	.project-settings-resources :global(input.field) {
+		max-width: 20rem;
+	}
+
+	.project-settings-resources :global(textarea.field) {
+		max-width: 48rem;
+	}
+</style>
