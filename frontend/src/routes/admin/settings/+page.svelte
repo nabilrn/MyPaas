@@ -132,7 +132,7 @@
 			updateOverlayOpen = true;
 			startUpdatePolling();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to check for updates');
+			toast.error(error instanceof Error ? error.message : 'Failed to update MyPaaS');
 			console.error(error);
 		} finally {
 			triggeringUpdate = false;
@@ -194,7 +194,7 @@
 </script>
 
 <svelte:head>
-	<title>Settings · MyPaas</title>
+	<title>Settings · MyPaaS</title>
 </svelte:head>
 
 {#if updateOverlayOpen}
@@ -261,8 +261,8 @@
 			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">System update</h2>
 			<div class="mt-3 grid gap-3 border-y border-gray-100 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center dark:border-neutral-800">
 				<p class="text-sm text-gray-500 dark:text-gray-400">Current build</p>
-				<p class="font-mono text-sm text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
-				<ActionButton variant="secondary" size="sm" loading={triggeringUpdate} loadingLabel="Checking" on:click={triggerUpdate}>Check for updates</ActionButton>
+				<div><p class="font-mono text-sm text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Installs a newer release when available and may restart the control plane.</p></div>
+				<ActionButton variant="secondary" size="sm" loading={triggeringUpdate} loadingLabel="Updating" on:click={triggerUpdate}>Update MyPaaS</ActionButton>
 			</div>
 		</section>
 
