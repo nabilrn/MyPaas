@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import overview from '../../routes/projects/[id]/+page.svelte?raw';
 import settings from '../../routes/projects/[id]/settings/+page.svelte?raw';
 import observability from '../components/ProjectObservability.svelte?raw';
-import metricChart from '../components/MultiServiceMetricChart.svelte?raw';
+import runtimeUsageBar from '../components/RuntimeUsageBar.svelte?raw';
 
 describe('project detail cleanup contract', () => {
 	it('keeps configuration detail out of the project overview', () => {
@@ -15,6 +15,14 @@ describe('project detail cleanup contract', () => {
 		expect(overview).toContain('Database Studio');
 	});
 
+	it('keeps project summary copy and navigation concise', () => {
+		expect(overview).toContain('Your project settings and configuration.');
+		expect(overview).toContain('Browse and manage your project database.');
+		expect(overview).toContain('ArrowUpRight');
+		expect(overview).toContain('variant="secondary" size="xs"');
+		expect(overview).toContain('border-[color:var(--workspace-divider)]');
+	});
+
 	it('owns environment management inside the settings sub-navigation', () => {
 		expect(settings).toContain("'environment'");
 		expect(settings).toContain('KeyRound');
@@ -23,11 +31,17 @@ describe('project detail cleanup contract', () => {
 		expect(settings).toContain('projectId={project.id}');
 	});
 
-	it('bounds runtime charts by assigned resources instead of observed samples', () => {
-		expect(observability).toContain('projectResourceScale(project, visibleItems)');
-		expect(observability).toContain('maxValue={resourceScale.cpuPercent}');
-		expect(observability).toContain('maxValue={resourceScale.memoryMb}');
-		expect(metricChart).toContain("rangeCaption = maxValue !== null ? 'allocated scale'");
-		expect(metricChart).toContain('`0–${formatRangeValue(domain.max)}${suffix}`');
+	it('shows runtime as bounded low-contrast allocation bars instead of line charts', () => {
+		expect(observability).toContain('projectResourceAllocation(project, visibleItems)');
+		expect(observability).toContain('RuntimeUsageBar');
+		expect(observability).toContain('used={cpuUsed}');
+		expect(observability).toContain('limit={cpuLimit}');
+		expect(observability).toContain('used={memoryUsed}');
+		expect(observability).toContain('limit={memoryLimit}');
+		expect(observability).not.toContain('MultiServiceMetricChart');
+		expect(runtimeUsageBar).toContain('role="progressbar"');
+		expect(runtimeUsageBar).toContain('bg-gray-300/70');
+		expect(runtimeUsageBar).toContain('bg-transparent');
+		expect(runtimeUsageBar).not.toContain('bg-sky');
 	});
 });
