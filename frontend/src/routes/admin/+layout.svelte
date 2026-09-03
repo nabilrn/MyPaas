@@ -49,6 +49,11 @@
     border-radius: 0 !important;
   }
 
+  :global(.admin-content > .page-shell > section.rounded-lg > .divide-y > div) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
   :global(.admin-content > .page-shell > section + section),
   :global(.admin-content > .page-shell > section + details),
   :global(.admin-content > .page-shell > details + section),
