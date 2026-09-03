@@ -192,6 +192,7 @@
 		color: var(--control-text);
 		box-shadow: none;
 		@apply px-3 py-1.5 text-sm outline-none transition-colors;
+
 		transition-property: border-color, background-color, box-shadow, color;
 	}
 
