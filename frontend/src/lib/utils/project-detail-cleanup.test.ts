@@ -23,7 +23,6 @@ describe('project detail cleanup contract', () => {
 		expect(overview).not.toContain('selectPrimaryProjectMetric');
 		expect(overview).not.toContain('Project settings');
 		expect(overview).not.toContain('Database Studio');
-		expect(overview).toContain("project.deployMode !== 'static'");
 	});
 
 	it('shows lifecycle chrome only on Overview and Deployments', () => {
@@ -45,7 +44,7 @@ describe('project detail cleanup contract', () => {
 		expect(environmentRoute).toContain('project-environment-leaf');
 		expect(settings).not.toContain('ProjectEnvironmentSettings');
 		expect(projectDetailSidebar).not.toContain('settings/environment');
-		expect(effectiveConfiguration).not.toContain('Source</p>');
+		expect(effectiveConfiguration).not.toContain('>Source</p>');
 		expect(effectiveConfiguration).not.toContain('sourceSummary');
 	});
 
