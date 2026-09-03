@@ -36,6 +36,19 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn('verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"', updater)
         self.assertIn('previous runtime could not be verified after rollback', updater)
 
+    def test_updater_preflights_existing_api_before_any_redeploy(self):
+        updater = self.text("scripts/update-vm.sh")
+        preflight = updater.index('preflight_existing_runtime "$docker_cmd"')
+        target_reset = updater.index('git_repo reset --hard "$target_sha"')
+        same_sha = updater.index('if [[ "$current_sha" == "$target_sha" ]]; then')
+
+        self.assertLess(preflight, same_sha)
+        self.assertLess(preflight, target_reset)
+        self.assertIn('network disconnect -f "$network" mypaas-api', updater)
+        self.assertIn('references missing network $network; refusing to update', updater)
+        self.assertIn('127.0.0.1:8080/health', updater)
+        self.assertIn('network membership is not isolated to $control_network', updater)
+
     def test_updater_deploys_after_each_checkout_reset(self):
         updater = self.text("scripts/update-vm.sh")
         deploy = self.text("scripts/deploy-to-vm.sh")
