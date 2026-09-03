@@ -4,6 +4,15 @@ set -euo pipefail
 sudo apt-get update
 sudo apt-get install -y podman catatonit conmon crun
 sudo systemctl stop docker.service docker.socket podman.service podman.socket || true
+
+# GitHub-hosted runners are disposable and may arrive with rootful Podman
+# storage pre-initialized by a different runner-image Podman build. Start the
+# compatibility smoke from a clean store so the distro Podman service can
+# initialize its API socket deterministically, matching a fresh host install.
+sudo pkill -9 -x podman || true
+sudo rm -rf /var/lib/containers/storage /run/containers/storage
+sudo mkdir -p /var/lib/containers/storage
+
 sudo mkdir -p /run/podman /run/user/0
 sudo chmod 700 /run/user/0
 
