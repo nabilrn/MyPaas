@@ -50,3 +50,17 @@
 		<slot name="footer" />
 	{/if}
 </section>
+
+<style>
+	:global(.table-toolbar [data-action-button]),
+	:global(.table-toolbar [data-action-link]) {
+		min-height: 2.25rem;
+	}
+
+	@media (any-pointer: coarse) {
+		:global(.table-toolbar [data-action-button]),
+		:global(.table-toolbar [data-action-link]) {
+			min-height: 44px;
+		}
+	}
+</style>
