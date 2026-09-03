@@ -1,5 +1,5 @@
 import { isCurrentDeployment, isPipelineActive } from './deploymentHistory';
-import type { Deployment, Project } from '$types';
+import type { DeployMode, Deployment, Project } from '$types';
 
 export type ServingState = 'live' | 'offline' | 'degraded' | 'unknown';
 export type ReleaseState = 'not_deployed' | 'queued' | 'deploying' | 'succeeded' | 'failed';
@@ -37,8 +37,9 @@ export interface ProjectInventoryAction {
 	label: string;
 }
 
-export function deriveProjectInventoryAction(operationalState: ProjectOperationalState): ProjectInventoryAction {
+export function deriveProjectInventoryAction(operationalState: ProjectOperationalState, deployMode: DeployMode): ProjectInventoryAction {
 	if (
+		deployMode !== 'static' &&
 		operationalState.serving === 'live' &&
 		operationalState.release === 'succeeded' &&
 		operationalState.attention === 'none'

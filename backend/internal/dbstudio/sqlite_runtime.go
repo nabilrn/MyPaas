@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	pathpkg "path"
+	"sort"
 	"strings"
 
 	"mypaas/internal/db"
@@ -30,6 +31,11 @@ type sqliteRuntimeClient struct {
 	databasePath string
 }
 
+type sqliteRuntimeCandidate struct {
+	container string
+	path      string
+}
+
 type sqliteHelperEnvelope struct {
 	OK       bool                 `json:"ok"`
 	Response SQLiteHelperResponse `json:"response"`
@@ -41,6 +47,10 @@ func resolveSQLiteConnection(ctx context.Context, project db.Project, envs map[s
 	if !ok {
 		return Connection{}, false, nil
 	}
+	return resolveSQLiteConfiguredPath(ctx, project, rawPath, source)
+}
+
+func resolveSQLiteConfiguredPath(ctx context.Context, project db.Project, rawPath, source string) (Connection, bool, error) {
 	if project.DeployMode == "static" {
 		return Connection{}, true, fmt.Errorf("%w: SQLite DB Studio requires a container-backed project", errs.ErrValidation)
 	}
@@ -111,6 +121,82 @@ func sqlitePathFromEnv(envs map[string]string) (string, string, bool) {
 	return "", "", false
 }
 
+func resolveSQLiteRuntimeConnection(ctx context.Context, project db.Project) (Connection, bool, error) {
+	if project.DeployMode == "static" {
+		return Connection{}, false, nil
+	}
+
+	containers, err := sqliteRuntimeCandidates(ctx, project)
+	if err != nil {
+		if isDockerUnavailable(err.Error()) {
+			return Connection{}, false, nil
+		}
+		return Connection{}, true, err
+	}
+
+	candidates := make([]sqliteRuntimeCandidate, 0)
+	seen := make(map[string]struct{})
+	for _, container := range containers {
+		inspect, err := inspectSQLiteRuntime(ctx, container)
+		if err != nil {
+			if isDockerUnavailable(err.Error()) || isNoSuchContainer(err.Error()) {
+				continue
+			}
+			return Connection{}, true, err
+		}
+		roots := persistentSQLiteMountRoots(inspect)
+		if len(roots) == 0 {
+			continue
+		}
+
+		client := &sqliteRuntimeClient{container: container}
+		paths, err := client.Discover(ctx, roots)
+		if err != nil {
+			return Connection{}, true, err
+		}
+		for _, path := range paths {
+			path = pathpkg.Clean(strings.TrimSpace(path))
+			if !sqlitePathOnPersistentMount(path, inspect) {
+				continue
+			}
+			key := container + "\x00" + path
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			candidates = append(candidates, sqliteRuntimeCandidate{container: container, path: path})
+		}
+	}
+
+	candidate, ambiguous := selectSQLiteRuntimeCandidate(candidates)
+	if ambiguous {
+		return Connection{}, true, fmt.Errorf("%w: multiple persistent SQLite databases were found; configure SQLITE_PATH, SQLITE_DATABASE, SQLITE_DB, or DATABASE_URL explicitly", errs.ErrValidation)
+	}
+	if candidate.path == "" {
+		return Connection{}, false, nil
+	}
+	return Connection{
+		Driver: DriverSQLite, Database: candidate.path, Source: "runtime-discovery",
+		runtimeContainer: candidate.container, databasePath: candidate.path,
+	}, true, nil
+}
+
+func selectSQLiteRuntimeCandidate(candidates []sqliteRuntimeCandidate) (sqliteRuntimeCandidate, bool) {
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].container != candidates[j].container {
+			return candidates[i].container < candidates[j].container
+		}
+		return candidates[i].path < candidates[j].path
+	})
+	if len(candidates) == 0 {
+		return sqliteRuntimeCandidate{}, false
+	}
+	if len(candidates) > 1 {
+		return sqliteRuntimeCandidate{}, true
+	}
+	return candidates[0], false
+}
+
 func sqlitePathFromURL(value string) (string, bool) {
 	value = strings.TrimSpace(value)
 	lowered := strings.ToLower(value)
@@ -166,18 +252,18 @@ func sqliteRuntimeCandidates(ctx context.Context, project db.Project) ([]string,
 		}
 	}
 	for _, composeProject := range composeProjectCandidates(project.Name) {
-		cmd := exec.CommandContext(ctx, "docker", "ps", "-aq", "--filter", "label=com.docker.compose.project="+composeProject)
-		raw, err := cmd.CombinedOutput()
+		raw, err := sqliteRuntimeCommand(ctx, "ps", "-aq", "--filter", "label=com.docker.compose.project="+composeProject)
 		if err != nil {
 			return nil, fmt.Errorf("%w: find SQLite Compose containers: %s", errs.ErrValidation, strings.TrimSpace(string(raw)))
 		}
 		add(strings.Fields(string(raw))...)
 	}
+	sort.Strings(out)
 	return out, nil
 }
 
 func inspectSQLiteRuntime(ctx context.Context, container string) (sqliteRuntimeInspect, error) {
-	out, err := exec.CommandContext(ctx, "docker", "inspect", container).CombinedOutput()
+	out, err := sqliteRuntimeCommand(ctx, "inspect", container)
 	if err != nil {
 		return sqliteRuntimeInspect{}, fmt.Errorf("inspect SQLite runtime: %s", strings.TrimSpace(string(out)))
 	}
@@ -186,6 +272,10 @@ func inspectSQLiteRuntime(ctx context.Context, container string) (sqliteRuntimeI
 		return sqliteRuntimeInspect{}, fmt.Errorf("parse SQLite runtime inspection")
 	}
 	return rows[0], nil
+}
+
+var sqliteRuntimeCommand = func(ctx context.Context, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 }
 
 func resolveSQLiteContainerPath(rawPath, workingDir string) (string, error) {
@@ -208,14 +298,8 @@ func resolveSQLiteContainerPath(rawPath, workingDir string) (string, error) {
 }
 
 func sqlitePathOnPersistentMount(databasePath string, inspect sqliteRuntimeInspect) bool {
-	for _, mount := range inspect.Mounts {
-		if mount.Type != "bind" && mount.Type != "volume" {
-			continue
-		}
-		destination := pathpkg.Clean(strings.TrimSpace(mount.Destination))
-		if destination == "." || destination == "/" || destination == "" {
-			continue
-		}
+	databasePath = pathpkg.Clean(strings.TrimSpace(databasePath))
+	for _, destination := range persistentSQLiteMountRoots(inspect) {
 		if databasePath == destination || strings.HasPrefix(databasePath, destination+"/") {
 			return true
 		}
@@ -223,8 +307,32 @@ func sqlitePathOnPersistentMount(databasePath string, inspect sqliteRuntimeInspe
 	return false
 }
 
+func persistentSQLiteMountRoots(inspect sqliteRuntimeInspect) []string {
+	seen := make(map[string]struct{})
+	roots := make([]string, 0)
+	for _, mount := range inspect.Mounts {
+		mountType := strings.ToLower(strings.TrimSpace(mount.Type))
+		if mountType != "bind" && mountType != "volume" {
+			continue
+		}
+		destination := pathpkg.Clean(strings.TrimSpace(mount.Destination))
+		if destination == "." || destination == "/" || destination == "" {
+			continue
+		}
+		if _, ok := seen[destination]; ok {
+			continue
+		}
+		seen[destination] = struct{}{}
+		roots = append(roots, destination)
+	}
+	sort.Strings(roots)
+	return roots
+}
+
 func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequest) (SQLiteHelperResponse, error) {
-	request.DatabasePath = c.databasePath
+	if c.databasePath != "" {
+		request.DatabasePath = c.databasePath
+	}
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return SQLiteHelperResponse{}, err
@@ -240,9 +348,7 @@ func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequ
 		"--volumes-from", c.container,
 		"--entrypoint", "/app/mypaas-sqlite-helper", image,
 	}
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdin = bytes.NewReader(append(payload, '\n'))
-	out, err := cmd.CombinedOutput()
+	out, err := sqliteRuntimeHelperCommand(ctx, args, payload)
 	if err != nil {
 		return SQLiteHelperResponse{}, fmt.Errorf("SQLite helper failed: %s", strings.TrimSpace(string(out)))
 	}
@@ -259,11 +365,17 @@ func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequ
 	return envelope.Response, nil
 }
 
+var sqliteRuntimeHelperCommand = func(ctx context.Context, args []string, payload []byte) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdin = bytes.NewReader(append(payload, '\n'))
+	return cmd.CombinedOutput()
+}
+
 func sqliteHelperImage(ctx context.Context) (string, error) {
 	if value := strings.TrimSpace(os.Getenv("MYPAAS_SQLITE_HELPER_IMAGE")); value != "" {
 		return value, nil
 	}
-	out, err := exec.CommandContext(ctx, "docker", "inspect", "--format", "{{.Image}}", "mypaas-api").CombinedOutput()
+	out, err := sqliteRuntimeCommand(ctx, "inspect", "--format", "{{.Image}}", "mypaas-api")
 	if err != nil {
 		return "", fmt.Errorf("resolve SQLite helper image: %s", strings.TrimSpace(string(out)))
 	}
@@ -272,6 +384,11 @@ func sqliteHelperImage(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("resolve SQLite helper image: empty image id")
 	}
 	return image, nil
+}
+
+func (c *sqliteRuntimeClient) Discover(ctx context.Context, roots []string) ([]string, error) {
+	response, err := c.call(ctx, SQLiteHelperRequest{Operation: "discover", DiscoveryRoots: roots})
+	return response.SQLiteCandidates, err
 }
 
 func (c *sqliteRuntimeClient) Ping(ctx context.Context) error {

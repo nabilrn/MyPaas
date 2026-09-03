@@ -1,19 +1,22 @@
 <script lang="ts">
 	import { Search } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
-	import { loadRuntimeContainers, type RuntimeContainer } from '$lib/api/container-inventory';
+	import { loadRuntimeContainers, mergeRuntimeContainerTelemetry, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
 
 	let rows: RuntimeContainer[] = [];
 	let loading = false;
+	let telemetryError = '';
 	let error = '';
 	let query = '';
 	let stateFilter = 'all';
 	let runtimeFilter = 'all';
 	let pageIndex = 0;
 	let pageSize = 10;
+	let metadataController: AbortController | null = null;
+	let telemetryController: AbortController | null = null;
 
 	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
 	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
@@ -34,23 +37,50 @@
 		void load();
 	});
 
+	onDestroy(() => {
+		metadataController?.abort();
+		telemetryController?.abort();
+	});
+
 	async function load() {
 		if (loading) return;
 		loading = true;
+		metadataController?.abort();
+		const controller = new AbortController();
+		metadataController = controller;
 		const finishMainLoading = rows.length === 0 ? beginMainContentLoading() : null;
 		error = '';
 		try {
-			const next = await loadRuntimeContainers();
+			const next = await loadRuntimeContainers({ telemetry: false, signal: controller.signal });
+			if (controller.signal.aborted) return;
 			rows = next.sort((a, b) => {
 				const runningOrder = Number(b.state === 'running') - Number(a.state === 'running');
 				if (runningOrder !== 0) return runningOrder;
 				return (a.composeProject || '').localeCompare(b.composeProject || '') || a.name.localeCompare(b.name);
 			});
+			void loadTelemetry();
 		} catch (err) {
+			if (controller.signal.aborted) return;
 			error = err instanceof Error ? err.message : 'Failed to load host container inventory';
 		} finally {
 			finishMainLoading?.();
 			loading = false;
+		}
+	}
+
+	async function loadTelemetry() {
+		telemetryController?.abort();
+		const controller = new AbortController();
+		telemetryController = controller;
+		telemetryError = '';
+		try {
+			const telemetryRows = await loadRuntimeContainers({ signal: controller.signal });
+			if (controller.signal.aborted) return;
+			rows = mergeRuntimeContainerTelemetry(rows, telemetryRows);
+		} catch (err) {
+			if (controller.signal.aborted) return;
+			telemetryError = err instanceof Error ? err.message : 'Live container telemetry is unavailable';
+			rows = rows.map((row) => ({ ...row, cpu: 0, memoryMb: 0, memoryLimitMb: 0, metricsAvailable: false }));
 		}
 	}
 
@@ -97,6 +127,11 @@
 		on:retry={() => load()}
 	>
 		<svelte:fragment slot="notice">
+			{#if telemetryError}
+				<div class="border-b border-amber-200/70 bg-amber-50/70 px-4 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200" role="status">
+					Live CPU/RAM telemetry unavailable; container metadata is still current.
+				</div>
+			{/if}
 			<div class="grid gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end lg:px-5">
 				<label class="block min-w-0" for="container-search">
 					<span class="field-label">Search</span>

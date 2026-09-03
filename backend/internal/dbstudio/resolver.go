@@ -42,6 +42,9 @@ func resolveConnection(ctx context.Context, project db.Project, envs map[string]
 			}
 		}
 	}
+	if conn, ok, err := resolveSQLiteRuntimeConnection(ctx, project); ok || err != nil {
+		return conn, err
+	}
 	return Connection{}, fmt.Errorf("%w: no supported database environment was found", errs.ErrValidation)
 }
 
