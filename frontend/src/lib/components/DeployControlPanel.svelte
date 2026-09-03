@@ -91,7 +91,7 @@
 				</ActionButton>
 			{/if}
 			<details bind:this={actionsMenu} class="relative" use:dismissable={{ enabled: true, onDismiss: closeActionsMenu }}>
-				<summary class="app-focus inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 hover:text-gray-950 dark:border-gray-700 dark:bg-neutral-950 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-neutral-900 dark:hover:text-white [&::-webkit-details-marker]:hidden" aria-label="More project actions" title="More project actions"><MoreHorizontal class="h-4 w-4" aria-hidden="true" /></summary>
+				<summary class="app-focus control-square inline-flex cursor-pointer list-none items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50 hover:text-gray-950 dark:border-gray-700 dark:bg-neutral-950 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-neutral-900 dark:hover:text-white [&::-webkit-details-marker]:hidden" aria-label="More project actions" title="More project actions"><MoreHorizontal class="h-4 w-4" aria-hidden="true" /></summary>
 				<div class="overlay absolute right-0 z-30 mt-2 w-44 overflow-hidden py-1">
 					<a href={`/projects/${project.id}/logs`} class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-neutral-900" on:click={closeActionsMenu}><FileText class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />View logs</a>
 					<div class="my-1 border-t border-gray-100 dark:border-neutral-800"></div>
