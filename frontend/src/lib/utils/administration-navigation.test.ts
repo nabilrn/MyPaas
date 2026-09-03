@@ -117,7 +117,8 @@ describe("administration navigation contract", () => {
   it("uses task-first administration content instead of nested panel narration", () => {
     expect(adminSettingsPage).not.toContain("SectionPanel");
     expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
-    expect(adminSettingsPage).toContain("Check for updates");
+    expect(adminSettingsPage).toContain("Update MyPaaS");
+    expect(adminSettingsPage).toContain("may restart the control plane");
 
     expect(adminUsersPage).not.toContain('title="Owners"');
     expect(adminUsersPage).not.toContain('title="Add owner"');
@@ -131,6 +132,7 @@ describe("administration navigation contract", () => {
     expect(adminMigrationPage).not.toContain("Migration safety");
     expect(adminMigrationPage).toContain("What is included?");
     expect(adminMigrationPage).toContain("Prepare package");
+    expect(adminMigrationPage).toContain("Running container projects pause briefly");
 
     expect(adminMcpPage).not.toContain("MCP access");
     expect(adminMcpPage).not.toContain("readonly");
@@ -140,5 +142,14 @@ describe("administration navigation contract", () => {
     expect(adminAuditPage).not.toContain("System event log");
     expect(adminAuditPage).not.toContain("!bg-gray-50/70");
     expect(adminAuditPage).toContain("Audit logs copied");
+  });
+
+  it("keeps administration dialogs keyboard reachable", () => {
+    for (const pageSource of [adminUsersPage, adminBackupPage]) {
+      expect(pageSource).toContain("trapDialogFocus");
+      expect(pageSource).toContain("event.key === 'Escape'");
+      expect(pageSource).toContain('tabindex="-1"');
+      expect(pageSource).toContain("ReturnFocus");
+    }
   });
 });
