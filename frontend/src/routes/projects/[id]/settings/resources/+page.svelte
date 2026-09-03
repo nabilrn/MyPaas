@@ -7,6 +7,17 @@
 </div>
 
 <style>
+	.project-settings-resources :global(.space-y-5 > :first-child) {
+		padding-inline: 1.25rem;
+	}
+
+	.project-settings-resources :global(.space-y-5 > .border-y),
+	.project-settings-resources :global(.space-y-5 > details),
+	.project-settings-resources :global(.space-y-5 > .flex.border-b),
+	.project-settings-resources :global(.space-y-5 > .flex:last-child) {
+		padding-inline: 1rem;
+	}
+
 	.project-settings-resources :global(.space-y-5 > :not([hidden]) ~ :not([hidden])) {
 		margin-top: 0.75rem;
 	}
