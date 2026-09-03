@@ -15,7 +15,7 @@
 	import { registerWebMCPTools } from '$lib/webmcp';
 	import { mainContentLoading } from '$stores/main-loading';
 	import type { User } from '$types';
-	import faviconWhite from '../assets/new-assets/logoonly_white.png';
+	import favicon from '../assets/brand/mypaas-icon.svg';
 
 	let user: User | null = null;
 	let checked = false;
@@ -60,7 +60,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" type="image/png" href={faviconWhite} />
+	<link rel="icon" type="image/svg+xml" href={favicon} />
 </svelte:head>
 
 {#if isPublic}
