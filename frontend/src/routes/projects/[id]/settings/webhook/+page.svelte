@@ -2,4 +2,6 @@
 	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
 </script>
 
-<ProjectSettingsSection section="webhook" />
+<div class="project-settings-webhook">
+	<ProjectSettingsSection section="webhook" />
+</div>
