@@ -120,28 +120,5 @@ jobs:
             exit 1
           fi
 
-      - name: Install rootful Podman socket
-        run: bash scripts/ci_setup_rootful_podman.sh
-
-      - name: Verify Docker CLI is backed by packaged Podman
-        run: |
-          set -euo pipefail
-          clean_env=(env PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf)
-          expected="$(sudo "${clean_env[@]}" /usr/bin/podman version --format '{{.Client.Version}}')"
-          actual="$(sudo docker version --format '{{.Server.Version}}')"
-          if [[ "$actual" != "$expected" ]]; then
-            echo "Docker compatibility socket server version $actual does not match packaged Podman $expected" >&2
-            sudo docker version >&2 || true
-            sudo "${clean_env[@]}" /usr/bin/podman version >&2 || true
-            exit 1
-          fi
-          conmon_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.Conmon.Path}}')"
-          runtime_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.OCIRuntime.Path}}')"
-          test "$conmon_path" = "/usr/bin/conmon"
-          test "$runtime_path" = "/usr/bin/crun"
-          sudo docker version | tee /tmp/mypaas-docker-version.txt
-          grep -q 'Podman Engine' /tmp/mypaas-docker-version.txt
-          sudo docker compose version
-
-      - name: Run MyPaaS Podman compatibility smoke
-        run: sudo -E env PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 bash scripts/podman_compat_smoke.sh
+      - name: Run isolated Podman compatibility smoke
+        run: bash scripts/ci_podman_compat_isolated.sh
