@@ -14,8 +14,8 @@
   </aside>
 
   <main class="min-w-0 px-3.5 py-3">
-    <div class="w-full space-y-3">
-      <header>
+    <div class="w-full">
+      <header class="border-b border-[color:var(--workspace-divider)] pb-3">
         <h1 class="text-lg font-semibold text-gray-950 dark:text-white">
           {currentSection.title}
         </h1>
@@ -24,7 +24,7 @@
         </p>
       </header>
 
-      <div class="admin-content min-w-0">
+      <div class="admin-content min-w-0 pt-3">
         <slot />
       </div>
     </div>
@@ -40,6 +40,6 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0;
   }
 </style>
