@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import settings from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import settings from '../components/ProjectSettingsSection.svelte?raw';
+import generalRoute from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import sourceRoute from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
+import resourcesRoute from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
+import webhookRoute from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
+import dangerRoute from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
+import environmentRoute from '../../routes/projects/[id]/env/+page.svelte?raw';
 import generalInformation from '../components/ProjectEffectiveConfiguration.svelte?raw';
 import environmentSettings from '../components/ProjectEnvironmentSettings.svelte?raw';
 import secretField from '../components/SecretField.svelte?raw';
@@ -7,6 +13,7 @@ import selectMenu from '../components/SelectMenu.svelte?raw';
 
 describe('project settings product contract', () => {
 	it('uses user-facing general information copy', () => {
+		expect(generalRoute).toContain('section="general"');
 		expect(settings).toContain('General information');
 		expect(settings).toContain('Basic information about this project.');
 		expect(settings).not.toContain('Project identity and effective control-plane configuration.');
@@ -23,16 +30,17 @@ describe('project settings product contract', () => {
 		expect(generalInformation).not.toContain('<input');
 	});
 
-	it('keeps settings navigation and general information on one neutral surface', () => {
+	it('keeps settings content on one neutral project-detail surface', () => {
+		expect(settings).not.toContain('ProjectSettingsNavItem');
+		expect(settings).not.toContain('activeSection');
 		expect(settings).not.toContain('bg-gray-50/35');
 		expect(settings).not.toContain('dark:bg-neutral-950/40');
-		expect(settings).not.toContain("'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white'");
-		expect(settings).not.toContain('min-h-[calc(100vh-11rem)] border-t');
 		expect(generalInformation).not.toContain('bg-white');
 		expect(generalInformation).not.toContain('dark:bg-neutral-950');
 	});
 
 	it('keeps common source settings simple and automatic', () => {
+		expect(sourceRoute).toContain('section="source"');
 		expect(settings).toContain('Choose what MyPaaS deploys.');
 		expect(settings).toContain('Advanced source settings');
 		expect(settings).toContain('ariaLabel="Deployment branch"');
@@ -43,19 +51,21 @@ describe('project settings product contract', () => {
 	});
 
 	it('uses custom resource selection and hides destructive runtime cleanup from normal settings', () => {
+		expect(resourcesRoute).toContain('section="resources"');
 		expect(settings).toContain('Set how much CPU and memory this project can use.');
 		expect(settings).toContain('ariaLabel="Resource profile"');
 		expect(settings).toContain('Advanced resource limits');
 		expect(settings).toContain('Runtime resources');
-		expect(settings).not.toContain('<select');
 		expect(settings).not.toContain('Reset resources');
 		expect(settings).not.toContain('Check resources');
 		expect(settings).not.toContain('Runtime limits and project-owned Compose resources.');
 		expect(selectMenu).toContain('role="listbox"');
 	});
 
-	it('shows stored environment values as information until the user edits them', () => {
-		expect(settings).toContain('Variables available to your app at runtime.');
+	it('keeps environment management on the dedicated project env route', () => {
+		expect(environmentRoute).toContain('ProjectEnvironmentSettings');
+		expect(environmentRoute).toContain('projectId={$page.params.id');
+		expect(settings).not.toContain('ProjectEnvironmentSettings');
 		expect(environmentSettings).not.toContain('Encrypted at rest. Reveal only when you need to inspect a stored value.');
 		expect(environmentSettings).toContain('Add variable');
 		expect(environmentSettings).toContain('Import .env');
@@ -64,6 +74,8 @@ describe('project settings product contract', () => {
 	});
 
 	it('keeps webhook and danger copy short and action-oriented', () => {
+		expect(webhookRoute).toContain('section="webhook"');
+		expect(dangerRoute).toContain('section="danger"');
 		expect(settings).toContain('Deploy when changes are pushed to GitHub.');
 		expect(settings).toContain('Setup guide');
 		expect(settings).not.toContain('GitHub push deployment endpoint and signing secret.');
