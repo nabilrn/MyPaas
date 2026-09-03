@@ -128,7 +128,7 @@
 						{#if analytics.timeseries?.length > 0}
 							<CloudflareChart data={analytics.timeseries} metric="requests" compact />
 						{:else}
-							<div class="flex h-14 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
+							<div class="flex h-24 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
 						{/if}
 					</div>
 				</div>
@@ -140,7 +140,7 @@
 						{#if analytics.timeseries?.length > 0}
 							<CloudflareChart data={analytics.timeseries} metric="bandwidth" compact />
 						{:else}
-							<div class="flex h-14 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
+							<div class="flex h-24 items-center text-xs text-gray-400 dark:text-gray-500">Waiting for traffic samples.</div>
 						{/if}
 					</div>
 				</div>
@@ -151,7 +151,7 @@
 						{#if analytics.errors > 0}<AlertTriangle class="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />{/if}
 					</div>
 					<p class="metric-value mt-1 text-lg font-semibold text-gray-950 dark:text-white">{analytics.errors.toLocaleString()}</p>
-					<div class="relative mt-1.5 flex h-14 items-center">
+					<div class="relative mt-1.5 flex h-24 items-center">
 						{#if analytics.errors === 0}
 							<div class="h-px w-full bg-gray-200 dark:bg-neutral-800"></div>
 							<span class="absolute bottom-0 text-[11px] text-gray-400 dark:text-gray-500">No errors observed</span>
@@ -220,6 +220,7 @@
 							used={cpuUsed}
 							limit={cpuLimit}
 							valueLabel={`${formatCPU(cpuUsed)} / ${formatCPU(cpuLimit)}`}
+							tone="cpu"
 						/>
 					</div>
 					<RuntimeUsageBar
@@ -227,6 +228,7 @@
 						used={memoryUsed}
 						limit={memoryLimit}
 						valueLabel={`${formatMemory(memoryUsed)} / ${formatMemory(memoryLimit)}`}
+						tone="memory"
 					/>
 				</div>
 			{:else if metricItems.length > 0}
