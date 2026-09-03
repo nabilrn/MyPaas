@@ -3,7 +3,6 @@
 	import { onDestroy, onMount } from 'svelte';
 	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
-	import SelectMenu from '$components/SelectMenu.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { loadRuntimeContainers, mergeRuntimeContainerTelemetry, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
@@ -24,11 +23,8 @@
 	let telemetryController: AbortController | null = null;
 	let telemetryPoll: ReturnType<typeof setInterval> | undefined;
 
-	$: stateValues = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
-	$: runtimeValues = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
-	$: stateOptions = [{ value: 'all', label: 'All states' }, ...stateValues.map((state) => ({ value: state, label: capitalize(state) }))];
-	$: runtimeOptions = [{ value: 'all', label: 'All runtime groups' }, ...runtimeValues.map((runtime) => ({ value: runtime, label: runtime }))];
-	$: pageSizeOptions = [10, 20, 50, 100].map((size) => ({ value: String(size), label: `${size} rows` }));
+	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
+	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
 	$: searchTerm = query.trim().toLowerCase();
 	$: filteredRows = rows.filter((row) => {
 		const networkSearch = row.networks.map((network) => `${network.name} ${network.ipAddress}`).join(' ');
@@ -107,22 +103,6 @@
 		pageIndex = 0;
 	}
 
-	function chooseState(value: string) {
-		stateFilter = value;
-		resetPage();
-	}
-
-	function chooseRuntime(value: string) {
-		runtimeFilter = value;
-		resetPage();
-	}
-
-	function choosePageSize(value: string) {
-		const parsed = Number(value);
-		if (Number.isFinite(parsed) && parsed > 0) pageSize = parsed;
-		resetPage();
-	}
-
 	function toggleDetails(id: string) {
 		expanded.has(id) ? expanded.delete(id) : expanded.add(id);
 		expanded = new Set(expanded);
@@ -167,10 +147,6 @@
 		if (/^[a-f0-9]{20,}$/i.test(tag)) image = `${image.slice(0, separator + 1)}${tag.slice(0, 12)}`;
 		return image;
 	}
-
-	function capitalize(value: string) {
-		return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
-	}
 </script>
 
 <svelte:head>
@@ -202,9 +178,22 @@
 					/>
 				</div>
 
-				<SelectMenu value={stateFilter} options={stateOptions} ariaLabel="Filter containers by state" on:change={(event) => chooseState(event.detail)} />
-				<SelectMenu value={runtimeFilter} options={runtimeOptions} ariaLabel="Filter containers by runtime group" on:change={(event) => chooseRuntime(event.detail)} />
-				<SelectMenu value={String(pageSize)} options={pageSizeOptions} ariaLabel="Rows per page" on:change={(event) => choosePageSize(event.detail)} />
+				<select id="container-state" class="field w-full" aria-label="Filter containers by state" bind:value={stateFilter} on:change={resetPage}>
+					<option value="all">All states</option>
+					{#each stateOptions as state}<option value={state}>{state}</option>{/each}
+				</select>
+
+				<select id="container-runtime" class="field w-full font-mono" aria-label="Filter containers by runtime group" bind:value={runtimeFilter} on:change={resetPage}>
+					<option value="all">All runtime groups</option>
+					{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
+				</select>
+
+				<select id="container-page-size" class="field w-full" aria-label="Rows per page" bind:value={pageSize} on:change={resetPage}>
+					<option value={10}>10 rows</option>
+					<option value={20}>20 rows</option>
+					<option value={50}>50 rows</option>
+					<option value={100}>100 rows</option>
+				</select>
 			</div>
 		</svelte:fragment>
 
