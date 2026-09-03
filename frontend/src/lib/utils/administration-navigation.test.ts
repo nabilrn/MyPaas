@@ -85,7 +85,9 @@ describe("administration navigation contract", () => {
   it("uses the shared admin shell without changing excluded project routes", () => {
     expect(adminLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
     expect(adminLayout).toContain("lg:border-r");
-    expect(adminLayout).toContain("min-w-0 px-4 py-5 sm:px-5 lg:px-6");
+    expect(adminLayout).toContain("min-w-0 px-3.5 py-3");
+    expect(adminLayout).toContain("w-full space-y-3");
+    expect(adminLayout).not.toContain("mx-auto max-w-6xl");
     expect(adminLayout).toContain("currentSection.title");
     expect(adminLayout).toContain("currentSection.description");
     expect(adminLayout).toContain(".admin-content > .page-shell");
@@ -119,6 +121,10 @@ describe("administration navigation contract", () => {
     expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
     expect(adminSettingsPage).toContain("Update MyPaaS");
     expect(adminSettingsPage).toContain("may restart the control plane");
+    expect(adminSettingsPage).toContain("rounded-lg border border-gray-200");
+    expect(adminSettingsPage).toContain("divide-y divide-gray-200");
+    expect(adminSettingsPage).toContain("compact-number-input");
+    expect(adminSettingsPage).not.toContain("border-y border-gray-100");
 
     expect(adminUsersPage).not.toContain('title="Owners"');
     expect(adminUsersPage).not.toContain('title="Add owner"');

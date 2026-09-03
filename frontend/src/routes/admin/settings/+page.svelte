@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { Cpu, HardDrive, MemoryStick, RefreshCw, SlidersHorizontal, Timer } from '@lucide/svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -208,69 +209,120 @@
 	{#if loadingSettings}
 		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading settings" /></div>
 	{:else}
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Host</h2>
-			<div class="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
-				<div class="grid gap-2 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Memory</p>
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">{hostStats ? formatBytes(hostMemoryTotal) : 'Unavailable'}</p>{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)} allocated{hostStats.memory ? ` · ${formatBytes(hostMemoryUsed)} used` : ''}</p>{/if}</div>
+		<section class="overflow-hidden rounded-lg border border-gray-200 dark:border-neutral-800">
+			<div class="divide-y divide-gray-200 dark:divide-neutral-800">
+				<div class="px-4 py-2.5">
+					<h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Host</h2>
 				</div>
-				<div class="grid gap-2 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">CPU</p>
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">{hostStats ? `${hostStats.host_cpu_cores} core${hostStats.host_cpu_cores === 1 ? '' : 's'}` : 'Unavailable'}</p>{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>{/if}</div>
-				</div>
-				<div class="grid gap-2 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Storage</p>
-					<div><p class="text-sm font-medium text-gray-950 dark:text-white">{hostStats?.storage ? formatBytes(hostStats.storage.total_bytes) : 'Unavailable'}</p>{#if hostStats?.storage}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatBytes(hostStorageUsed)} used · {formatBytes(hostStats.storage.available_bytes)} free</p>{/if}</div>
-				</div>
-			</div>
-		</section>
 
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resource defaults</h2>
-			<div class="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
+				<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-center">
+					<MemoryStick class="h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<p class="text-sm text-gray-600 dark:text-gray-400">Memory</p>
+					<div class="min-w-0">
+						<p class="text-sm font-semibold text-gray-950 dark:text-white">{hostStats ? formatBytes(hostMemoryTotal) : 'Unavailable'}</p>
+						{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)} allocated{hostStats.memory ? ` · ${formatBytes(hostMemoryUsed)} used` : ''}</p>{/if}
+					</div>
+				</div>
+
+				<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-center">
+					<Cpu class="h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<p class="text-sm text-gray-600 dark:text-gray-400">CPU</p>
+					<div class="min-w-0">
+						<p class="text-sm font-semibold text-gray-950 dark:text-white">{hostStats ? `${hostStats.host_cpu_cores} core${hostStats.host_cpu_cores === 1 ? '' : 's'}` : 'Unavailable'}</p>
+						{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>{/if}
+					</div>
+				</div>
+
+				<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-center">
+					<HardDrive class="h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<p class="text-sm text-gray-600 dark:text-gray-400">Storage</p>
+					<div class="min-w-0">
+						<p class="text-sm font-semibold text-gray-950 dark:text-white">{hostStats?.storage ? formatBytes(hostStats.storage.total_bytes) : 'Unavailable'}</p>
+						{#if hostStats?.storage}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatBytes(hostStorageUsed)} used · {formatBytes(hostStats.storage.available_bytes)} free</p>{/if}
+					</div>
+				</div>
+
+				<div class="px-4 py-2.5">
+					<h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Resource defaults</h2>
+				</div>
+
 				{#each profileSettings as profile}
-					<div class="grid gap-3 py-3 md:grid-cols-[10rem_minmax(10rem,1fr)_minmax(10rem,1fr)] md:items-start">
+					<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-start">
+						<SlidersHorizontal class="mt-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 						<p class="pt-2 text-sm font-medium text-gray-950 dark:text-white">{profile.name}</p>
-						<label class="block" for={profile.memoryKey}>
-							<span class="field-label">Memory</span>
-							<div class="flex items-center gap-2"><input type="number" id={profile.memoryKey} min={profile.minimumMemory} max="32768" step="1" bind:value={settings[profile.memoryKey]} class="field min-w-0 flex-1" aria-invalid={validationErrors[profile.memoryKey] ? 'true' : undefined} /><span class="w-10 shrink-0 text-xs text-gray-500 dark:text-gray-400">MB</span></div>
-							{#if validationErrors[profile.memoryKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.memoryKey]}</p>{/if}
-						</label>
-						<label class="block" for={profile.cpuKey}>
-							<span class="field-label">CPU</span>
-							<div class="flex items-center gap-2"><input type="number" id={profile.cpuKey} min={profile.minimumCPU} max="32" step="0.05" bind:value={settings[profile.cpuKey]} class="field min-w-0 flex-1" aria-invalid={validationErrors[profile.cpuKey] ? 'true' : undefined} /><span class="w-10 shrink-0 text-xs text-gray-500 dark:text-gray-400">CPU</span></div>
-							{#if validationErrors[profile.cpuKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.cpuKey]}</p>{/if}
-						</label>
+						<div class="grid max-w-2xl gap-3 sm:grid-cols-2">
+							<label class="block" for={profile.memoryKey}>
+								<span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">Memory</span>
+								<div class="relative max-w-60">
+									<input type="number" id={profile.memoryKey} min={profile.minimumMemory} max="32768" step="1" bind:value={settings[profile.memoryKey]} class="field compact-number-input w-full pr-12" aria-invalid={validationErrors[profile.memoryKey] ? 'true' : undefined} />
+									<span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">MB</span>
+								</div>
+								{#if validationErrors[profile.memoryKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.memoryKey]}</p>{/if}
+							</label>
+							<label class="block" for={profile.cpuKey}>
+								<span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">CPU</span>
+								<div class="relative max-w-60">
+									<input type="number" id={profile.cpuKey} min={profile.minimumCPU} max="32" step="0.05" bind:value={settings[profile.cpuKey]} class="field compact-number-input w-full pr-14" aria-invalid={validationErrors[profile.cpuKey] ? 'true' : undefined} />
+									<span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">CPU</span>
+								</div>
+								{#if validationErrors[profile.cpuKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.cpuKey]}</p>{/if}
+							</label>
+						</div>
 					</div>
 				{/each}
-			</div>
-		</section>
 
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Deployment</h2>
-			<div class="mt-3 border-y border-gray-100 py-3 dark:border-neutral-800">
-				<div class="grid gap-3 sm:grid-cols-[10rem_minmax(0,22rem)] sm:items-start">
-					<label class="pt-2 text-sm text-gray-500 dark:text-gray-400" for="build_timeout_minutes">Build timeout</label>
-					<div><div class="flex items-center gap-2"><input type="number" id="build_timeout_minutes" min="1" max="1440" step="1" bind:value={settings.build_timeout_minutes} class="field min-w-0 flex-1" aria-invalid={validationErrors.build_timeout_minutes ? 'true' : undefined} /><span class="text-xs text-gray-500 dark:text-gray-400">minutes</span></div>{#if validationErrors.build_timeout_minutes}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.build_timeout_minutes}</p>{/if}</div>
+				<div class="px-4 py-2.5">
+					<h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">Deployment</h2>
 				</div>
-			</div>
-		</section>
 
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">System update</h2>
-			<div class="mt-3 grid gap-3 border-y border-gray-100 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center dark:border-neutral-800">
-				<p class="text-sm text-gray-500 dark:text-gray-400">Current build</p>
-				<div><p class="font-mono text-sm text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Installs a newer release when available and may restart the control plane.</p></div>
-				<ActionButton variant="secondary" size="sm" loading={triggeringUpdate} loadingLabel="Updating" on:click={triggerUpdate}>Update MyPaaS</ActionButton>
+				<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-start">
+					<Timer class="mt-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<label class="pt-2 text-sm text-gray-600 dark:text-gray-400" for="build_timeout_minutes">Build timeout</label>
+					<div>
+						<div class="relative max-w-60">
+							<input type="number" id="build_timeout_minutes" min="1" max="1440" step="1" bind:value={settings.build_timeout_minutes} class="field compact-number-input w-full pr-16" aria-invalid={validationErrors.build_timeout_minutes ? 'true' : undefined} />
+							<span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">minutes</span>
+						</div>
+						{#if validationErrors.build_timeout_minutes}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors.build_timeout_minutes}</p>{/if}
+					</div>
+				</div>
+
+				<div class="px-4 py-2.5">
+					<h2 class="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">System update</h2>
+				</div>
+
+				<div class="grid gap-3 px-4 py-3 sm:grid-cols-[2rem_12rem_minmax(0,1fr)] sm:items-center">
+					<RefreshCw class="h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<p class="text-sm text-gray-600 dark:text-gray-400">Current build</p>
+					<div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
+						<div class="min-w-0">
+							<p class="font-mono text-sm font-semibold text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Installs a newer release when available and may restart the control plane.</p>
+						</div>
+						<ActionButton variant="secondary" size="sm" loading={triggeringUpdate} loadingLabel="Updating" on:click={triggerUpdate}>Update MyPaaS</ActionButton>
+					</div>
+				</div>
 			</div>
 		</section>
 
 		{#if settingsChanged}
-			<div class="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 pt-3 dark:border-neutral-800">
+			<div class="flex flex-wrap items-center justify-end gap-2 pt-1">
 				<ActionButton variant="ghost" size="sm" on:click={discardChanges} disabled={savingSettings}>Discard</ActionButton>
 				<ActionButton variant="primary" size="sm" loading={savingSettings} loadingLabel="Saving" on:click={saveSettings} disabled={hasValidationErrors}>Save changes</ActionButton>
 			</div>
 		{/if}
 	{/if}
 </div>
+
+<style>
+	:global(.compact-number-input) {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
+
+	:global(.compact-number-input::-webkit-inner-spin-button),
+	:global(.compact-number-input::-webkit-outer-spin-button) {
+		margin: 0;
+		-webkit-appearance: none;
+	}
+</style>

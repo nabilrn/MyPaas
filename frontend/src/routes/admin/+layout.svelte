@@ -13,8 +13,8 @@
     <AdminSidebar />
   </aside>
 
-  <main class="min-w-0 px-4 py-5 sm:px-5 lg:px-6">
-    <div class="mx-auto max-w-6xl space-y-4">
+  <main class="min-w-0 px-3.5 py-3">
+    <div class="w-full space-y-3">
       <header>
         <h1 class="text-lg font-semibold text-gray-950 dark:text-white">
           {currentSection.title}
@@ -40,6 +40,6 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 </style>
