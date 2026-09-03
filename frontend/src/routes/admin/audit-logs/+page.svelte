@@ -70,9 +70,9 @@
 	async function copyLogs() {
 		try {
 			await navigator.clipboard.writeText(JSON.stringify(visibleRows, null, 2));
-			toast.success('Event log copied');
+			toast.success('Audit logs copied');
 		} catch {
-			toast.error('Failed to copy event log');
+			toast.error('Failed to copy audit logs');
 		}
 	}
 
@@ -81,19 +81,19 @@
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = `mypaas-system-events-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+		link.download = `mypaas-audit-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 		link.click();
 		URL.revokeObjectURL(url);
 	}
 </script>
 
-<svelte:head><title>Audit Logs · MyPaas Admin</title></svelte:head>
+<svelte:head><title>Audit Logs · MyPaaS Admin</title></svelte:head>
 
 <div class="page-shell">
-	<TableShell title="System event log" {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No system events yet." emptyDescription="Events appear after authenticated platform changes." on:retry={load}>
+	<TableShell {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Changes will appear here." on:retry={load}>
 		<svelte:fragment slot="actions">
 			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={copyLogs}><Copy slot="icon" class="h-4 w-4" />Copy</ActionButton>
-			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={exportLogs}><Download slot="icon" class="h-4 w-4" />Export JSON</ActionButton>
+			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={exportLogs}><Download slot="icon" class="h-4 w-4" />Export</ActionButton>
 			<ActionButton variant="secondary" size="sm" loading={loading} loadingLabel="Refreshing" on:click={load}><RefreshCw slot="icon" class="h-4 w-4" />Refresh</ActionButton>
 		</svelte:fragment>
 
@@ -122,11 +122,11 @@
 						<td class="whitespace-nowrap text-right"><IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} audit log details`} variant="ghost" on:click={() => toggle(row.id)}>{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></td>
 					</tr>
 					{#if expanded.has(row.id)}
-						<tr class="!bg-gray-50/70 dark:!bg-neutral-900/50"><td colspan="5" class="!p-4"><div class="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]"><div class="space-y-3 text-sm text-gray-500 dark:text-gray-400"><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">IP address</p><p class="mt-1 font-mono text-xs">{row.ipAddress ?? 'unknown'}</p></div><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">User agent</p><p class="mt-1 line-clamp-4 break-words text-xs">{row.userAgent ?? 'unknown'}</p></div></div><pre class="console-surface max-h-80 overflow-auto p-3">{JSON.stringify(row.metadata, null, 2)}</pre></div></td></tr>
+						<tr><td colspan="5" class="!border-y !border-gray-100 !p-4 dark:!border-neutral-800"><div class="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]"><div class="space-y-3 text-sm text-gray-500 dark:text-gray-400"><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">IP address</p><p class="mt-1 font-mono text-xs">{row.ipAddress ?? 'unknown'}</p></div><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">User agent</p><p class="mt-1 line-clamp-4 break-words text-xs">{row.userAgent ?? 'unknown'}</p></div></div><pre class="console-surface max-h-80 overflow-auto p-3">{JSON.stringify(row.metadata, null, 2)}</pre></div></td></tr>
 					{/if}
 				{/each}
 			</tbody>
 		</table>
-		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={visibleRows.length} {hasNext} {loading} label="System events" /></svelte:fragment>
+		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={visibleRows.length} {hasNext} {loading} label="Audit logs" /></svelte:fragment>
 	</TableShell>
 </div>
