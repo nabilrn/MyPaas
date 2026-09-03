@@ -36,18 +36,24 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn('verify_stack "$docker_cmd" "$current_sha" "$rollback_tag"', updater)
         self.assertIn('previous runtime could not be verified after rollback', updater)
 
-    def test_updater_preflights_existing_api_before_any_redeploy(self):
+    def test_updater_preflights_existing_api_only_when_redeploy_is_ready(self):
         updater = self.text("scripts/update-vm.sh")
-        preflight = updater.index('preflight_existing_runtime "$docker_cmd"')
-        target_reset = updater.index('git_repo reset --hard "$target_sha"')
-        same_sha = updater.index('if [[ "$current_sha" == "$target_sha" ]]; then')
+        main_start = updater.index("main() {")
+        image_wait = updater.index('log "Waiting for release images', main_start)
+        migration_preflight = updater.index('if git_repo diff --quiet "$current_sha" "$target_sha" -- backend/migrations', main_start)
+        preflight = updater.index('preflight_existing_runtime "$docker_cmd"', migration_preflight)
+        rollback_tagging = updater.index('rollback_tag="rollback-${current_sha:0:12}"', preflight)
+        target_reset = updater.index('git_repo reset --hard "$target_sha"', preflight)
 
-        self.assertLess(preflight, same_sha)
+        self.assertLess(image_wait, preflight)
+        self.assertLess(migration_preflight, preflight)
+        self.assertLess(preflight, rollback_tagging)
         self.assertLess(preflight, target_reset)
         self.assertIn('network disconnect -f "$network" mypaas-api', updater)
         self.assertIn('references missing network $network; refusing to update', updater)
         self.assertIn('127.0.0.1:8080/health', updater)
         self.assertIn('network membership is not isolated to $control_network', updater)
+        self.assertIn('preflight_existing_runtime "$docker_cmd"\n    log "API runtime environment is missing', updater)
 
     def test_updater_deploys_after_each_checkout_reset(self):
         updater = self.text("scripts/update-vm.sh")
