@@ -2,11 +2,16 @@
 set -euo pipefail
 
 sudo apt-get update
-# ubuntu-24.04 hosted runners can have Podman preinstalled without the
-# recommended CNI plugin package. Install it explicitly so the rootful API
-# service can validate the packaged Podman network configuration.
+# ubuntu-24.04 hosted runners are currently rolling back from a bundled Podman
+# build to the distro build. Some runner revisions have Podman preinstalled
+# without the CNI plugins and can retain incompatible rootful storage state.
+# The runner is disposable, so make this smoke deterministic by explicitly
+# installing the distro networking plugins and starting from a clean store.
 sudo apt-get install -y podman catatonit conmon crun containernetworking-plugins
 sudo systemctl stop docker.service docker.socket podman.service podman.socket || true
+sudo pkill -9 -x podman || true
+sudo rm -rf /var/lib/containers/storage /run/containers/storage
+sudo mkdir -p /var/lib/containers/storage
 sudo mkdir -p /run/podman /run/user/0
 sudo chmod 700 /run/user/0
 
