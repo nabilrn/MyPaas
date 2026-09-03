@@ -21,35 +21,38 @@
 
 	$: start = totalShown === 0 ? 0 : page * pageSize + 1;
 	$: end = page * pageSize + totalShown;
+	$: visible = page > 0 || hasNext;
 </script>
 
-<div
-	class="flex flex-col gap-2 border-t border-gray-100 bg-gray-50/70 px-4 py-2.5 text-sm dark:border-neutral-800 dark:bg-neutral-900/60 sm:flex-row sm:items-center sm:justify-between"
-	role="navigation"
-	aria-label={`${label} pagination`}
->
-	<p class="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
-		{label}: {start}-{end}{hasNext ? '+' : ''}
-	</p>
-	<div class="flex items-center gap-2">
-		<ActionButton
-			on:click={dispatchPrev}
-			disabled={page === 0 || loading}
-			ariaLabel={`Previous ${label.toLowerCase()} page`}
-			variant="secondary"
-			size="xs"
-		>
-			Previous
-		</ActionButton>
-		<span class="min-w-16 text-center text-xs font-medium text-gray-500 dark:text-gray-400" aria-live="polite">Page {page + 1}</span>
-		<ActionButton
-			on:click={dispatchNext}
-			disabled={!hasNext || loading}
-			ariaLabel={`Next ${label.toLowerCase()} page`}
-			variant="secondary"
-			size="xs"
-		>
-			Next
-		</ActionButton>
+{#if visible}
+	<div
+		class="flex flex-col gap-2 border-t border-[color:var(--workspace-divider)] px-4 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
+		role="navigation"
+		aria-label={`${label} pagination`}
+	>
+		<p class="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+			{label}: {start}-{end}{hasNext ? '+' : ''}
+		</p>
+		<div class="flex items-center gap-2">
+			<ActionButton
+				on:click={dispatchPrev}
+				disabled={page === 0 || loading}
+				ariaLabel={`Previous ${label.toLowerCase()} page`}
+				variant="secondary"
+				size="xs"
+			>
+				Previous
+			</ActionButton>
+			<span class="min-w-16 text-center text-xs font-medium text-gray-500 dark:text-gray-400" aria-live="polite">Page {page + 1}</span>
+			<ActionButton
+				on:click={dispatchNext}
+				disabled={!hasNext || loading}
+				ariaLabel={`Next ${label.toLowerCase()} page`}
+				variant="secondary"
+				size="xs"
+			>
+				Next
+			</ActionButton>
+		</div>
 	</div>
-</div>
+{/if}

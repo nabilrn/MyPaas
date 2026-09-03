@@ -15,7 +15,7 @@
 
   <main class="min-w-0 px-3.5 py-3">
     <div class="w-full space-y-3">
-      <header>
+      <header class="border-b border-[color:var(--workspace-divider)] pb-3">
         <h1 class="text-lg font-semibold text-gray-950 dark:text-white">
           {currentSection.title}
         </h1>
@@ -40,6 +40,24 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0;
+  }
+
+  :global(.admin-content > .page-shell > section.rounded-lg) {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  :global(.admin-content > .page-shell > section.rounded-lg > .divide-y > div) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  :global(.admin-content > .page-shell > section + section),
+  :global(.admin-content > .page-shell > section + details),
+  :global(.admin-content > .page-shell > details + section),
+  :global(.admin-content > .page-shell > details + details) {
+    margin-top: 1rem;
   }
 </style>

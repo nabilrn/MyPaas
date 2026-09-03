@@ -2,4 +2,12 @@
 	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
 </script>
 
-<ProjectSettingsSection section="general" />
+<div class="project-settings-general">
+	<ProjectSettingsSection section="general" />
+</div>
+
+<style>
+	.project-settings-general :global(.space-y-4 > :not([hidden]) ~ :not([hidden])) {
+		margin-top: 0.75rem;
+	}
+</style>

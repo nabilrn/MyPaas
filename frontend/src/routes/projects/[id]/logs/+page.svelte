@@ -77,7 +77,7 @@
 	function handleScroll() { paused = !isNearBottom(); }
 	function isNearBottom() { if (!logViewport) return true; return logViewport.scrollHeight - logViewport.scrollTop - logViewport.clientHeight < 48; }
 	async function scrollToBottom() { await tick(); if (!logViewport) return; logViewport.scrollTop = logViewport.scrollHeight; paused = false; }
-	function clearLogs() { logs = []; selectedService = 'all'; }
+	function clearLogs() { logs = []; selectedService = 'all'; filter = ''; }
 	function copyVisibleLogs() {
 		void navigator.clipboard.writeText(filteredLogs.map(formatLine).join('\n')).then(() => {
 			logsCopied = true;
@@ -96,13 +96,13 @@
 
 <svelte:head><title>Logs · MyPaaS</title></svelte:head>
 
-<div class="flex h-[calc(100vh-16rem)] min-h-[32rem] flex-col">
+<div class="flex h-[calc(100vh-10rem)] min-h-[32rem] flex-col">
 	<SectionPanel title="Log stream" description={streamDescription} className="flex min-h-0 flex-1 flex-col" contentClass="flex min-h-0 flex-1 flex-col gap-3 p-4">
 		<svelte:fragment slot="actions">
 			<div class="flex flex-wrap items-center gap-2">
-				<span class="inline-flex h-9 items-center gap-2 px-1 text-sm text-gray-500 dark:text-gray-400"><span class="status-dot {streaming ? 'bg-emerald-500' : 'bg-amber-500'}"></span>{filteredLogs.length} visible</span>
-				<input type="search" bind:value={filter} placeholder="Filter logs" class="field h-9 w-full sm:w-56" />
-				<select bind:value={selectedService} class="field h-9 min-w-36">{#each services as service}<option value={service}>{service === 'all' ? 'All services' : service}</option>{/each}</select>
+				{#if logs.length > 0}<span class="inline-flex h-9 items-center gap-2 px-1 text-sm text-gray-500 dark:text-gray-400"><span class="status-dot {streaming ? 'bg-emerald-500' : 'bg-amber-500'}"></span>{filteredLogs.length} visible</span>{/if}
+				<input type="search" bind:value={filter} placeholder="Filter logs" class="field h-9 w-full sm:w-56" disabled={logs.length === 0} />
+				<select bind:value={selectedService} class="field h-9 min-w-36" disabled={logs.length === 0}>{#each services as service}<option value={service}>{service === 'all' ? 'All services' : service}</option>{/each}</select>
 				<ActionButton variant="secondary" size="sm" on:click={copyVisibleLogs} disabled={filteredLogs.length === 0}>{#if logsCopied}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}{logsCopied ? 'Copied' : 'Copy'}</ActionButton>
 				<ActionButton variant="secondary" size="sm" on:click={downloadLogs} disabled={filteredLogs.length === 0}><Download slot="icon" class="h-4 w-4" />Download</ActionButton>
 			</div>
@@ -111,12 +111,21 @@
 		{#if streamError}<div class="alert-neutral flex-wrap items-center justify-between"><span class="min-w-0 flex-1">{streamError}</span><ActionButton variant="secondary" size="xs" type="button" on:click={reconnectProjectStream}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reconnect</ActionButton></div>{/if}
 		<div bind:this={logViewport} on:scroll={handleScroll} class="console-surface scrollbar-thin relative flex-1 !overflow-auto select-text p-4 selection:bg-gray-700 selection:text-white" aria-live="polite">
 			{#if loading}
-				<div class="flex h-full min-h-48 items-center justify-center">
-					<LoadingIndicator label="Loading log history" size="sm" />
-				</div>
-			{:else if filteredLogs.length === 0}<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
-			{:else}{#if clippedRenderCount > 0}<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>{/if}{#each renderedLogs as log (log.id)}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span><span class="truncate text-gray-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span><span>{log.line}</span></div>{/each}{/if}
+				<div class="flex h-full min-h-48 items-center justify-center"><LoadingIndicator label="Loading log history" size="sm" /></div>
+			{:else if filteredLogs.length === 0}
+				<div class="flex h-full min-h-48 items-center justify-center text-center"><div><p class="text-sm font-medium text-gray-300">{logs.length === 0 ? 'No logs yet.' : 'No logs match this filter.'}</p>{#if logs.length === 0}<p class="mt-1 text-xs text-gray-500">Output appears here when the project emits container logs.</p>{/if}</div></div>
+			{:else}
+				{#if clippedRenderCount > 0}<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>{/if}
+				{#each renderedLogs as log (log.id)}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span><span class="truncate text-gray-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span><span>{log.line}</span></div>{/each}
+			{/if}
 		</div>
-		<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400"><p>Latest {maxLines} lines kept in memory.</p><div class="flex flex-wrap items-center gap-2">{#if paused}<ActionButton variant="secondary" size="xs" type="button" on:click={scrollToBottom}><ArrowDown slot="icon" class="h-3.5 w-3.5" />Resume</ActionButton>{/if}<ActionButton variant="ghost" size="xs" type="button" on:click={clearLogs} disabled={logs.length === 0}><Trash2 slot="icon" class="h-3.5 w-3.5" />Clear</ActionButton><ActionButton variant="secondary" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Reloading"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reload history</ActionButton></div></div>
+		<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
+			{#if logs.length > 0}<p>Latest {maxLines} lines kept in memory.</p>{:else}<span></span>{/if}
+			<div class="flex flex-wrap items-center gap-2">
+				{#if paused}<ActionButton variant="secondary" size="xs" type="button" on:click={scrollToBottom}><ArrowDown slot="icon" class="h-3.5 w-3.5" />Resume</ActionButton>{/if}
+				{#if logs.length > 0}<ActionButton variant="ghost" size="xs" type="button" on:click={clearLogs}><Trash2 slot="icon" class="h-3.5 w-3.5" />Clear</ActionButton>{/if}
+				<ActionButton variant="secondary" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Reloading"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reload history</ActionButton>
+			</div>
+		</div>
 	</SectionPanel>
 </div>

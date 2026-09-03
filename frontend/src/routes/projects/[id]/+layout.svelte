@@ -36,6 +36,8 @@
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
+	$: projectBase = project ? `/projects/${project.id}` : '';
+	$: showOperationalHeader = Boolean(projectBase && ($page.url.pathname === projectBase || $page.url.pathname === `${projectBase}/deployments`));
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -224,16 +226,18 @@
 			</aside>
 
 			<main class="min-w-0 px-3.5 py-3">
-				<div class="space-y-3">
-					<DeployControlPanel
-						{project}
-						{latestDeployment}
-						{pendingAction}
-						on:start={handleStart}
-						on:stop={handleStop}
-						on:restart={handleRestart}
-						on:deploy={handleDeploy}
-					/>
+				<div class={showOperationalHeader ? 'space-y-3' : ''}>
+					{#if showOperationalHeader}
+						<DeployControlPanel
+							{project}
+							{latestDeployment}
+							{pendingAction}
+							on:start={handleStart}
+							on:stop={handleStop}
+							on:restart={handleRestart}
+							on:deploy={handleDeploy}
+						/>
+					{/if}
 
 					<div class="project-detail-content min-w-0">
 						<slot />
