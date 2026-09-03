@@ -10,8 +10,6 @@
 
 	export let project: Project;
 	export let latestDeployment: Deployment | null | undefined = undefined;
-	export let publicProjectHost = '';
-	export let publicProjectURL = '';
 	export let pendingAction: 'start' | 'stop' | 'restart' | 'deploy' | null = null;
 
 	const dispatch = createEventDispatcher<{ deploy: void; start: void; restart: void; stop: void }>();
