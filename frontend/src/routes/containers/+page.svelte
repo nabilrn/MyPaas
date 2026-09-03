@@ -126,47 +126,45 @@
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
 		on:retry={() => load()}
 	>
+		<svelte:fragment slot="actions">
+			<div class="grid w-full gap-2 md:grid-cols-[minmax(16rem,1fr)_11rem_14rem_5.5rem]">
+				<div class="relative min-w-0">
+					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<input
+						id="container-search"
+						class="field w-full !pl-9 font-mono"
+						placeholder="Search name, image, project, status…"
+						aria-label="Search containers"
+						bind:value={query}
+						on:input={resetPage}
+					/>
+				</div>
+
+				<select id="container-state" class="field w-full" aria-label="Filter containers by state" bind:value={stateFilter} on:change={resetPage}>
+					<option value="all">All states</option>
+					{#each stateOptions as state}<option value={state}>{state}</option>{/each}
+				</select>
+
+				<select id="container-runtime" class="field w-full font-mono" aria-label="Filter containers by runtime group" bind:value={runtimeFilter} on:change={resetPage}>
+					<option value="all">All runtime groups</option>
+					{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
+				</select>
+
+				<select id="container-page-size" class="field w-full" aria-label="Rows per page" bind:value={pageSize} on:change={resetPage}>
+					<option value={10}>10 rows</option>
+					<option value={20}>20 rows</option>
+					<option value={50}>50 rows</option>
+					<option value={100}>100 rows</option>
+				</select>
+			</div>
+		</svelte:fragment>
+
 		<svelte:fragment slot="notice">
 			{#if telemetryError}
 				<div class="border-b border-amber-200/70 bg-amber-50/70 px-4 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200" role="status">
 					Live CPU/RAM telemetry unavailable; container metadata is still current.
 				</div>
 			{/if}
-			<div class="grid gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900 md:grid-cols-[minmax(16rem,1fr)_12rem_14rem_auto] md:items-end lg:px-5">
-				<label class="block min-w-0" for="container-search">
-					<span class="field-label">Search</span>
-					<div class="relative">
-						<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
-						<input id="container-search" class="field w-full !pl-9 font-mono" placeholder="name, image, project, status…" bind:value={query} on:input={resetPage} />
-					</div>
-				</label>
-
-				<label class="block" for="container-state">
-					<span class="field-label">State</span>
-					<select id="container-state" class="field w-full" bind:value={stateFilter} on:change={resetPage}>
-						<option value="all">All states</option>
-						{#each stateOptions as state}<option value={state}>{state}</option>{/each}
-					</select>
-				</label>
-
-				<label class="block" for="container-runtime">
-					<span class="field-label">Compose / runtime</span>
-					<select id="container-runtime" class="field w-full font-mono" bind:value={runtimeFilter} on:change={resetPage}>
-						<option value="all">All runtime groups</option>
-						{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
-					</select>
-				</label>
-
-				<label class="block" for="container-page-size">
-					<span class="field-label">Rows</span>
-					<select id="container-page-size" class="field min-w-20" bind:value={pageSize} on:change={resetPage}>
-						<option value={10}>10</option>
-						<option value={20}>20</option>
-						<option value={50}>50</option>
-						<option value={100}>100</option>
-					</select>
-				</label>
-			</div>
 		</svelte:fragment>
 
 		<table class="data-table table-fixed min-w-[64rem]">
