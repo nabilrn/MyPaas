@@ -127,7 +127,7 @@
 		on:retry={() => load()}
 	>
 		<svelte:fragment slot="actions">
-			<div class="grid w-full gap-2 md:grid-cols-[minmax(16rem,1fr)_11rem_14rem_5.5rem]">
+			<div class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_11rem_14rem_5.5rem]">
 				<div class="relative min-w-0">
 					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 					<input
