@@ -221,9 +221,8 @@
 		border-color: var(--app-border) !important;
 	}
 
-	/* Host Shell is the canonical technical-output palette for every dashboard output surface. */
+	/* Host Shell is the canonical palette for terminal/log/build/preformatted output blocks. */
 	:global(.app-workspace .console-surface),
-	:global(.app-workspace .code-surface),
 	:global(.app-workspace pre) {
 		background: var(--technical-surface-bg) !important;
 		border-color: var(--technical-surface-border) !important;
