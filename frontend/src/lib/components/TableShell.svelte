@@ -19,8 +19,8 @@
 </script>
 
 <section class="surface workspace-section min-w-0 overflow-hidden !rounded-none !border-0" aria-busy={loading}>
-	{#if title || description || $$slots.actions}
-		<div class="panel-header flex flex-col gap-2 !border-gray-100/70 sm:flex-row sm:items-center sm:justify-between dark:!border-neutral-900">
+	{#if title || description}
+		<div class="panel-header">
 			<div class="min-w-0">
 				{#if title}
 					<h2 class="panel-title">{title}</h2>
@@ -29,9 +29,12 @@
 					<p class="panel-description">{description}</p>
 				{/if}
 			</div>
-			<div class="flex shrink-0 flex-wrap items-center gap-2">
-				<slot name="actions" />
-			</div>
+		</div>
+	{/if}
+
+	{#if $$slots.actions}
+		<div class="table-toolbar">
+			<slot name="actions" />
 		</div>
 	{/if}
 
@@ -47,18 +50,3 @@
 		<slot name="footer" />
 	{/if}
 </section>
-
-<style>
-	section :global(.data-table thead th) {
-		border-bottom-color: color-mix(in oklch, var(--app-border) 42%, transparent);
-	}
-
-	section :global(.data-table > thead > tr > th:not(:last-child)),
-	section :global(.data-table > tbody > tr > td:not(:last-child)) {
-		border-right-color: color-mix(in oklch, var(--app-border) 30%, transparent);
-	}
-
-	section :global(.data-table > tbody > tr:not(:last-child) > td) {
-		border-bottom-color: color-mix(in oklch, var(--app-border) 28%, transparent);
-	}
-</style>
