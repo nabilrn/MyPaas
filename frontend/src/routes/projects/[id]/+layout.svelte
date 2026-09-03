@@ -276,6 +276,7 @@
 	}
 
 	:global(.project-settings-shell main > .max-w-6xl),
+	:global(.project-settings-shell main > .max-w-5xl),
 	:global(.project-settings-shell main > .max-w-4xl) {
 		width: 100% !important;
 		max-width: none !important;

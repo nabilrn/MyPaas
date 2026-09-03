@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bot, Boxes, ClipboardList, Database, Layers3, Settings, Terminal, Users } from '@lucide/svelte';
+	import { Boxes, Layers3, Settings, Terminal } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import BrandLogo from '$components/BrandLogo.svelte';
+	import { isAdministrationPath } from '$lib/navigation/administration';
 	import type { User } from '$types';
 
 	export let user: User | null = null;
@@ -13,23 +14,17 @@
 		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true }
 	];
 
-	const administrationItems = [
-		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
-		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
-		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
-		{ href: '/admin/backup', label: 'Backup', icon: Database, ownerOnly: true },
-		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft, ownerOnly: true },
-		{ href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true }
-	];
+	const administrationItem = { href: '/admin/settings', label: 'Administration', icon: Settings, ownerOnly: true };
 
 	let expanded = false;
 	let sidebar: HTMLElement | null = null;
 
 	$: pathname = $page.url.pathname;
 	$: visibleWorkspaceItems = workspaceItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
-	$: visibleAdministrationItems = administrationItems.filter((item) => authPending || !item.ownerOnly || user?.role === 'owner');
+	$: showAdministration = authPending || user?.role === 'owner';
 
 	function isActive(href: string, currentPath: string) {
+		if (href === '/admin/settings') return isAdministrationPath(currentPath);
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
 		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
@@ -84,23 +79,20 @@
 			{/each}
 		</div>
 
-		{#if visibleAdministrationItems.length > 0}
+		{#if showAdministration}
 			<div class={`my-3 border-t border-gray-100 dark:border-neutral-900 ${expanded ? 'mx-1' : 'mx-1.5'}`}></div>
-			{#if expanded}<p class="px-3 pb-1.5 text-[13px] font-medium text-gray-400 dark:text-gray-500">Administration</p>{/if}
 			<div class="space-y-1">
-				{#each visibleAdministrationItems as item}
-					{#if authPending}
-						<span class={`${navItemClass(item.href, expanded, pathname)} pointer-events-none opacity-45`} aria-hidden="true">
-							<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" />
-							{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{/if}
-						</span>
-					{:else}
-						<a href={item.href} aria-current={isActive(item.href, pathname) ? 'page' : undefined} class={navItemClass(item.href, expanded, pathname)} title={expanded ? undefined : item.label} on:click={chooseNavigation}>
-							<svelte:component this={item.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-							{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{item.label}</span>{:else}<span class="sr-only">{item.label}</span>{/if}
-						</a>
-					{/if}
-				{/each}
+				{#if authPending}
+					<span class={`${navItemClass(administrationItem.href, expanded, pathname)} pointer-events-none opacity-45`} aria-hidden="true">
+						<svelte:component this={administrationItem.icon} class="h-[18px] w-[18px] shrink-0" />
+						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{administrationItem.label}</span>{/if}
+					</span>
+				{:else}
+					<a href={administrationItem.href} aria-current={isActive(administrationItem.href, pathname) ? 'page' : undefined} class={navItemClass(administrationItem.href, expanded, pathname)} title={expanded ? undefined : administrationItem.label} on:click={chooseNavigation}>
+						<svelte:component this={administrationItem.icon} class="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+						{#if expanded}<span class="min-w-0 truncate whitespace-nowrap">{administrationItem.label}</span>{:else}<span class="sr-only">{administrationItem.label}</span>{/if}
+					</a>
+				{/if}
 			</div>
 		{/if}
 	</nav>
