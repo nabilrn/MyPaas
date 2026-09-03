@@ -1,10 +1,8 @@
 <script lang="ts">
-	import type { ComponentType, SvelteComponent } from 'svelte';
-
 	export let active = false;
 	export let danger = false;
 	export let label = '';
-	export let icon: ComponentType<SvelteComponent>;
+	export let icon: any;
 </script>
 
 <button
