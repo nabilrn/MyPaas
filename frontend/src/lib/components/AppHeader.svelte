@@ -25,8 +25,15 @@
 		logs: 'Logs',
 		metrics: 'Metrics',
 		env: 'Environment',
-		database: 'Database',
-		settings: 'Settings'
+		database: 'Database'
+	};
+
+	const projectSettingsLabels: Record<string, string> = {
+		'': 'General',
+		source: 'Source',
+		resources: 'Resources',
+		webhook: 'Webhook',
+		danger: 'Danger zone'
 	};
 
 	let mobileMenuOpen = false;
@@ -44,9 +51,15 @@
 		if (currentPath === '/projects/new') {
 			return { root: 'Projects', rootHref: '/projects', middle: null as { label: string; href: string } | null, current: 'New project' };
 		}
-		const projectMatch = currentPath.match(/^\/projects\/([^/]+)(?:\/([^/]+))?/);
+		const projectMatch = currentPath.match(/^\/projects\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/);
 		if (projectMatch) {
-			const section = projectMatch[2] ? (projectSectionLabels[projectMatch[2]] ?? 'Project') : '';
+			const sectionKey = projectMatch[2] ?? '';
+			const nestedKey = projectMatch[3] ?? '';
+			const section = sectionKey === 'settings'
+				? (projectSettingsLabels[nestedKey] ?? 'General')
+				: sectionKey
+					? (projectSectionLabels[sectionKey] ?? 'Project')
+					: '';
 			const projectLabel = context.projectName ?? 'Project';
 			const projectHref = `/projects/${projectMatch[1]}`;
 			return {

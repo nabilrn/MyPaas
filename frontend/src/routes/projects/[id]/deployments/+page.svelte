@@ -35,6 +35,7 @@
 	$: activeCount = visibleDeployments.filter((item) => isPipelineActive(item.status)).length;
 	$: recoverableCount = visibleDeployments.filter((item) => canRollbackDeployment(item.status, item.id, project?.activeDeploymentId)).length;
 	$: failedCount = visibleDeployments.filter((item) => item.status === 'failed').length;
+	$: showPagination = currentPage > 0 || hasNext;
 	$: focusId = normalizeDeploymentFocus($page.url.searchParams.get('focus'));
 	$: if (focusId !== appliedFocusId) {
 		appliedFocusId = focusId;
@@ -153,7 +154,7 @@
 </script>
 
 <svelte:head>
-	<title>Deployments · MyPaas</title>
+	<title>Deployments · MyPaaS</title>
 </svelte:head>
 
 <TableShell
@@ -182,7 +183,7 @@
 
 	<div class="grid border-b border-gray-100 bg-gray-50/50 dark:border-neutral-800 dark:bg-neutral-900/40 sm:grid-cols-3">
 		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
-			<p class="metric-label">Active pipeline</p>
+			<p class="metric-label">In-progress pipelines</p>
 			<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{activeCount}</p>
 		</div>
 		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
@@ -263,6 +264,8 @@
 	</div>
 
 	<svelte:fragment slot="footer">
-		<Pagination bind:page={currentPage} {pageSize} totalShown={visibleDeployments.length} {hasNext} {loading} label="Deployments" />
+		{#if showPagination}
+			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleDeployments.length} {hasNext} {loading} label="Deployments" />
+		{/if}
 	</svelte:fragment>
 </TableShell>

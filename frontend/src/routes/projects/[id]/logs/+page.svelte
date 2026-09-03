@@ -94,7 +94,7 @@
 	function formatLine(log: LogEntry) { const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'; return `[${time}] [${log.service}] ${log.line}`; }
 </script>
 
-<svelte:head><title>Logs · MyPaas</title></svelte:head>
+<svelte:head><title>Logs · MyPaaS</title></svelte:head>
 
 <div class="flex h-[calc(100vh-16rem)] min-h-[32rem] flex-col">
 	<SectionPanel title="Log stream" description={streamDescription} className="flex min-h-0 flex-1 flex-col" contentClass="flex min-h-0 flex-1 flex-col gap-3 p-4">
@@ -115,8 +115,8 @@
 					<LoadingIndicator label="Loading log history" size="sm" />
 				</div>
 			{:else if filteredLogs.length === 0}<p class="text-gray-500">{logs.length === 0 ? 'No logs yet.' : 'No logs match the current filter.'}</p>
-			{:else}{#if clippedRenderCount > 0}<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>{/if}{#each renderedLogs as log (log.id)}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span><span class="truncate text-sky-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span><span>{log.line}</span></div>{/each}{/if}
+			{:else}{#if clippedRenderCount > 0}<p class="mb-2 text-gray-500">Rendering latest {renderLimit} of {filteredLogs.length} matching lines. Copy/download still includes all matches.</p>{/if}{#each renderedLogs as log (log.id)}<div class="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2 whitespace-pre-wrap break-words sm:grid-cols-[5.5rem_7rem_minmax(0,1fr)]"><span class="text-gray-500">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '--:--:--'}</span><span class="truncate text-gray-300 max-sm:col-start-2 max-sm:row-start-2">{log.service}</span><span>{log.line}</span></div>{/each}{/if}
 		</div>
-		<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400"><p>Showing {filteredLogs.length} of {logs.length} lines · latest {maxLines} kept in memory.</p><div class="flex flex-wrap items-center gap-2">{#if paused}<ActionButton variant="secondary" size="xs" type="button" on:click={scrollToBottom}><ArrowDown slot="icon" class="h-3.5 w-3.5" />Resume</ActionButton>{/if}<ActionButton variant="ghost" size="xs" type="button" on:click={clearLogs} disabled={logs.length === 0}><Trash2 slot="icon" class="h-3.5 w-3.5" />Clear</ActionButton><ActionButton variant="secondary" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Reloading"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reload history</ActionButton></div></div>
+		<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400"><p>Latest {maxLines} lines kept in memory.</p><div class="flex flex-wrap items-center gap-2">{#if paused}<ActionButton variant="secondary" size="xs" type="button" on:click={scrollToBottom}><ArrowDown slot="icon" class="h-3.5 w-3.5" />Resume</ActionButton>{/if}<ActionButton variant="ghost" size="xs" type="button" on:click={clearLogs} disabled={logs.length === 0}><Trash2 slot="icon" class="h-3.5 w-3.5" />Clear</ActionButton><ActionButton variant="secondary" size="xs" type="button" on:click={() => loadHistory(true)} loading={reloadingHistory} loadingLabel="Reloading"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Reload history</ActionButton></div></div>
 	</SectionPanel>
 </div>

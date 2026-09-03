@@ -19,7 +19,6 @@
 	} from '$stores/project-stream';
 	import { projectStreamTopics } from '$lib/utils/project-stream-topics';
 	import type { Deployment, MetricsSnapshot, Project, ProjectStatus } from '$types';
-	import { projectHost, projectURL } from '$lib/utils/urls';
 
 	const terminalProjectStatuses = new Set<ProjectStatus>(['running', 'stopped', 'crashed', 'pending']);
 
@@ -34,12 +33,9 @@
 	let mounted = false;
 	let activeStreamKey = '';
 
-	$: publicProjectHost = project ? projectHost(project.subdomain, $page.url.hostname) : '';
-	$: publicProjectURL = project ? projectURL(project.subdomain, $page.url.protocol, $page.url.hostname) : '';
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
-	$: databaseWorkspace = $page.url.pathname.startsWith(`/projects/${$page.params.id}/database`);
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -229,19 +225,15 @@
 
 			<main class="min-w-0 px-3.5 py-3">
 				<div class="space-y-3">
-					{#if !databaseWorkspace}
-						<DeployControlPanel
-							{project}
-							{latestDeployment}
-							{publicProjectHost}
-							{publicProjectURL}
-							{pendingAction}
-							on:start={handleStart}
-							on:stop={handleStop}
-							on:restart={handleRestart}
-							on:deploy={handleDeploy}
-						/>
-					{/if}
+					<DeployControlPanel
+						{project}
+						{latestDeployment}
+						{pendingAction}
+						on:start={handleStart}
+						on:stop={handleStop}
+						on:restart={handleRestart}
+						on:deploy={handleDeploy}
+					/>
 
 					<div class="project-detail-content min-w-0">
 						<slot />

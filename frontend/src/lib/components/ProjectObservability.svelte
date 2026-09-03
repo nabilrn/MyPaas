@@ -70,13 +70,7 @@
 		hiddenServices = new Set();
 	}
 
-	function formatPercent(value: number) {
-		if (value < 1) return value.toFixed(2);
-		if (value < 10) return value.toFixed(1);
-		return value.toFixed(0);
-	}
-
-	function formatCPUAllocation(percent: number) {
+	function formatCPU(percent: number) {
 		const cores = percent / 100;
 		return `${Number(cores.toFixed(2))} CPU`;
 	}
@@ -225,16 +219,14 @@
 							label="CPU usage"
 							used={cpuUsed}
 							limit={cpuLimit}
-							valueLabel={`${formatPercent(cpuUsed)}% of ${formatPercent(cpuLimit)}%`}
-							allocationLabel={formatCPUAllocation(cpuLimit)}
+							valueLabel={`${formatCPU(cpuUsed)} / ${formatCPU(cpuLimit)}`}
 						/>
 					</div>
 					<RuntimeUsageBar
 						label="Memory usage"
 						used={memoryUsed}
 						limit={memoryLimit}
-						valueLabel={`${formatMemory(memoryUsed)} of ${formatMemory(memoryLimit)}`}
-						allocationLabel={formatMemory(memoryLimit)}
+						valueLabel={`${formatMemory(memoryUsed)} / ${formatMemory(memoryLimit)}`}
 					/>
 				</div>
 			{:else if metricItems.length > 0}
