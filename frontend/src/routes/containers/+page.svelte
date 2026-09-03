@@ -251,9 +251,9 @@
 								{#if row.health}<p class={`mt-0.5 text-xs capitalize ${healthClass(row.health)}`}>{row.health}</p>{/if}
 							</div>
 						</td>
-						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
+						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.cpuAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
 						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">
-							{#if row.metricsAvailable}
+							{#if row.memoryAvailable}
 								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
 							{:else}—{/if}
 						</td>
