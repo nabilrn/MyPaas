@@ -130,6 +130,6 @@
 	}
 </script>
 
-<div class={`${compact ? 'h-14' : 'h-64'} relative w-full`}>
+<div class={`${compact ? 'h-24' : 'h-64'} relative w-full`}>
 	<canvas bind:this={canvas}></canvas>
 </div>
