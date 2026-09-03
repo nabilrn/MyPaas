@@ -61,3 +61,18 @@ func TestApplyCachedRuntimeTelemetry(t *testing.T) {
 		t.Fatal("expected cache miss for app-b")
 	}
 }
+
+func TestApplyCachedRuntimeTelemetrySkipsStoppedContainer(t *testing.T) {
+	cli := NewDockerCLI("127.0.0.1")
+	cli.runtimeTelemetry["app-a"] = Metrics{CPUPercent: 9.5, MemoryMB: 256, MemoryLimitMB: 512}
+	containers := []RuntimeContainer{{Name: "app-a", State: "exited"}}
+
+	cli.applyCachedRuntimeTelemetry(containers)
+
+	if containers[0].MetricsAvailable {
+		t.Fatal("stopped container must not expose stale cached telemetry")
+	}
+	if containers[0].CPUPercent != 0 || containers[0].MemoryMB != 0 || containers[0].MemoryLimitMB != 0 {
+		t.Fatalf("stopped container inherited stale telemetry: %+v", containers[0])
+	}
+}
