@@ -357,37 +357,36 @@
 					on:retry={() => void loadRows()}
 				>
 					<svelte:fragment slot="actions">
-						<ActionButton variant="secondary" size="xs" on:click={() => void loadRows()} disabled={!selectedTable || loadingRows}><RefreshCw slot="icon" class="h-3.5 w-3.5" />Refresh rows</ActionButton>
-						{#if activeFilterCount > 0}<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows}><RotateCcw slot="icon" class="h-3.5 w-3.5" />Clear filters</ActionButton>{/if}
-						<ActionButton variant="primary" size="xs" on:click={openInsert} disabled={!writeActive || columns.length === 0}><Plus slot="icon" class="h-3.5 w-3.5" />Insert row</ActionButton>
-					</svelte:fragment>
-
-					<div class="border-b border-gray-100/70 bg-gray-50/40 p-3 dark:border-neutral-900 dark:bg-neutral-900/30">
-						<div class="grid gap-3 lg:grid-cols-[minmax(14rem,1fr)_auto] lg:items-end">
-							<label class="block">
-								<span class="field-label">Search rows</span>
-								<input value={rowSearch} class="field w-full" placeholder="Search scalar columns" on:input={(event) => (rowSearch = (event.currentTarget as HTMLInputElement).value)} on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void applyRowFilters(); } }} />
-							</label>
-							<div class="flex flex-wrap gap-2">
-								<ActionButton variant={filterDirty ? 'primary' : 'secondary'} size="xs" on:click={() => void applyRowFilters()} disabled={loadingRows || !filterDirty}><Filter slot="icon" class="h-3.5 w-3.5" />Apply filters</ActionButton>
-								<ActionButton variant="ghost" size="xs" on:click={() => void clearRowFilters()} disabled={loadingRows || (!rowSearch && activeFilterCount === 0 && Object.values(enumFilters).filter(Boolean).length === 0)}><RotateCcw slot="icon" class="h-3.5 w-3.5" />Reset</ActionButton>
+						<div class="flex w-full flex-col gap-2">
+							<div class="flex w-full flex-wrap items-center gap-2">
+								<input
+									value={rowSearch}
+									class="field min-w-[14rem] flex-1"
+									placeholder="Search rows"
+									aria-label="Search database rows"
+									on:input={(event) => (rowSearch = (event.currentTarget as HTMLInputElement).value)}
+									on:keydown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void applyRowFilters(); } }}
+								/>
+								<ActionButton variant={filterDirty ? 'primary' : 'secondary'} size="sm" on:click={() => void applyRowFilters()} disabled={loadingRows || !filterDirty}><Filter slot="icon" class="h-4 w-4" />Apply filters</ActionButton>
+								<ActionButton variant="ghost" size="sm" on:click={() => void clearRowFilters()} disabled={loadingRows || (!rowSearch && activeFilterCount === 0 && Object.values(enumFilters).filter(Boolean).length === 0)}><RotateCcw slot="icon" class="h-4 w-4" />Reset</ActionButton>
+								<ActionButton variant="secondary" size="sm" on:click={() => void loadRows()} disabled={!selectedTable || loadingRows}><RefreshCw slot="icon" class="h-4 w-4" />Refresh rows</ActionButton>
+								<ActionButton variant="primary" size="sm" on:click={openInsert} disabled={!writeActive || columns.length === 0}><Plus slot="icon" class="h-4 w-4" />Insert row</ActionButton>
 							</div>
+							{#if enumColumns.length > 0}
+								<div class="grid w-full gap-2 sm:grid-cols-2 xl:grid-cols-4">
+									{#each enumColumns as column}
+										<label class="block min-w-0">
+											<span class="field-label truncate" title={column.name}>{column.name}</span>
+											<select class="field w-full" value={enumFilters[column.name] ?? ''} on:change={(event) => (enumFilters = { ...enumFilters, [column.name]: (event.currentTarget as HTMLSelectElement).value })}>
+												<option value="">Any value</option>
+												{#each column.enumValues ?? [] as value}<option {value}>{value}</option>{/each}
+											</select>
+										</label>
+									{/each}
+								</div>
+							{/if}
 						</div>
-						{#if enumColumns.length > 0}
-							<div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-								{#each enumColumns as column}
-									<label class="block">
-										<span class="field-label truncate" title={column.name}>{column.name}</span>
-										<select class="field w-full" value={enumFilters[column.name] ?? ''} on:change={(event) => (enumFilters = { ...enumFilters, [column.name]: (event.currentTarget as HTMLSelectElement).value })}>
-											<option value="">Any value</option>
-											{#each column.enumValues ?? [] as value}<option {value}>{value}</option>{/each}
-										</select>
-									</label>
-								{/each}
-							</div>
-						{/if}
-						<p class="field-hint">Search and enum filters are applied in SQL with pagination; MyPaaS does not load the whole table into memory.</p>
-					</div>
+					</svelte:fragment>
 
 					{#if !rows || rows.rows.length === 0}
 						<EmptyState title={activeFilterCount > 0 ? 'No rows match these filters.' : 'No rows in this table.'} description={activeFilterCount > 0 ? 'Adjust the search or enum filters, then apply again.' : ''} compact />

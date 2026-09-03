@@ -242,6 +242,38 @@ Primary workflow actions use monochrome inversion.
 
 Operational tables are first-class workspace content, not cards containing miniature cards.
 
+### Hierarchy and toolbar
+
+Table-scoped utilities belong to the table chrome, not to a separate form or card above it.
+
+The visual order is:
+
+```text
+table title / context
+table toolbar
+column header
+rows
+pagination / result count
+```
+
+The toolbar owns controls that operate on the displayed dataset, including:
+
+- search;
+- filters;
+- sorting;
+- refresh;
+- row-count controls;
+- table-scoped primary actions.
+
+Rules:
+
+- Place the toolbar immediately above the column header inside the same `TableShell` workspace.
+- Do not create a separate bordered panel merely to hold search/filter controls for a table.
+- Toolbar controls use the same shared field tokens and standard control height as adjacent actions.
+- Idle toolbar controls stay visually quiet; focus/active state may become the strongest normal control boundary.
+- A toolbar without controls must not reserve an empty row.
+- Table title/context and table utilities may wrap independently on narrow widths without clipping the primary action.
+
 ### Geometry
 
 - Prefer stable deliberate column geometry for predictable datasets.
@@ -258,11 +290,17 @@ Operational tables are first-class workspace content, not cards containing minia
 - numeric metrics: right aligned with tabular numerals;
 - technical identifiers: use mono where useful.
 
-### Strokes
+### Strokes and states
 
+- table header: one quiet tonal step from the body;
 - row separators: subtle;
-- column separators: even more subtle;
+- column separators: quieter than row separators;
+- idle row: neutral table surface;
+- hover row: subtle neutral surface change;
+- selected row: stronger neutral surface change, still monochrome;
 - outer table outline: normally unnecessary when table already belongs to a workspace section.
+
+The table grid must never dominate the data. From a distance, content and hierarchy should be more visible than individual cell boundaries.
 
 Typical row height: roughly **52–60px** for ordinary operational inventory.
 
@@ -358,6 +396,45 @@ Use `@lucide/svelte` for generic UI icons.
 - Icon-only controls are for compact utility actions.
 - Standard visual control height is about 36px while retaining appropriate coarse-pointer targets.
 - Do not use emoji/Unicode glyphs as product icons.
+
+### Input hierarchy
+
+Editable text inputs, search fields, selects, comboboxes, and textareas share one neutral control grammar.
+
+Idle state:
+
+- background remains close to the parent surface;
+- boundary is visible but low contrast;
+- an idle input must not become the strongest rectangle in its section.
+
+Hover state:
+
+- boundary becomes slightly clearer;
+- background may shift by only one neutral tonal step;
+- do not introduce semantic or decorative accent color.
+
+Focus state:
+
+- focus is the highest-contrast normal input state;
+- use the shared monochrome focus border and restrained focus ring;
+- the focus indicator must remain visible in light and dark themes;
+- do not use success green or another semantic color as generic focus chrome.
+
+Disabled and read-only states:
+
+- use a muted control surface and muted text rather than opacity alone;
+- remain distinguishable from editable idle state;
+- preserve legibility of existing values.
+
+Sizing:
+
+- ordinary fields target **36px** visual height;
+- field text remains **14px**;
+- horizontal padding is normally **10–12px**;
+- table-toolbar fields align with adjacent `ActionButton size="sm"` controls;
+- coarse-pointer environments may increase the hit target without changing desktop density.
+
+Route-local input palettes that recreate border/background/focus colors are prohibited when the shared `.field` primitive owns the state.
 
 ---
 

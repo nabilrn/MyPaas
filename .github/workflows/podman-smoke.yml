@@ -61,34 +61,7 @@ jobs:
           fi
 
       - name: Install rootful Podman socket
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y podman catatonit conmon crun
-          sudo systemctl stop docker.service docker.socket podman.service podman.socket || true
-          sudo mkdir -p /run/podman /run/user/0
-          sudo chmod 700 /run/user/0
-          sudo rm -f /run/podman/podman.sock /var/run/docker.sock
-          cat >/tmp/mypaas-containers.conf <<'EOF'
-          [engine]
-          conmon_path = ["/usr/bin/conmon"]
-          runtime = "crun"
-
-          [engine.runtimes]
-          crun = ["/usr/bin/crun"]
-          EOF
-          sudo sh -c 'export PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf; nohup /usr/bin/podman system service --time=0 unix:///run/podman/podman.sock >/tmp/mypaas-podman-service.log 2>&1 &'
-          for _ in $(seq 1 40); do
-            if [[ -S /run/podman/podman.sock ]]; then
-              break
-            fi
-            sleep 0.25
-          done
-          if [[ ! -S /run/podman/podman.sock ]]; then
-            cat /tmp/mypaas-podman-service.log >&2 || true
-            exit 1
-          fi
-          sudo ln -s /run/podman/podman.sock /var/run/docker.sock
+        run: bash scripts/ci_setup_rootful_podman.sh
 
       - name: Verify Docker CLI is backed by packaged Podman
         run: |
