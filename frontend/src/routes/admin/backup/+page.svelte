@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { Download, X } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
+	import { trapDialogFocus } from '$lib/utils/dialogFocus';
 
 	let loading = true;
 	let savingS3 = false;
 	let s3Configured = false;
 	let configuringS3 = false;
+	let storageDialog: HTMLElement | null = null;
+	let endpointInput: HTMLInputElement | null = null;
+	let storageReturnFocus: HTMLElement | null = null;
 
 	let s3Config = {
 		endpoint: '',
@@ -44,6 +48,12 @@
 		}
 	}
 
+	function openS3Config(event: MouseEvent) {
+		storageReturnFocus = event.currentTarget as HTMLElement;
+		configuringS3 = true;
+		void tick().then(() => endpointInput?.focus());
+	}
+
 	async function saveS3Config() {
 		if (savingS3 || !canSaveS3) return;
 		savingS3 = true;
@@ -63,8 +73,12 @@
 			const body = await response.json().catch(() => ({}));
 			if (!response.ok) throw new Error(body.error?.message || 'Failed to save S3 configuration');
 			s3Configured = true;
+			const returnTarget = storageReturnFocus;
 			configuringS3 = false;
+			storageReturnFocus = null;
 			s3Config = { endpoint: '', bucket: '', region: 'auto', access_key: '', secret_key: '' };
+			await tick();
+			returnTarget?.focus();
 			toast.success('Backup storage saved');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to save S3 configuration');
@@ -75,14 +89,29 @@
 
 	function closeS3Config() {
 		if (savingS3) return;
+		const returnTarget = storageReturnFocus;
 		configuringS3 = false;
+		storageReturnFocus = null;
 		s3Config = { endpoint: '', bucket: '', region: 'auto', access_key: '', secret_key: '' };
+		void tick().then(() => returnTarget?.focus());
+	}
+
+	function handleWindowKeydown(event: KeyboardEvent) {
+		if (!configuringS3) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeS3Config();
+			return;
+		}
+		trapDialogFocus(event, storageDialog);
 	}
 
 	function downloadBackup() {
 		window.location.href = '/api/admin/backup/download';
 	}
 </script>
+
+<svelte:window on:keydown={handleWindowKeydown} />
 
 <svelte:head>
 	<title>Backup · MyPaaS</title>
@@ -98,7 +127,7 @@
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
 					<p class="text-sm text-gray-500 dark:text-gray-400">Status</p>
 					<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class={`status-dot ${s3Configured ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-gray-500'}`}></span>{s3Configured ? 'Configured' : 'Not configured'}</p>
-					<ActionButton variant="secondary" size="sm" on:click={() => (configuringS3 = true)}>{s3Configured ? 'Change storage' : 'Configure storage'}</ActionButton>
+					<ActionButton variant="secondary" size="sm" on:click={openS3Config}>{s3Configured ? 'Change storage' : 'Configure storage'}</ActionButton>
 				</div>
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
 					<p class="text-sm text-gray-500 dark:text-gray-400">Storage</p>
@@ -121,13 +150,13 @@
 {#if configuringS3}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button type="button" class="absolute inset-0 cursor-default bg-gray-950/45" aria-label="Close backup storage setup" on:click={closeS3Config}></button>
-		<div class="overlay relative max-h-[90vh] w-full max-w-xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="backup-storage-title">
+		<div bind:this={storageDialog} class="overlay relative max-h-[90vh] w-full max-w-xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="backup-storage-title" tabindex="-1">
 			<div class="panel-header flex items-start justify-between gap-3">
 				<h2 id="backup-storage-title" class="panel-title">Backup storage</h2>
 				<ActionButton variant="ghost" size="xs" on:click={closeS3Config} disabled={savingS3}><X slot="icon" class="h-4 w-4" />Close</ActionButton>
 			</div>
 			<div class="max-h-[calc(90vh-5rem)] space-y-4 overflow-y-auto p-4">
-				<div><label class="field-label" for="endpoint">S3 endpoint</label><input id="endpoint" type="text" bind:value={s3Config.endpoint} class="field w-full font-mono text-sm" placeholder="https://<account-id>.r2.cloudflarestorage.com" /></div>
+				<div><label class="field-label" for="endpoint">S3 endpoint</label><input bind:this={endpointInput} id="endpoint" type="text" bind:value={s3Config.endpoint} class="field w-full font-mono text-sm" placeholder="https://<account-id>.r2.cloudflarestorage.com" /></div>
 				<div class="grid gap-4 sm:grid-cols-2">
 					<div><label class="field-label" for="bucket">Bucket</label><input id="bucket" type="text" bind:value={s3Config.bucket} class="field w-full font-mono text-sm" placeholder="mypaas-backups" /></div>
 					<div><label class="field-label" for="region">Region</label><input id="region" type="text" bind:value={s3Config.region} class="field w-full font-mono text-sm" placeholder="auto" /></div>
