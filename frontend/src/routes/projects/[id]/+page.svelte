@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowRight, ArrowUpRight, Database, ExternalLink, Settings2 } from '@lucide/svelte';
+	import { ArrowRight, ArrowUpRight, Database, ExternalLink } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
@@ -119,38 +119,21 @@
 			</section>
 		{/if}
 
-		<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
-			<div class={`grid ${project.deployMode === 'static' ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
-				<a
-					href={`${base}/settings`}
-					class={`group min-w-0 px-4 py-3 ${project.deployMode === 'static' ? '' : 'sm:border-r sm:border-[color:var(--workspace-divider)]'}`}
-				>
+		{#if project.deployMode !== 'static'}
+			<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
+				<a href={`${base}/database`} class="group block min-w-0 px-4 py-3">
 					<div class="flex items-center justify-between gap-3">
 						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-							<Settings2 class="h-3.5 w-3.5" aria-hidden="true" />
-							Settings
+							<Database class="h-3.5 w-3.5" aria-hidden="true" />
+							Database
 						</div>
 						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-gray-500" aria-hidden="true" />
 					</div>
-					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Project settings</p>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Your project settings and configuration.</p>
+					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Browse and manage your project database.</p>
 				</a>
-
-				{#if project.deployMode !== 'static'}
-					<a href={`${base}/database`} class="group min-w-0 px-4 py-3">
-						<div class="flex items-center justify-between gap-3">
-							<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-								<Database class="h-3.5 w-3.5" aria-hidden="true" />
-								Database
-							</div>
-							<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-gray-500" aria-hidden="true" />
-						</div>
-						<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Browse and manage your project database.</p>
-					</a>
-				{/if}
-			</div>
-		</section>
+			</section>
+		{/if}
 
 		{#if additionalEndpoints.length > 0}
 			<section class="workspace-section border-b border-gray-100/70 dark:border-neutral-900">
