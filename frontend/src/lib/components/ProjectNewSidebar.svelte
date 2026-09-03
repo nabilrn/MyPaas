@@ -40,7 +40,8 @@
 		return reviewTarget();
 	}
 
-	function navigate(section: WizardSection) {
+	function navigate(event: MouseEvent, section: WizardSection) {
+		event.preventDefault();
 		activeSection = section;
 		window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${section}`);
 		requestAnimationFrame(() => {
@@ -57,7 +58,7 @@
 			href={`#${item.id}`}
 			label={item.label}
 			icon={item.icon}
-			on:click|preventDefault={() => navigate(item.id)}
+			on:click={(event) => navigate(event, item.id)}
 		/>
 	{/each}
 </nav>
