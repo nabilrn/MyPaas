@@ -9,6 +9,7 @@
 <style>
 	.project-settings-danger :global(.space-y-5 > :first-child) {
 		padding-inline: 1.25rem;
+		padding-top: 1rem;
 	}
 
 	.project-settings-danger :global(.space-y-5 > section.border-y) {
