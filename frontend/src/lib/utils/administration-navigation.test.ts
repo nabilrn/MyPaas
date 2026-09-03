@@ -7,12 +7,20 @@ import adminMigrationPage from "../../routes/admin/migration/+page.svelte?raw";
 import adminMcpPage from "../../routes/admin/mcp/+page.svelte?raw";
 import adminAuditPage from "../../routes/admin/audit-logs/+page.svelte?raw";
 import createProjectPage from "../../routes/projects/new/+page.svelte?raw";
+import createProjectLayout from "../../routes/projects/new/+layout.svelte?raw";
 import projectLogsPage from "../../routes/projects/[id]/logs/+page.svelte?raw";
 import projectLayout from "../../routes/projects/[id]/+layout.svelte?raw";
 import projectSettingsPage from "../../routes/projects/[id]/settings/+page.svelte?raw";
+import projectSourceSettingsPage from "../../routes/projects/[id]/settings/source/+page.svelte?raw";
+import projectResourcesSettingsPage from "../../routes/projects/[id]/settings/resources/+page.svelte?raw";
+import projectWebhookSettingsPage from "../../routes/projects/[id]/settings/webhook/+page.svelte?raw";
+import projectDangerSettingsPage from "../../routes/projects/[id]/settings/danger/+page.svelte?raw";
 import adminSidebar from "../components/AdminSidebar.svelte?raw";
 import appHeader from "../components/AppHeader.svelte?raw";
 import navbar from "../components/Navbar.svelte?raw";
+import projectDetailSidebar from "../components/ProjectDetailSidebar.svelte?raw";
+import projectNewSidebar from "../components/ProjectNewSidebar.svelte?raw";
+import projectSettingsSection from "../components/ProjectSettingsSection.svelte?raw";
 import {
   administrationNavGroups,
   administrationNavItemForPath,
@@ -97,8 +105,6 @@ describe("administration navigation contract", () => {
     expect(adminSidebar).toContain("bg-transparent");
     expect(adminSidebar).toContain("uppercase tracking");
     expect(adminSidebar).toContain("administrationNavGroups");
-    expect(projectSettingsPage).toContain("ProjectSettingsNavItem");
-    expect(projectLayout).toContain("main > .max-w-5xl");
     expect(createProjectPage).not.toContain("AdminSidebar");
     expect(projectLogsPage).not.toContain("AdminSidebar");
   });
@@ -158,5 +164,57 @@ describe("administration navigation contract", () => {
       expect(pageSource).toContain('tabindex="-1"');
       expect(pageSource).toContain("ReturnFocus");
     }
+  });
+});
+
+describe("project secondary navigation contract", () => {
+  it("keeps create project as one parent route with a local four-step sidebar", () => {
+    expect(createProjectLayout).toContain("ProjectNewSidebar");
+    expect(createProjectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
+    for (const label of ["Source", "Configuration", "Environment", "Review"]) {
+      expect(projectNewSidebar).toContain(`label: '${label}'`);
+    }
+  });
+
+  it("keeps one global secondary sidebar across project detail routes", () => {
+    expect(projectLayout).toContain("ProjectDetailSidebar");
+    expect(projectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
+    expect(projectLayout).not.toContain("project-settings-shell");
+    for (const label of [
+      "Overview",
+      "Deployments",
+      "Logs",
+      "Environment",
+      "Database",
+      "General",
+      "Source",
+      "Resources",
+      "Webhook",
+      "Danger zone",
+    ]) {
+      expect(projectDetailSidebar).toContain(`label: '${label}'`);
+    }
+    expect(projectDetailSidebar).toContain("`${base}/env`");
+    expect(projectDetailSidebar).not.toContain("settings/environment");
+  });
+
+  it("splits settings into route-backed sections without a nested settings sidebar", () => {
+    for (const pageSource of [
+      projectSettingsPage,
+      projectSourceSettingsPage,
+      projectResourcesSettingsPage,
+      projectWebhookSettingsPage,
+      projectDangerSettingsPage,
+    ]) {
+      expect(pageSource).toContain("ProjectSettingsSection");
+      expect(pageSource).not.toContain("ProjectSettingsNavItem");
+    }
+    expect(projectSettingsPage).toContain('section="general"');
+    expect(projectSourceSettingsPage).toContain('section="source"');
+    expect(projectResourcesSettingsPage).toContain('section="resources"');
+    expect(projectWebhookSettingsPage).toContain('section="webhook"');
+    expect(projectDangerSettingsPage).toContain('section="danger"');
+    expect(projectSettingsSection).not.toContain("ProjectEnvironmentSettings");
+    expect(projectSettingsSection).not.toContain("activeSection");
   });
 });
