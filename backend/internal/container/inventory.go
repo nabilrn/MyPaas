@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -35,8 +36,10 @@ type RuntimeContainer struct {
 	ComposeProject   string                    `json:"composeProject"`
 	Service          string                    `json:"service"`
 	CPUPercent       float64                   `json:"cpu"`
+	CPUAvailable     bool                      `json:"cpuAvailable"`
 	MemoryMB         float64                   `json:"memoryMb"`
 	MemoryLimitMB    float64                   `json:"memoryLimitMb"`
+	MemoryAvailable  bool                      `json:"memoryAvailable"`
 	MetricsAvailable bool                      `json:"metricsAvailable"`
 }
 
@@ -67,10 +70,10 @@ type runtimeInventoryInspectRow struct {
 }
 
 const (
-	runtimeStatsFormat             = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
-	runtimeTelemetryRefreshEvery   = 15 * time.Second
-	runtimeTelemetryTimeout        = 12 * time.Second
-	runtimeBulkTelemetryTimeout    = 4 * time.Second
+	runtimeStatsFormat              = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+	runtimeTelemetryRefreshEvery    = 15 * time.Second
+	runtimeTelemetryTimeout         = 12 * time.Second
+	runtimeBulkTelemetryTimeout     = 4 * time.Second
 	runtimeFallbackTelemetryTimeout = 2 * time.Second
 )
 
@@ -267,8 +270,8 @@ func (d *DockerCLI) refreshRuntimeTelemetry(ctx context.Context) error {
 
 // collectRuntimeStats prefers one targeted bulk stats call, retries through the
 // runtime-wide bulk form when a Docker-compatible runtime omits rows, then uses
-// the existing single-container Stats contract only for still-missing samples.
-// All of this stays on the background path; user requests never wait on stats.
+// a single-target command only for still-missing samples. All of this stays on
+// the background path; user requests never wait on stats.
 func (d *DockerCLI) collectRuntimeStats(ctx context.Context, containers []RuntimeContainer) (map[string]Metrics, error) {
 	targets := runtimeStatsTargets(containers)
 	if len(targets) == 0 {
@@ -298,10 +301,10 @@ func (d *DockerCLI) collectRuntimeStats(ctx context.Context, containers []Runtim
 			continue
 		}
 		fallbackCtx, cancel := context.WithTimeout(ctx, runtimeFallbackTelemetryTimeout)
-		metric, err := d.Stats(fallbackCtx, target)
+		fallbackOut, err := runRuntimeStatsCommand(fallbackCtx, []string{target})
 		cancel()
 		if err == nil {
-			stats[target] = metric
+			mergeTargetRuntimeStats(stats, parseRuntimeStats(fallbackOut, 1), targetSet)
 		}
 	}
 
@@ -374,7 +377,7 @@ func parseRuntimeStats(raw []byte, capacity int) map[string]Metrics {
 	}
 	stats := make(map[string]Metrics, capacity)
 	for _, line := range fieldsByLine(string(raw)) {
-		metric, err := parseStatsLine(line)
+		metric, err := parseRuntimeInventoryStatsLine(line)
 		if err != nil {
 			continue
 		}
@@ -383,11 +386,121 @@ func parseRuntimeStats(raw []byte, capacity int) map[string]Metrics {
 	return stats
 }
 
+// parseRuntimeInventoryStatsLine is deliberately more tolerant than the
+// project-metrics parser. Podman can legitimately report `--` for one metric
+// while still returning useful values for another; the host inventory keeps
+// the partial sample instead of discarding the whole container row.
+func parseRuntimeInventoryStatsLine(line string) (Metrics, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return Metrics{}, ErrNoContainer
+	}
+
+	name := ""
+	cpuValue := ""
+	memoryValue := ""
+	if strings.HasPrefix(line, "{") {
+		var raw dockerStatsLine
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			return Metrics{}, fmt.Errorf("parse docker stats inventory: %w", err)
+		}
+		name = strings.TrimSpace(raw.Name)
+		cpuValue = raw.CPUPerc
+		memoryValue = raw.MemUsage
+	} else {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 {
+			return Metrics{}, fmt.Errorf("parse docker stats inventory columns: expected name, CPU, and memory usage")
+		}
+		name = strings.TrimSpace(parts[0])
+		cpuValue = parts[1]
+		memoryValue = parts[2]
+	}
+	if name == "" {
+		return Metrics{}, fmt.Errorf("parse docker stats inventory: missing container name")
+	}
+
+	cpu, cpuAvailable, err := parseRuntimeMetricPercent(cpuValue)
+	if err != nil {
+		return Metrics{}, err
+	}
+	used, limit, memoryAvailable, err := parseRuntimeMetricMemory(memoryValue)
+	if err != nil {
+		return Metrics{}, err
+	}
+	if !cpuAvailable {
+		cpu = math.NaN()
+	}
+	if !memoryAvailable {
+		used = math.NaN()
+	}
+
+	return Metrics{
+		Service:       name,
+		CPUPercent:    cpu,
+		MemoryMB:      used,
+		MemoryLimitMB: limit,
+	}, nil
+}
+
+func parseRuntimeMetricPercent(value string) (float64, bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || trimmed == "--" {
+		return 0, false, nil
+	}
+	parsed, err := parsePercent(trimmed)
+	if err != nil {
+		return 0, false, err
+	}
+	return parsed, true, nil
+}
+
+func parseRuntimeMetricMemory(value string) (float64, float64, bool, error) {
+	parts := strings.Split(value, "/")
+	if len(parts) != 2 {
+		return 0, 0, false, fmt.Errorf("parse memory usage %q", value)
+	}
+
+	used := math.NaN()
+	limit := math.NaN()
+	usedText := strings.TrimSpace(parts[0])
+	limitText := strings.TrimSpace(parts[1])
+	if usedText != "" && usedText != "--" {
+		parsed, err := parseMemoryMB(usedText)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		used = parsed
+	}
+	if limitText != "" && limitText != "--" {
+		parsed, err := parseMemoryMB(limitText)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		limit = parsed
+	}
+	return used, limit, !math.IsNaN(used), nil
+}
+
 func applyRuntimeMetric(container *RuntimeContainer, metric Metrics) {
-	container.CPUPercent = metric.CPUPercent
-	container.MemoryMB = metric.MemoryMB
-	container.MemoryLimitMB = metric.MemoryLimitMB
-	container.MetricsAvailable = true
+	container.CPUAvailable = !math.IsNaN(metric.CPUPercent)
+	container.MemoryAvailable = !math.IsNaN(metric.MemoryMB)
+	if container.CPUAvailable {
+		container.CPUPercent = metric.CPUPercent
+	} else {
+		container.CPUPercent = 0
+	}
+	if container.MemoryAvailable {
+		container.MemoryMB = metric.MemoryMB
+	} else {
+		container.MemoryMB = 0
+	}
+	if !math.IsNaN(metric.MemoryLimitMB) {
+		container.MemoryLimitMB = metric.MemoryLimitMB
+	} else {
+		container.MemoryLimitMB = 0
+	}
+	container.MetricsAvailable = container.CPUAvailable || container.MemoryAvailable
 }
 
 func dockerLabel(labels, key string) string {
