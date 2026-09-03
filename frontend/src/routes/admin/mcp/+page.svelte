@@ -80,34 +80,34 @@ Keep the token secret. Do not deploy, restart, delete, or change project configu
 	{:else}
 		<section>
 			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Access</h2>
-			<div class="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
+			<div class="mt-3 divide-y divide-[color:var(--workspace-divider)] border-y border-[color:var(--workspace-divider)]">
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
 					<p class="text-sm text-gray-500 dark:text-gray-400">API token</p>
-					<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{mcpToken ? (showToken ? mcpToken : '••••••••••••••••') : 'Not configured'}</p>
-					{#if mcpToken}
-						<div class="flex items-center gap-1">
+					<div class="min-w-0">
+						<p class="break-all font-mono text-sm text-gray-950 dark:text-white">{mcpToken ? (showToken ? mcpToken : '••••••••••••••••') : 'Not configured'}</p>
+						{#if confirmRegenerateToken}<p class="mt-0.5 text-xs text-amber-700 dark:text-amber-300">Regenerating disconnects existing clients.</p>{/if}
+					</div>
+					<div class="flex flex-wrap items-center justify-end gap-1">
+						{#if mcpToken}
 							<IconButton label={showToken ? 'Hide API token' : 'Reveal API token'} variant="ghost" on:click={() => (showToken = !showToken)}>{#if showToken}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}</IconButton>
 							<IconButton label={copiedText === 'token' ? 'API token copied' : 'Copy API token'} variant="ghost" on:click={() => copyToClipboard(mcpToken, 'token')}>{#if copiedText === 'token'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
-						</div>
-					{/if}
+						{/if}
+						{#if confirmRegenerateToken}
+							<ActionButton variant="ghost" size="sm" on:click={() => (confirmRegenerateToken = false)} disabled={regeneratingToken}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
+							<ActionButton variant="danger" size="sm" on:click={regenerateToken} loading={regeneratingToken} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-4 w-4" />Confirm</ActionButton>
+						{:else}
+							<ActionButton variant="secondary" size="sm" on:click={() => (confirmRegenerateToken = true)}><RefreshCw slot="icon" class="h-4 w-4" />Regenerate</ActionButton>
+						{/if}
+					</div>
 				</div>
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Clients</p>
+					<p class="text-sm text-gray-500 dark:text-gray-400">Supported clients</p>
 					<AgentBadgeStack />
 				</div>
 			</div>
-			<div class="mt-3 flex flex-wrap items-center gap-2">
-				{#if confirmRegenerateToken}
-					<span class="text-sm text-gray-500 dark:text-gray-400">Existing clients will disconnect.</span>
-					<ActionButton variant="ghost" size="sm" on:click={() => (confirmRegenerateToken = false)} disabled={regeneratingToken}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
-					<ActionButton variant="danger" size="sm" on:click={regenerateToken} loading={regeneratingToken} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-4 w-4" />Regenerate</ActionButton>
-				{:else}
-					<ActionButton variant="secondary" size="sm" on:click={() => (confirmRegenerateToken = true)}><RefreshCw slot="icon" class="h-4 w-4" />Regenerate token</ActionButton>
-				{/if}
-			</div>
 		</section>
 
-		<details class="border-y border-gray-100 py-3 dark:border-neutral-800">
+		<details class="border-y border-[color:var(--workspace-divider)] py-3">
 			<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Agent setup</summary>
 			<div class="mt-3">
 				<pre class="console-surface max-h-96 overflow-auto whitespace-pre-wrap p-4"><code>{setupPrompt}</code></pre>
