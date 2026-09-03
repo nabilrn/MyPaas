@@ -17,12 +17,26 @@ runtime = "crun"
 crun = ["/usr/bin/crun"]
 EOF
 
-# Use the distro package's native socket activation instead of launching
-# `podman system service` in the background. During GitHub's Ubuntu 24.04
-# Podman rollback, the service process can stay alive without binding its
-# socket, while systemd can create the listening socket deterministically.
+# Some hosted-runner revisions still carry stale Podman 5.8.4 systemd units
+# under /usr/local even after the distro 4.9.3 package is installed. Remove
+# those overrides so systemd resolves the units shipped by the apt package.
+sudo rm -f /usr/local/lib/systemd/system/podman.service \
+  /usr/local/lib/systemd/system/podman.socket
 sudo systemctl daemon-reload
+
+# Let systemd own creation of /run/podman/podman.sock. This avoids the runner
+# transition failure where a manually launched `podman system service` stays
+# alive but never binds the socket.
 sudo systemctl start podman.socket
+
+socket_unit="$(systemctl show -p FragmentPath --value podman.socket)"
+service_unit="$(systemctl show -p FragmentPath --value podman.service)"
+if [[ "$socket_unit" != "/usr/lib/systemd/system/podman.socket" || "$service_unit" != "/usr/lib/systemd/system/podman.service" ]]; then
+  echo "Podman systemd units are not the distro package units" >&2
+  echo "socket unit: $socket_unit" >&2
+  echo "service unit: $service_unit" >&2
+  exit 1
+fi
 
 ready=false
 for _ in $(seq 1 40); do
