@@ -2,6 +2,4 @@
 	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
 </script>
 
-<div class="px-4">
-	<ProjectSettingsSection section="resources" />
-</div>
+<ProjectSettingsSection section="resources" />
