@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import adminLayout from "../../routes/admin/+layout.svelte?raw";
+import adminSettingsPage from "../../routes/admin/settings/+page.svelte?raw";
+import adminUsersPage from "../../routes/admin/users/+page.svelte?raw";
+import adminBackupPage from "../../routes/admin/backup/+page.svelte?raw";
+import adminMigrationPage from "../../routes/admin/migration/+page.svelte?raw";
+import adminMcpPage from "../../routes/admin/mcp/+page.svelte?raw";
+import adminAuditPage from "../../routes/admin/audit-logs/+page.svelte?raw";
 import createProjectPage from "../../routes/projects/new/+page.svelte?raw";
 import projectLogsPage from "../../routes/projects/[id]/logs/+page.svelte?raw";
 import projectLayout from "../../routes/projects/[id]/+layout.svelte?raw";
@@ -76,11 +82,10 @@ describe("administration navigation contract", () => {
     expect(appHeader).toContain("administrationNavItemForPath");
   });
 
-  it("uses the Project Settings geometry for the admin shell without changing excluded routes", () => {
+  it("uses the shared admin shell without changing excluded project routes", () => {
     expect(adminLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
     expect(adminLayout).toContain("lg:border-r");
     expect(adminLayout).toContain("min-w-0 px-4 py-5 sm:px-5 lg:px-6");
-    expect(adminLayout).toContain("mx-auto max-w-6xl space-y-4");
     expect(adminLayout).toContain("currentSection.title");
     expect(adminLayout).toContain("currentSection.description");
     expect(adminLayout).toContain(".admin-content > .page-shell");
@@ -95,14 +100,56 @@ describe("administration navigation contract", () => {
     expect(projectLogsPage).not.toContain("AdminSidebar");
   });
 
-  it("provides simple page-level headings for every administration section", () => {
+  it("keeps administration page copy short", () => {
     expect(administrationNavItemForPath("/admin/settings")).toMatchObject({
-      title: "General information",
-      description: "Platform settings and host configuration.",
+      title: "General",
+      description: "Host and platform defaults.",
     });
-    expect(administrationNavItemForPath("/admin/mcp").title).toBe("MCP integration");
-    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe(
-      "Review authenticated changes made through the control plane.",
+    expect(administrationNavItemForPath("/admin/users").description).toBe(
+      "Manage owner access.",
     );
+    expect(administrationNavItemForPath("/admin/mcp").title).toBe("MCP");
+    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe(
+      "Review control-plane changes.",
+    );
+  });
+
+  it("uses task-first administration content instead of nested panel narration", () => {
+    expect(adminSettingsPage).not.toContain("SectionPanel");
+    expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
+    expect(adminSettingsPage).toContain("Update MyPaaS");
+    expect(adminSettingsPage).toContain("may restart the control plane");
+
+    expect(adminUsersPage).not.toContain('title="Owners"');
+    expect(adminUsersPage).not.toContain('title="Add owner"');
+    expect(adminUsersPage).toContain('role="dialog"');
+    expect(adminUsersPage).not.toContain("Whitelisted access");
+
+    expect(adminBackupPage).not.toContain("S3 automated backup");
+    expect(adminBackupPage).toContain("Configure storage");
+    expect(adminBackupPage).toContain('role="dialog"');
+
+    expect(adminMigrationPage).not.toContain("Migration safety");
+    expect(adminMigrationPage).toContain("What is included?");
+    expect(adminMigrationPage).toContain("Prepare package");
+    expect(adminMigrationPage).toContain("Running container projects pause briefly");
+
+    expect(adminMcpPage).not.toContain("MCP access");
+    expect(adminMcpPage).not.toContain("readonly");
+    expect(adminMcpPage).toContain("Reveal API token");
+    expect(adminMcpPage).toContain("Agent setup");
+
+    expect(adminAuditPage).not.toContain("System event log");
+    expect(adminAuditPage).not.toContain("!bg-gray-50/70");
+    expect(adminAuditPage).toContain("Audit logs copied");
+  });
+
+  it("keeps administration dialogs keyboard reachable", () => {
+    for (const pageSource of [adminUsersPage, adminBackupPage]) {
+      expect(pageSource).toContain("trapDialogFocus");
+      expect(pageSource).toContain("event.key === 'Escape'");
+      expect(pageSource).toContain('tabindex="-1"');
+      expect(pageSource).toContain("ReturnFocus");
+    }
   });
 });
