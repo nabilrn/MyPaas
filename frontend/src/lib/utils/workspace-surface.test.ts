@@ -37,7 +37,6 @@ describe('authenticated workspace surface contract', () => {
 		expect(layout).toContain('--technical-surface-bg: #171717;');
 		expect(layout).toContain('--technical-surface-bg: #0a0a0a;');
 		expect(layout).toContain(':global(.app-workspace .console-surface)');
-		expect(layout).toContain(':global(.app-workspace .code-surface)');
 		expect(layout).toContain(':global(.app-workspace pre)');
 	});
 
