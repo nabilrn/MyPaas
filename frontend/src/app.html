@@ -6,14 +6,16 @@
 		<title>MyPaas</title>
 		<script>
 			(() => {
+				let stored = null;
 				try {
-					const stored = localStorage.getItem('theme');
-					const dark = stored === 'dark' || (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-					document.documentElement.classList.toggle('dark', dark);
-					document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+					stored = localStorage.getItem('theme');
 				} catch {
-					// Storage/media access may be restricted. CSS falls back to the light root tokens.
+					// Storage may be unavailable by browser policy; system preference still applies.
 				}
+				const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
+				const dark = stored === 'dark' || (stored !== 'light' && systemDark);
+				document.documentElement.classList.toggle('dark', dark);
+				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 			})();
 		</script>
 		<script>
