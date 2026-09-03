@@ -23,6 +23,30 @@
 		--app-warning: #d97706;
 		--app-info: #0284c7;
 		--app-success: #059669;
+
+		/* Control tokens: idle controls stay quiet; interaction raises contrast. */
+		--control-bg: color-mix(in oklch, var(--app-surface) 90%, var(--app-surface-muted));
+		--control-bg-hover: var(--app-surface);
+		--control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 82%, var(--app-surface));
+		--control-border: color-mix(in oklch, var(--app-border) 68%, transparent);
+		--control-border-hover: color-mix(in oklch, var(--app-border-strong) 88%, var(--app-border));
+		--control-border-focus: var(--app-ink);
+		--control-text: var(--app-ink);
+		--control-placeholder: color-mix(in oklch, var(--app-subtle) 82%, transparent);
+		--control-disabled-text: color-mix(in oklch, var(--app-subtle) 82%, var(--app-surface));
+		--control-focus-ring: color-mix(in oklch, var(--app-accent-soft) 58%, transparent);
+
+		/* Table tokens: content should dominate the grid and chrome. */
+		--table-bg: var(--app-surface);
+		--table-toolbar-bg: color-mix(in oklch, var(--app-surface) 96%, var(--app-surface-muted));
+		--table-header-bg: color-mix(in oklch, var(--app-surface-muted) 38%, var(--app-surface));
+		--table-header-text: color-mix(in oklch, var(--app-muted) 88%, var(--app-ink));
+		--table-text: var(--app-muted);
+		--table-divider: color-mix(in oklch, var(--app-border) 34%, transparent);
+		--table-divider-vertical: color-mix(in oklch, var(--app-border) 22%, transparent);
+		--table-row-hover: color-mix(in oklch, var(--app-surface-muted) 38%, var(--app-surface));
+		--table-row-selected: color-mix(in oklch, var(--app-surface-muted) 68%, var(--app-surface));
+
 		--chart-cpu: #0ea5e9;
 		--chart-cpu-soft: rgb(14 165 233 / 0.12);
 		--chart-memory: #10b981;
@@ -55,6 +79,28 @@
 		--app-warning: #fbbf24;
 		--app-info: #38bdf8;
 		--app-success: #34d399;
+
+		--control-bg: color-mix(in oklch, var(--app-surface) 88%, var(--app-bg));
+		--control-bg-hover: color-mix(in oklch, var(--app-surface) 94%, var(--app-surface-muted));
+		--control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-bg));
+		--control-border: color-mix(in oklch, var(--app-border) 62%, transparent);
+		--control-border-hover: color-mix(in oklch, var(--app-border-strong) 86%, var(--app-border));
+		--control-border-focus: var(--app-ink);
+		--control-text: var(--app-ink);
+		--control-placeholder: color-mix(in oklch, var(--app-subtle) 78%, transparent);
+		--control-disabled-text: color-mix(in oklch, var(--app-subtle) 78%, var(--app-bg));
+		--control-focus-ring: color-mix(in oklch, var(--app-accent-soft) 62%, transparent);
+
+		--table-bg: var(--app-surface);
+		--table-toolbar-bg: color-mix(in oklch, var(--app-surface) 96%, var(--app-bg));
+		--table-header-bg: color-mix(in oklch, var(--app-surface-muted) 34%, var(--app-surface));
+		--table-header-text: color-mix(in oklch, var(--app-muted) 90%, var(--app-ink));
+		--table-text: var(--app-muted);
+		--table-divider: color-mix(in oklch, var(--app-border) 38%, transparent);
+		--table-divider-vertical: color-mix(in oklch, var(--app-border) 24%, transparent);
+		--table-row-hover: color-mix(in oklch, var(--app-surface-muted) 46%, var(--app-surface));
+		--table-row-selected: color-mix(in oklch, var(--app-surface-muted) 76%, var(--app-surface));
+
 		--chart-cpu: #38bdf8;
 		--chart-cpu-soft: rgb(56 189 248 / 0.16);
 		--chart-memory: #34d399;
@@ -137,18 +183,44 @@
 		box-shadow: 0 12px 28px rgb(0 0 0 / 0.14);
 	}
 
-	/* Fields */
+	/* Fields: neutral at rest, stronger only while interacting. */
 	.field {
-		border: 1px solid var(--app-border);
+		min-height: 2.25rem;
+		border: 1px solid var(--control-border);
 		border-radius: 0.375rem;
-		background: var(--app-surface);
-		color: var(--app-ink);
-		@apply px-3 py-2 text-sm outline-none transition-colors placeholder:text-gray-400 dark:placeholder:text-gray-500;
+		background: var(--control-bg);
+		color: var(--control-text);
+		box-shadow: none;
+		@apply px-3 py-1.5 text-sm outline-none transition-colors;
+		transition-property: border-color, background-color, box-shadow, color;
+	}
+
+	.field::placeholder {
+		color: var(--control-placeholder);
+	}
+
+	.field:hover:not(:disabled):not([readonly]) {
+		border-color: var(--control-border-hover);
+		background: var(--control-bg-hover);
 	}
 
 	.field:focus {
-		border-color: var(--app-accent);
-		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 72%, transparent);
+		border-color: var(--control-border-focus);
+		background: var(--control-bg-hover);
+		box-shadow: 0 0 0 3px var(--control-focus-ring);
+	}
+
+	.field[readonly] {
+		border-color: var(--control-border);
+		background: var(--control-bg-disabled);
+		color: var(--app-muted);
+	}
+
+	.field:disabled {
+		border-color: var(--control-border);
+		background: var(--control-bg-disabled);
+		color: var(--control-disabled-text);
+		cursor: not-allowed;
 	}
 
 	.field-label {
@@ -166,8 +238,8 @@
 	}
 
 	.app-focus:focus-visible {
-		border-color: var(--app-accent);
-		box-shadow: 0 0 0 1px var(--app-accent), 0 0 0 4px color-mix(in oklch, var(--app-accent-soft) 72%, transparent);
+		border-color: var(--control-border-focus);
+		box-shadow: 0 0 0 3px var(--control-focus-ring);
 	}
 
 	/* Panel chrome */
@@ -187,52 +259,72 @@
 		@apply mt-0.5 max-w-2xl text-[0.8125rem];
 	}
 
+	/* Table-scoped controls form one toolbar directly above column headers. */
+	.table-toolbar {
+		border-bottom: 1px solid var(--table-divider);
+		background: var(--table-toolbar-bg);
+		@apply flex min-h-[3.5rem] w-full flex-wrap items-center justify-end gap-2 px-4 py-2.5 lg:px-5;
+	}
+
+	.table-toolbar .field {
+		min-height: 2.25rem;
+	}
+
 	/* Data tables: geometry comes from each table's colgroup, not browser heuristics. */
 	.data-table {
 		border-collapse: separate;
 		border-spacing: 0;
+		background: var(--table-bg);
 		@apply min-w-full text-sm;
 	}
 
 	.data-table thead th {
-		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 52%, transparent);
-		background: color-mix(in oklch, var(--app-surface-muted) 52%, var(--app-surface));
-		color: var(--app-subtle);
+		border-bottom: 1px solid var(--table-divider);
+		background: var(--table-header-bg);
+		color: var(--table-header-text);
 		text-align: center;
 		white-space: nowrap;
 		@apply px-3 py-2 text-[0.8125rem] font-medium;
 	}
 
-	.data-table thead th.text-right,
-	.data-table thead th.text-center,
 	.data-table thead th.text-left {
+		text-align: left;
+	}
+
+	.data-table thead th.text-center {
 		text-align: center;
 	}
 
+	.data-table thead th.text-right {
+		text-align: right;
+	}
+
 	.data-table tbody td {
-		color: var(--app-muted);
+		color: var(--table-text);
 		@apply px-3 py-2.5 align-middle;
 	}
 
 	.data-table tbody tr {
+		background: var(--table-bg);
 		@apply transition-colors;
 	}
 
 	.data-table tbody tr:hover {
-		background: color-mix(in oklch, var(--app-surface-muted) 48%, var(--app-surface));
+		background: var(--table-row-hover);
 	}
 
-	table > thead > tr > th:not(:last-child),
-	table > tbody > tr > td:not(:last-child) {
-		border-right: 1px solid color-mix(in oklch, var(--app-border) 34%, transparent);
+	.data-table tbody tr[aria-selected='true'],
+	.data-table tbody tr[data-selected='true'] {
+		background: var(--table-row-selected);
 	}
 
-	table > tbody > tr:not(:last-child) > td {
-		border-bottom: 1px solid color-mix(in oklch, var(--app-border) 38%, transparent);
+	.data-table > thead > tr > th:not(:last-child),
+	.data-table > tbody > tr > td:not(:last-child) {
+		border-right: 1px solid var(--table-divider-vertical);
 	}
 
-	table > thead > tr > th {
-		text-align: center;
+	.data-table > tbody > tr:not(:last-child) > td {
+		border-bottom: 1px solid var(--table-divider);
 	}
 
 	/* Status */
@@ -291,6 +383,12 @@
 
 	.metric-value {
 		font-variant-numeric: tabular-nums;
+	}
+
+	@media (any-pointer: coarse) {
+		.field {
+			min-height: 2.75rem;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
