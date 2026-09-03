@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import overview from '../../routes/projects/[id]/+page.svelte?raw';
+import projectLayout from '../../routes/projects/[id]/+layout.svelte?raw';
 import settings from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import environmentRoute from '../../routes/projects/[id]/env/+page.svelte?raw';
+import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
 import observability from '../components/ProjectObservability.svelte?raw';
 import runtimeUsageBar from '../components/RuntimeUsageBar.svelte?raw';
 
@@ -23,12 +26,14 @@ describe('project detail cleanup contract', () => {
 		expect(overview).toContain('border-[color:var(--workspace-divider)]');
 	});
 
-	it('owns environment management inside the settings sub-navigation', () => {
-		expect(settings).toContain("'environment'");
-		expect(settings).toContain('KeyRound');
-		expect(settings).toContain('ProjectEnvironmentSettings');
-		expect(settings).toContain("activeSection === 'environment'");
-		expect(settings).toContain('projectId={project.id}');
+	it('owns environment management on the project env route instead of settings', () => {
+		expect(projectLayout).toContain('ProjectDetailSidebar');
+		expect(projectDetailSidebar).toContain("label: 'Environment'");
+		expect(projectDetailSidebar).toContain('`${base}/env`');
+		expect(environmentRoute).toContain('ProjectEnvironmentSettings');
+		expect(environmentRoute).toContain('projectId={$page.params.id');
+		expect(settings).not.toContain('ProjectEnvironmentSettings');
+		expect(projectDetailSidebar).not.toContain('settings/environment');
 	});
 
 	it('shows runtime as bounded low-contrast allocation bars instead of line charts', () => {
