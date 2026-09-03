@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { Plus, RefreshCw } from '@lucide/svelte';
+	import { Plus, RefreshCw, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
-	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
@@ -22,7 +21,6 @@
 	$: visibleUsers = users.slice(pageStart, pageStart + pageSize);
 	$: hasNext = pageStart + pageSize < users.length;
 	$: canAdd = Boolean(addEmail.trim() && !savingUser);
-	$: addDisabledReason = addEmail.trim() ? '' : 'Email is required before adding an owner.';
 
 	onMount(load);
 
@@ -54,6 +52,12 @@
 		}
 	}
 
+	function closeAddOwner() {
+		if (savingUser) return;
+		adding = false;
+		addEmail = '';
+	}
+
 	function initial(email: string) {
 		return email.trim().slice(0, 1).toUpperCase() || '?';
 	}
@@ -68,32 +72,13 @@
 </svelte:head>
 
 <div class="page-shell">
-	{#if adding}
-		<SectionPanel title="Add owner" description="Whitelist an owner for GitHub OAuth and control-plane access.">
-			<form class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-start" on:submit|preventDefault={handleAdd}>
-				<div>
-					<label class="field-label" for="user-email">Email</label>
-					<input id="user-email" type="email" bind:value={addEmail} placeholder="user@example.com" class="field w-full" />
-					{#if addDisabledReason}<p class="field-hint">{addDisabledReason}</p>{/if}
-				</div>
-				<ActionButton variant="primary" type="submit" className="md:mt-[1.45rem]" loading={savingUser} loadingLabel="Adding" disabled={!canAdd}>
-					<Plus slot="icon" class="h-4 w-4" />
-					Add
-				</ActionButton>
-				<ActionButton variant="ghost" className="md:mt-[1.45rem]" on:click={() => (adding = false)} disabled={savingUser}>Cancel</ActionButton>
-			</form>
-		</SectionPanel>
-	{/if}
-
 	<TableShell
-		title="Owners"
-		description="Whitelisted access to this MyPaaS control plane."
 		{loading}
 		loadingRows={3}
 		{error}
 		empty={users.length === 0}
-		emptyTitle="No owners are whitelisted yet."
-		emptyDescription="Add an owner to allow GitHub OAuth sign-in."
+		emptyTitle="No owners yet."
+		emptyDescription="Add an owner to allow sign-in."
 		on:retry={load}
 	>
 		<svelte:fragment slot="actions">
@@ -102,20 +87,19 @@
 					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
 					Refresh
 				</ActionButton>
-				<ActionButton variant="primary" size="xs" disabled={adding} on:click={() => (adding = true)}>
+				<ActionButton variant="primary" size="xs" on:click={() => (adding = true)}>
 					<Plus slot="icon" class="h-3.5 w-3.5" />
 					Add owner
 				</ActionButton>
 			</div>
 		</svelte:fragment>
 
-		<table class="data-table table-fixed min-w-[48rem]">
+		<table class="data-table table-fixed min-w-[42rem]">
 			<colgroup>
-				<col class="w-[42%]" />
-				<col class="w-[14%]" />
-				<col class="w-[14%]" />
-				<col class="w-[14%]" />
+				<col class="w-[46%]" />
 				<col class="w-[16%]" />
+				<col class="w-[19%]" />
+				<col class="w-[19%]" />
 			</colgroup>
 			<thead>
 				<tr>
@@ -123,7 +107,6 @@
 					<th>Role</th>
 					<th>Last login</th>
 					<th>Added</th>
-					<th>Access</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -134,7 +117,7 @@
 								{#if user.avatarUrl}
 									<img src={user.avatarUrl} alt="" class="h-8 w-8 shrink-0 rounded-full object-cover" />
 								{:else}
-									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-gray-300">{initial(user.email)}</div>
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 text-xs font-semibold text-gray-500 dark:border-neutral-800 dark:text-gray-300">{initial(user.email)}</div>
 								{/if}
 								<div class="min-w-0">
 									<p class="truncate text-sm font-medium text-gray-950 dark:text-white" title={user.githubUsername ?? 'Not logged in yet'}>{user.githubUsername ?? 'Not logged in yet'}</p>
@@ -150,7 +133,6 @@
 						</td>
 						<td class="whitespace-nowrap text-center text-sm tabular-nums">{formatDate(user.lastLoginAt)}</td>
 						<td class="whitespace-nowrap text-center text-sm tabular-nums">{formatDate(user.createdAt)}</td>
-						<td class="whitespace-nowrap text-center text-xs text-gray-500 dark:text-gray-400">Protected</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -160,3 +142,25 @@
 		</svelte:fragment>
 	</TableShell>
 </div>
+
+{#if adding}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button type="button" class="absolute inset-0 cursor-default bg-gray-950/45" aria-label="Close add owner" on:click={closeAddOwner}></button>
+		<div class="overlay relative w-full max-w-lg" role="dialog" aria-modal="true" aria-labelledby="add-owner-title">
+			<div class="panel-header flex items-start justify-between gap-3">
+				<h2 id="add-owner-title" class="panel-title">Add owner</h2>
+				<ActionButton variant="ghost" size="xs" on:click={closeAddOwner} disabled={savingUser}><X slot="icon" class="h-4 w-4" />Close</ActionButton>
+			</div>
+			<form class="space-y-4 p-4" on:submit|preventDefault={handleAdd}>
+				<div>
+					<label class="field-label" for="user-email">Email</label>
+					<input id="user-email" type="email" required bind:value={addEmail} placeholder="user@example.com" class="field w-full" />
+				</div>
+				<div class="flex justify-end gap-2">
+					<ActionButton variant="ghost" on:click={closeAddOwner} disabled={savingUser}>Cancel</ActionButton>
+					<ActionButton variant="primary" type="submit" loading={savingUser} loadingLabel="Adding" disabled={!canAdd}>Add owner</ActionButton>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
