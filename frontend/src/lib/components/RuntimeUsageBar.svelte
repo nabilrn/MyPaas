@@ -3,7 +3,6 @@
 	export let used = 0;
 	export let limit = 0;
 	export let valueLabel = '';
-	export let allocationLabel = '';
 
 	$: safeLimit = Math.max(limit, 0);
 	$: ratio = safeLimit > 0 ? Math.max(0, Math.min(1, used / safeLimit)) : 0;
@@ -31,10 +30,5 @@
 			class="h-full border-r border-gray-400/40 bg-gray-300/70 dark:border-neutral-500/40 dark:bg-neutral-700/80"
 			style={`width: ${ratio * 100}%`}
 		></div>
-	</div>
-
-	<div class="mt-1.5 flex items-center justify-between gap-3 text-[11px] text-gray-400 dark:text-gray-500">
-		<span>Allocated resource</span>
-		<span class="font-mono">{allocationLabel}</span>
 	</div>
 </article>
