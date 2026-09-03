@@ -172,7 +172,9 @@ class InstallConfigTest(unittest.TestCase):
         html = WIZARD.form_html().decode("utf-8")
 
         self.assertTrue(Path(WIZARD.BRAND_LOGO_PATH).is_file())
-        self.assertIn('/brand/logo.png', html)
+        self.assertTrue(WIZARD.BRAND_LOGO_PATH.endswith("mypaas-logo.svg"))
+        self.assertIn('/brand/logo.svg', html)
+        self.assertNotIn('/brand/logo.png', html)
         self.assertIn('Inter Variable', html)
         self.assertIn('Set up MyPaas', html)
         self.assertIn('Nothing is saved until the final step.', html)
@@ -184,6 +186,7 @@ class InstallConfigTest(unittest.TestCase):
     def test_success_html_renders_auto_close_script(self) -> None:
         html = WIZARD.success_html(title="Done", message="Saved.").decode("utf-8")
 
+        self.assertIn('/brand/logo.svg', html)
         self.assertIn("setTimeout(() => {", html)
         self.assertIn("window.close();", html)
         self.assertIn("}, 4000);", html)
