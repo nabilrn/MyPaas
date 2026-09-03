@@ -1,9 +1,20 @@
+export interface RuntimeContainerNetwork {
+	name: string;
+	ipAddress: string;
+}
+
 export interface RuntimeContainer {
 	id: string;
 	name: string;
 	image: string;
 	state: string;
 	status: string;
+	uptime: string;
+	health: string;
+	ports: string;
+	restartCount: number;
+	detailsAvailable: boolean;
+	networks: RuntimeContainerNetwork[];
 	composeProject: string;
 	service: string;
 	cpu: number;
