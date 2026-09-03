@@ -9,6 +9,7 @@
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
 	import ProjectEffectiveConfiguration from '$components/ProjectEffectiveConfiguration.svelte';
 	import ProjectEnvironmentSettings from '$components/ProjectEnvironmentSettings.svelte';
+	import ProjectSettingsNavItem from '$components/ProjectSettingsNavItem.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
@@ -31,7 +32,6 @@
 	let lastRepoInspectKey = '';
 	let activeSection: SettingsSection = 'general';
 
-	let name = '';
 	let branch = '';
 	let imageRef = '';
 	let appPort = 3000;
@@ -121,7 +121,6 @@
 				};
 				resourceProfiles = resourceProfiles.map((profile) => ({ ...profile, ...(configured[profile.id] ?? {}) }));
 			}
-			name = project.name;
 			branch = project.branch;
 			imageRef = project.imageRef ?? '';
 			appPort = project.appPort;
@@ -380,24 +379,16 @@
 		<ErrorState title="Could not load settings" message={loadError || 'Project not found'} on:retry={() => void load()} />
 	</div>
 {:else if project}
-	<div class="grid min-h-[calc(100vh-11rem)] border-t border-gray-100 dark:border-neutral-900 lg:grid-cols-[15rem_minmax(0,1fr)]">
-		<aside class="border-b border-gray-100 bg-gray-50/35 px-3 py-4 dark:border-neutral-900 dark:bg-neutral-950/40 lg:border-b-0 lg:border-r">
+	<div class="grid min-h-[calc(100vh-11rem)] lg:grid-cols-[15rem_minmax(0,1fr)]">
+		<aside class="border-b border-gray-100 px-3 py-4 dark:border-neutral-900 lg:border-b-0 lg:border-r">
 			<nav aria-label="Project settings" class="space-y-5 lg:sticky lg:top-4">
 				<div>
 					<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Configuration</p>
 					<div class="mt-2 space-y-1">
-						<button type="button" on:click={() => (activeSection = 'general')} aria-current={activeSection === 'general' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'general' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
-							<Settings2 class="h-4 w-4" aria-hidden="true" /> General
-						</button>
-						<button type="button" on:click={() => (activeSection = 'source')} aria-current={activeSection === 'source' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'source' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
-							<GitBranch class="h-4 w-4" aria-hidden="true" /> Source
-						</button>
-						<button type="button" on:click={() => (activeSection = 'resources')} aria-current={activeSection === 'resources' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'resources' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
-							<Box class="h-4 w-4" aria-hidden="true" /> Resources
-						</button>
-						<button type="button" on:click={() => (activeSection = 'environment')} aria-current={activeSection === 'environment' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'environment' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
-							<KeyRound class="h-4 w-4" aria-hidden="true" /> Environment
-						</button>
+						<ProjectSettingsNavItem active={activeSection === 'general'} label="General" icon={Settings2} on:click={() => (activeSection = 'general')} />
+						<ProjectSettingsNavItem active={activeSection === 'source'} label="Source" icon={GitBranch} on:click={() => (activeSection = 'source')} />
+						<ProjectSettingsNavItem active={activeSection === 'resources'} label="Resources" icon={Box} on:click={() => (activeSection = 'resources')} />
+						<ProjectSettingsNavItem active={activeSection === 'environment'} label="Environment" icon={KeyRound} on:click={() => (activeSection = 'environment')} />
 					</div>
 				</div>
 
@@ -405,9 +396,7 @@
 					<div class="border-t border-gray-100 pt-4 dark:border-neutral-900">
 						<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Integrations</p>
 						<div class="mt-2">
-							<button type="button" on:click={() => (activeSection = 'webhook')} aria-current={activeSection === 'webhook' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'webhook' ? 'bg-gray-100 text-gray-950 dark:bg-neutral-900 dark:text-white' : 'text-gray-600 hover:bg-gray-100/70 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900/70 dark:hover:text-white'}">
-								<Webhook class="h-4 w-4" aria-hidden="true" /> Webhook
-							</button>
+							<ProjectSettingsNavItem active={activeSection === 'webhook'} label="Webhook" icon={Webhook} on:click={() => (activeSection = 'webhook')} />
 						</div>
 					</div>
 				{/if}
@@ -415,9 +404,7 @@
 				<div class="border-t border-gray-100 pt-4 dark:border-neutral-900">
 					<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Advanced</p>
 					<div class="mt-2">
-						<button type="button" on:click={() => (activeSection = 'danger')} aria-current={activeSection === 'danger' ? 'page' : undefined} class="app-focus flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors {activeSection === 'danger' ? 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' : 'text-gray-600 hover:bg-red-50 hover:text-red-700 dark:text-gray-400 dark:hover:bg-red-950/20 dark:hover:text-red-300'}">
-							<CircleAlert class="h-4 w-4" aria-hidden="true" /> Danger zone
-						</button>
+						<ProjectSettingsNavItem active={activeSection === 'danger'} danger label="Danger zone" icon={CircleAlert} on:click={() => (activeSection = 'danger')} />
 					</div>
 				</div>
 			</nav>
@@ -427,24 +414,11 @@
 			{#if activeSection === 'general'}
 				<div class="mx-auto max-w-6xl space-y-4">
 					<div>
-						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">General settings</h1>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Project identity and effective control-plane configuration.</p>
+						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">General information</h1>
+						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Basic information about this project.</p>
 					</div>
 
 					<ProjectEffectiveConfiguration {project} publicUrl={effectivePublicURL} />
-
-					<SectionPanel title="Project" description="Project identity is fixed after creation.">
-						<div class="grid gap-4 sm:grid-cols-2">
-							<div>
-								<label class="field-label" for="pname">Project name</label>
-								<input id="pname" type="text" value={name} class="field w-full bg-gray-50 text-gray-500 dark:bg-neutral-900 dark:text-gray-400" readonly />
-							</div>
-							<div>
-								<label class="field-label" for="publicUrl">Public route</label>
-								<input id="publicUrl" type="text" value={effectivePublicURL} class="field w-full bg-gray-50 font-mono text-gray-500 dark:bg-neutral-900 dark:text-gray-400" readonly />
-							</div>
-						</div>
-					</SectionPanel>
 				</div>
 			{:else if activeSection === 'source'}
 				<div class="mx-auto max-w-6xl space-y-4">
