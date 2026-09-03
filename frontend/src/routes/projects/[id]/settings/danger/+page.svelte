@@ -7,6 +7,14 @@
 </div>
 
 <style>
+	.project-settings-danger :global(.space-y-5 > :first-child) {
+		padding-inline: 1.25rem;
+	}
+
+	.project-settings-danger :global(.space-y-5 > section.border-y) {
+		padding-inline: 1rem;
+	}
+
 	.project-settings-danger :global(.space-y-5 > :not([hidden]) ~ :not([hidden])) {
 		margin-top: 0.75rem;
 	}

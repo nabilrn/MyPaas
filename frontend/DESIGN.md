@@ -51,11 +51,45 @@ For route families with a secondary sidebar, the content column owns exactly one
 - horizontal: **14px** (`px-3.5`);
 - vertical: **12px** (`py-3`).
 
-The Project Overview geometry is the reference implementation.
+The `/projects/:id` project-detail layout is the reference implementation for this parent inset.
 
 Child routes MUST NOT add another route-level outer padding wrapper. A nested `page-shell` inside these families is normalized to full width with zero extra padding.
 
 Do not compensate for inconsistent child anatomy by changing this outer inset route-by-route.
+
+### Canonical project-detail horizontal gutter
+
+For every `/projects/:id/*` route, the final left/right content alignment is defined by the geometry already used by **Overview, Deployments, and Logs**. Those three routes are the canonical visual reference for project-detail horizontal spacing.
+
+The parent `main` inset and the inner content gutter are two separate layers:
+
+- parent project `main`: **14px** horizontal (`px-3.5`);
+- ordinary section/body/row content inside the route surface: **16px** horizontal (`px-4` or equivalent);
+- shared page/section heading bars may use **20px** horizontal (`px-5` / `.panel-header`) when matching Deployments/Logs header geometry.
+
+Rules:
+
+- first-level route surfaces and divider lines remain full width inside the parent project content column;
+- do **not** fix alignment by wrapping the entire leaf page in another `px-4`, because that incorrectly indents the surface/divider itself;
+- place horizontal padding on the readable content, heading, toolbar, or row inside the surface;
+- Environment, Database data view, General, Source, Resources, Webhook, and Danger zone MUST align their readable content to the same gutter family as Overview, Deployments, and Logs;
+- Schema Design remains a full-canvas exception because it deliberately leaves the ordinary project-detail surface.
+
+### Canonical Administration horizontal gutter
+
+Administration uses the **same horizontal rhythm** as the project-detail reference above. `/admin/settings`, `/admin/users`, `/admin/backup`, `/admin/migration`, `/admin/mcp`, and `/admin/audit-logs` do not define a separate spacing system.
+
+- parent admin `main`: **14px** horizontal (`px-3.5`);
+- Administration route heading: **20px** horizontal (`px-5`);
+- ordinary admin section rows/body content: **16px** horizontal (`px-4` or equivalent);
+- shared `TableShell` / `.panel-header` / toolbar geometry remains canonical for Users and Audit logs;
+- first-level section borders/dividers remain full width inside the admin content column.
+
+Do not zero out row padding in Administration to make a section look wider. The surface may be full width; the readable content inside it still follows the 16px/20px gutter contract.
+
+If a future Administration page looks horizontally inconsistent, compare its heading/body alignment against project Overview, Deployments, and Logs before inventing a route-local padding value.
+
+If a future project-detail page looks horizontally inconsistent, compare it against `/projects/:id`, `/projects/:id/deployments`, and `/projects/:id/logs` before changing any padding value.
 
 ---
 
@@ -77,7 +111,8 @@ A normal leaf page heading is:
 
 - title: `text-lg`, semibold;
 - subtitle: at most one short sentence;
-- left aligned to the same x-origin as all sections below it;
+- left aligned to the same x-origin as the readable section content below it;
+- horizontally padded using the canonical project-detail gutter when inside `/projects/:id/*`;
 - separated from following content by deliberate section rhythm, not a floating card.
 
 Do not create a black nested title strip, rounded title card, or second application header inside a route.
@@ -351,13 +386,14 @@ No route should restate data whose canonical owner is a sibling route unless the
 
 ## 14. Administration route contract
 
-Administration uses the same outer geometry for General, Users, Backup, Migration, MCP, and Audit logs.
+Administration uses the same outer geometry and inner readable-content gutters as the project-detail source of truth for General, Users, Backup, Migration, MCP, and Audit logs.
 
-- Parent layout owns route heading/subtitle.
+- Parent layout owns route heading/subtitle and gives it the canonical **20px** horizontal heading gutter.
 - Child pages begin at the same content x-origin.
-- General uses flat rows, not a rounded settings card.
+- Ordinary admin rows use the canonical **16px** horizontal content gutter while their parent border/divider remains full width.
+- General uses flat rows, not a rounded settings card silhouette.
 - Backup/Migration/MCP use the same divider-based section grammar.
-- Users/Audit use the shared table grammar.
+- Users/Audit use the shared table grammar, which already owns its header/toolbar/cell gutters.
 
 MCP token actions that act on the same secret belong in the same row/action group. Avoid separate action strips for Reveal/Copy/Regenerate when they operate on one token.
 

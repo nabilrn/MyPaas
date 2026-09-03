@@ -40,6 +40,13 @@ describe('project settings product contract', () => {
 		expect(generalInformation).not.toContain('dark:bg-neutral-950');
 	});
 
+	it('aligns every settings leaf with the canonical project detail inner gutter', () => {
+		for (const route of [generalRoute, sourceRoute, resourcesRoute, webhookRoute, dangerRoute]) {
+			expect(route).toContain('padding-inline: 1.25rem');
+			expect(route).toContain('padding-inline: 1rem');
+		}
+	});
+
 	it('keeps common source settings simple and automatic', () => {
 		expect(sourceRoute).toContain('section="source"');
 		expect(settings).toContain('Choose what MyPaaS deploys.');

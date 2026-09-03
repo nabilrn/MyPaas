@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import adminLayout from '../../routes/admin/+layout.svelte?raw';
+import adminSettings from '../../routes/admin/settings/+page.svelte?raw';
+import adminBackup from '../../routes/admin/backup/+page.svelte?raw';
+import adminMigration from '../../routes/admin/migration/+page.svelte?raw';
+import adminMcp from '../../routes/admin/mcp/+page.svelte?raw';
+import adminUsers from '../../routes/admin/users/+page.svelte?raw';
+import adminAudit from '../../routes/admin/audit-logs/+page.svelte?raw';
+import designContract from '../../../DESIGN.md?raw';
+
+describe('administration horizontal gutter contract', () => {
+	it('uses the same parent and readable-content gutter family as project detail', () => {
+		expect(adminLayout).toContain('min-w-0 px-3.5 py-3');
+		expect(adminLayout).toContain('px-5 pb-3');
+		expect(adminLayout).toContain('.admin-content > .page-shell > section > h2');
+		expect(adminLayout).toContain('padding-inline: 1.25rem');
+		expect(adminLayout).toContain('padding-left: 1rem !important');
+		expect(adminLayout).toContain('.admin-content > .page-shell > details');
+		expect(adminLayout).not.toContain('padding-left: 0 !important');
+		expect(adminLayout).not.toContain('padding-right: 0 !important');
+	});
+
+	it('keeps admin route surfaces full width while preserving inner row gutters', () => {
+		expect(adminSettings).toContain('px-4 py-3');
+		expect(adminBackup).toContain('border-y border-[color:var(--workspace-divider)]');
+		expect(adminMigration).toContain('border-y border-gray-100');
+		expect(adminMcp).toContain('divide-y divide-[color:var(--workspace-divider)]');
+		expect(adminUsers).toContain('TableShell');
+		expect(adminAudit).toContain('TableShell');
+	});
+
+	it('documents administration as part of the canonical gutter contract', () => {
+		expect(designContract).toContain('Canonical Administration horizontal gutter');
+		expect(designContract).toContain('parent admin `main`: **14px** horizontal (`px-3.5`)');
+		expect(designContract).toContain('Administration route heading: **20px** horizontal (`px-5`)');
+		expect(designContract).toContain('ordinary admin section rows/body content: **16px** horizontal (`px-4` or equivalent)');
+	});
+});

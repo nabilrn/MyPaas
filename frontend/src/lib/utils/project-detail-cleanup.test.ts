@@ -48,14 +48,30 @@ describe('project detail cleanup contract', () => {
 		expect(effectiveConfiguration).not.toContain('sourceSummary');
 	});
 
-	it('uses one parent inset and sensible settings control widths', () => {
+	it('uses Overview, Deployments, and Logs as the horizontal gutter reference', () => {
 		expect(projectLayout).toContain('min-w-0 px-3.5 py-3');
-		expect(settings).not.toContain('px-4');
+		expect(deployControlPanel).toContain('px-4 py-2.5');
+		expect(deploymentsRoute).toContain('TableShell');
+		expect(logsRoute).toContain('SectionPanel');
+		expect(environmentRoute).toContain('class="px-5"');
+		expect(environmentRoute).toContain('padding-inline: 1rem');
+		expect(settings).toContain('padding-inline: 1.25rem');
+		expect(settings).toContain('padding-inline: 1rem');
+		expect(sourceSettings).toContain('padding-inline: 1.25rem');
+		expect(sourceSettings).toContain('padding-inline: 1rem');
+		expect(resourceSettings).toContain('padding-inline: 1.25rem');
+		expect(resourceSettings).toContain('padding-inline: 1rem');
+		expect(dangerSettings).toContain('padding-inline: 1.25rem');
+		expect(dangerSettings).toContain('padding-inline: 1rem');
+		expect(databaseLayout).toContain('px-5 pb-3');
+		expect(effectiveConfiguration).toContain('border-y border-[color:var(--workspace-divider)]');
+		expect(effectiveConfiguration).not.toContain('rounded-lg');
+	});
+
+	it('keeps settings controls at sensible widths', () => {
 		expect(sourceSettings).toContain('max-width: 36rem');
 		expect(resourceSettings).toContain('max-width: 32rem');
 		expect(dangerSettings).toContain('max-width: 36rem');
-		expect(effectiveConfiguration).toContain('border-y border-[color:var(--workspace-divider)]');
-		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
 
 	it('uses semantic resource color and readable overview charts', () => {
