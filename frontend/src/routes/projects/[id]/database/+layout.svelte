@@ -66,7 +66,7 @@
 	</section>
 {:else}
 	<div class="database-data-shell">
-		<header class="flex flex-col gap-3 border-b border-[color:var(--workspace-divider)] px-5 pb-3 sm:flex-row sm:items-start sm:justify-between">
+		<header class="flex flex-col gap-3 border-b border-[color:var(--workspace-divider)] px-5 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="min-w-0">
 				<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Database Studio</h1>
 				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse project data and schema.</p>
