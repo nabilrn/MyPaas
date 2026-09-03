@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Container inventory now serves metadata with a cached bulk telemetry snapshot refreshed in the background, keeping request latency independent of the number of containers.
+- DB Studio SQLite discovery now tolerates Podman-style missing-object errors and Compose-labeled runtime containers for projects whose stable container name is absent; the project database shortcut also labels SQLite explicitly.
+- DB Studio SQLite helper execution now keeps stdin attached so runtime schema requests are delivered correctly through Docker-compatible Podman.
+- DB Studio SQLite helper access now resolves the project's numeric runtime UID/GID and uses it for shared-volume reads and writes, including named users such as `node`.
+
+### Removed
+- Removed the owner-facing Ports/firewall management feature, including its dashboard route, REST endpoints, WebMCP tool, and host firewall helper installation.
+
 ### Added
 - Deployment history readiness diagnostics with an explicit queued, source, build, and service-readiness timeline plus the last captured deployment event.
 - Owner-only short-lived host shell for trusted VM operators, with owner/master whitelist invariants, session timeout/idle cleanup, and audit-safe command handling.

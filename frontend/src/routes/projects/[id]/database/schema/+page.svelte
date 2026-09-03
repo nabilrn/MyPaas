@@ -254,7 +254,7 @@
 {:else if error && !status}
 	<div class="surface overflow-hidden"><ErrorState title="Could not load schema metadata" message={error} on:retry={() => void load()} /></div>
 {:else if !status?.configured}
-	<SectionPanel title="Schema & ERD"><EmptyState title="No database connection found." description="Configure PostgreSQL, MySQL, or MariaDB first." /></SectionPanel>
+	<SectionPanel title="Schema & ERD"><EmptyState title="No database connection found." description="Configure PostgreSQL, MySQL, MariaDB, or a persistent SQLite database first." /></SectionPanel>
 {:else if !status.connected}
 	<SectionPanel title="Schema & ERD"><EmptyState title="Database unavailable." description={status.message} /></SectionPanel>
 {:else}

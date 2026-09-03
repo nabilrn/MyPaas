@@ -75,6 +75,7 @@
 		if (driver === 'postgres') return 'Postgres';
 		if (driver === 'mysql') return 'MySQL';
 		if (driver === 'mariadb') return 'MariaDB';
+		if (driver === 'sqlite') return 'SQLite';
 		return 'Database';
 	}
 </script>

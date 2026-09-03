@@ -14,7 +14,6 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - inspect repositories and support base-directory / monorepo deployments;
 - manage encrypted environment variables, editable per-source resource defaults with fixed safety floors, deployment history, logs, metrics, restart, redeploy, and rollback;
 - monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
-- inspect MyPaaS runtime port allocations and manage a narrow set of MyPaaS-owned UFW allow rules from the owner UI;
 - provide an owner-only short-lived host shell for trusted VM operators;
 - route applications through Caddy with derived project hostnames;
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
@@ -44,24 +43,9 @@ Dockerfile and Compose are the explicit escape hatches for applications with cus
 
 ## Container monitoring
 
-The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include CPU and memory samples. Search, state/runtime filters, and pagination keep larger hosts usable without adding a second observability stack.
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include periodically refreshed CPU and memory samples. Metadata is loaded independently from telemetry so larger hosts remain responsive without adding a second observability stack.
 
 The host-wide inventory is intentionally read-only. Application lifecycle stays project-scoped so stopping a project preserves the runtime state required by later Start, Restart, and redeploy operations.
-
-## Port management
-
-The Ports page distinguishes two things:
-
-- **project bindings** — the runtime ports allocated by MyPaaS, normally bound locally and exposed to HTTP clients through Caddy;
-- **managed firewall rules** — explicit UFW allow rules created by MyPaaS on the host.
-
-The firewall control is intentionally narrow:
-
-- owner-only;
-- MyPaaS never enables or disables UFW;
-- SSH `22/tcp` and Caddy `80/tcp` / `443/tcp` are protected;
-- only rules tagged `mypaas-managed` are removable from the UI;
-- arbitrary firewall commands and arbitrary rule editing are not exposed.
 
 ## Host shell
 
@@ -118,7 +102,6 @@ flowchart TB
     API --> Postgres[("PostgreSQL")]
     API --> Engine["Podman default / Docker compatibility"]
     API --> Statd["optional mypaas-statd"]
-    API --> Firewall["bounded host firewall helper"]
     Engine --> Runtime
 ```
 

@@ -222,8 +222,61 @@ func TestResolveSQLiteRuntimeConnectionUsesPersistentMountDiscovery(t *testing.T
 	previousRuntimeCommand := sqliteRuntimeCommand
 	previousHelperCommand := sqliteRuntimeHelperCommand
 	sqliteRuntimeCommand = func(_ context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte("mypaas-wago\n"), nil
+		}
 		if len(args) > 0 && args[0] == "inspect" {
 			return []byte(`[{"Config":{"WorkingDir":"/app"},"Mounts":[{"Type":"volume","Destination":"/app/data","RW":true}]}]`), nil
+		}
+		return nil, fmt.Errorf("unexpected runtime command: %v", args)
+	}
+	sqliteRuntimeHelperCommand = func(_ context.Context, args []string, payload []byte) ([]byte, error) {
+		interactive := false
+		for _, arg := range args {
+			if arg == "-i" {
+				interactive = true
+				break
+			}
+		}
+		if !interactive {
+			return nil, fmt.Errorf("SQLite helper must keep stdin attached")
+		}
+		var request SQLiteHelperRequest
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return nil, err
+		}
+		if request.Operation != "discover" || len(request.DiscoveryRoots) != 1 || request.DiscoveryRoots[0] != "/app/data" {
+			return nil, fmt.Errorf("unexpected discovery request: %#v", request)
+		}
+		return []byte(`{"ok":true,"response":{"sqliteCandidates":["/app/data/wago.db"]}}`), nil
+	}
+	t.Setenv("MYPAAS_SQLITE_HELPER_IMAGE", "mypaas-api:test")
+	t.Cleanup(func() {
+		sqliteRuntimeCommand = previousRuntimeCommand
+		sqliteRuntimeHelperCommand = previousHelperCommand
+	})
+
+	conn, ok, err := resolveSQLiteRuntimeConnection(context.Background(), db.Project{Name: "wago", DeployMode: "dockerfile"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || conn.Driver != DriverSQLite || conn.Database != "/app/data/wago.db" || conn.Source != "runtime-discovery" || conn.runtimeContainer != "mypaas-wago" {
+		t.Fatalf("connection = %#v, ok = %v; want generic persistent runtime discovery", conn, ok)
+	}
+}
+
+func TestResolveSQLiteRuntimeConnectionFindsComposeLabeledRuntimeWhenStableNameIsMissing(t *testing.T) {
+	previousRuntimeCommand := sqliteRuntimeCommand
+	previousHelperCommand := sqliteRuntimeHelperCommand
+	sqliteRuntimeCommand = func(_ context.Context, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "inspect" && len(args) == 2 && args[1] == "mypaas-wago" {
+			return []byte("Error: no such object: mypaas-wago"), fmt.Errorf("exit status 1")
+		}
+		if len(args) > 0 && args[0] == "ps" {
+			return []byte("mypaas-wago-wago-1\n"), nil
+		}
+		if len(args) > 0 && args[0] == "inspect" {
+			return []byte(`[ {"Config":{"WorkingDir":"/app"},"Mounts":[{"Type":"volume","Destination":"/app/data","RW":true}] } ]`), nil
 		}
 		return nil, fmt.Errorf("unexpected runtime command: %v", args)
 	}
@@ -247,8 +300,57 @@ func TestResolveSQLiteRuntimeConnectionUsesPersistentMountDiscovery(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok || conn.Driver != DriverSQLite || conn.Database != "/app/data/wago.db" || conn.Source != "runtime-discovery" || conn.runtimeContainer != "mypaas-wago" {
-		t.Fatalf("connection = %#v, ok = %v; want generic persistent runtime discovery", conn, ok)
+	if !ok || conn.Driver != DriverSQLite || conn.Database != "/app/data/wago.db" || conn.runtimeContainer != "mypaas-wago-wago-1" {
+		t.Fatalf("connection = %#v, ok = %v; want Compose-labeled Wago runtime discovery", conn, ok)
+	}
+}
+
+func TestSQLiteRuntimeClientUsesRuntimeIdentityForDatabaseAccess(t *testing.T) {
+	previousRuntimeCommand := sqliteRuntimeCommand
+	previousHelperCommand := sqliteRuntimeHelperCommand
+	sqliteRuntimeCommand = func(_ context.Context, args ...string) ([]byte, error) {
+		if len(args) == 4 && args[0] == "exec" && args[1] == "mypaas-wago-wago-1" && args[2] == "id" {
+			if args[3] == "-u" || args[3] == "-g" {
+				return []byte("1000\n"), nil
+			}
+		}
+		return nil, fmt.Errorf("unexpected runtime command: %v", args)
+	}
+	sqliteRuntimeHelperCommand = func(_ context.Context, args []string, payload []byte) ([]byte, error) {
+		interactive := false
+		identity := ""
+		for index, arg := range args {
+			if arg == "-i" {
+				interactive = true
+			}
+			if arg == "--user" && index+1 < len(args) {
+				identity = args[index+1]
+			}
+		}
+		if !interactive || identity != "1000:1000" {
+			return nil, fmt.Errorf("unexpected helper runtime options: %v", args)
+		}
+		var request SQLiteHelperRequest
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return nil, err
+		}
+		if request.Operation != "ping" || request.DatabasePath != "/app/data/wago.db" {
+			return nil, fmt.Errorf("unexpected helper request: %#v", request)
+		}
+		return []byte(`{"ok":true,"response":{}}`), nil
+	}
+	t.Setenv("MYPAAS_SQLITE_HELPER_IMAGE", "mypaas-api:test")
+	t.Cleanup(func() {
+		sqliteRuntimeCommand = previousRuntimeCommand
+		sqliteRuntimeHelperCommand = previousHelperCommand
+	})
+
+	client := &sqliteRuntimeClient{container: "mypaas-wago-wago-1", databasePath: "/app/data/wago.db"}
+	if err := client.Ping(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if client.runtimeUser != "1000:1000" {
+		t.Fatalf("runtimeUser = %q, want 1000:1000", client.runtimeUser)
 	}
 }
 

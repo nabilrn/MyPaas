@@ -93,6 +93,7 @@ for network in "$ROUTING_NETWORK" "$PROJECT_NETWORK" "$CONTROL_NETWORK"; do
   remove_owned_network "$network"
 done
 
+# Keep this cleanup for VMs installed before the firewall feature was removed.
 if [[ -f /usr/local/lib/mypaas/firewall-helper.py ]]; then
   log "Removing MyPaaS-managed UFW rules..."
   sudo_cmd python3 - <<'PY' || true
@@ -109,7 +110,7 @@ for rule in list(module.current_managed_rules()):
 PY
 fi
 
-log "Removing MyPaaS firewall helper..."
+log "Removing legacy MyPaaS firewall helper..."
 if command -v systemctl >/dev/null 2>&1; then
   sudo_cmd systemctl disable --now mypaas-firewall.service >/dev/null 2>&1 || true
 fi

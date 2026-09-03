@@ -7,8 +7,6 @@ const forbiddenNames = [
 	'reveal_env_var',
 	'set_env_vars',
 	'delete_env_var',
-	'open_firewall_port',
-	'close_firewall_port',
 	'update_system',
 	'database_write',
 	'run_shell'
@@ -36,9 +34,9 @@ describe('WebMCP site tools', () => {
 		for (const forbidden of forbiddenNames) expect(names).not.toContain(forbidden);
 	});
 
-	it('exposes host, port, container and DB schema tools to every owner', () => {
+	it('exposes host, container and DB schema tools to every owner', () => {
 		const names = buildWebMCPTools({ role: 'owner' }).map((tool) => tool.name);
-		for (const name of ['get_host_stats', 'list_containers', 'list_ports', 'get_database_schema']) {
+		for (const name of ['get_host_stats', 'list_containers', 'get_database_schema']) {
 			expect(names).toContain(name);
 		}
 	});

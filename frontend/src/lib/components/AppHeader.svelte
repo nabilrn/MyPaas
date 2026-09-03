@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Network, Settings, Sun, Terminal, Users } from '@lucide/svelte';
+	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Settings, Sun, Terminal, Users } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
@@ -15,7 +15,6 @@
 	const navItems = [
 		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
 		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
-		{ href: '/ports', label: 'Ports', icon: Network, ownerOnly: true },
 		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true },
 		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
 		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
@@ -62,7 +61,6 @@
 			};
 		}
 		if (currentPath.startsWith('/containers')) return { root: 'Containers', rootHref: '/containers', middle: null, current: '' };
-		if (currentPath.startsWith('/ports')) return { root: 'Ports', rootHref: '/ports', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/users')) return { root: 'Users', rootHref: '/admin/users', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/audit-logs')) return { root: 'Audit', rootHref: '/admin/audit-logs', middle: null, current: '' };
 		if (currentPath.startsWith('/admin/mcp')) return { root: 'MCP', rootHref: '/admin/mcp', middle: null, current: '' };

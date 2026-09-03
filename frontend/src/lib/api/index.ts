@@ -72,31 +72,6 @@ export interface MigrationStatus {
 	error?: string;
 }
 
-export interface PortAllocation {
-	port: number;
-	projectId: string;
-	projectName: string;
-	service: string;
-	appPort: number;
-	deployMode: string;
-	projectStatus: string;
-}
-
-export interface FirewallRule {
-	port: number;
-	protocol: 'tcp' | 'udp';
-}
-
-export interface PortOverview {
-	bindHost: string;
-	allocations: PortAllocation[];
-	firewall: {
-		available: boolean;
-		active: boolean;
-		rules: FirewallRule[];
-	};
-}
-
 class ApiError extends Error {
 	constructor(
 		public code: string,
@@ -271,11 +246,6 @@ export const api = {
 		prepareMigration: (): Promise<MigrationStatus> => request('/admin/migrate/prepare', { method: 'POST' }),
 		migrationStatus: (id: string): Promise<MigrationStatus> => request(`/admin/migrate/${id}/status`),
 		getHostStats: (): Promise<HostStats> => request('/admin/host-stats'),
-		ports: (): Promise<PortOverview> => request('/admin/ports'),
-		openFirewallPort: (port: number, protocol: 'tcp' | 'udp'): Promise<void> =>
-			request('/admin/ports/firewall', { method: 'POST', body: JSON.stringify({ port, protocol }) }),
-		closeFirewallPort: (port: number, protocol: 'tcp' | 'udp'): Promise<void> =>
-			request(`/admin/ports/firewall/${protocol}/${port}`, { method: 'DELETE' }),
 		updateS3Config: (d: { endpoint: string; bucket: string; region: string; access_key: string; secret_key: string }): Promise<void> =>
 			request('/admin/settings/s3', { method: 'POST', body: JSON.stringify(d) }),
 		triggerBackup: (): Promise<void> => request('/admin/backup', { method: 'POST' }),
