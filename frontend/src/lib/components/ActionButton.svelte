@@ -12,11 +12,11 @@
 	export let className = '';
 
 	$: baseClass =
-		'inline-flex min-w-0 items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-px disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-55 dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950';
+		'inline-flex h-9 min-h-9 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-950 focus-visible:ring-offset-2 focus-visible:ring-offset-white active:translate-y-px disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-55 dark:focus-visible:ring-white dark:focus-visible:ring-offset-neutral-950';
 	$: sizeClass = {
-		xs: 'min-h-8 rounded-md px-2.5 py-1.5 text-xs',
-		sm: 'min-h-9 rounded-md px-3 py-1.5 text-sm',
-		md: 'min-h-10 rounded-md px-4 py-2 text-sm'
+		xs: 'px-2.5',
+		sm: 'px-3',
+		md: 'px-4'
 	}[size];
 	$: variantClass = {
 		primary: 'border border-gray-950 bg-gray-950 text-white hover:border-black hover:bg-black dark:border-white dark:bg-white dark:text-gray-950 dark:hover:border-gray-200 dark:hover:bg-gray-200',
@@ -29,7 +29,7 @@
 	$: classes = `${baseClass} ${sizeClass} ${variantClass} ${full ? 'w-full' : ''} ${className}`.trim();
 </script>
 
-<button {type} class={classes} data-action-button data-variant={variant} disabled={disabled || loading} aria-busy={loading} aria-label={ariaLabel} on:click>
+<button {type} class={classes} data-action-button data-variant={variant} data-size={size} disabled={disabled || loading} aria-busy={loading} aria-label={ariaLabel} on:click>
 	{#if loading}
 		<LoaderCircle class="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />
 	{:else if $$slots.icon}

@@ -50,7 +50,7 @@
 	<section class="database-design-shell fixed bottom-0 left-0 right-0 top-14 z-30 flex flex-col overflow-hidden bg-gray-50 dark:bg-neutral-950 lg:left-14">
 		<header class="flex h-12 shrink-0 items-center justify-between border-b border-gray-100/70 bg-white px-3 dark:border-neutral-900 dark:bg-neutral-950">
 			<div class="flex min-w-0 items-center gap-3">
-				<a href={base} class="app-focus inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 px-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950 dark:border-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white">
+				<a href={base} class="app-focus control-height inline-flex items-center gap-1.5 border border-gray-200 px-2.5 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950 dark:border-neutral-800 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white">
 					<ArrowLeft class="h-4 w-4" aria-hidden="true" />
 					Data
 				</a>
@@ -71,7 +71,7 @@
 				<p class="text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
 				<p class="text-[13px] text-gray-500 dark:text-gray-400">Browse project data and schema.</p>
 			</div>
-			<a href={`${base}/schema`} class="app-focus inline-flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white">
+			<a href={`${base}/schema`} class="app-focus control-height inline-flex items-center gap-2 border border-gray-200 bg-white px-3 font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900 dark:hover:text-white">
 				<Workflow class="h-4 w-4" aria-hidden="true" />
 				Schema design
 			</a>

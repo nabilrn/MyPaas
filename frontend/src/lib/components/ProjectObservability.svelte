@@ -193,8 +193,8 @@
 					</div>
 					{#if services.length > 1}
 						<details class="group relative">
-							<summary class="app-focus flex h-8 cursor-pointer list-none items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900 [&::-webkit-details-marker]:hidden">
-								<SlidersHorizontal class="h-3.5 w-3.5" aria-hidden="true" />
+							<summary class="app-focus control-height flex cursor-pointer list-none items-center gap-2 border border-gray-200 bg-white px-3 font-medium text-gray-600 hover:bg-gray-50 dark:border-neutral-800 dark:bg-neutral-950 dark:text-gray-300 dark:hover:bg-neutral-900 [&::-webkit-details-marker]:hidden">
+								<SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
 								Services {visibleServices.length}/{services.length}
 							</summary>
 							<div class="overlay absolute right-0 z-30 mt-2 w-56 p-2">

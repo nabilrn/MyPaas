@@ -170,7 +170,7 @@
 			<div class="relative" use:dismissable={{ enabled: accountMenuOpen, onDismiss: closeAccountMenu }}>
 				<button
 					type="button"
-					class="app-focus flex h-9 max-w-48 items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
+					class="app-focus control-height flex max-w-48 items-center gap-2 px-1.5 text-left transition-colors hover:bg-gray-100 dark:hover:bg-neutral-900"
 					aria-label="Open account menu"
 					aria-expanded={accountMenuOpen}
 					on:click={toggleAccountMenu}
