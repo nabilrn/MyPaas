@@ -75,6 +75,25 @@ Rules:
 - Environment, Database data view, General, Source, Resources, Webhook, and Danger zone MUST align their readable content to the same gutter family as Overview, Deployments, and Logs;
 - Schema Design remains a full-canvas exception because it deliberately leaves the ordinary project-detail surface.
 
+### Canonical project-detail top rhythm
+
+**Overview, Deployments, and Logs are also the vertical alignment reference for the first readable content in `/projects/:id/*`.** The presence or absence of `Deploy again` must not make sibling routes appear to start at unrelated heights.
+
+The vertical contract has two layers:
+
+- parent project `main` owns **12px** top/bottom inset (`py-3`);
+- the first leaf title block owns an additional **16px** top inset (`pt-4`) before its title baseline.
+
+Operational pages may use the existing `min-h-14` action header with vertically centered title/status/actions. Ordinary leaves such as Environment, Database, General, Source, Resources, Webhook, and Danger zone do not copy that operational action bar; instead their title/description block uses the canonical `pt-4` optical offset so the title begins at the same visual level.
+
+Rules:
+
+- align the **title optical top**, not the total height of the header block;
+- a title + subtitle leaf may naturally be taller than a one-line operational header;
+- keep the existing horizontal gutter contract (`px-5` for the leaf heading, `px-4` for ordinary body rows);
+- do not add arbitrary `mt-*` to individual titles, change parent `py-3`, or add another route-level wrapper merely to compensate for a missing leaf-header inset;
+- full-canvas Schema Design remains exempt from ordinary leaf top rhythm.
+
 ### Canonical Administration horizontal gutter
 
 Administration uses the **same horizontal rhythm** as the project-detail reference above. `/admin/settings`, `/admin/users`, `/admin/backup`, `/admin/migration`, `/admin/mcp`, and `/admin/audit-logs` do not define a separate spacing system.
@@ -113,6 +132,7 @@ A normal leaf page heading is:
 - subtitle: at most one short sentence;
 - left aligned to the same x-origin as the readable section content below it;
 - horizontally padded using the canonical project-detail gutter when inside `/projects/:id/*`;
+- vertically positioned using the canonical project-detail top rhythm when inside `/projects/:id/*`;
 - separated from following content by deliberate section rhythm, not a floating card.
 
 Do not create a black nested title strip, rounded title card, or second application header inside a route.
@@ -239,6 +259,17 @@ Targets:
 - true object/page titles: **18–24px** when needed.
 
 Compactness comes from layout and chrome, not unreadable type.
+
+### Canonical brand assets
+
+MyPaaS branding is vector-first. The canonical production assets are:
+
+- `src/assets/brand/mypaas-icon.svg` for compact marks and favicons;
+- `src/assets/brand/mypaas-logo.svg` for the wordmark.
+
+These assets come from the optimized theme-aware SVG bundle and replace the legacy black/white PNG variants. Dashboard chrome, favicon usage, and installer branding MUST reference the canonical SVG assets rather than maintaining parallel raster logo copies.
+
+Do not reintroduce route-local logo files, duplicated black/white PNG exports, or rasterized favicons when the canonical SVG can serve the same purpose.
 
 ---
 
@@ -478,6 +509,7 @@ Do not introduce:
 
 - first-level rounded card stacks;
 - route-local outer padding that conflicts with the parent family inset;
+- arbitrary route-local top margins used to compensate for missing canonical leaf-header rhythm;
 - nested application headers inside leaf pages;
 - repeated project operational bars on non-operational settings/data leaves;
 - sibling-route shortcut cards with no unique data;
@@ -490,6 +522,7 @@ Do not introduce:
 - decorative shadows on ordinary sections;
 - fake telemetry history;
 - semantic resource telemetry rendered as meaningless neutral gray;
+- duplicated raster black/white logo variants when the canonical SVG assets exist;
 - explanatory copy that only restates the label directly above it.
 
 ---

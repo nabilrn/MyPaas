@@ -8,7 +8,7 @@
 </svelte:head>
 
 <div class="project-environment-leaf w-full space-y-3">
-	<div class="px-5">
+	<div class="px-5 pt-4">
 		<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Environment</h1>
 		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Variables available to your app at runtime.</p>
 	</div>

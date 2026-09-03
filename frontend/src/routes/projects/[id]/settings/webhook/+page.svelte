@@ -9,6 +9,7 @@
 <style>
 	.project-settings-webhook :global(.space-y-5 > :first-child) {
 		padding-inline: 1.25rem;
+		padding-top: 1rem;
 	}
 
 	.project-settings-webhook :global(.space-y-5 > .divide-y > .grid),
