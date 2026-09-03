@@ -34,13 +34,13 @@
 	}
 </script>
 
-<div class="grid gap-3 px-4 py-2.5 lg:grid-cols-[14rem_minmax(0,1fr)_17rem] lg:items-center">
+<div class="grid gap-3 px-4 py-3 lg:grid-cols-[14rem_minmax(0,1fr)_auto] lg:items-center">
 	<div class="min-w-0">
 		<div class="flex min-w-0 items-center gap-2">
 			{#if dirty}<span class="status-dot bg-amber-500" aria-label="Unsaved change"></span>{/if}
 			<p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white">{keyName}</p>
 		</div>
-		<p class="mt-0.5 text-xs {dirty ? 'text-amber-700 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400'}">{stateLabel}</p>
+		{#if dirty || revealed}<p class="mt-0.5 text-xs {dirty ? 'text-amber-700 dark:text-amber-200' : 'text-gray-500 dark:text-gray-400'}">{stateLabel}</p>{/if}
 	</div>
 
 	{#if editing}
@@ -55,7 +55,7 @@
 			aria-label={`Replacement value for ${keyName}`}
 		/>
 	{:else}
-		<div class="field flex min-h-9 w-full items-center font-mono text-sm text-gray-700 dark:text-gray-300" aria-label={`${keyName} stored value`}>
+		<div class="flex min-h-9 min-w-0 items-center font-mono text-sm text-gray-700 dark:text-gray-300" aria-label={`${keyName} stored value`}>
 			<span class="truncate">{revealed && value ? value : '••••••••'}</span>
 		</div>
 	{/if}
@@ -68,26 +68,18 @@
 			</ActionButton>
 		{:else}
 			<ActionButton variant="ghost" size="xs" on:click={() => (editing = true)} disabled={revealing || deleting}>
-				<Pencil slot="icon" class="h-3.5 w-3.5" />
-				Edit
+				<Pencil slot="icon" class="h-3.5 w-3.5" />Edit
 			</ActionButton>
 		{/if}
 
 		{#if revealed && value && !editing}
-			<IconButton label={`Copy ${keyName}`} variant="ghost" on:click={() => dispatch('copy')} disabled={revealing || deleting}>
-				<Copy class="h-4 w-4" aria-hidden="true" />
-			</IconButton>
+			<IconButton label={`Copy ${keyName}`} variant="ghost" on:click={() => dispatch('copy')} disabled={revealing || deleting}><Copy class="h-4 w-4" /></IconButton>
 		{/if}
 		<IconButton label={revealed ? `Hide ${keyName}` : `Reveal ${keyName}`} variant="ghost" on:click={() => dispatch('reveal')} loading={revealing} disabled={deleting || editing}>
-			{#if revealed}
-				<EyeOff class="h-4 w-4" aria-hidden="true" />
-			{:else}
-				<Eye class="h-4 w-4" aria-hidden="true" />
-			{/if}
+			{#if revealed}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
 		</IconButton>
 		<ActionButton variant="ghostDanger" size="xs" on:click={() => dispatch('remove')} loading={deleting} loadingLabel="Deleting" disabled={revealing || editing}>
-			<Trash2 slot="icon" class="h-3.5 w-3.5" />
-			Delete
+			<Trash2 slot="icon" class="h-3.5 w-3.5" />Delete
 		</ActionButton>
 	</div>
 </div>
