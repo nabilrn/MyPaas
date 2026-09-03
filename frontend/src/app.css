@@ -24,9 +24,9 @@
 		--app-info: #0284c7;
 		--app-success: #059669;
 
-		/* Control tokens: idle controls stay quiet; interaction raises contrast. */
-		--control-bg: color-mix(in oklch, var(--app-surface) 90%, var(--app-surface-muted));
-		--control-bg-hover: var(--app-surface);
+		/* Editable controls inherit the parent surface; interaction raises stroke contrast. */
+		--control-bg: transparent;
+		--control-bg-hover: transparent;
 		--control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 82%, var(--app-surface));
 		--control-border: color-mix(in oklch, var(--app-border) 68%, transparent);
 		--control-border-hover: color-mix(in oklch, var(--app-border-strong) 88%, var(--app-border));
@@ -80,8 +80,8 @@
 		--app-info: #38bdf8;
 		--app-success: #34d399;
 
-		--control-bg: color-mix(in oklch, var(--app-surface) 88%, var(--app-bg));
-		--control-bg-hover: color-mix(in oklch, var(--app-surface) 94%, var(--app-surface-muted));
+		--control-bg: transparent;
+		--control-bg-hover: transparent;
 		--control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-bg));
 		--control-border: color-mix(in oklch, var(--app-border) 62%, transparent);
 		--control-border-hover: color-mix(in oklch, var(--app-border-strong) 86%, var(--app-border));
@@ -135,7 +135,13 @@
 	input,
 	select,
 	textarea {
-		@apply bg-white text-gray-950 placeholder:text-gray-400 dark:bg-neutral-950 dark:text-gray-100 dark:placeholder:text-gray-600;
+		background: transparent;
+		color: var(--app-ink);
+	}
+
+	input::placeholder,
+	textarea::placeholder {
+		color: var(--control-placeholder);
 	}
 }
 
@@ -183,7 +189,7 @@
 		box-shadow: 0 12px 28px rgb(0 0 0 / 0.14);
 	}
 
-	/* Fields: neutral at rest, stronger only while interacting. */
+	/* Fields: transparent at rest; hover/focus are communicated by the boundary. */
 	.field {
 		min-height: 2.25rem;
 		border: 1px solid var(--control-border);
@@ -202,12 +208,10 @@
 
 	:is(input, select, textarea).field:hover:not(:disabled):not([readonly]) {
 		border-color: var(--control-border-hover);
-		background: var(--control-bg-hover);
 	}
 
 	.field:focus {
 		border-color: var(--control-border-focus);
-		background: var(--control-bg-hover);
 		box-shadow: 0 0 0 3px var(--control-focus-ring);
 	}
 
