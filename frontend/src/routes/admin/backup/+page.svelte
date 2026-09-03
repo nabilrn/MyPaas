@@ -122,23 +122,22 @@
 		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading backup settings" /></div>
 	{:else}
 		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Automatic backup</h2>
-			<div class="mt-3 divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
+			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Backup storage</h2>
+			<div class="mt-3 border-y border-[color:var(--workspace-divider)]">
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Status</p>
-					<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class={`status-dot ${s3Configured ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-gray-500'}`}></span>{s3Configured ? 'Configured' : 'Not configured'}</p>
-					<ActionButton variant="secondary" size="sm" on:click={openS3Config}>{s3Configured ? 'Change storage' : 'Configure storage'}</ActionButton>
-				</div>
-				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)] sm:items-center">
 					<p class="text-sm text-gray-500 dark:text-gray-400">Storage</p>
-					<p class="text-sm text-gray-950 dark:text-white">S3-compatible</p>
+					<div class="min-w-0">
+						<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class={`status-dot ${s3Configured ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-gray-500'}`}></span>{s3Configured ? 'S3-compatible' : 'Not configured'}</p>
+						{#if s3Configured}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Automatic backups use the configured object storage.</p>{/if}
+					</div>
+					<ActionButton variant="secondary" size="sm" on:click={openS3Config}>{s3Configured ? 'Change storage' : 'Configure storage'}</ActionButton>
 				</div>
 			</div>
 		</section>
 
 		<section>
 			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Manual backup</h2>
-			<div class="mt-3 grid gap-3 border-y border-gray-100 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center dark:border-neutral-800">
+			<div class="mt-3 grid gap-3 border-y border-[color:var(--workspace-divider)] py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
 				<p class="text-sm text-gray-500 dark:text-gray-400">Snapshot</p>
 				<p class="text-sm text-gray-950 dark:text-white">Database and platform configuration <span class="text-gray-500 dark:text-gray-400">· project volumes excluded</span></p>
 				<ActionButton variant="secondary" size="sm" on:click={downloadBackup}><Download slot="icon" class="h-4 w-4" />Download</ActionButton>
@@ -163,7 +162,7 @@
 				</div>
 				<div><label class="field-label" for="access-key">Access key</label><input id="access-key" type="text" autocomplete="off" bind:value={s3Config.access_key} class="field w-full font-mono text-sm" /></div>
 				<div><label class="field-label" for="secret-key">Secret key</label><input id="secret-key" type="password" autocomplete="new-password" bind:value={s3Config.secret_key} class="field w-full font-mono text-sm" /></div>
-				<details class="border-y border-gray-100 py-3 dark:border-neutral-800">
+				<details class="border-y border-[color:var(--workspace-divider)] py-3">
 					<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Cloudflare R2</summary>
 					<ol class="mt-3 space-y-1 text-sm text-gray-500 dark:text-gray-400">
 						<li>1. Create a bucket.</li>
