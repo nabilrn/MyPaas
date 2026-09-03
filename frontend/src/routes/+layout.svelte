@@ -90,6 +90,9 @@
 		--technical-surface-border: #374151;
 		--technical-surface-text: #e5e7eb;
 		--technical-surface-muted: #9ca3af;
+		--control-height: 2.25rem;
+		--control-radius: 0.375rem;
+		--control-font-size: 0.875rem;
 	}
 
 	:global(.dark .app-shell) {
@@ -97,6 +100,32 @@
 		--technical-surface-border: #262626;
 		--technical-surface-text: #e5e7eb;
 		--technical-surface-muted: #9ca3af;
+	}
+
+	/* Every ordinary single-line dashboard control shares one geometry contract. */
+	:global(.app-shell :is(input, select).field),
+	:global(.app-shell [data-action-button]),
+	:global(.app-shell [data-action-link]),
+	:global(.app-shell .control-height) {
+		height: var(--control-height) !important;
+		min-height: var(--control-height) !important;
+		border-radius: var(--control-radius) !important;
+		font-size: var(--control-font-size) !important;
+	}
+
+	:global(.app-shell [data-icon-button]),
+	:global(.app-shell .control-square) {
+		width: var(--control-height) !important;
+		height: var(--control-height) !important;
+		min-width: var(--control-height) !important;
+		min-height: var(--control-height) !important;
+		border-radius: var(--control-radius) !important;
+	}
+
+	@media (any-pointer: coarse) {
+		:global(.app-shell) {
+			--control-height: 2.75rem;
+		}
 	}
 
 	:global(.app-shell),
