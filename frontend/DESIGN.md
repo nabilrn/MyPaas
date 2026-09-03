@@ -160,7 +160,18 @@ Success/warning/danger/info colors are reserved for real state. Primary workflow
 
 ## 8. Controls
 
-Editable text inputs, search fields, selects, comboboxes, and textareas share one neutral grammar.
+Inputs and actions belong to one control system. Editable text inputs, search fields, selects, comboboxes, ordinary text buttons, navigation-style action links, icon-only utility buttons, and compact single-line disclosure/toolbar controls share the same geometry.
+
+### Geometry
+
+- Canonical desktop visual height is **36px**.
+- Canonical control text is **14px**.
+- Icon-only controls are **36×36px**.
+- `ActionButton` and `ActionLink` `xs` / `sm` / `md` sizes may change horizontal padding only; they MUST NOT change height or font size.
+- Adjacent fields and actions must align on the same top/bottom edges without per-route nudges.
+- Coarse-pointer layouts raise the shared control target to **44px** for both fields and actions rather than enlarging buttons alone.
+
+Exceptions are controls whose content genuinely requires another geometry: multiline textareas, content-rich selection tiles such as `SegmentedChoice`, navigation rows, and full-canvas/data-visualization interaction affordances where the design contract explicitly defines another size. Do not use an exception merely to make one route look denser.
 
 ### Idle
 
@@ -184,9 +195,7 @@ Editable text inputs, search fields, selects, comboboxes, and textareas share on
 
 Prefer muted text and boundary treatment. A muted fill is allowed only when necessary to make non-editability unambiguous; it must remain restrained.
 
-Ordinary fields target **36px** visual height and **14px** text.
-
-Reuse `ActionButton`, `ActionLink`, `IconButton`, `SegmentedChoice`, and shared field utilities rather than creating route-local button/input palettes.
+Reuse `ActionButton`, `ActionLink`, `IconButton`, `SegmentedChoice`, and shared field utilities rather than creating route-local button/input palettes or hardcoded one-off control heights.
 
 ---
 
@@ -342,6 +351,7 @@ Do not introduce:
 - neutral hover fills that are stronger than the surrounding workspace;
 - table headers/toolbars/pagination with independent neutral fills;
 - route-local input/button/console palettes;
+- route-local `h-8` / `h-10` action sizing used only to make one control denser or larger than its adjacent field;
 - nested border rectangles at every hierarchy level;
 - decorative shadows on ordinary sections;
 - full-page spinner for normal client-side navigation or local operations;
@@ -362,4 +372,4 @@ When implementing authenticated UI work:
 5. Audit semantic, loading, empty, disabled, focus, and error states after visual changes.
 6. Run frontend unit tests, Svelte/TypeScript checks, and production build before merge.
 
-The goal is one coherent operational workspace: **same neutral fill, structural strokes, semantic color only when meaningful, and one canonical technical-output palette.**
+The goal is one coherent operational workspace: **same neutral fill, structural strokes, semantic color only when meaningful, one canonical control geometry, and one canonical technical-output palette.**
