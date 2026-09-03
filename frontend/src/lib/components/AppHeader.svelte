@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { ArrowRightLeft, Bell, Bot, Boxes, ChevronDown, ChevronRight, ClipboardList, Database, Layers3, LogOut, Menu, Moon, Settings, Sun, Terminal, Users } from '@lucide/svelte';
+	import { Bell, Boxes, ChevronDown, ChevronRight, Layers3, LogOut, Menu, Moon, Settings, Sun, Terminal } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
+	import { administrationNavItemForPath, isAdministrationPath } from '$lib/navigation/administration';
 	import { shellContext } from '$stores/shell-context';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
@@ -16,12 +17,7 @@
 		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
 		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
 		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true },
-		{ href: '/admin/users', label: 'Users', icon: Users, ownerOnly: true },
-		{ href: '/admin/audit-logs', label: 'Audit', icon: ClipboardList, ownerOnly: true },
-		{ href: '/admin/mcp', label: 'MCP', icon: Bot, ownerOnly: true },
-		{ href: '/admin/backup', label: 'Backup', icon: Database, ownerOnly: true },
-		{ href: '/admin/migration', label: 'Migration', icon: ArrowRightLeft, ownerOnly: true },
-		{ href: '/admin/settings', label: 'Settings', icon: Settings, ownerOnly: true }
+		{ href: '/admin/settings', label: 'Administration', icon: Settings, ownerOnly: true }
 	];
 
 	const projectSectionLabels: Record<string, string> = {
@@ -61,16 +57,15 @@
 			};
 		}
 		if (currentPath.startsWith('/containers')) return { root: 'Containers', rootHref: '/containers', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/users')) return { root: 'Users', rootHref: '/admin/users', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/audit-logs')) return { root: 'Audit', rootHref: '/admin/audit-logs', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/mcp')) return { root: 'MCP', rootHref: '/admin/mcp', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/backup')) return { root: 'Backup', rootHref: '/admin/backup', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/migration')) return { root: 'Migration', rootHref: '/admin/migration', middle: null, current: '' };
-		if (currentPath.startsWith('/admin/settings')) return { root: 'Settings', rootHref: '/admin/settings', middle: null, current: '' };
+		if (isAdministrationPath(currentPath)) {
+			const administrationItem = administrationNavItemForPath(currentPath);
+			return { root: 'Administration', rootHref: '/admin/settings', middle: null, current: administrationItem.label };
+		}
 		return { root: 'Projects', rootHref: '/projects', middle: null, current: '' };
 	}
 
 	function isActive(href: string, currentPath = pathname) {
+		if (href === '/admin/settings') return isAdministrationPath(currentPath);
 		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
 		return currentPath === href || currentPath.startsWith(`${href}/`);
 	}
