@@ -6,6 +6,7 @@ import adminMigration from '../../routes/admin/migration/+page.svelte?raw';
 import adminMcp from '../../routes/admin/mcp/+page.svelte?raw';
 import adminUsers from '../../routes/admin/users/+page.svelte?raw';
 import adminAudit from '../../routes/admin/audit-logs/+page.svelte?raw';
+import designContract from '../../../DESIGN.md?raw';
 
 describe('administration horizontal gutter contract', () => {
 	it('uses the same parent and readable-content gutter family as project detail', () => {
@@ -26,5 +27,12 @@ describe('administration horizontal gutter contract', () => {
 		expect(adminMcp).toContain('divide-y divide-[color:var(--workspace-divider)]');
 		expect(adminUsers).toContain('TableShell');
 		expect(adminAudit).toContain('TableShell');
+	});
+
+	it('documents administration as part of the canonical gutter contract', () => {
+		expect(designContract).toContain('Canonical Administration horizontal gutter');
+		expect(designContract).toContain('parent admin `main`: **14px** horizontal (`px-3.5`)');
+		expect(designContract).toContain('Administration route heading: **20px** horizontal (`px-5`)');
+		expect(designContract).toContain('ordinary admin section rows/body content: **16px** horizontal (`px-4` or equivalent)');
 	});
 });
