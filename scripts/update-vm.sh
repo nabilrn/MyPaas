@@ -214,6 +214,7 @@ redeploy_current_for_env_drift() {
   desired_socket="$(env_file_value STATD_SOCKET)"
   api_socket="$(container_env_value "$docker_cmd" mypaas-api STATD_SOCKET)"
   if [[ -n "$desired_socket" && "$api_socket" != "$desired_socket" ]]; then
+    preflight_existing_runtime "$docker_cmd"
     log "API runtime environment is missing the reconciled STATD_SOCKET; recreating the current stack"
     MYPAAS_IMAGE_TAG="$current_sha" MYPAAS_BUILD_SHA="$current_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
       ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
@@ -253,8 +254,6 @@ main() {
   target_sha="$(git_repo rev-parse FETCH_HEAD)"
   docker_cmd="$(docker_prefix)"
 
-  preflight_existing_runtime "$docker_cmd"
-
   if [[ "$current_sha" == "$target_sha" ]]; then
     # Host-native dependencies and ignored production env files can drift even
     # when the Git checkout is already current. Reconcile them before returning.
@@ -289,6 +288,11 @@ main() {
       return 0
     fi
   fi
+
+  # From this point onward the update is actually ready to mutate runtime state.
+  # Clean any live DB Studio network attachment and prove the host-port path is
+  # healthy before tagging rollback images or resetting the checkout.
+  preflight_existing_runtime "$docker_cmd"
 
   local rollback_tag api_image_id dashboard_image_id rollback_ready=false
   rollback_tag="rollback-${current_sha:0:12}"
