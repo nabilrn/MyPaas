@@ -14,7 +14,7 @@ PORT = int(os.environ.get("WIZARD_PORT", "8787"))
 TOKEN = os.environ.get("WIZARD_TOKEN", secrets.token_hex(16))
 ENV_FILE = os.environ.get("WIZARD_ENV_FILE", ".env")
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-BRAND_LOGO_PATH = os.path.join(ROOT_DIR, "frontend", "src", "assets", "new-assets", "logowithtext_black.png")
+BRAND_LOGO_PATH = os.path.join(ROOT_DIR, "frontend", "src", "assets", "brand", "mypaas-logo.svg")
 
 
 def default(name: str, fallback: str = "") -> str:
@@ -388,7 +388,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   <main>
     <header>
       <div class="topline">
-        <div class="product-brand"><img class="brand-logo" src="/brand/logo.png" alt="MyPaas"><span class="installer-badge">Installer</span></div>
+        <div class="product-brand"><img class="brand-logo" src="/brand/logo.svg" alt="MyPaas"><span class="installer-badge">Installer</span></div>
         <div class="install-meta" aria-label="Install context">
           <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
             <svg id="theme-icon-sun" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -828,8 +828,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/brand/logo.png":
-            self.send_asset(BRAND_LOGO_PATH, "image/png")
+        if parsed.path == "/brand/logo.svg":
+            self.send_asset(BRAND_LOGO_PATH, "image/svg+xml")
             return
         if parsed.path == "/health":
             self.send_html(b"ok")
@@ -953,7 +953,7 @@ def success_html(title: str = "Production config saved", message: str = f"Produc
   </script>
   <main>
     <section>
-      <div class="success-brand"><img src="/brand/logo.png" alt="MyPaas"></div>
+      <div class="success-brand"><img src="/brand/logo.svg" alt="MyPaas"></div>
       <span class="status-mark" aria-hidden="true">✓</span>
       <h1>{esc(title)}</h1>
       <p>{message} This window will close automatically. The terminal installer will continue.</p>
