@@ -126,13 +126,11 @@ func (d *DockerCLI) refreshRuntimeTelemetry(ctx context.Context) error {
 		return err
 	}
 
+	// Treat each successful collection as an immutable snapshot. Merging into
+	// the previous map would retain metrics for stopped/deleted containers and
+	// can leak those values to a later container that reuses the same name.
 	d.telemetryMu.Lock()
-	if d.runtimeTelemetry == nil {
-		d.runtimeTelemetry = make(map[string]Metrics)
-	}
-	for name, metric := range stats {
-		d.runtimeTelemetry[name] = metric
-	}
+	d.runtimeTelemetry = stats
 	d.telemetryMu.Unlock()
 	return nil
 }
@@ -168,6 +166,12 @@ func (d *DockerCLI) applyCachedRuntimeTelemetry(containers []RuntimeContainer) {
 	d.telemetryMu.RLock()
 	defer d.telemetryMu.RUnlock()
 	for i := range containers {
+		// Metadata is authoritative for lifecycle state. A container may stop
+		// between telemetry refreshes, so never render the last running sample
+		// on a row that is no longer running.
+		if containers[i].State != "running" {
+			continue
+		}
 		metric, ok := d.runtimeTelemetry[containers[i].Name]
 		if !ok {
 			continue
