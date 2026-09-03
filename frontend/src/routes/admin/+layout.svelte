@@ -14,7 +14,7 @@
   </aside>
 
   <main class="min-w-0 px-3.5 py-3">
-    <div class="w-full">
+    <div class="w-full space-y-3">
       <header class="border-b border-[color:var(--workspace-divider)] pb-3">
         <h1 class="text-lg font-semibold text-gray-950 dark:text-white">
           {currentSection.title}
@@ -24,7 +24,7 @@
         </p>
       </header>
 
-      <div class="admin-content min-w-0 pt-3">
+      <div class="admin-content min-w-0">
         <slot />
       </div>
     </div>
