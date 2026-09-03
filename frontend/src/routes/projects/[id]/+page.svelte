@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowRight, ArrowUpRight, Database, ExternalLink } from '@lucide/svelte';
+	import { ArrowRight, ArrowUpRight, ExternalLink } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
@@ -116,22 +116,6 @@
 						</ActionLink>
 					{/if}
 				</div>
-			</section>
-		{/if}
-
-		{#if project.deployMode !== 'static'}
-			<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
-				<a href={`${base}/database`} class="group block min-w-0 px-4 py-3">
-					<div class="flex items-center justify-between gap-3">
-						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-							<Database class="h-3.5 w-3.5" aria-hidden="true" />
-							Database
-						</div>
-						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-gray-500" aria-hidden="true" />
-					</div>
-					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Browse and manage your project database.</p>
-				</a>
 			</section>
 		{/if}
 
