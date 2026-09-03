@@ -51,11 +51,31 @@ For route families with a secondary sidebar, the content column owns exactly one
 - horizontal: **14px** (`px-3.5`);
 - vertical: **12px** (`py-3`).
 
-The Project Overview geometry is the reference implementation.
+The `/projects/:id` project-detail layout is the reference implementation for this parent inset.
 
 Child routes MUST NOT add another route-level outer padding wrapper. A nested `page-shell` inside these families is normalized to full width with zero extra padding.
 
 Do not compensate for inconsistent child anatomy by changing this outer inset route-by-route.
+
+### Canonical project-detail horizontal gutter
+
+For every `/projects/:id/*` route, the final left/right content alignment is defined by the geometry already used by **Overview, Deployments, and Logs**. Those three routes are the canonical visual reference for project-detail horizontal spacing.
+
+The parent `main` inset and the inner content gutter are two separate layers:
+
+- parent project `main`: **14px** horizontal (`px-3.5`);
+- ordinary section/body/row content inside the route surface: **16px** horizontal (`px-4` or equivalent);
+- shared page/section heading bars may use **20px** horizontal (`px-5` / `.panel-header`) when matching Deployments/Logs header geometry.
+
+Rules:
+
+- first-level route surfaces and divider lines remain full width inside the parent project content column;
+- do **not** fix alignment by wrapping the entire leaf page in another `px-4`, because that incorrectly indents the surface/divider itself;
+- place horizontal padding on the readable content, heading, toolbar, or row inside the surface;
+- Environment, Database data view, General, Source, Resources, Webhook, and Danger zone MUST align their readable content to the same gutter family as Overview, Deployments, and Logs;
+- Schema Design remains a full-canvas exception because it deliberately leaves the ordinary project-detail surface.
+
+If a future project-detail page looks horizontally inconsistent, compare it against `/projects/:id`, `/projects/:id/deployments`, and `/projects/:id/logs` before changing any padding value.
 
 ---
 
@@ -77,7 +97,8 @@ A normal leaf page heading is:
 
 - title: `text-lg`, semibold;
 - subtitle: at most one short sentence;
-- left aligned to the same x-origin as all sections below it;
+- left aligned to the same x-origin as the readable section content below it;
+- horizontally padded using the canonical project-detail gutter when inside `/projects/:id/*`;
 - separated from following content by deliberate section rhythm, not a floating card.
 
 Do not create a black nested title strip, rounded title card, or second application header inside a route.
@@ -135,8 +156,10 @@ Different fills are reserved for real semantic/layer changes: warnings/errors/su
 - No shadow.
 - No large external card gap.
 - Use a bottom divider between consecutive sections.
-- Section header padding is typically `12px 16px`.
-- Section body rows use the same x-origin.
+- First-level divider/surface width is not reduced merely to create text padding.
+- Ordinary body content uses approximately `12px 16px` geometry.
+- Shared `.panel-header` geometry may use `12px 20px`.
+- Section body rows use the same readable x-origin as neighboring route content.
 
 ### Canonical settings row
 
@@ -149,9 +172,12 @@ Settings/configuration pages use one row grammar:
 Desktop target:
 
 - label column: **9–12rem**;
+- row horizontal padding: **16px** inside the full-width row surface;
 - row vertical padding: **12px**;
 - divider between rows;
 - content column remains flexible but controls do not stretch arbitrarily.
+
+Project settings headings follow the project-detail heading gutter; rows follow the 16px body gutter. Do not leave settings text flush against the parent `main` inset while Overview/Deployments/Logs use an inner content gutter.
 
 ### Control width rule
 
@@ -332,6 +358,14 @@ Routes:
 - Webhook
 - Danger zone
 
+Horizontal reference hierarchy:
+
+1. `/projects/:id` Overview;
+2. `/projects/:id/deployments`;
+3. `/projects/:id/logs`.
+
+These three routes define the accepted left/right geometry for the project-detail family. Other project leaves conform to them; they do not define independent padding contracts.
+
 Rules:
 
 - Overview owns operational summary/observability.
@@ -344,6 +378,8 @@ Rules:
 - Resources owns resource profile and limits.
 - Webhook owns webhook endpoint/secret/setup.
 - Danger zone owns deletion only.
+- Normal project leaf headings use the same readable horizontal gutter family as the canonical reference routes.
+- Normal project leaf rows/bodies use the 16px inner gutter while first-level dividers stay full width.
 
 No route should restate data whose canonical owner is a sibling route unless the duplicate is required to execute the current task.
 
@@ -368,10 +404,11 @@ MCP token actions that act on the same secret belong in the same row/action grou
 Database Studio is a project leaf, not a separate embedded application.
 
 - Do not render an additional dark/black nested application header.
-- `Database Studio` uses the normal project leaf heading grammar.
+- `Database Studio` uses the normal project leaf heading grammar and project-detail horizontal gutter.
 - `Schema design` is a contextual page action aligned with that heading.
 - Connection status and table browsing are ordinary sections below it.
 - The table/data workspace may still consume the available width because it is a real data tool.
+- The full-canvas Schema Design workspace is exempt from the ordinary leaf gutter only while it is in full-canvas mode.
 
 ---
 
@@ -442,6 +479,8 @@ Do not introduce:
 
 - first-level rounded card stacks;
 - route-local outer padding that conflicts with the parent family inset;
+- a whole-page leaf `px-4` wrapper used to fake the inner project-detail content gutter;
+- project-detail headings/rows flush against the 14px parent inset while Overview/Deployments/Logs use an inner content gutter;
 - nested application headers inside leaf pages;
 - repeated project operational bars on non-operational settings/data leaves;
 - sibling-route shortcut cards with no unique data;
@@ -464,10 +503,11 @@ When implementing authenticated UI work:
 
 1. Read this file first.
 2. Identify the parent route family and its canonical outer inset.
-3. Identify the single owner of each piece of information and each action.
-4. Fix shared behavior centrally before adding route-specific CSS.
-5. Keep route-specific exceptions only when workflow semantics genuinely differ.
-6. Audit loading, empty, disabled, focus, error, destructive, and responsive states.
-7. Run frontend unit tests, Svelte/TypeScript checks, production build, and repository CI before merge.
+3. For project-detail horizontal spacing, compare against Overview, Deployments, and Logs before inventing a new gutter.
+4. Identify the single owner of each piece of information and each action.
+5. Fix shared behavior centrally before adding route-specific CSS.
+6. Keep route-specific exceptions only when workflow semantics genuinely differ.
+7. Audit loading, empty, disabled, focus, error, destructive, and responsive states.
+8. Run frontend unit tests, Svelte/TypeScript checks, production build, and repository CI before merge.
 
-The target is one coherent operational workspace: **one outer geometry, one section grammar, one control system, one technical-output palette, semantic color where data requires it, and no redundant navigation or state.**
+The target is one coherent operational workspace: **one outer geometry, one project-detail gutter family, one section grammar, one control system, one technical-output palette, semantic color where data requires it, and no redundant navigation or state.**
