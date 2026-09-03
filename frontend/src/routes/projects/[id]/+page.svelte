@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowRight, Database, ExternalLink, History, Settings2 } from '@lucide/svelte';
+	import { ArrowRight, ArrowUpRight, Database, ExternalLink, Settings2 } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
@@ -32,15 +32,6 @@
 	$: attentionHeadline = operationalState?.headline === 'Deploying'
 		? 'Deployment in progress'
 		: (operationalState?.headline ?? '');
-	$: runtimeLabel = project
-		? project.deployMode === 'compose'
-			? 'Docker Compose'
-			: project.deployMode === 'dockerfile'
-				? 'Dockerfile'
-				: project.deployMode === 'static'
-					? 'Static site'
-					: 'Container image'
-		: '-';
 	$: additionalEndpoints = project
 		? httpRoutes.map((route) => ({
 			...route,
@@ -128,34 +119,34 @@
 			</section>
 		{/if}
 
-		<section class="workspace-section border-b border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900">
-			<div class={`grid gap-px ${project.deployMode === 'static' ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
-				<a href={`${base}/settings`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
+		<section class="workspace-section border-b border-[color:var(--workspace-divider)]">
+			<div class={`grid ${project.deployMode === 'static' ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
+				<a
+					href={`${base}/settings`}
+					class={`group min-w-0 px-4 py-3 ${project.deployMode === 'static' ? '' : 'sm:border-r sm:border-[color:var(--workspace-divider)]'}`}
+				>
 					<div class="flex items-center justify-between gap-3">
 						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
 							<Settings2 class="h-3.5 w-3.5" aria-hidden="true" />
 							Settings
 						</div>
-						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-gray-500" aria-hidden="true" />
 					</div>
-					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">{runtimeLabel}</p>
-					{#if project.deployMode === 'static'}
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Source · build · environment</p>
-					{:else}
-						<p class="mt-0.5 font-mono text-xs text-gray-500 dark:text-gray-400">:{project.appPort} · {project.memoryLimitMb} MB · {project.cpuLimit} CPU</p>
-					{/if}
+					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Project settings</p>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Your project settings and configuration.</p>
 				</a>
 
 				{#if project.deployMode !== 'static'}
-					<a href={`${base}/database`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
+					<a href={`${base}/database`} class="group min-w-0 px-4 py-3">
 						<div class="flex items-center justify-between gap-3">
 							<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
 								<Database class="h-3.5 w-3.5" aria-hidden="true" />
 								Database
 							</div>
-							<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+							<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-gray-500" aria-hidden="true" />
 						</div>
 						<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Browse and manage your project database.</p>
 					</a>
 				{/if}
 			</div>
@@ -193,8 +184,8 @@
 		<section class="workspace-section bg-white dark:bg-neutral-950">
 			<div class="flex items-center justify-between gap-3 border-b border-gray-100/70 px-4 py-3 dark:border-neutral-900">
 				<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Latest deployment</h2>
-				<ActionLink href={`${base}/deployments`} variant="ghost" size="xs">
-					<History slot="icon" class="h-3.5 w-3.5" />
+				<ActionLink href={`${base}/deployments`} variant="secondary" size="xs">
+					<ArrowUpRight slot="icon" class="h-3.5 w-3.5" />
 					View all
 				</ActionLink>
 			</div>
