@@ -263,9 +263,9 @@
 		{/each}
 	</div>
 
-	{#if showPagination}
-		<svelte:fragment slot="footer">
+	<svelte:fragment slot="footer">
+		{#if showPagination}
 			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleDeployments.length} {hasNext} {loading} label="Deployments" />
-		</svelte:fragment>
-	{/if}
+		{/if}
+	</svelte:fragment>
 </TableShell>
