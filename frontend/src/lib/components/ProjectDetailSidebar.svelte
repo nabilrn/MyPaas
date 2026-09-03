@@ -1,0 +1,86 @@
+<script lang="ts">
+	import {
+		Box,
+		CircleAlert,
+		Database,
+		FileText,
+		GitBranch,
+		History,
+		KeyRound,
+		LayoutDashboard,
+		Settings2,
+		Webhook
+	} from '@lucide/svelte';
+	import { page } from '$app/stores';
+	import ProjectSecondaryNavItem from './ProjectSecondaryNavItem.svelte';
+
+	export let projectId = '';
+
+	type NavItem = {
+		label: string;
+		href: string;
+		icon: any;
+		exact?: boolean;
+		danger?: boolean;
+	};
+
+	$: base = `/projects/${projectId}`;
+	$: groups = [
+		{
+			label: 'Project',
+			items: [
+				{ label: 'Overview', href: base, icon: LayoutDashboard, exact: true },
+				{ label: 'Deployments', href: `${base}/deployments`, icon: History },
+				{ label: 'Logs', href: `${base}/logs`, icon: FileText }
+			] satisfies NavItem[]
+		},
+		{
+			label: 'Data',
+			items: [
+				{ label: 'Environment', href: `${base}/env`, icon: KeyRound },
+				{ label: 'Database', href: `${base}/database`, icon: Database }
+			] satisfies NavItem[]
+		},
+		{
+			label: 'Configuration',
+			items: [
+				{ label: 'General', href: `${base}/settings`, icon: Settings2, exact: true },
+				{ label: 'Source', href: `${base}/settings/source`, icon: GitBranch },
+				{ label: 'Resources', href: `${base}/settings/resources`, icon: Box }
+			] satisfies NavItem[]
+		},
+		{
+			label: 'Integrations',
+			items: [{ label: 'Webhook', href: `${base}/settings/webhook`, icon: Webhook }] satisfies NavItem[]
+		},
+		{
+			label: 'Advanced',
+			items: [{ label: 'Danger zone', href: `${base}/settings/danger`, icon: CircleAlert, danger: true }] satisfies NavItem[]
+		}
+	];
+
+	function isActive(item: NavItem) {
+		const pathname = $page.url.pathname;
+		if (item.exact) return pathname === item.href;
+		return pathname === item.href || pathname.startsWith(`${item.href}/`);
+	}
+</script>
+
+<nav aria-label="Project navigation" class="space-y-5 lg:sticky lg:top-4">
+	{#each groups as group}
+		<div>
+			<p class="px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">{group.label}</p>
+			<div class="mt-2 space-y-1">
+				{#each group.items as item}
+					<ProjectSecondaryNavItem
+						active={isActive(item)}
+						danger={item.danger ?? false}
+						href={item.href}
+						label={item.label}
+						icon={item.icon}
+					/>
+				{/each}
+			</div>
+		</div>
+	{/each}
+</nav>
