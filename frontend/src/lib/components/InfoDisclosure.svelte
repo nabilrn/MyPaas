@@ -28,7 +28,7 @@
 <span class="relative inline-block align-middle" use:dismissable={{ enabled: expanded, onDismiss: close }}>
 	<button
 		type="button"
-		class="app-focus inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-200"
+		class="app-focus control-square inline-flex items-center justify-center text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-gray-900 dark:hover:text-gray-200"
 		aria-label={label}
 		aria-expanded={expanded}
 		aria-controls={panelId}
