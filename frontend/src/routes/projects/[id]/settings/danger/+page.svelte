@@ -2,4 +2,4 @@
 	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
 </script>
 
-<ProjectSettingsSection section="general" />
+<ProjectSettingsSection section="danger" />
