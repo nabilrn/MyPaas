@@ -5,3 +5,13 @@
 <div class="project-settings-danger">
 	<ProjectSettingsSection section="danger" />
 </div>
+
+<style>
+	.project-settings-danger :global(input.field) {
+		max-width: 36rem;
+	}
+
+	.project-settings-danger :global(section) {
+		max-width: 56rem;
+	}
+</style>
