@@ -2,7 +2,7 @@
 	import { Check, ChevronDown } from '@lucide/svelte';
 	import { createEventDispatcher } from 'svelte';
 
-	export type SelectMenuOption = {
+	type SelectMenuOption = {
 		value: string;
 		label: string;
 		description?: string;
@@ -45,7 +45,7 @@
 		on:click={() => (open = !open)}
 	>
 		<span class="min-w-0 flex-1 truncate">{selected?.label ?? placeholder}</span>
-		<ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition-transform" class:rotate-180={open} aria-hidden="true" />
+		<ChevronDown class={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
 	</button>
 
 	{#if open}
