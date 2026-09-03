@@ -5,28 +5,40 @@ type Theme = 'light' | 'dark';
 
 function resolveInitial(): Theme {
 	if (!browser) return 'light';
-	const stored = localStorage.getItem('theme');
-	if (stored === 'dark' || stored === 'light') return stored;
+	try {
+		const stored = localStorage.getItem('theme');
+		if (stored === 'dark' || stored === 'light') return stored;
+	} catch {
+		// Storage may be unavailable by browser policy.
+	}
 	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function createThemeStore() {
-	const { subscribe, set, update } = writable<Theme>(resolveInitial());
+	const initial = resolveInitial();
+	const { subscribe, set, update } = writable<Theme>(initial);
 
-	function apply(theme: Theme) {
+	function apply(theme: Theme, persist = true) {
 		if (!browser) return;
-		document.documentElement.classList.toggle('dark', theme === 'dark');
-		localStorage.setItem('theme', theme);
+		const dark = theme === 'dark';
+		document.documentElement.classList.toggle('dark', dark);
+		document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+		if (!persist) return;
+		try {
+			localStorage.setItem('theme', theme);
+		} catch {
+			// Keep the in-memory preference even when storage is unavailable.
+		}
 	}
 
-	// Apply immediately on init
-	apply(resolveInitial());
+	// Reconcile with the blocking app.html prepaint without rewriting persistence.
+	apply(initial, false);
 
 	return {
 		subscribe,
 		toggle() {
-			update((t) => {
-				const next = t === 'light' ? 'dark' : 'light';
+			update((theme) => {
+				const next = theme === 'light' ? 'dark' : 'light';
 				apply(next);
 				return next;
 			});
