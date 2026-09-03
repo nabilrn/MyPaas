@@ -4,41 +4,74 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
+
+// RuntimeContainerNetwork is a compact network attachment shown in the host
+// inventory. The inventory is read-only; network lifecycle remains project-owned.
+type RuntimeContainerNetwork struct {
+	Name      string `json:"name"`
+	IPAddress string `json:"ipAddress"`
+}
 
 // RuntimeContainer is a host-wide read-only view of a container visible through
 // the Docker-compatible runtime. It intentionally includes platform/control
 // plane containers and unrelated host containers so owners can diagnose the
 // whole single-node runtime from one page.
 type RuntimeContainer struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Image            string  `json:"image"`
-	State            string  `json:"state"`
-	Status           string  `json:"status"`
-	ComposeProject   string  `json:"composeProject"`
-	Service          string  `json:"service"`
-	CPUPercent       float64 `json:"cpu"`
-	MemoryMB         float64 `json:"memoryMb"`
-	MemoryLimitMB    float64 `json:"memoryLimitMb"`
-	MetricsAvailable bool    `json:"metricsAvailable"`
+	ID               string                    `json:"id"`
+	Name             string                    `json:"name"`
+	Image            string                    `json:"image"`
+	State            string                    `json:"state"`
+	Status           string                    `json:"status"`
+	Uptime           string                    `json:"uptime"`
+	Health           string                    `json:"health"`
+	Ports            string                    `json:"ports"`
+	RestartCount     int                       `json:"restartCount"`
+	DetailsAvailable bool                      `json:"detailsAvailable"`
+	Networks         []RuntimeContainerNetwork `json:"networks"`
+	ComposeProject   string                    `json:"composeProject"`
+	Service          string                    `json:"service"`
+	CPUPercent       float64                   `json:"cpu"`
+	MemoryMB         float64                   `json:"memoryMb"`
+	MemoryLimitMB    float64                   `json:"memoryLimitMb"`
+	MetricsAvailable bool                      `json:"metricsAvailable"`
 }
 
 type dockerPSLine struct {
-	ID     string `json:"ID"`
-	Names  string `json:"Names"`
-	Image  string `json:"Image"`
-	State  string `json:"State"`
-	Status string `json:"Status"`
-	Labels string `json:"Labels"`
+	ID         string `json:"ID"`
+	Names      string `json:"Names"`
+	Image      string `json:"Image"`
+	State      string `json:"State"`
+	Status     string `json:"Status"`
+	RunningFor string `json:"RunningFor"`
+	Ports      string `json:"Ports"`
+	Labels     string `json:"Labels"`
+}
+
+type runtimeInventoryInspectRow struct {
+	ID           string `json:"Id"`
+	RestartCount int    `json:"RestartCount"`
+	State        struct {
+		Health *struct {
+			Status string `json:"Status"`
+		} `json:"Health"`
+	} `json:"State"`
+	NetworkSettings struct {
+		Networks map[string]struct {
+			IPAddress string `json:"IPAddress"`
+		} `json:"Networks"`
+	} `json:"NetworkSettings"`
 }
 
 const (
-	runtimeStatsFormat           = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
-	runtimeTelemetryRefreshEvery = 15 * time.Second
-	runtimeTelemetryTimeout      = 5 * time.Second
+	runtimeStatsFormat             = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+	runtimeTelemetryRefreshEvery   = 15 * time.Second
+	runtimeTelemetryTimeout        = 12 * time.Second
+	runtimeBulkTelemetryTimeout    = 4 * time.Second
+	runtimeFallbackTelemetryTimeout = 2 * time.Second
 )
 
 // RuntimeContainerMetadata returns every container visible to the
@@ -61,6 +94,10 @@ func (d *DockerCLI) RuntimeContainerMetadata(ctx context.Context) ([]RuntimeCont
 			Image:          strings.TrimSpace(raw.Image),
 			State:          strings.ToLower(strings.TrimSpace(raw.State)),
 			Status:         strings.TrimSpace(raw.Status),
+			Uptime:         runtimeUptime(raw.RunningFor, raw.Status),
+			Health:         runtimeHealth(raw.Status),
+			Ports:          strings.TrimSpace(raw.Ports),
+			Networks:       []RuntimeContainerNetwork{},
 			ComposeProject: dockerLabel(raw.Labels, "com.docker.compose.project"),
 			Service:        dockerLabel(raw.Labels, "com.docker.compose.service"),
 		})
@@ -68,7 +105,100 @@ func (d *DockerCLI) RuntimeContainerMetadata(ctx context.Context) ([]RuntimeCont
 	if containers == nil {
 		containers = []RuntimeContainer{}
 	}
+
+	// Restart count and network attachments are useful diagnostics but should
+	// never make the fast inventory unavailable. One batched inspect enriches
+	// all rows; failures leave DetailsAvailable false instead of failing the page.
+	_ = d.enrichRuntimeContainerDetails(ctx, containers)
 	return containers, nil
+}
+
+func (d *DockerCLI) enrichRuntimeContainerDetails(ctx context.Context, containers []RuntimeContainer) error {
+	ids := make([]string, 0, len(containers))
+	for _, item := range containers {
+		if strings.TrimSpace(item.ID) != "" {
+			ids = append(ids, item.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	args := append([]string{"inspect"}, ids...)
+	out, err := commandContext(ctx, "docker", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker inspect inventory details: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return applyRuntimeContainerDetails(containers, out)
+}
+
+func applyRuntimeContainerDetails(containers []RuntimeContainer, raw []byte) error {
+	var details []runtimeInventoryInspectRow
+	if err := json.Unmarshal(raw, &details); err != nil {
+		return fmt.Errorf("decode docker inventory details: %w", err)
+	}
+	byID := make(map[string]runtimeInventoryInspectRow, len(details))
+	for _, item := range details {
+		if id := strings.TrimSpace(item.ID); id != "" {
+			byID[id] = item
+		}
+	}
+
+	for i := range containers {
+		item, ok := byID[containers[i].ID]
+		if !ok {
+			continue
+		}
+		containers[i].DetailsAvailable = true
+		containers[i].RestartCount = item.RestartCount
+		if item.State.Health != nil && strings.TrimSpace(item.State.Health.Status) != "" {
+			containers[i].Health = strings.ToLower(strings.TrimSpace(item.State.Health.Status))
+		}
+		containers[i].Networks = runtimeNetworks(item.NetworkSettings.Networks)
+	}
+	return nil
+}
+
+func runtimeNetworks(networks map[string]struct {
+	IPAddress string `json:"IPAddress"`
+}) []RuntimeContainerNetwork {
+	out := make([]RuntimeContainerNetwork, 0, len(networks))
+	for name, network := range networks {
+		out = append(out, RuntimeContainerNetwork{
+			Name:      strings.TrimSpace(name),
+			IPAddress: strings.TrimSpace(network.IPAddress),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+func runtimeHealth(status string) string {
+	value := strings.ToLower(status)
+	switch {
+	case strings.Contains(value, "unhealthy"):
+		return "unhealthy"
+	case strings.Contains(value, "health: starting"):
+		return "starting"
+	case strings.Contains(value, "healthy"):
+		return "healthy"
+	default:
+		return ""
+	}
+}
+
+func runtimeUptime(runningFor, status string) string {
+	status = strings.TrimSpace(status)
+	if strings.HasPrefix(status, "Up ") {
+		value := strings.TrimSpace(strings.TrimPrefix(status, "Up "))
+		if index := strings.Index(value, " ("); index >= 0 {
+			value = strings.TrimSpace(value[:index])
+		}
+		if value != "" {
+			return value
+		}
+	}
+	return strings.TrimSpace(runningFor)
 }
 
 // RuntimeContainers returns every container visible to the Docker-compatible
@@ -121,7 +251,7 @@ func (d *DockerCLI) refreshRuntimeTelemetry(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	stats, err := collectRuntimeStats(ctx, containers)
+	stats, err := d.collectRuntimeStats(ctx, containers)
 	if err != nil {
 		return err
 	}
@@ -135,20 +265,67 @@ func (d *DockerCLI) refreshRuntimeTelemetry(ctx context.Context) error {
 	return nil
 }
 
-func collectRuntimeStats(ctx context.Context, containers []RuntimeContainer) (map[string]Metrics, error) {
+// collectRuntimeStats prefers one targeted bulk stats call, retries through the
+// runtime-wide bulk form when a Docker-compatible runtime omits rows, then uses
+// the existing single-container Stats contract only for still-missing samples.
+// All of this stays on the background path; user requests never wait on stats.
+func (d *DockerCLI) collectRuntimeStats(ctx context.Context, containers []RuntimeContainer) (map[string]Metrics, error) {
 	targets := runtimeStatsTargets(containers)
 	if len(targets) == 0 {
 		return map[string]Metrics{}, nil
 	}
 
-	args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
-	args = append(args, targets...)
-	statsOut, err := commandContext(ctx, "docker", args...).CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("docker stats inventory: %w: %s", err, strings.TrimSpace(string(statsOut)))
+	targetSet := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		targetSet[target] = struct{}{}
+	}
+	stats := make(map[string]Metrics, len(targets))
+
+	bulkOut, bulkErr := runRuntimeStatsCommand(ctx, targets)
+	if bulkErr == nil {
+		mergeTargetRuntimeStats(stats, parseRuntimeStats(bulkOut, len(targets)), targetSet)
 	}
 
-	return parseRuntimeStats(statsOut, len(targets)), nil
+	if len(stats) < len(targets) && ctx.Err() == nil {
+		allOut, allErr := runRuntimeStatsCommand(ctx, nil)
+		if allErr == nil {
+			mergeTargetRuntimeStats(stats, parseRuntimeStats(allOut, len(targets)), targetSet)
+		}
+	}
+
+	for _, target := range targets {
+		if _, ok := stats[target]; ok || ctx.Err() != nil {
+			continue
+		}
+		fallbackCtx, cancel := context.WithTimeout(ctx, runtimeFallbackTelemetryTimeout)
+		metric, err := d.Stats(fallbackCtx, target)
+		cancel()
+		if err == nil {
+			stats[target] = metric
+		}
+	}
+
+	if len(stats) == 0 && bulkErr != nil {
+		return nil, fmt.Errorf("docker stats inventory: %w: %s", bulkErr, strings.TrimSpace(string(bulkOut)))
+	}
+	return stats, nil
+}
+
+func runRuntimeStatsCommand(ctx context.Context, targets []string) ([]byte, error) {
+	bulkCtx, cancel := context.WithTimeout(ctx, runtimeBulkTelemetryTimeout)
+	defer cancel()
+	args := []string{"stats", "--no-stream", "--format", runtimeStatsFormat}
+	args = append(args, targets...)
+	return commandContext(bulkCtx, "docker", args...).CombinedOutput()
+}
+
+func mergeTargetRuntimeStats(dst, source map[string]Metrics, targets map[string]struct{}) {
+	for name, metric := range source {
+		if _, ok := targets[name]; !ok {
+			continue
+		}
+		dst[name] = metric
+	}
 }
 
 func runtimeStatsTargets(containers []RuntimeContainer) []string {
