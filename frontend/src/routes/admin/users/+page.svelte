@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { Plus, RefreshCw, X } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import ActionButton from '$components/ActionButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
+	import { trapDialogFocus } from '$lib/utils/dialogFocus';
 	import type { User } from '$types';
 
 	const pageSize = 10;
@@ -16,6 +17,9 @@
 	let addEmail = '';
 	let adding = false;
 	let savingUser = false;
+	let addDialog: HTMLElement | null = null;
+	let addEmailInput: HTMLInputElement | null = null;
+	let addReturnFocus: HTMLElement | null = null;
 
 	$: pageStart = currentPage * pageSize;
 	$: visibleUsers = users.slice(pageStart, pageStart + pageSize);
@@ -36,14 +40,24 @@
 		}
 	}
 
+	function openAddOwner(event: MouseEvent) {
+		addReturnFocus = event.currentTarget as HTMLElement;
+		adding = true;
+		void tick().then(() => addEmailInput?.focus());
+	}
+
 	async function handleAdd() {
 		if (!addEmail.trim() || savingUser) return;
 		savingUser = true;
 		try {
 			await api.admin.addUser({ email: addEmail.trim() });
 			toast.success('Owner added');
+			const returnTarget = addReturnFocus;
 			adding = false;
 			addEmail = '';
+			addReturnFocus = null;
+			await tick();
+			returnTarget?.focus();
 			await load();
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Failed to add owner');
@@ -54,8 +68,21 @@
 
 	function closeAddOwner() {
 		if (savingUser) return;
+		const returnTarget = addReturnFocus;
 		adding = false;
 		addEmail = '';
+		addReturnFocus = null;
+		void tick().then(() => returnTarget?.focus());
+	}
+
+	function handleWindowKeydown(event: KeyboardEvent) {
+		if (!adding) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeAddOwner();
+			return;
+		}
+		trapDialogFocus(event, addDialog);
 	}
 
 	function initial(email: string) {
@@ -66,6 +93,8 @@
 		return value ? new Date(value).toLocaleDateString() : '—';
 	}
 </script>
+
+<svelte:window on:keydown={handleWindowKeydown} />
 
 <svelte:head>
 	<title>Users · MyPaaS Admin</title>
@@ -87,7 +116,7 @@
 					<RefreshCw slot="icon" class="h-3.5 w-3.5" />
 					Refresh
 				</ActionButton>
-				<ActionButton variant="primary" size="xs" on:click={() => (adding = true)}>
+				<ActionButton variant="primary" size="xs" on:click={openAddOwner}>
 					<Plus slot="icon" class="h-3.5 w-3.5" />
 					Add owner
 				</ActionButton>
@@ -146,7 +175,7 @@
 {#if adding}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button type="button" class="absolute inset-0 cursor-default bg-gray-950/45" aria-label="Close add owner" on:click={closeAddOwner}></button>
-		<div class="overlay relative w-full max-w-lg" role="dialog" aria-modal="true" aria-labelledby="add-owner-title">
+		<div bind:this={addDialog} class="overlay relative w-full max-w-lg" role="dialog" aria-modal="true" aria-labelledby="add-owner-title" tabindex="-1">
 			<div class="panel-header flex items-start justify-between gap-3">
 				<h2 id="add-owner-title" class="panel-title">Add owner</h2>
 				<ActionButton variant="ghost" size="xs" on:click={closeAddOwner} disabled={savingUser}><X slot="icon" class="h-4 w-4" />Close</ActionButton>
@@ -154,7 +183,7 @@
 			<form class="space-y-4 p-4" on:submit|preventDefault={handleAdd}>
 				<div>
 					<label class="field-label" for="user-email">Email</label>
-					<input id="user-email" type="email" required bind:value={addEmail} placeholder="user@example.com" class="field w-full" />
+					<input bind:this={addEmailInput} id="user-email" type="email" required bind:value={addEmail} placeholder="user@example.com" class="field w-full" />
 				</div>
 				<div class="flex justify-end gap-2">
 					<ActionButton variant="ghost" on:click={closeAddOwner} disabled={savingUser}>Cancel</ActionButton>
