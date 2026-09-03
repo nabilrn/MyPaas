@@ -1,29 +1,22 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, ArrowRight, Database, ExternalLink, History, KeyRound, Settings2 } from '@lucide/svelte';
+	import { ArrowRight, Database, ExternalLink, History, Settings2 } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ActionLink from '$components/ActionLink.svelte';
 	import EmptyState from '$components/EmptyState.svelte';
-	import EnvironmentVariablesDialog from '$components/EnvironmentVariablesDialog.svelte';
 	import ProjectObservability from '$components/ProjectObservability.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
 	import StatusBadge from '$components/StatusBadge.svelte';
 	import { api, type ProjectHTTPRoute } from '$api';
 	import { deploymentHistoryLabel } from '$lib/utils/deploymentHistory';
-	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { deriveProjectOperationalState } from '$lib/utils/project-operational-state';
 	import { projectRouteURL } from '$lib/utils/urls';
-	import { projectStreamMetrics } from '$stores/project-stream';
-	import type { DBStudioStatus, Deployment, Project } from '$types';
+	import type { Deployment, Project } from '$types';
 
 	let project: Project | null = null;
 	let deployments: Deployment[] = [];
-	let envCount: number | null = null;
-	let dbStatus: DBStudioStatus | null = null;
 	let httpRoutes: ProjectHTTPRoute[] = [];
-	let supportingSummaryLoaded = false;
 	let overviewInFlight = false;
-	let environmentDialogOpen = false;
 	let error = '';
 
 	$: base = `/projects/${$page.params.id}`;
@@ -35,9 +28,7 @@
 			runtimeEvidence: project.deployMode === 'static' ? 'not_applicable' : undefined
 		})
 		: null;
-	$: attentionActionHref = operationalState?.primaryAction === 'view_logs'
-		? `${base}/logs`
-		: '';
+	$: attentionActionHref = operationalState?.primaryAction === 'view_logs' ? `${base}/logs` : '';
 	$: attentionHeadline = operationalState?.headline === 'Deploying'
 		? 'Deployment in progress'
 		: (operationalState?.headline ?? '');
@@ -50,31 +41,19 @@
 					? 'Static site'
 					: 'Container image'
 		: '-';
-	$: databaseLabel = dbStatus?.configured
-		? `${dbStatus.connection?.driver?.toUpperCase() ?? 'Database'} · ${dbStatus.connected ? 'Connected' : 'Unavailable'}`
-		: supportingSummaryLoaded
-			? 'Not configured'
-			: 'Checking…';
 	$: additionalEndpoints = project
 		? httpRoutes.map((route) => ({
 			...route,
 			url: projectRouteURL(project!.subdomain || project!.name, route.name, $page.url.protocol, $page.url.hostname)
 		}))
 		: [];
-	$: primaryMetric = project ? selectPrimaryProjectMetric($projectStreamMetrics, project.mainService) : null;
-	$: usageLabel = primaryMetric
-		? `${formatMetricValue(primaryMetric.memoryMb)} MB · ${primaryMetric.cpu.toFixed(1)}% CPU`
-		: 'Waiting for telemetry';
-	$: usageDetail = primaryMetric?.uptime ? `Up ${primaryMetric.uptime}` : 'Live runtime usage';
 
 	onMount(() => {
 		void loadOverview();
-		void loadSupportingSummary();
+		void loadAdditionalRoutes();
 
 		const overviewInterval = setInterval(() => void loadOverview(true), 5000);
-		return () => {
-			clearInterval(overviewInterval);
-		};
+		return () => clearInterval(overviewInterval);
 	});
 
 	async function loadOverview(background = false) {
@@ -95,23 +74,12 @@
 		}
 	}
 
-	async function loadSupportingSummary() {
-		const projectId = $page.params.id ?? '';
-		const [envResult, databaseResult, routeResult] = await Promise.allSettled([
-			api.env.list(projectId),
-			api.dbStudio.status(projectId),
-			api.projects.routes(projectId)
-		]);
-
-		envCount = envResult.status === 'fulfilled' ? envResult.value.length : null;
-		dbStatus = databaseResult.status === 'fulfilled' ? databaseResult.value : null;
-		httpRoutes = routeResult.status === 'fulfilled' ? routeResult.value : [];
-		supportingSummaryLoaded = true;
-	}
-
-	function formatMetricValue(value: number) {
-		if (!Number.isFinite(value)) return '0';
-		return value >= 100 ? value.toFixed(0) : value.toFixed(1);
+	async function loadAdditionalRoutes() {
+		try {
+			httpRoutes = await api.projects.routes($page.params.id ?? '');
+		} catch {
+			httpRoutes = [];
+		}
 	}
 
 	function formatDuration(start: string, end: string | null): string {
@@ -161,63 +129,33 @@
 		{/if}
 
 		<section class="workspace-section border-b border-gray-100/70 bg-gray-100/70 dark:border-neutral-900 dark:bg-neutral-900">
-			<div class={`grid gap-px sm:grid-cols-2 ${project.deployMode === 'static' ? 'xl:grid-cols-3' : 'xl:grid-cols-4'}`}>
-				{#if project.deployMode !== 'static'}
-					<a href={`${base}/settings`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
-						<div class="flex items-center justify-between gap-3">
-							<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-								<Settings2 class="h-3.5 w-3.5" aria-hidden="true" />
-								Runtime
-							</div>
-							<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-						</div>
-						<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">{runtimeLabel}</p>
-						<p class="mt-0.5 font-mono text-xs text-gray-500 dark:text-gray-400">:{project.appPort}</p>
-					</a>
-
-					<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-950">
-						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-							<Activity class="h-3.5 w-3.5" aria-hidden="true" />
-							Usage <span class="font-normal text-gray-400 dark:text-gray-500">Live</span>
-						</div>
-						<p class="metric-value mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">{usageLabel}</p>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{usageDetail}</p>
-					</div>
-				{/if}
-
-				<button type="button" class="group min-w-0 bg-white px-4 py-3 text-left hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900" on:click={() => (environmentDialogOpen = true)}>
+			<div class={`grid gap-px ${project.deployMode === 'static' ? 'grid-cols-1' : 'sm:grid-cols-2'}`}>
+				<a href={`${base}/settings`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
 					<div class="flex items-center justify-between gap-3">
 						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-							<KeyRound class="h-3.5 w-3.5" aria-hidden="true" />
-							Environment
+							<Settings2 class="h-3.5 w-3.5" aria-hidden="true" />
+							Settings
 						</div>
 						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
 					</div>
-					<p class="mt-1.5 truncate text-sm font-semibold text-gray-950 dark:text-white">{envCount === null ? (supportingSummaryLoaded ? 'Unavailable' : 'Checking…') : `${envCount} variable${envCount === 1 ? '' : 's'}`}</p>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">configured</p>
-				</button>
-
-				<a href={`${base}/database`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
-					<div class="flex items-center justify-between gap-3">
-						<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-							<Database class="h-3.5 w-3.5" aria-hidden="true" />
-							Database
-						</div>
-						<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-					</div>
-					<p class="mt-1.5 truncate text-sm font-semibold text-gray-950 dark:text-white">{databaseLabel}</p>
+					<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">{runtimeLabel}</p>
+					{#if project.deployMode === 'static'}
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Source · build · environment</p>
+					{:else}
+						<p class="mt-0.5 font-mono text-xs text-gray-500 dark:text-gray-400">:{project.appPort} · {project.memoryLimitMb} MB · {project.cpuLimit} CPU</p>
+					{/if}
 				</a>
 
-				{#if project.deployMode === 'static'}
-					<a href={`${base}/settings`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
+				{#if project.deployMode !== 'static'}
+					<a href={`${base}/database`} class="group min-w-0 bg-white px-4 py-3 hover:bg-gray-50/80 dark:bg-neutral-950 dark:hover:bg-neutral-900">
 						<div class="flex items-center justify-between gap-3">
 							<div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-								<Settings2 class="h-3.5 w-3.5" aria-hidden="true" />
-								Deployment limits
+								<Database class="h-3.5 w-3.5" aria-hidden="true" />
+								Database
 							</div>
 							<ArrowRight class="h-3.5 w-3.5 text-gray-400 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
 						</div>
-						<p class="metric-value mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">{project.memoryLimitMb} MB · {project.cpuLimit} CPU</p>
+						<p class="mt-1.5 text-sm font-semibold text-gray-950 dark:text-white">Database Studio</p>
 					</a>
 				{/if}
 			</div>
@@ -288,13 +226,4 @@
 			{/if}
 		</section>
 	</div>
-
-	{#if environmentDialogOpen}
-		<EnvironmentVariablesDialog
-			projectId={project.id}
-			fullPageHref={`${base}/env`}
-			on:close={() => (environmentDialogOpen = false)}
-			on:changed={(event) => (envCount = event.detail)}
-		/>
-	{/if}
 {/if}

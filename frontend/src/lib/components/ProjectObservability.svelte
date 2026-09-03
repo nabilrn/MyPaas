@@ -7,6 +7,7 @@
 	import MultiServiceMetricChart from '$components/MultiServiceMetricChart.svelte';
 	import { projectStreamConnection, projectStreamMetrics } from '$stores/project-stream';
 	import { appendProjectMetricHistory, type ProjectMetricHistory } from '$lib/utils/project-metric-history';
+	import { projectResourceScale } from '$lib/utils/project-resource-scale';
 	import type { CloudflareAnalytics, Project } from '$types';
 
 	export let project: Project;
@@ -23,6 +24,7 @@
 	$: services = Array.from(new Set(metricItems.map((item) => item.service).filter(Boolean)));
 	$: visibleServices = services.filter((service) => !hiddenServices.has(service));
 	$: visibleItems = metricItems.filter((item) => visibleServices.includes(item.service));
+	$: resourceScale = projectResourceScale(project, visibleItems);
 	$: currentSampleKey = $projectStreamMetrics?.collectedAt ?? '';
 	$: if (currentSampleKey && currentSampleKey !== lastHistorySample) {
 		metricHistory = appendProjectMetricHistory(metricHistory, metricItems);
@@ -217,8 +219,8 @@
 
 			{#if metricItems.length > 0 && visibleItems.length > 0}
 				<div class="grid gap-px border-t border-[color:var(--workspace-divider)] bg-[var(--workspace-divider)] xl:grid-cols-2">
-					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" heightClass="h-14" compact />
-					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix=" MB" heightClass="h-14" compact />
+					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" maxValue={resourceScale.cpuPercent} heightClass="h-14" compact />
+					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix=" MB" maxValue={resourceScale.memoryMb} heightClass="h-14" compact />
 				</div>
 			{:else if metricItems.length > 0}
 				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-4 text-xs text-gray-500 dark:text-gray-400">
