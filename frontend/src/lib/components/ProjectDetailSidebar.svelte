@@ -24,6 +24,13 @@
 		danger?: boolean;
 	};
 
+	type NavGroup = {
+		label: string;
+		items: NavItem[];
+	};
+
+	let groups: NavGroup[] = [];
+
 	$: base = `/projects/${projectId}`;
 	$: groups = [
 		{
@@ -32,14 +39,14 @@
 				{ label: 'Overview', href: base, icon: LayoutDashboard, exact: true },
 				{ label: 'Deployments', href: `${base}/deployments`, icon: History },
 				{ label: 'Logs', href: `${base}/logs`, icon: FileText }
-			] satisfies NavItem[]
+			]
 		},
 		{
 			label: 'Data',
 			items: [
 				{ label: 'Environment', href: `${base}/env`, icon: KeyRound },
 				{ label: 'Database', href: `${base}/database`, icon: Database }
-			] satisfies NavItem[]
+			]
 		},
 		{
 			label: 'Configuration',
@@ -47,15 +54,15 @@
 				{ label: 'General', href: `${base}/settings`, icon: Settings2, exact: true },
 				{ label: 'Source', href: `${base}/settings/source`, icon: GitBranch },
 				{ label: 'Resources', href: `${base}/settings/resources`, icon: Box }
-			] satisfies NavItem[]
+			]
 		},
 		{
 			label: 'Integrations',
-			items: [{ label: 'Webhook', href: `${base}/settings/webhook`, icon: Webhook }] satisfies NavItem[]
+			items: [{ label: 'Webhook', href: `${base}/settings/webhook`, icon: Webhook }]
 		},
 		{
 			label: 'Advanced',
-			items: [{ label: 'Danger zone', href: `${base}/settings/danger`, icon: CircleAlert, danger: true }] satisfies NavItem[]
+			items: [{ label: 'Danger zone', href: `${base}/settings/danger`, icon: CircleAlert, danger: true }]
 		}
 	];
 
