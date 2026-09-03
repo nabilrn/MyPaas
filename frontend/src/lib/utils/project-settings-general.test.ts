@@ -26,7 +26,8 @@ describe('project settings product contract', () => {
 		expect(generalInformation).toContain('Fixed after creation.');
 		expect(generalInformation).toContain('Public URL');
 		expect(generalInformation).toContain('Deployment type');
-		expect(generalInformation).toContain('Source');
+		expect(generalInformation).not.toContain('>Source</p>');
+		expect(generalInformation).not.toContain('sourceSummary');
 		expect(generalInformation).not.toContain('<input');
 	});
 
