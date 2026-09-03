@@ -42,4 +42,17 @@
     flex-direction: column;
     gap: 0;
   }
+
+  :global(.admin-content > .page-shell > section.rounded-lg) {
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  :global(.admin-content > .page-shell > section + section),
+  :global(.admin-content > .page-shell > section + details),
+  :global(.admin-content > .page-shell > details + section),
+  :global(.admin-content > .page-shell > details + details) {
+    margin-top: 1rem;
+  }
 </style>
