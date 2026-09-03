@@ -19,4 +19,8 @@
 	.project-settings-resources :global(textarea.field) {
 		max-width: 48rem;
 	}
+
+	.project-settings-resources :global(.border-y > .mt-4.grid) {
+		max-width: 32rem;
+	}
 </style>
