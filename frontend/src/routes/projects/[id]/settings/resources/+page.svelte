@@ -7,6 +7,10 @@
 </div>
 
 <style>
+	.project-settings-resources :global(.space-y-5 > :not([hidden]) ~ :not([hidden])) {
+		margin-top: 0.75rem;
+	}
+
 	.project-settings-resources :global(button[aria-label='Resource profile']),
 	.project-settings-resources :global(div[role='listbox'][aria-label='Resource profile']) {
 		max-width: 32rem;
