@@ -6,6 +6,18 @@
 		<title>MyPaas</title>
 		<script>
 			(() => {
+				try {
+					const stored = localStorage.getItem('theme');
+					const dark = stored === 'dark' || (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+					document.documentElement.classList.toggle('dark', dark);
+					document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+				} catch {
+					// Storage/media access may be restricted. CSS falls back to the light root tokens.
+				}
+			})();
+		</script>
+		<script>
+			(() => {
 				const recoveryKey = 'mypaas:asset-recovery-at';
 				const recoveryCookie = 'mypaas_asset_recovery_at';
 				const recoveryCooldownMs = 30_000;
