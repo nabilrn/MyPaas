@@ -7,10 +7,16 @@
 	<title>Environment · MyPaaS</title>
 </svelte:head>
 
-<div class="w-full space-y-4">
+<div class="project-environment-leaf w-full space-y-3">
 	<div>
 		<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Environment</h1>
 		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Variables available to your app at runtime.</p>
 	</div>
 	<ProjectEnvironmentSettings projectId={$page.params.id ?? ''} />
 </div>
+
+<style>
+	:global(.project-environment-leaf > .border-t > .flex > p:first-child) {
+		display: none;
+	}
+</style>
