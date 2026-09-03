@@ -2,11 +2,19 @@
 set -euo pipefail
 
 sudo apt-get update
-# ubuntu-24.04 hosted runners are currently rolling back from a bundled Podman
-# build to the distro build. Some runner revisions have Podman preinstalled
-# without the CNI plugins and can retain incompatible rootful storage state.
-# The runner is disposable, so make this smoke deterministic by explicitly
-# installing the distro networking plugins and starting from a clean store.
+
+# ubuntu-24.04 hosted runners are in a staged rollback from a bundled Podman
+# release to the distribution package. During that rollout the same workflow
+# can land on either a clean image or an image carrying conflicting Podman
+# state. This CI runner is disposable, so normalize it to the distro package
+# before exercising MyPaaS' Podman compatibility contract.
+if dpkg-query -W -f='${Status}' podman 2>/dev/null | grep -q 'install ok installed'; then
+  sudo systemctl stop podman.service podman.socket || true
+  sudo pkill -9 -x podman || true
+  sudo apt-get purge -y podman
+  sudo rm -rf /etc/containers /var/lib/containers/storage /run/containers/storage
+fi
+
 sudo apt-get install -y podman catatonit conmon crun containernetworking-plugins
 sudo systemctl stop docker.service docker.socket podman.service podman.socket || true
 sudo pkill -9 -x podman || true
