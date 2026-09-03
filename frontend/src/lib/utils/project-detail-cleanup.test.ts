@@ -53,7 +53,7 @@ describe('project detail cleanup contract', () => {
 		expect(deployControlPanel).toContain('px-4 py-2.5');
 		expect(deploymentsRoute).toContain('TableShell');
 		expect(logsRoute).toContain('SectionPanel');
-		expect(environmentRoute).toContain('class="px-5"');
+		expect(environmentRoute).toContain('class="px-5 pt-4"');
 		expect(environmentRoute).toContain('padding-inline: 1rem');
 		expect(settings).toContain('padding-inline: 1.25rem');
 		expect(settings).toContain('padding-inline: 1rem');
@@ -63,7 +63,7 @@ describe('project detail cleanup contract', () => {
 		expect(resourceSettings).toContain('padding-inline: 1rem');
 		expect(dangerSettings).toContain('padding-inline: 1.25rem');
 		expect(dangerSettings).toContain('padding-inline: 1rem');
-		expect(databaseLayout).toContain('px-5 pb-3');
+		expect(databaseLayout).toContain('px-5 pb-3 pt-4');
 		expect(effectiveConfiguration).toContain('border-y border-[color:var(--workspace-divider)]');
 		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
