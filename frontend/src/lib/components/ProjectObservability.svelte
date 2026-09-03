@@ -6,7 +6,7 @@
 	import CloudflareSetup from '$components/CloudflareSetup.svelte';
 	import RuntimeUsageBar from '$components/RuntimeUsageBar.svelte';
 	import { projectStreamConnection, projectStreamMetrics } from '$stores/project-stream';
-	import { projectResourceScale } from '$lib/utils/project-resource-scale';
+	import { projectResourceAllocation } from '$lib/utils/project-resource-scale';
 	import type { CloudflareAnalytics, Project } from '$types';
 
 	export let project: Project;
@@ -21,7 +21,9 @@
 	$: services = Array.from(new Set(metricItems.map((item) => item.service).filter(Boolean)));
 	$: visibleServices = services.filter((service) => !hiddenServices.has(service));
 	$: visibleItems = metricItems.filter((item) => visibleServices.includes(item.service));
-	$: resourceScale = projectResourceScale(project, visibleItems);
+	$: resourceAllocation = projectResourceAllocation(project, visibleItems);
+	$: cpuLimit = resourceAllocation.cpuPercent ?? 0;
+	$: memoryLimit = resourceAllocation.memoryMb ?? 0;
 	$: cpuUsed = visibleItems.reduce((total, item) => total + item.cpu, 0);
 	$: memoryUsed = visibleItems.reduce((total, item) => total + item.memoryMb, 0);
 	$: sampleLabel = $projectStreamMetrics?.collectedAt ? new Date($projectStreamMetrics.collectedAt).toLocaleTimeString() : '';
@@ -222,17 +224,17 @@
 						<RuntimeUsageBar
 							label="CPU usage"
 							used={cpuUsed}
-							limit={resourceScale.cpuPercent}
-							valueLabel={`${formatPercent(cpuUsed)}% of ${formatPercent(resourceScale.cpuPercent)}%`}
-							allocationLabel={formatCPUAllocation(resourceScale.cpuPercent)}
+							limit={cpuLimit}
+							valueLabel={`${formatPercent(cpuUsed)}% of ${formatPercent(cpuLimit)}%`}
+							allocationLabel={formatCPUAllocation(cpuLimit)}
 						/>
 					</div>
 					<RuntimeUsageBar
 						label="Memory usage"
 						used={memoryUsed}
-						limit={resourceScale.memoryMb}
-						valueLabel={`${formatMemory(memoryUsed)} of ${formatMemory(resourceScale.memoryMb)}`}
-						allocationLabel={formatMemory(resourceScale.memoryMb)}
+						limit={memoryLimit}
+						valueLabel={`${formatMemory(memoryUsed)} of ${formatMemory(memoryLimit)}`}
+						allocationLabel={formatMemory(memoryLimit)}
 					/>
 				</div>
 			{:else if metricItems.length > 0}
