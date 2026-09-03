@@ -32,6 +32,7 @@
 	let groups: NavGroup[] = [];
 
 	$: base = `/projects/${projectId}`;
+	$: pathname = $page.url.pathname;
 	$: groups = [
 		{
 			label: 'Project',
@@ -66,10 +67,9 @@
 		}
 	];
 
-	function isActive(item: NavItem) {
-		const pathname = $page.url.pathname;
-		if (item.exact) return pathname === item.href;
-		return pathname === item.href || pathname.startsWith(`${item.href}/`);
+	function isActive(item: NavItem, currentPath: string) {
+		if (item.exact) return currentPath === item.href;
+		return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
 	}
 </script>
 
@@ -80,7 +80,7 @@
 			<div class="mt-2 space-y-1">
 				{#each group.items as item}
 					<ProjectSecondaryNavItem
-						active={isActive(item)}
+						active={isActive(item, pathname)}
 						danger={item.danger ?? false}
 						href={item.href}
 						label={item.label}
