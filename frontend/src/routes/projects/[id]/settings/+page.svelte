@@ -410,11 +410,11 @@
 								<p class="truncate font-mono text-sm text-gray-950 dark:text-white" title={project.repoUrl}>{project.repoUrl}</p>
 							</div>
 							<div class="grid gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center">
-								<label class="text-sm text-gray-500 dark:text-gray-400" for="branch-select">Branch</label>
+								<span class="text-sm text-gray-500 dark:text-gray-400">Branch</span>
 								<SelectMenu value={branch} options={branchOptions} ariaLabel="Deployment branch" disabled={inspectingRepo || branchOptions.length === 0} on:change={(event) => handleBranchChange(event.detail)} />
 							</div>
 							<div class="grid gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center">
-								<label class="text-sm text-gray-500 dark:text-gray-400" for="directory-select">Base directory</label>
+								<span class="text-sm text-gray-500 dark:text-gray-400">Base directory</span>
 								<SelectMenu value={baseDirectory} options={baseDirectoryOptions} ariaLabel="Base directory" disabled={inspectingRepo} on:change={(event) => handleBaseDirectoryChange(event.detail)} />
 							</div>
 						</div>
@@ -430,38 +430,17 @@
 						<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Advanced source settings</summary>
 						<div class="mt-4 grid gap-4 sm:grid-cols-2">
 							{#if project.deployMode !== 'static'}
-								<div>
-									<label class="field-label" for="appPort">App port</label>
-									<input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" />
-								</div>
+								<div><label class="field-label" for="appPort">App port</label><input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" /></div>
 							{/if}
 							{#if project.deployMode === 'compose'}
-								<div>
-									<label class="field-label" for="mainService">Main service</label>
-									<input id="mainService" type="text" bind:value={mainService} placeholder="app" class="field w-full font-mono" />
-								</div>
-								<div>
-									<label class="field-label" for="composeFilePath">Compose file</label>
-									<input id="composeFilePath" type="text" bind:value={composeFilePath} placeholder="docker-compose.yml" class="field w-full font-mono" />
-								</div>
-								<div>
-									<label class="field-label" for="composeWorkdir">Working directory</label>
-									<input id="composeWorkdir" type="text" bind:value={composeWorkdir} placeholder="auto" class="field w-full font-mono" />
-								</div>
-								<div>
-									<label class="field-label" for="composeOverridePaths">Override files</label>
-									<input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} placeholder="docker-compose.prod.yml" class="field w-full font-mono" />
-								</div>
-								<div>
-									<label class="field-label" for="composeProfiles">Profiles</label>
-									<input id="composeProfiles" type="text" bind:value={composeProfiles} placeholder="app, worker" class="field w-full font-mono" />
-								</div>
+								<div><label class="field-label" for="mainService">Main service</label><input id="mainService" type="text" bind:value={mainService} placeholder="app" class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeFilePath">Compose file</label><input id="composeFilePath" type="text" bind:value={composeFilePath} placeholder="docker-compose.yml" class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeWorkdir">Working directory</label><input id="composeWorkdir" type="text" bind:value={composeWorkdir} placeholder="auto" class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeOverridePaths">Override files</label><input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} placeholder="docker-compose.prod.yml" class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeProfiles">Profiles</label><input id="composeProfiles" type="text" bind:value={composeProfiles} placeholder="app, worker" class="field w-full font-mono" /></div>
 							{/if}
 							{#if project.sourceType === 'git' && (project.deployMode === 'compose' || project.deployMode === 'dockerfile')}
-								<div>
-									<label class="field-label" for="staticFrontendPath">Static frontend path</label>
-									<input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} placeholder="frontend" class="field w-full font-mono" />
-								</div>
+								<div><label class="field-label" for="staticFrontendPath">Static frontend path</label><input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} placeholder="frontend" class="field w-full font-mono" /></div>
 							{/if}
 						</div>
 					</details>
@@ -474,24 +453,15 @@
 
 			{:else if activeSection === 'resources'}
 				<div class="mx-auto max-w-5xl space-y-5">
-					<div>
-						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Resources</h1>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set how much CPU and memory this project can use.</p>
-					</div>
+					<div><h1 class="text-lg font-semibold text-gray-950 dark:text-white">Resources</h1><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set how much CPU and memory this project can use.</p></div>
 
 					<div class="border-y border-gray-100 py-4 dark:border-neutral-800">
-						<label class="field-label" for="resource-profile">Resource profile</label>
+						<label class="field-label">Resource profile</label>
 						<SelectMenu value={resourceProfile} options={resourceProfileOptions} ariaLabel="Resource profile" on:change={(event) => applyResourceProfile(event.detail as ResourceProfile)} />
 						{#if resourceProfile === 'custom'}
 							<div class="mt-4 grid gap-4 sm:grid-cols-2">
-								<div>
-									<label class="field-label" for="mem">Memory (MB)</label>
-									<input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" />
-								</div>
-								<div>
-									<label class="field-label" for="cpu">CPU</label>
-									<input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" />
-								</div>
+								<div><label class="field-label" for="mem">Memory (MB)</label><input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" /></div>
+								<div><label class="field-label" for="cpu">CPU</label><input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" /></div>
 							</div>
 						{:else}
 							<div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -504,70 +474,52 @@
 					{#if project.deployMode === 'compose'}
 						<details class="border-b border-gray-100 pb-4 dark:border-neutral-800">
 							<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Advanced resource limits</summary>
-							<div class="mt-4">
-								<label class="field-label" for="service_resources">Other services (JSON)</label>
-								<textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full font-mono text-sm"></textarea>
-							</div>
+							<div class="mt-4"><label class="field-label" for="service_resources">Other services (JSON)</label><textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full font-mono text-sm"></textarea></div>
 						</details>
 
 						<div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4 dark:border-neutral-800">
 							<div>
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Runtime resources</p>
-								<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-									{composeResources?.containers ?? 0} container{(composeResources?.containers ?? 0) === 1 ? '' : 's'} · {composeResources?.volumes ?? 0} volume{(composeResources?.volumes ?? 0) === 1 ? '' : 's'} · {composeResources?.networks ?? 0} network{(composeResources?.networks ?? 0) === 1 ? '' : 's'}
-								</p>
+								<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{composeResources?.containers ?? 0} container{(composeResources?.containers ?? 0) === 1 ? '' : 's'} · {composeResources?.volumes ?? 0} volume{(composeResources?.volumes ?? 0) === 1 ? '' : 's'} · {composeResources?.networks ?? 0} network{(composeResources?.networks ?? 0) === 1 ? '' : 's'}</p>
 							</div>
 							<IconButton label="Refresh runtime resources" variant="secondary" loading={loadingComposeResources} on:click={() => void loadComposeResources()}><RefreshCw class="h-4 w-4" aria-hidden="true" /></IconButton>
 						</div>
 						{#if composeResourceError}<div class="alert-danger">{composeResourceError}</div>{/if}
 					{/if}
 
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<p class="text-sm text-gray-500 dark:text-gray-400">New limits apply after the next deployment.</p>
-						{#if resourcesChanged}<ActionButton variant="primary" on:click={handleSave} loading={savingSettings} loadingLabel="Saving">Save changes</ActionButton>{/if}
-					</div>
+					<div class="flex flex-wrap items-center justify-between gap-3"><p class="text-sm text-gray-500 dark:text-gray-400">New limits apply after the next deployment.</p>{#if resourcesChanged}<ActionButton variant="primary" on:click={handleSave} loading={savingSettings} loadingLabel="Saving">Save changes</ActionButton>{/if}</div>
 				</div>
 
 			{:else if activeSection === 'environment'}
 				<div class="mx-auto max-w-6xl space-y-4">
-					<div>
-						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Environment variables</h1>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Variables available to your app at runtime.</p>
-					</div>
+					<div><h1 class="text-lg font-semibold text-gray-950 dark:text-white">Environment variables</h1><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Variables available to your app at runtime.</p></div>
 					<ProjectEnvironmentSettings projectId={project.id} />
 				</div>
 
 			{:else if activeSection === 'webhook' && project.sourceType === 'git'}
 				<div class="mx-auto max-w-4xl space-y-5">
-					<div>
-						<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
-						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy when changes are pushed to GitHub.</p>
-					</div>
-
+					<div><h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy when changes are pushed to GitHub.</p></div>
 					<div class="divide-y divide-gray-100 border-y border-gray-100 dark:divide-neutral-800 dark:border-neutral-800">
 						<div class="grid gap-2 py-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center">
 							<p class="text-sm text-gray-500 dark:text-gray-400">Payload URL</p>
 							<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{publicWebhookURL}</p>
-							<IconButton label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyWebhookURL(project.id)}>{#if copiedTarget === 'webhook-url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+							<IconButton label={copiedTarget === 'webhook-url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyWebhookURL(project?.id ?? '')}>{#if copiedTarget === 'webhook-url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
 						</div>
 						<div class="grid gap-2 py-3 sm:grid-cols-[9rem_minmax(0,1fr)_auto] sm:items-center">
 							<p class="text-sm text-gray-500 dark:text-gray-400">Secret</p>
 							<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••'}</p>
 							<div class="flex items-center gap-1">
 								<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Reveal webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>{#if showWebhookSecret}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}</IconButton>
-								<IconButton label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}>{#if copiedTarget === 'webhook-secret'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+								<IconButton label={copiedTarget === 'webhook-secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'webhook-secret')}>{#if copiedTarget === 'webhook-secret'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
 							</div>
 						</div>
 					</div>
-
 					<div class="flex flex-wrap items-center gap-2">
 						<ActionButton variant="secondary" on:click={() => (showWebhookHelp = true)}>Setup guide</ActionButton>
 						{#if confirmRegenerateSecret}
 							<ActionButton variant="ghost" on:click={() => (confirmRegenerateSecret = false)} disabled={regeneratingSecret}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
 							<ActionButton variant="danger" on:click={handleRegenerateSecret} loading={regeneratingSecret} loadingLabel="Regenerating"><RefreshCw slot="icon" class="h-4 w-4" />Regenerate secret</ActionButton>
-						{:else}
-							<ActionButton variant="ghost" on:click={requestRegenerateSecret}>Regenerate secret</ActionButton>
-						{/if}
+						{:else}<ActionButton variant="ghost" on:click={requestRegenerateSecret}>Regenerate secret</ActionButton>{/if}
 					</div>
 				</div>
 
@@ -577,10 +529,7 @@
 					<section class="border-y border-red-200 py-4 dark:border-red-900/60">
 						<h2 class="text-sm font-semibold text-red-700 dark:text-red-300">Delete project</h2>
 						<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Permanently delete this project.</p>
-						<label class="mt-4 block">
-							<span class="field-label">Type <span class="font-mono text-gray-950 dark:text-white">{project.name}</span> to confirm</span>
-							<input type="text" bind:value={deleteInput} placeholder={project.name} class="field w-full border-red-300 focus:border-red-600 focus:ring-red-600 dark:border-red-900" />
-						</label>
+						<label class="mt-4 block"><span class="field-label">Type <span class="font-mono text-gray-950 dark:text-white">{project.name}</span> to confirm</span><input type="text" bind:value={deleteInput} placeholder={project.name} class="field w-full border-red-300 focus:border-red-600 focus:ring-red-600 dark:border-red-900" /></label>
 						<ActionButton className="mt-3" variant="danger" on:click={handleDelete} disabled={deleteInput !== project.name} loading={deletingProject} loadingLabel="Deleting"><Trash2 slot="icon" class="h-4 w-4" />Delete project</ActionButton>
 					</section>
 				</div>
@@ -593,13 +542,7 @@
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<button type="button" class="absolute inset-0 cursor-default bg-gray-950/45" aria-label="Close webhook setup" on:click={() => (showWebhookHelp = false)}></button>
 		<div class="overlay relative max-h-[90vh] w-full max-w-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="webhook-help-title" tabindex="-1">
-			<div class="panel-header flex items-start justify-between gap-3">
-				<div>
-					<h2 id="webhook-help-title" class="panel-title">GitHub webhook setup</h2>
-					<p class="panel-description">Connect GitHub pushes to this project.</p>
-				</div>
-				<IconButton label="Close webhook setup" variant="ghost" on:click={() => (showWebhookHelp = false)}><X class="h-4 w-4" /></IconButton>
-			</div>
+			<div class="panel-header flex items-start justify-between gap-3"><div><h2 id="webhook-help-title" class="panel-title">GitHub webhook setup</h2><p class="panel-description">Connect GitHub pushes to this project.</p></div><IconButton label="Close webhook setup" variant="ghost" on:click={() => (showWebhookHelp = false)}><X class="h-4 w-4" /></IconButton></div>
 			<div class="max-h-[calc(90vh-5rem)] space-y-4 overflow-y-auto p-4">
 				<ol class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
 					<li>1. Open the repository on GitHub and go to <strong>Settings → Webhooks</strong>.</li>
