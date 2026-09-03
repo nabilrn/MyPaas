@@ -4,9 +4,8 @@
 	import { api } from '$api';
 	import CloudflareChart from '$components/CloudflareChart.svelte';
 	import CloudflareSetup from '$components/CloudflareSetup.svelte';
-	import MultiServiceMetricChart from '$components/MultiServiceMetricChart.svelte';
+	import RuntimeUsageBar from '$components/RuntimeUsageBar.svelte';
 	import { projectStreamConnection, projectStreamMetrics } from '$stores/project-stream';
-	import { appendProjectMetricHistory, type ProjectMetricHistory } from '$lib/utils/project-metric-history';
 	import { projectResourceScale } from '$lib/utils/project-resource-scale';
 	import type { CloudflareAnalytics, Project } from '$types';
 
@@ -16,8 +15,6 @@
 	let cloudflareConfigured: boolean | null = null;
 	let analyticsLoading = true;
 	let analyticsError = '';
-	let metricHistory: ProjectMetricHistory = {};
-	let lastHistorySample = '';
 	let hiddenServices = new Set<string>();
 
 	$: metricItems = $projectStreamMetrics?.items ?? [];
@@ -25,21 +22,8 @@
 	$: visibleServices = services.filter((service) => !hiddenServices.has(service));
 	$: visibleItems = metricItems.filter((item) => visibleServices.includes(item.service));
 	$: resourceScale = projectResourceScale(project, visibleItems);
-	$: currentSampleKey = $projectStreamMetrics?.collectedAt ?? '';
-	$: if (currentSampleKey && currentSampleKey !== lastHistorySample) {
-		metricHistory = appendProjectMetricHistory(metricHistory, metricItems);
-		lastHistorySample = currentSampleKey;
-	}
-	$: cpuSeries = visibleItems.map((item) => ({
-		service: item.service,
-		values: metricHistory[item.service]?.cpu ?? [],
-		value: `${item.cpu.toFixed(2)}%`
-	}));
-	$: memorySeries = visibleItems.map((item) => ({
-		service: item.service,
-		values: metricHistory[item.service]?.memoryMb ?? [],
-		value: `${item.memoryMb.toFixed(1)} MB`
-	}));
+	$: cpuUsed = visibleItems.reduce((total, item) => total + item.cpu, 0);
+	$: memoryUsed = visibleItems.reduce((total, item) => total + item.memoryMb, 0);
 	$: sampleLabel = $projectStreamMetrics?.collectedAt ? new Date($projectStreamMetrics.collectedAt).toLocaleTimeString() : '';
 
 	onMount(() => {
@@ -82,6 +66,21 @@
 
 	function showAllServices() {
 		hiddenServices = new Set();
+	}
+
+	function formatPercent(value: number) {
+		if (value < 1) return value.toFixed(2);
+		if (value < 10) return value.toFixed(1);
+		return value.toFixed(0);
+	}
+
+	function formatCPUAllocation(percent: number) {
+		const cores = percent / 100;
+		return `${Number(cores.toFixed(2))} CPU`;
+	}
+
+	function formatMemory(value: number) {
+		return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} MB`;
 	}
 </script>
 
@@ -181,7 +180,7 @@
 			<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 				<div>
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">CPU and memory across running services.</p>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Current resource usage against this project's allocation.</p>
 				</div>
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
@@ -218,9 +217,23 @@
 			</div>
 
 			{#if metricItems.length > 0 && visibleItems.length > 0}
-				<div class="grid gap-px border-t border-[color:var(--workspace-divider)] bg-[var(--workspace-divider)] xl:grid-cols-2">
-					<MultiServiceMetricChart label="CPU usage" series={cpuSeries} suffix="%" maxValue={resourceScale.cpuPercent} heightClass="h-14" compact />
-					<MultiServiceMetricChart label="Memory usage" series={memorySeries} suffix=" MB" maxValue={resourceScale.memoryMb} heightClass="h-14" compact />
+				<div class="grid border-t border-[color:var(--workspace-divider)] xl:grid-cols-2">
+					<div class="xl:border-r xl:border-[color:var(--workspace-divider)]">
+						<RuntimeUsageBar
+							label="CPU usage"
+							used={cpuUsed}
+							limit={resourceScale.cpuPercent}
+							valueLabel={`${formatPercent(cpuUsed)}% of ${formatPercent(resourceScale.cpuPercent)}%`}
+							allocationLabel={formatCPUAllocation(resourceScale.cpuPercent)}
+						/>
+					</div>
+					<RuntimeUsageBar
+						label="Memory usage"
+						used={memoryUsed}
+						limit={resourceScale.memoryMb}
+						valueLabel={`${formatMemory(memoryUsed)} of ${formatMemory(resourceScale.memoryMb)}`}
+						allocationLabel={formatMemory(resourceScale.memoryMb)}
+					/>
 				</div>
 			{:else if metricItems.length > 0}
 				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-4 text-xs text-gray-500 dark:text-gray-400">
