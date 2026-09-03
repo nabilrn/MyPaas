@@ -8,6 +8,12 @@ function container(overrides: Partial<RuntimeContainer> = {}): RuntimeContainer 
 		image: 'example/app:latest',
 		state: 'running',
 		status: 'Up 1 minute',
+		uptime: '1 minute',
+		health: 'healthy',
+		ports: '127.0.0.1:3000->3000/tcp',
+		restartCount: 2,
+		detailsAvailable: true,
+		networks: [{ name: 'app', ipAddress: '10.0.0.2' }],
 		composeProject: '',
 		service: '',
 		cpu: 0,
@@ -21,7 +27,7 @@ function container(overrides: Partial<RuntimeContainer> = {}): RuntimeContainer 
 describe('mergeRuntimeContainerTelemetry', () => {
 	it('updates metrics by stable container ID without replacing metadata', () => {
 		const rows = [container({ image: 'example/app:v1' })];
-		const telemetry = [container({ cpu: 2.5, memoryMb: 64, memoryLimitMb: 512, metricsAvailable: true })];
+		const telemetry = [container({ image: 'ignored:v2', cpu: 2.5, memoryMb: 64, memoryLimitMb: 512, metricsAvailable: true })];
 
 		expect(mergeRuntimeContainerTelemetry(rows, telemetry)).toEqual([
 			container({ image: 'example/app:v1', cpu: 2.5, memoryMb: 64, memoryLimitMb: 512, metricsAvailable: true })
