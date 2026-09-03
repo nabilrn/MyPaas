@@ -28,8 +28,8 @@ func TestMergeRuntimeStatsMarksOnlyMatchedRowsAvailable(t *testing.T) {
 
 	mergeRuntimeStats(containers, []byte("app-a\t1.25%\t128MiB / 512MiB\n"))
 
-	if !containers[0].MetricsAvailable {
-		t.Fatal("expected app-a metrics to be available")
+	if !containers[0].MetricsAvailable || !containers[0].CPUAvailable || !containers[0].MemoryAvailable {
+		t.Fatal("expected app-a CPU and memory metrics to be available")
 	}
 	if containers[0].CPUPercent != 1.25 {
 		t.Fatalf("CPUPercent = %v, want 1.25", containers[0].CPUPercent)
@@ -42,6 +42,38 @@ func TestMergeRuntimeStatsMarksOnlyMatchedRowsAvailable(t *testing.T) {
 	}
 }
 
+func TestRuntimeStatsKeepsMemoryWhenPodmanCPUIsUnavailable(t *testing.T) {
+	containers := []RuntimeContainer{{Name: "app-a", State: "running"}}
+
+	mergeRuntimeStats(containers, []byte("app-a\t--\t128MiB / 512MiB\n"))
+
+	if !containers[0].MetricsAvailable {
+		t.Fatal("expected partial telemetry sample to remain available")
+	}
+	if containers[0].CPUAvailable {
+		t.Fatal("CPUAvailable = true, want false for Podman -- sample")
+	}
+	if !containers[0].MemoryAvailable {
+		t.Fatal("MemoryAvailable = false, want true")
+	}
+	if containers[0].CPUPercent != 0 {
+		t.Fatalf("CPUPercent = %v, want presentation fallback 0", containers[0].CPUPercent)
+	}
+	if containers[0].MemoryMB != 128 || containers[0].MemoryLimitMB != 512 {
+		t.Fatalf("memory = %v / %v, want 128 / 512", containers[0].MemoryMB, containers[0].MemoryLimitMB)
+	}
+}
+
+func TestRuntimeStatsTreatsFullyUnavailableSampleAsUnavailable(t *testing.T) {
+	containers := []RuntimeContainer{{Name: "app-a", State: "running"}}
+
+	mergeRuntimeStats(containers, []byte("app-a\t--\t-- / --\n"))
+
+	if containers[0].MetricsAvailable || containers[0].CPUAvailable || containers[0].MemoryAvailable {
+		t.Fatalf("unexpected telemetry availability: %+v", containers[0])
+	}
+}
+
 func TestApplyCachedRuntimeTelemetry(t *testing.T) {
 	cli := NewDockerCLI("127.0.0.1")
 	cli.runtimeTelemetry["app-a"] = Metrics{CPUPercent: 1.25, MemoryMB: 128, MemoryLimitMB: 512}
@@ -51,7 +83,7 @@ func TestApplyCachedRuntimeTelemetry(t *testing.T) {
 	}
 
 	cli.applyCachedRuntimeTelemetry(containers)
-	if !containers[0].MetricsAvailable {
+	if !containers[0].MetricsAvailable || !containers[0].CPUAvailable || !containers[0].MemoryAvailable {
 		t.Fatal("expected cached app-a metrics to be available")
 	}
 	if containers[0].CPUPercent != 1.25 || containers[0].MemoryMB != 128 || containers[0].MemoryLimitMB != 512 {
