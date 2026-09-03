@@ -123,22 +123,26 @@ jobs:
       - name: Install rootful Podman socket
         run: bash scripts/ci_setup_rootful_podman.sh
 
-      - name: Verify Docker CLI is backed by packaged Podman
+      - name: Verify Docker CLI is backed by selected Podman
         run: |
           set -euo pipefail
-          clean_env=(env PATH=/usr/bin:/usr/sbin:/bin:/sbin HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf)
-          expected="$(sudo "${clean_env[@]}" /usr/bin/podman version --format '{{.Client.Version}}')"
+          podman_bin="$(cat /tmp/mypaas-podman-bin)"
+          conmon_bin="$(cat /tmp/mypaas-conmon-bin)"
+          crun_bin="$(cat /tmp/mypaas-crun-bin)"
+          clean_path="$(dirname "$podman_bin"):$(dirname "$conmon_bin"):$(dirname "$crun_bin"):/usr/bin:/usr/sbin:/bin:/sbin"
+          clean_env=(env PATH="$clean_path" HOME=/root XDG_RUNTIME_DIR=/run/user/0 CONTAINERS_CONF_OVERRIDE=/tmp/mypaas-containers.conf)
+          expected="$(sudo "${clean_env[@]}" "$podman_bin" version --format '{{.Client.Version}}')"
           actual="$(sudo docker version --format '{{.Server.Version}}')"
           if [[ "$actual" != "$expected" ]]; then
-            echo "Docker compatibility socket server version $actual does not match packaged Podman $expected" >&2
+            echo "Docker compatibility socket server version $actual does not match selected Podman $expected" >&2
             sudo docker version >&2 || true
-            sudo "${clean_env[@]}" /usr/bin/podman version >&2 || true
+            sudo "${clean_env[@]}" "$podman_bin" version >&2 || true
             exit 1
           fi
-          conmon_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.Conmon.Path}}')"
-          runtime_path="$(sudo "${clean_env[@]}" /usr/bin/podman info --format '{{.Host.OCIRuntime.Path}}')"
-          test "$conmon_path" = "/usr/bin/conmon"
-          test "$runtime_path" = "/usr/bin/crun"
+          conmon_path="$(sudo "${clean_env[@]}" "$podman_bin" info --format '{{.Host.Conmon.Path}}')"
+          runtime_path="$(sudo "${clean_env[@]}" "$podman_bin" info --format '{{.Host.OCIRuntime.Path}}')"
+          test "$conmon_path" = "$conmon_bin"
+          test "$runtime_path" = "$crun_bin"
           sudo docker version | tee /tmp/mypaas-docker-version.txt
           grep -q 'Podman Engine' /tmp/mypaas-docker-version.txt
           sudo docker compose version
