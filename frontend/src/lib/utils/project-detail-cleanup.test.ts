@@ -31,13 +31,13 @@ describe('project detail cleanup contract', () => {
 		expect(settings).toContain('projectId={project.id}');
 	});
 
-	it('shows runtime as bounded allocation bars instead of line charts', () => {
-		expect(observability).toContain('projectResourceScale(project, visibleItems)');
+	it('shows runtime as bounded low-contrast allocation bars instead of line charts', () => {
+		expect(observability).toContain('projectResourceAllocation(project, visibleItems)');
 		expect(observability).toContain('RuntimeUsageBar');
 		expect(observability).toContain('used={cpuUsed}');
-		expect(observability).toContain('limit={resourceScale.cpuPercent}');
+		expect(observability).toContain('limit={cpuLimit}');
 		expect(observability).toContain('used={memoryUsed}');
-		expect(observability).toContain('limit={resourceScale.memoryMb}');
+		expect(observability).toContain('limit={memoryLimit}');
 		expect(observability).not.toContain('MultiServiceMetricChart');
 		expect(runtimeUsageBar).toContain('role="progressbar"');
 		expect(runtimeUsageBar).toContain('bg-gray-300/70');
