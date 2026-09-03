@@ -85,6 +85,7 @@ describe("administration navigation contract", () => {
   it("uses the shared admin shell without changing excluded project routes", () => {
     expect(adminLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
     expect(adminLayout).toContain("lg:border-r");
+    expect(adminLayout).toContain("border-[color:var(--workspace-divider)]");
     expect(adminLayout).toContain("min-w-0 px-3.5 py-3");
     expect(adminLayout).toContain("w-full space-y-3");
     expect(adminLayout).not.toContain("mx-auto max-w-6xl");
