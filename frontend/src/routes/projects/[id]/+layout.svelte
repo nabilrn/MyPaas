@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import DeployControlPanel from '$components/DeployControlPanel.svelte';
 	import ErrorState from '$components/ErrorState.svelte';
+	import ProjectDetailSidebar from '$components/ProjectDetailSidebar.svelte';
 	import { api } from '$api';
 	import { beginMainContentLoading } from '$stores/main-loading';
 	import { clearShellContext, setShellContext } from '$stores/shell-context';
@@ -39,7 +40,6 @@
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
 	$: databaseWorkspace = $page.url.pathname.startsWith(`/projects/${$page.params.id}/database`);
-	$: settingsWorkspace = $page.url.pathname === `/projects/${$page.params.id}/settings`;
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -222,83 +222,41 @@
 			<ErrorState title="Could not load project" message={error || 'Project not found'} on:retry={() => void loadProject()} />
 		</div>
 	{:else if project}
-		{#if !databaseWorkspace}
-			<DeployControlPanel
-				{project}
-				{latestDeployment}
-				{publicProjectHost}
-				{publicProjectURL}
-				{pendingAction}
-				on:start={handleStart}
-				on:stop={handleStop}
-				on:restart={handleRestart}
-				on:deploy={handleDeploy}
-			/>
-		{/if}
+		<div class="grid min-h-[calc(100vh-3.5rem)] lg:grid-cols-[12rem_minmax(0,1fr)]">
+			<aside class="border-b border-[color:var(--workspace-divider)] px-3 py-4 lg:border-b-0 lg:border-r">
+				<ProjectDetailSidebar projectId={project.id} />
+			</aside>
 
-		{#if settingsWorkspace}
-			<div class="project-settings-shell"><slot /></div>
-		{:else}
-			<slot />
-		{/if}
+			<main class="min-w-0 px-3.5 py-3">
+				<div class="space-y-3">
+					{#if !databaseWorkspace}
+						<DeployControlPanel
+							{project}
+							{latestDeployment}
+							{publicProjectHost}
+							{publicProjectURL}
+							{pendingAction}
+							on:start={handleStart}
+							on:stop={handleStop}
+							on:restart={handleRestart}
+							on:deploy={handleDeploy}
+						/>
+					{/if}
+
+					<div class="project-detail-content min-w-0">
+						<slot />
+					</div>
+				</div>
+			</main>
+		</div>
 	{/if}
 </div>
 
 <style>
-	:global(.project-settings-shell > .space-y-4 > * + *) {
-		margin-top: 0;
-	}
-
-	:global(.project-settings-shell > .space-y-4 > .grid) {
-		gap: 0;
-		background: var(--workspace-divider);
-	}
-
-	:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4) {
-		margin: 0;
-		background: var(--app-surface);
-	}
-
-	:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4 > * + *) {
-		margin-top: 0;
-	}
-
-	:global(.project-settings-shell > div.grid) {
-		border-color: var(--workspace-divider);
-	}
-
-	:global(.project-settings-shell > div.grid > aside) {
-		border-color: var(--workspace-divider);
-	}
-
-	:global(.project-settings-shell > div.grid > main) {
-		padding: 0.75rem 0.875rem;
-	}
-
-	:global(.project-settings-shell main > .max-w-6xl),
-	:global(.project-settings-shell main > .max-w-5xl),
-	:global(.project-settings-shell main > .max-w-4xl) {
-		width: 100% !important;
-		max-width: none !important;
-		margin-inline: 0 !important;
-	}
-
-	:global(.project-settings-shell main > .space-y-4 > * + *) {
-		margin-top: 0.75rem;
-	}
-
-	@media (min-width: 1024px) {
-		:global(.project-settings-shell > div.grid) {
-			grid-template-columns: 12rem minmax(0, 1fr);
-		}
-
-		:global(.project-settings-shell > .space-y-4 > .grid > .space-y-4:first-child) {
-			border-right: 1px solid var(--workspace-divider);
-		}
-	}
-
-	:global(.project-settings-shell section.surface) {
-		border: 0;
-		border-radius: 0;
+	:global(.project-detail-content > .page-shell) {
+		width: 100%;
+		max-width: none;
+		margin-inline: 0;
+		padding: 0;
 	}
 </style>
