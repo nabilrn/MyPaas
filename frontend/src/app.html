@@ -6,6 +6,20 @@
 		<title>MyPaas</title>
 		<script>
 			(() => {
+				let stored = null;
+				try {
+					stored = localStorage.getItem('theme');
+				} catch {
+					// Storage may be unavailable by browser policy; system preference still applies.
+				}
+				const systemDark = matchMedia('(prefers-color-scheme: dark)').matches;
+				const dark = stored === 'dark' || (stored !== 'light' && systemDark);
+				document.documentElement.classList.toggle('dark', dark);
+				document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+			})();
+		</script>
+		<script>
+			(() => {
 				const recoveryKey = 'mypaas:asset-recovery-at';
 				const recoveryCookie = 'mypaas_asset_recovery_at';
 				const recoveryCooldownMs = 30_000;

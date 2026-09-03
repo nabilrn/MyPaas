@@ -5,13 +5,12 @@
 </script>
 
 <!--
-	Authenticated navigation and initial-resource loading is owned by main content.
-	Child routes stay mounted behind the root layout so onMount/fetch can progress, but
-	the root keeps them hidden and out of layout flow until the initial route barrier ends.
-	Do not add page-level initial skeletons or loading spinners.
+	Initial authenticated account/resource loading is owned by main content.
+	Normal client-side route navigation keeps the current workspace visible instead of
+	painting a blocking transition surface between pages.
 -->
 <div
-	class="absolute inset-0 z-30 min-h-[20rem] bg-white/95 backdrop-blur-[1px] dark:bg-neutral-950/95"
+	class="absolute inset-0 z-30 min-h-[20rem] bg-[var(--app-surface)]"
 	role="presentation"
 >
 	<div class="sticky top-0 flex min-h-[calc(100vh-4rem)] items-center justify-center">
