@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { Search } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Search } from '@lucide/svelte';
 	import { onDestroy, onMount } from 'svelte';
+	import IconButton from '$components/IconButton.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { loadRuntimeContainers, mergeRuntimeContainerTelemetry, type RuntimeContainer } from '$lib/api/container-inventory';
 	import { beginMainContentLoading } from '$stores/main-loading';
+
+	const telemetryRefreshMs = 15_000;
 
 	let rows: RuntimeContainer[] = [];
 	let loading = false;
@@ -15,14 +18,17 @@
 	let runtimeFilter = 'all';
 	let pageIndex = 0;
 	let pageSize = 10;
+	let expanded = new Set<string>();
 	let metadataController: AbortController | null = null;
 	let telemetryController: AbortController | null = null;
+	let telemetryPoll: ReturnType<typeof setInterval> | undefined;
 
 	$: stateOptions = [...new Set(rows.map((row) => row.state || 'unknown'))].sort();
 	$: runtimeOptions = [...new Set(rows.map((row) => row.composeProject || 'standalone'))].sort();
 	$: searchTerm = query.trim().toLowerCase();
 	$: filteredRows = rows.filter((row) => {
-		const searchable = [row.name, row.id, row.image, row.composeProject, row.service, row.state, row.status].join(' ').toLowerCase();
+		const networkSearch = row.networks.map((network) => `${network.name} ${network.ipAddress}`).join(' ');
+		const searchable = [row.name, row.id, row.image, row.composeProject, row.service, row.state, row.status, row.health, row.ports, networkSearch].join(' ').toLowerCase();
 		const matchesSearch = !searchTerm || searchable.includes(searchTerm);
 		const matchesState = stateFilter === 'all' || (row.state || 'unknown') === stateFilter;
 		const runtime = row.composeProject || 'standalone';
@@ -33,13 +39,16 @@
 	$: if (pageIndex > maxPage) pageIndex = maxPage;
 	$: visibleRows = filteredRows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 	$: hasNext = (pageIndex + 1) * pageSize < filteredRows.length;
+
 	onMount(() => {
 		void load();
+		telemetryPoll = setInterval(() => void loadTelemetry(), telemetryRefreshMs);
 	});
 
 	onDestroy(() => {
 		metadataController?.abort();
 		telemetryController?.abort();
+		if (telemetryPoll) clearInterval(telemetryPoll);
 	});
 
 	async function load() {
@@ -69,23 +78,34 @@
 	}
 
 	async function loadTelemetry() {
+		if (rows.length === 0) return;
 		telemetryController?.abort();
 		const controller = new AbortController();
 		telemetryController = controller;
-		telemetryError = '';
 		try {
 			const telemetryRows = await loadRuntimeContainers({ signal: controller.signal });
 			if (controller.signal.aborted) return;
 			rows = mergeRuntimeContainerTelemetry(rows, telemetryRows);
+			const runningRows = rows.filter((row) => row.state === 'running');
+			const missingSamples = runningRows.filter((row) => !row.metricsAvailable).length;
+			telemetryError = missingSamples === 0
+				? ''
+				: missingSamples === runningRows.length
+					? 'CPU/RAM telemetry has not produced a sample yet. Container metadata is still current.'
+					: `CPU/RAM telemetry is unavailable for ${missingSamples} running container${missingSamples === 1 ? '' : 's'}.`;
 		} catch (err) {
 			if (controller.signal.aborted) return;
-			telemetryError = err instanceof Error ? err.message : 'Live container telemetry is unavailable';
-			rows = rows.map((row) => ({ ...row, cpu: 0, memoryMb: 0, memoryLimitMb: 0, metricsAvailable: false }));
+			telemetryError = err instanceof Error ? err.message : 'Live CPU/RAM telemetry is unavailable';
 		}
 	}
 
 	function resetPage() {
 		pageIndex = 0;
+	}
+
+	function toggleDetails(id: string) {
+		expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+		expanded = new Set(expanded);
 	}
 
 	function formatMemory(value: number) {
@@ -103,11 +123,29 @@
 		}
 	}
 
+	function healthClass(health: string) {
+		switch (health) {
+			case 'healthy': return 'text-emerald-700 dark:text-emerald-300';
+			case 'unhealthy': return 'text-red-700 dark:text-red-300';
+			case 'starting': return 'text-amber-700 dark:text-amber-200';
+			default: return 'text-gray-500 dark:text-gray-400';
+		}
+	}
+
 	function runtimeGroup(row: RuntimeContainer) {
 		if (row.composeProject && row.service) return `${row.composeProject} / ${row.service}`;
 		if (row.composeProject) return row.composeProject;
 		if (row.service) return row.service;
 		return 'standalone';
+	}
+
+	function compactImage(value: string) {
+		let image = value.trim().replace(/^docker\.io\/library\//, '').replace(/^docker\.io\//, '');
+		const separator = image.lastIndexOf(':');
+		if (separator <= image.lastIndexOf('/')) return image;
+		const tag = image.slice(separator + 1);
+		if (/^[a-f0-9]{20,}$/i.test(tag)) image = `${image.slice(0, separator + 1)}${tag.slice(0, 12)}`;
+		return image;
 	}
 </script>
 
@@ -127,13 +165,13 @@
 		on:retry={() => load()}
 	>
 		<svelte:fragment slot="actions">
-			<div class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(16rem,1fr)_11rem_14rem_5.5rem]">
+			<div class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_10rem_13rem_7rem]">
 				<div class="relative min-w-0">
 					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
 					<input
 						id="container-search"
 						class="field w-full !pl-9 font-mono"
-						placeholder="Search name, image, project, status…"
+						placeholder="Search container, image, project, port…"
 						aria-label="Search containers"
 						bind:value={query}
 						on:input={resetPage}
@@ -161,31 +199,37 @@
 
 		<svelte:fragment slot="notice">
 			{#if telemetryError}
-				<div class="border-b border-amber-200/70 bg-amber-50/70 px-4 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200" role="status">
-					Live CPU/RAM telemetry unavailable; container metadata is still current.
+				<div class="border-b border-amber-200/70 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:text-amber-200" role="status">
+					{telemetryError}
 				</div>
 			{/if}
 		</svelte:fragment>
 
-		<table class="data-table table-fixed min-w-[64rem]">
+		<table class="data-table table-fixed min-w-[90rem]">
 			<colgroup>
-				<col class="w-[17%]" />
+				<col class="w-[15%]" />
+				<col class="w-[15%]" />
 				<col class="w-[19%]" />
-				<col class="w-[24%]" />
-				<col class="w-[11%]" />
-				<col class="w-[8%]" />
-				<col class="w-[12%]" />
-				<col class="w-[9%]" />
+				<col class="w-[10%]" />
+				<col class="w-[6%]" />
+				<col class="w-[10%]" />
+				<col class="w-[7%]" />
+				<col class="w-[10%]" />
+				<col class="w-[6%]" />
+				<col class="w-[2%]" />
 			</colgroup>
 			<thead>
 				<tr>
 					<th>Container</th>
-					<th>Compose / service</th>
+					<th>Project / service</th>
 					<th>Image</th>
 					<th>State</th>
 					<th class="text-right">CPU</th>
 					<th class="text-right">Memory</th>
-					<th>Status</th>
+					<th class="text-right">Restarts</th>
+					<th>Ports</th>
+					<th>Uptime</th>
+					<th class="text-right"><span class="sr-only">Details</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -198,20 +242,59 @@
 							</div>
 						</td>
 						<td><p class="truncate font-mono text-[13px] text-gray-700 dark:text-gray-300" title={runtimeGroup(row)}>{runtimeGroup(row)}</p></td>
-						<td><p class="truncate font-mono text-[13px] text-gray-600 dark:text-gray-300" title={row.image}>{row.image || '—'}</p></td>
-						<td class="whitespace-nowrap">
-							<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
-								<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
-							</span>
+						<td><p class="truncate font-mono text-[13px] text-gray-600 dark:text-gray-300" title={row.image}>{compactImage(row.image) || '—'}</p></td>
+						<td>
+							<div class="min-w-0">
+								<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
+									<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
+								</span>
+								{#if row.health}<p class={`mt-0.5 text-xs capitalize ${healthClass(row.health)}`}>{row.health}</p>{/if}
+							</div>
 						</td>
-						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.metricsAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
+						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.cpuAvailable ? `${row.cpu.toFixed(2)}%` : '—'}</td>
 						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">
-							{#if row.metricsAvailable}
+							{#if row.memoryAvailable}
 								{formatMemory(row.memoryMb)}{#if row.memoryLimitMb > 0} / {formatMemory(row.memoryLimitMb)}{/if}
 							{:else}—{/if}
 						</td>
-						<td><p class="truncate text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.status || '—'}</p></td>
+						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.detailsAvailable ? row.restartCount : '—'}</td>
+						<td><p class="truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.ports}>{row.ports || '—'}</p></td>
+						<td class="whitespace-nowrap text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.state === 'running' ? row.uptime || '—' : '—'}</td>
+						<td class="text-right">
+							<IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} ${row.name} details`} variant="ghost" on:click={() => toggleDetails(row.id)}>
+								{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
+							</IconButton>
+						</td>
 					</tr>
+					{#if expanded.has(row.id)}
+						<tr>
+							<td colspan="10" class="!p-0">
+								<div class="grid gap-5 border-t border-gray-100/70 px-4 py-4 dark:border-neutral-900 md:grid-cols-3 lg:px-5">
+									<div class="min-w-0">
+										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Identity</p>
+										<p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.id}</p>
+										<p class="mt-2 break-all font-mono text-xs text-gray-500 dark:text-gray-400">{row.image || '—'}</p>
+									</div>
+									<div class="min-w-0">
+										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Runtime</p>
+										<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{row.status || '—'}</p>
+										<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Restarts: {row.detailsAvailable ? row.restartCount : 'unavailable'}</p>
+									</div>
+									<div class="min-w-0">
+										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Network</p>
+										<p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.ports || 'No published ports'}</p>
+										{#if row.networks.length > 0}
+											<div class="mt-2 space-y-1">
+												{#each row.networks as network}
+													<p class="font-mono text-xs text-gray-500 dark:text-gray-400">{network.name}{network.ipAddress ? ` · ${network.ipAddress}` : ''}</p>
+												{/each}
+											</div>
+										{:else}<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Network details unavailable.</p>{/if}
+									</div>
+								</div>
+							</td>
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
