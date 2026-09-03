@@ -57,9 +57,12 @@
 		fillClass: fillPalette[index % fillPalette.length],
 		dotClass: dotPalette[index % dotPalette.length]
 	}));
-	$: rangeLabel = allValues.length > 0
-		? `${formatRangeValue(observedMin)}–${formatRangeValue(observedMax)}${suffix}`
-		: '';
+	$: rangeLabel = maxValue !== null
+		? `0–${formatRangeValue(domain.max)}${suffix}`
+		: allValues.length > 0
+			? `${formatRangeValue(observedMin)}–${formatRangeValue(observedMax)}${suffix}`
+			: '';
+	$: rangeCaption = maxValue !== null ? 'allocated scale' : compact ? 'observed range' : 'rolling samples';
 
 	function buildDomain(min: number, max: number, ceiling: number | null) {
 		if (ceiling !== null) return { min: 0, max: Math.max(ceiling, 0.0001) };
@@ -143,9 +146,7 @@
 				</g>
 			{/if}
 			{#each paths as item}
-				{#if item.areaPath}
-					<path d={item.areaPath} class={item.fillClass} />
-				{/if}
+				{#if item.areaPath}<path d={item.areaPath} class={item.fillClass} />{/if}
 				{#if item.path}
 					<path
 						d={item.path}
@@ -166,7 +167,7 @@
 
 	{#if rangeLabel}
 		<div class={`${compact ? 'mt-1.5' : 'mt-2'} flex justify-between gap-3 text-[11px] text-gray-400 dark:text-gray-500`}>
-			<span>{compact ? 'observed range' : 'rolling samples'}</span>
+			<span>{rangeCaption}</span>
 			<span class="font-mono">{rangeLabel}</span>
 		</div>
 	{:else if !compact}
