@@ -8,6 +8,7 @@
 
 	let migration: MigrationStatus | null = null;
 	let preparingMigration = false;
+	let confirmPrepare = false;
 	let pollingInterval: ReturnType<typeof setInterval> | undefined;
 	let copiedText: string | null = null;
 
@@ -23,6 +24,7 @@
 
 	async function startMigration() {
 		if (preparingMigration) return;
+		confirmPrepare = false;
 		preparingMigration = true;
 		migration = null;
 		try {
@@ -90,7 +92,7 @@
 </script>
 
 <svelte:head>
-	<title>Migration · MyPaas</title>
+	<title>Migration · MyPaaS</title>
 </svelte:head>
 
 <div class="page-shell">
@@ -100,8 +102,15 @@
 			{#if canPrepare && !preparingMigration}
 				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
 					<p class="text-sm text-gray-500 dark:text-gray-400">Status</p>
-					<p class="text-sm font-medium text-gray-950 dark:text-white">{migration?.status === 'failed' ? 'Failed' : migration?.status === 'expired' ? 'Expired' : 'Not prepared'}</p>
-					<ActionButton variant="primary" size="sm" on:click={startMigration}><Package slot="icon" class="h-4 w-4" />Prepare package</ActionButton>
+					<div>
+						<p class="text-sm font-medium text-gray-950 dark:text-white">{migration?.status === 'failed' ? 'Failed' : migration?.status === 'expired' ? 'Expired' : 'Not prepared'}</p>
+						{#if confirmPrepare}<p class="mt-0.5 text-xs text-amber-700 dark:text-amber-300">Running container projects pause briefly while the package is created.</p>{/if}
+					</div>
+					{#if confirmPrepare}
+						<div class="flex items-center gap-2"><ActionButton variant="ghost" size="sm" on:click={() => (confirmPrepare = false)}>Cancel</ActionButton><ActionButton variant="primary" size="sm" on:click={startMigration}><Package slot="icon" class="h-4 w-4" />Prepare package</ActionButton></div>
+					{:else}
+						<ActionButton variant="primary" size="sm" on:click={() => (confirmPrepare = true)}><Package slot="icon" class="h-4 w-4" />Prepare package</ActionButton>
+					{/if}
 				</div>
 				{#if migration?.status === 'failed'}
 					<div class="border-t border-gray-100 py-3 dark:border-neutral-800"><div class="alert-danger"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{migration.error || 'Migration preparation failed.'}</p></div></div>
