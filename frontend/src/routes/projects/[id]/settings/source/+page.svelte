@@ -7,6 +7,10 @@
 </div>
 
 <style>
+	.project-settings-source :global(.space-y-5 > :not([hidden]) ~ :not([hidden])) {
+		margin-top: 0.75rem;
+	}
+
 	.project-settings-source :global(.field) {
 		max-width: 36rem;
 	}
