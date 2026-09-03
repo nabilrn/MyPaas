@@ -34,7 +34,7 @@ Keep the token secret. Do not deploy, restart, delete, or change project configu
 			const data = await api.admin.getSettings();
 			mcpToken = data.mcp_api_token ?? '';
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to load MCP access');
+			toast.error(error instanceof Error ? error.message : 'Failed to load MCP');
 		} finally {
 			loading = false;
 		}
@@ -76,7 +76,7 @@ Keep the token secret. Do not deploy, restart, delete, or change project configu
 
 <div class="page-shell">
 	{#if loading}
-		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading MCP access" /></div>
+		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading MCP" /></div>
 	{:else}
 		<section>
 			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Access</h2>
