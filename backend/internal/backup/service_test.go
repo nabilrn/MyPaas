@@ -1,11 +1,16 @@
 package backup
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	mpconfig "mypaas/internal/config"
 )
 
 func TestParseDailyTime(t *testing.T) {
@@ -102,6 +107,64 @@ func TestPGDumpEnvUsesPGVariables(t *testing.T) {
 		if !containsEnv(env, key+"="+value) {
 			t.Fatalf("pgDumpEnv() missing %s=%s in %v", key, value, env)
 		}
+	}
+}
+
+func TestValidateS3ConnectionChecksBucketWriteAndCleanup(t *testing.T) {
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		switch r.Method {
+		case http.MethodHead, http.MethodPut:
+			w.WriteHeader(http.StatusOK)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	err := ValidateS3Connection(context.Background(), S3Config{
+		Endpoint:  server.URL,
+		Bucket:    "mypaas-backups",
+		Region:    "auto",
+		AccessKey: "test-access-key",
+		SecretKey: "test-secret-key",
+	})
+	if err != nil {
+		t.Fatalf("ValidateS3Connection() error = %v", err)
+	}
+	if got := strings.Join(methods, ","); got != "HEAD,PUT,DELETE" {
+		t.Fatalf("validation methods = %s, want HEAD,PUT,DELETE", got)
+	}
+}
+
+func TestUploadToS3DoesNotSendACLHeader(t *testing.T) {
+	var aclHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		aclHeader = r.Header.Get("X-Amz-Acl")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	filePath := filepath.Join(t.TempDir(), "backup.tar.gz")
+	if err := os.WriteFile(filePath, []byte("backup"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(&mpconfig.Config{
+		S3Endpoint:  server.URL,
+		S3Bucket:    "mypaas-backups",
+		S3Region:    "auto",
+		S3AccessKey: "test-access-key",
+		S3SecretKey: "test-secret-key",
+	}, nil)
+	if err := service.uploadToS3(context.Background(), filePath); err != nil {
+		t.Fatalf("uploadToS3() error = %v", err)
+	}
+	if aclHeader != "" {
+		t.Fatalf("uploadToS3() sent unsupported x-amz-acl header %q", aclHeader)
 	}
 }
 

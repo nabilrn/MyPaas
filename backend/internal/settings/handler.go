@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"mypaas/internal/backup"
 	"mypaas/internal/config"
@@ -56,7 +57,7 @@ func NewHandler(queries *db.Queries, cfg *config.Config, backupService *backup.S
 	}
 	// The DB is the persisted source for owner-edited live settings. Rehydrate
 	// the shared config before the HTTP server starts accepting requests so a
-	// process restart cannot silently revert quota/build behavior to env values.
+	// process restart cannot silently revert quota/build/backup behavior to env values.
 	if rows, err := queries.GetAllSettings(context.Background()); err == nil {
 		h.applyStoredRows(rows)
 	}
@@ -81,6 +82,9 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	res["mcp_api_token"] = h.cfg.ApiToken
 	res["cloudflare_configured"] = h.cfg.CloudflareAPIToken != "" && h.cfg.CloudflareZoneID != ""
 	res["s3_configured"] = h.cfg.S3Endpoint != "" && h.cfg.S3Bucket != "" && h.cfg.S3AccessKey != "" && h.cfg.S3SecretKey != ""
+	res["s3_endpoint"] = h.cfg.S3Endpoint
+	res["s3_bucket"] = h.cfg.S3Bucket
+	res["s3_region"] = h.cfg.S3Region
 	res["build_sha"] = strings.TrimSpace(os.Getenv("MYPAAS_BUILD_SHA"))
 
 	httpx.JSON(w, http.StatusOK, res)
@@ -153,6 +157,35 @@ func (h *Handler) UpdateS3Config(w http.ResponseWriter, r *http.Request) {
 	var req s3Req
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "INVALID_BODY", "Invalid request body", nil)
+		return
+	}
+
+	req.Endpoint = strings.TrimRight(strings.TrimSpace(req.Endpoint), "/")
+	req.Bucket = strings.TrimSpace(req.Bucket)
+	req.AccessKey = strings.TrimSpace(req.AccessKey)
+	req.Region = strings.TrimSpace(req.Region)
+	if req.Region == "" {
+		req.Region = "auto"
+	}
+
+	validationCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := backup.ValidateS3Connection(validationCtx, backup.S3Config{
+		Endpoint:  req.Endpoint,
+		Bucket:    req.Bucket,
+		Region:    req.Region,
+		AccessKey: req.AccessKey,
+		SecretKey: req.SecretKey,
+	}); err != nil {
+		httpx.Error(w, http.StatusUnprocessableEntity, "BACKUP_STORAGE_VALIDATION_FAILED", "Could not validate backup storage: "+err.Error(), nil)
+		return
+	}
+
+	if r.URL.Query().Get("validate") == "1" {
+		httpx.JSON(w, http.StatusOK, map[string]interface{}{
+			"valid":  true,
+			"bucket": req.Bucket,
+		})
 		return
 	}
 
@@ -333,6 +366,30 @@ func validateSettings(values map[string]float64) error {
 func (h *Handler) applyStoredRows(rows []db.PlatformSetting) {
 	values := make(map[string]float64)
 	for _, row := range rows {
+		switch row.Key {
+		case "s3_endpoint", "s3_bucket", "s3_access_key", "s3_secret_key", "s3_region":
+			var value string
+			if json.Unmarshal(row.Value, &value) != nil {
+				continue
+			}
+			switch row.Key {
+			case "s3_endpoint":
+				h.cfg.S3Endpoint = strings.TrimRight(strings.TrimSpace(value), "/")
+			case "s3_bucket":
+				h.cfg.S3Bucket = strings.TrimSpace(value)
+			case "s3_access_key":
+				h.cfg.S3AccessKey = strings.TrimSpace(value)
+			case "s3_secret_key":
+				h.cfg.S3SecretKey = value
+			case "s3_region":
+				h.cfg.S3Region = strings.TrimSpace(value)
+				if h.cfg.S3Region == "" {
+					h.cfg.S3Region = "auto"
+				}
+			}
+			continue
+		}
+
 		if !isSettingKey(row.Key) {
 			continue
 		}

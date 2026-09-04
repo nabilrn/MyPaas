@@ -129,8 +129,15 @@ describe("administration navigation contract", () => {
     expect(adminUsersPage).not.toContain("Whitelisted access");
 
     expect(adminBackupPage).not.toContain("S3 automated backup");
-    expect(adminBackupPage).toContain("Configure storage");
-    expect(adminBackupPage).toContain('role="dialog"');
+    expect(adminBackupPage).toContain("admin-backup-workspace w-full");
+    expect(adminBackupPage).toContain("Cloudflare R2");
+    expect(adminBackupPage).toContain("Cloudflare R2 docs");
+    expect(adminBackupPage).toContain("https://developers.cloudflare.com/r2/get-started/s3/");
+    expect(adminBackupPage).toContain("/api/admin/settings/s3?validate=1");
+    expect(adminBackupPage).toContain("Test connection");
+    expect(adminBackupPage).toContain("Save storage");
+    expect(adminBackupPage).toContain("Object Read &amp; Write");
+    expect(adminBackupPage).not.toContain('role="dialog"');
 
     expect(adminMigrationPage).not.toContain("Migration safety");
     expect(adminMigrationPage).not.toContain("What is included?");
@@ -152,12 +159,10 @@ describe("administration navigation contract", () => {
   });
 
   it("keeps administration dialogs keyboard reachable", () => {
-    for (const pageSource of [adminUsersPage, adminBackupPage]) {
-      expect(pageSource).toContain("trapDialogFocus");
-      expect(pageSource).toContain("event.key === 'Escape'");
-      expect(pageSource).toContain('tabindex="-1"');
-      expect(pageSource).toContain("ReturnFocus");
-    }
+    expect(adminUsersPage).toContain("trapDialogFocus");
+    expect(adminUsersPage).toContain("event.key === 'Escape'");
+    expect(adminUsersPage).toContain('tabindex="-1"');
+    expect(adminUsersPage).toContain("ReturnFocus");
   });
 });
 

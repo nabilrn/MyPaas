@@ -27,7 +27,9 @@ describe('administration route spacing contract', () => {
 		}
 		expect(adminSettings).toContain('admin-general-workspace w-full');
 		expect(adminSettings).not.toContain('max-w-5xl');
-		expect(adminBackup).toContain('border-y border-[color:var(--workspace-divider)]');
+		expect(adminBackup).toContain('admin-backup-workspace w-full');
+		expect(adminBackup).not.toContain('max-w-5xl');
+		expect(adminBackup).toContain('border-t border-[color:var(--workspace-divider)]');
 		expect(adminMigration).toContain('border-[color:var(--workspace-divider)]');
 		expect(adminMigration).toContain('max-w-4xl');
 		expect(adminMcp).toContain('border-[color:var(--workspace-divider)]');

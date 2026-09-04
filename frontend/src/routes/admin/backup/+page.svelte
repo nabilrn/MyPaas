@@ -1,19 +1,22 @@
 <script lang="ts">
-	import { Download, X } from '@lucide/svelte';
-	import { onMount, tick } from 'svelte';
+	import { CheckCircle2, Cloud, Download, ExternalLink, ShieldCheck, TriangleAlert } from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import LoadingIndicator from '$components/LoadingIndicator.svelte';
-	import { trapDialogFocus } from '$lib/utils/dialogFocus';
+
+	type ConnectionState = 'idle' | 'valid' | 'error';
 
 	let loading = true;
+	let testingConnection = false;
 	let savingS3 = false;
 	let s3Configured = false;
-	let configuringS3 = false;
-	let storageDialog: HTMLElement | null = null;
-	let endpointInput: HTMLInputElement | null = null;
-	let storageReturnFocus: HTMLElement | null = null;
+	let connectionState: ConnectionState = 'idle';
+	let connectionMessage = '';
+	let savedEndpoint = '';
+	let savedBucket = '';
+	let savedRegion = 'auto';
 
 	let s3Config = {
 		endpoint: '',
@@ -23,13 +26,14 @@
 		secret_key: ''
 	};
 
-	$: canSaveS3 = Boolean(
+	$: canTestConnection = Boolean(
 		s3Config.endpoint.trim()
 		&& s3Config.bucket.trim()
-		&& s3Config.region.trim()
 		&& s3Config.access_key.trim()
 		&& s3Config.secret_key.trim()
 	);
+	$: canSaveS3 = canTestConnection && connectionState === 'valid';
+	$: endpointLooksLikeR2 = /\.r2\.cloudflarestorage\.com\/?$/i.test(s3Config.endpoint.trim());
 
 	onMount(() => {
 		void loadConfig();
@@ -40,6 +44,16 @@
 		try {
 			const data = await api.admin.getSettings();
 			s3Configured = Boolean((data as any).s3_configured);
+			savedEndpoint = String((data as any).s3_endpoint || '');
+			savedBucket = String((data as any).s3_bucket || '');
+			savedRegion = String((data as any).s3_region || 'auto');
+			s3Config = {
+				endpoint: savedEndpoint,
+				bucket: savedBucket,
+				region: savedRegion || 'auto',
+				access_key: '',
+				secret_key: ''
+			};
 		} catch (error) {
 			toast.error('Failed to load backup configuration');
 			console.error(error);
@@ -48,70 +62,84 @@
 		}
 	}
 
-	function openS3Config(event: MouseEvent) {
-		storageReturnFocus = event.currentTarget as HTMLElement;
-		configuringS3 = true;
-		void tick().then(() => endpointInput?.focus());
+	function invalidateConnection() {
+		connectionState = 'idle';
+		connectionMessage = '';
+	}
+
+	function requestBody() {
+		return {
+			s3_endpoint: s3Config.endpoint.trim(),
+			s3_bucket: s3Config.bucket.trim(),
+			s3_region: s3Config.region.trim() || 'auto',
+			s3_access_key: s3Config.access_key.trim(),
+			s3_secret_key: s3Config.secret_key
+		};
+	}
+
+	async function testConnection() {
+		if (testingConnection || savingS3 || !canTestConnection) return;
+		testingConnection = true;
+		connectionState = 'idle';
+		connectionMessage = '';
+		try {
+			const response = await fetch('/api/admin/settings/s3?validate=1', {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(requestBody())
+			});
+			const body = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(body.error?.message || 'Cloudflare R2 connection failed');
+			connectionState = 'valid';
+			connectionMessage = 'Connection verified. MyPaaS can access, write to, and clean up a probe object in this bucket.';
+		} catch (error) {
+			connectionState = 'error';
+			connectionMessage = error instanceof Error ? error.message : 'Cloudflare R2 connection failed';
+		} finally {
+			testingConnection = false;
+		}
 	}
 
 	async function saveS3Config() {
-		if (savingS3 || !canSaveS3) return;
+		if (savingS3 || testingConnection || !canSaveS3) return;
 		savingS3 = true;
 		try {
 			const response = await fetch('/api/admin/settings/s3', {
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					s3_endpoint: s3Config.endpoint.trim(),
-					s3_bucket: s3Config.bucket.trim(),
-					s3_region: s3Config.region.trim(),
-					s3_access_key: s3Config.access_key.trim(),
-					s3_secret_key: s3Config.secret_key
-				})
+				body: JSON.stringify(requestBody())
 			});
 			const body = await response.json().catch(() => ({}));
-			if (!response.ok) throw new Error(body.error?.message || 'Failed to save S3 configuration');
+			if (!response.ok) throw new Error(body.error?.message || 'Failed to save backup storage');
+
 			s3Configured = true;
-			const returnTarget = storageReturnFocus;
-			configuringS3 = false;
-			storageReturnFocus = null;
-			s3Config = { endpoint: '', bucket: '', region: 'auto', access_key: '', secret_key: '' };
-			await tick();
-			returnTarget?.focus();
-			toast.success('Backup storage saved');
+			savedEndpoint = s3Config.endpoint.trim();
+			savedBucket = s3Config.bucket.trim();
+			savedRegion = s3Config.region.trim() || 'auto';
+			s3Config = {
+				endpoint: savedEndpoint,
+				bucket: savedBucket,
+				region: savedRegion,
+				access_key: '',
+				secret_key: ''
+			};
+			connectionState = 'idle';
+			connectionMessage = '';
+			toast.success('Cloudflare R2 backup storage saved');
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to save S3 configuration');
+			connectionState = 'error';
+			connectionMessage = error instanceof Error ? error.message : 'Failed to save backup storage';
 		} finally {
 			savingS3 = false;
 		}
-	}
-
-	function closeS3Config() {
-		if (savingS3) return;
-		const returnTarget = storageReturnFocus;
-		configuringS3 = false;
-		storageReturnFocus = null;
-		s3Config = { endpoint: '', bucket: '', region: 'auto', access_key: '', secret_key: '' };
-		void tick().then(() => returnTarget?.focus());
-	}
-
-	function handleWindowKeydown(event: KeyboardEvent) {
-		if (!configuringS3) return;
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			closeS3Config();
-			return;
-		}
-		trapDialogFocus(event, storageDialog);
 	}
 
 	function downloadBackup() {
 		window.location.href = '/api/admin/backup/download';
 	}
 </script>
-
-<svelte:window on:keydown={handleWindowKeydown} />
 
 <svelte:head>
 	<title>Backup · MyPaaS</title>
@@ -121,57 +149,126 @@
 	{#if loading}
 		<div class="flex min-h-48 items-center justify-center"><LoadingIndicator label="Loading backup settings" /></div>
 	{:else}
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Backup storage</h2>
-			<div class="mt-3 border-y border-[color:var(--workspace-divider)]">
-				<div class="grid gap-3 py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
-					<p class="text-sm text-gray-500 dark:text-gray-400">Storage</p>
-					<div class="min-w-0">
-						<p class="inline-flex items-center gap-2 text-sm font-medium text-gray-950 dark:text-white"><span class={`status-dot ${s3Configured ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-gray-500'}`}></span>{s3Configured ? 'S3-compatible' : 'Not configured'}</p>
-						{#if s3Configured}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Automatic backups use the configured object storage.</p>{/if}
+		<div class="admin-backup-workspace w-full">
+			<section class="border-b border-[color:var(--workspace-divider)]">
+				<div class="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
+					<div class="flex min-w-0 items-start gap-3">
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[color:var(--workspace-divider)]">
+							<Cloud class="h-4 w-4 text-gray-700 dark:text-gray-300" aria-hidden="true" />
+						</div>
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Cloudflare R2</h2>
+								<span class={`status-dot ${s3Configured ? 'bg-emerald-500' : 'bg-gray-400 dark:bg-gray-500'}`}></span>
+								<span class="text-xs text-gray-500 dark:text-gray-400">{s3Configured ? 'Configured' : 'Not configured'}</span>
+							</div>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">S3-compatible object storage for MyPaaS backup archives.</p>
+						</div>
 					</div>
-					<ActionButton variant="secondary" size="sm" on:click={openS3Config}>{s3Configured ? 'Change storage' : 'Configure storage'}</ActionButton>
+					<a
+						href="https://developers.cloudflare.com/r2/get-started/s3/"
+						target="_blank"
+						rel="noreferrer"
+						class="app-focus inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-gray-600 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
+					>
+						Cloudflare R2 docs
+						<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
+					</a>
 				</div>
-			</div>
-		</section>
 
-		<section>
-			<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Manual backup</h2>
-			<div class="mt-3 grid gap-3 border-y border-[color:var(--workspace-divider)] py-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center">
-				<p class="text-sm text-gray-500 dark:text-gray-400">Snapshot</p>
-				<p class="text-sm text-gray-950 dark:text-white">Database and platform configuration <span class="text-gray-500 dark:text-gray-400">· project volumes excluded</span></p>
-				<ActionButton variant="secondary" size="sm" on:click={downloadBackup}><Download slot="icon" class="h-4 w-4" />Download</ActionButton>
-			</div>
-		</section>
+				<div class="grid border-t border-[color:var(--workspace-divider)] lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
+					<div class="px-4 py-4 lg:border-r lg:border-[color:var(--workspace-divider)]">
+						<div class="grid gap-4 md:grid-cols-2">
+							<div class="md:col-span-2">
+								<label class="field-label" for="r2-endpoint">R2 S3 endpoint</label>
+								<input
+									id="r2-endpoint"
+									type="url"
+									bind:value={s3Config.endpoint}
+									on:input={invalidateConnection}
+									class="field w-full max-w-3xl font-mono text-sm"
+									placeholder="https://<account-id>.r2.cloudflarestorage.com"
+									autocomplete="off"
+								/>
+								<p class={`mt-1 text-xs ${s3Config.endpoint && !endpointLooksLikeR2 ? 'text-amber-600 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}`}>
+									{s3Config.endpoint && !endpointLooksLikeR2 ? 'This does not look like a standard Cloudflare R2 endpoint. MyPaaS will still validate it as S3-compatible storage.' : 'Copy the S3 API endpoint from your Cloudflare R2 account.'}
+								</p>
+							</div>
+							<div>
+								<label class="field-label" for="r2-bucket">Bucket</label>
+								<input id="r2-bucket" type="text" bind:value={s3Config.bucket} on:input={invalidateConnection} class="field w-full font-mono text-sm" placeholder="mypaas-backups" autocomplete="off" />
+							</div>
+							<div>
+								<label class="field-label" for="r2-region">Region</label>
+								<input id="r2-region" type="text" bind:value={s3Config.region} on:input={invalidateConnection} class="field w-full max-w-xs font-mono text-sm" placeholder="auto" autocomplete="off" />
+								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Cloudflare R2 uses <span class="font-mono">auto</span>.</p>
+							</div>
+							<div>
+								<label class="field-label" for="r2-access-key">Access Key ID</label>
+								<input id="r2-access-key" type="text" bind:value={s3Config.access_key} on:input={invalidateConnection} class="field w-full font-mono text-sm" autocomplete="off" spellcheck="false" />
+							</div>
+							<div>
+								<label class="field-label" for="r2-secret-key">Secret Access Key</label>
+								<input id="r2-secret-key" type="password" bind:value={s3Config.secret_key} on:input={invalidateConnection} class="field w-full font-mono text-sm" autocomplete="new-password" />
+							</div>
+						</div>
+						<p class="mt-4 text-xs text-gray-500 dark:text-gray-400">Use an R2 token with Object Read &amp; Write access to the selected bucket. Credentials are validated by the MyPaaS API, not from the browser directly.</p>
+					</div>
+
+					<div class="flex min-w-0 flex-col px-4 py-4">
+						<div class="flex items-start gap-2.5">
+							<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+							<div class="min-w-0">
+								<p class="text-sm font-medium text-gray-950 dark:text-white">Connection validation</p>
+								<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">MyPaaS checks the bucket, writes a small probe object, then removes it. Saving repeats the same server-side validation.</p>
+							</div>
+						</div>
+
+						{#if connectionState === 'valid'}
+							<div class="mt-4 flex items-start gap-2 border-y border-emerald-200 py-3 text-emerald-700 dark:border-emerald-900 dark:text-emerald-300">
+								<CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+								<p class="text-xs leading-5">{connectionMessage}</p>
+							</div>
+						{:else if connectionState === 'error'}
+							<div class="mt-4 flex items-start gap-2 border-y border-red-200 py-3 text-red-700 dark:border-red-900 dark:text-red-300">
+								<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+								<p class="text-xs leading-5">{connectionMessage}</p>
+							</div>
+						{:else if s3Configured}
+							<div class="mt-4 border-y border-[color:var(--workspace-divider)] py-3">
+								<p class="text-xs font-medium text-gray-950 dark:text-white">Current destination</p>
+								<p class="mt-1 break-all font-mono text-xs text-gray-500 dark:text-gray-400">{savedBucket || 'Bucket configured'}</p>
+								{#if savedEndpoint}<p class="mt-1 break-all font-mono text-xs text-gray-500 dark:text-gray-400">{savedEndpoint}</p>{/if}
+							</div>
+						{/if}
+
+						<div class="mt-auto flex flex-wrap justify-end gap-2 pt-5">
+							<ActionButton variant="secondary" size="sm" disabled={!canTestConnection || savingS3} loading={testingConnection} loadingLabel="Testing" on:click={testConnection}>Test connection</ActionButton>
+							<ActionButton variant="primary" size="sm" disabled={!canSaveS3 || testingConnection} loading={savingS3} loadingLabel="Saving" on:click={saveS3Config}>Save storage</ActionButton>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="border-b border-[color:var(--workspace-divider)]">
+				<div class="px-4 py-3">
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Manual backup</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Generate a fresh archive on demand.</p>
+				</div>
+				<div class="grid border-t border-[color:var(--workspace-divider)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+					<div class="px-4 py-3 lg:border-r lg:border-[color:var(--workspace-divider)]">
+						<p class="text-xs text-gray-500 dark:text-gray-400">Included</p>
+						<p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">PostgreSQL database + MyPaaS environment configuration</p>
+					</div>
+					<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3 lg:border-t-0 lg:border-r">
+						<p class="text-xs text-gray-500 dark:text-gray-400">Excluded</p>
+						<p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">Project volumes and container filesystems</p>
+					</div>
+					<div class="flex items-center justify-end border-t border-[color:var(--workspace-divider)] px-4 py-3 lg:border-t-0">
+						<ActionButton variant="secondary" size="sm" on:click={downloadBackup}><Download slot="icon" class="h-4 w-4" />Download backup</ActionButton>
+					</div>
+				</div>
+			</section>
+		</div>
 	{/if}
 </div>
-
-{#if configuringS3}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-		<button type="button" class="absolute inset-0 cursor-default bg-gray-950/45" aria-label="Close backup storage setup" on:click={closeS3Config}></button>
-		<div bind:this={storageDialog} class="overlay relative max-h-[90vh] w-full max-w-xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="backup-storage-title" tabindex="-1">
-			<div class="panel-header flex items-start justify-between gap-3">
-				<h2 id="backup-storage-title" class="panel-title">Backup storage</h2>
-				<ActionButton variant="ghost" size="xs" on:click={closeS3Config} disabled={savingS3}><X slot="icon" class="h-4 w-4" />Close</ActionButton>
-			</div>
-			<div class="max-h-[calc(90vh-5rem)] space-y-4 overflow-y-auto p-4">
-				<div><label class="field-label" for="endpoint">S3 endpoint</label><input bind:this={endpointInput} id="endpoint" type="text" bind:value={s3Config.endpoint} class="field w-full font-mono text-sm" placeholder="https://<account-id>.r2.cloudflarestorage.com" /></div>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div><label class="field-label" for="bucket">Bucket</label><input id="bucket" type="text" bind:value={s3Config.bucket} class="field w-full font-mono text-sm" placeholder="mypaas-backups" /></div>
-					<div><label class="field-label" for="region">Region</label><input id="region" type="text" bind:value={s3Config.region} class="field w-full font-mono text-sm" placeholder="auto" /></div>
-				</div>
-				<div><label class="field-label" for="access-key">Access key</label><input id="access-key" type="text" autocomplete="off" bind:value={s3Config.access_key} class="field w-full font-mono text-sm" /></div>
-				<div><label class="field-label" for="secret-key">Secret key</label><input id="secret-key" type="password" autocomplete="new-password" bind:value={s3Config.secret_key} class="field w-full font-mono text-sm" /></div>
-				<details class="border-y border-[color:var(--workspace-divider)] py-3">
-					<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Cloudflare R2</summary>
-					<ol class="mt-3 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-						<li>1. Create a bucket.</li>
-						<li>2. Create an Object Read &amp; Write token.</li>
-						<li>3. Copy the S3 endpoint and credentials here.</li>
-					</ol>
-				</details>
-				<div class="flex justify-end gap-2"><ActionButton variant="ghost" on:click={closeS3Config} disabled={savingS3}>Cancel</ActionButton><ActionButton variant="primary" disabled={!canSaveS3} loading={savingS3} loadingLabel="Saving" on:click={saveS3Config}>Save</ActionButton></div>
-			</div>
-		</div>
-	</div>
-{/if}
