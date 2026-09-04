@@ -93,7 +93,7 @@ validate_ref() {
 validate_interval() {
   local value="$1"
   [[ "$value" =~ ^[0-9]+$ ]] || die "AUTO_UPDATE_INTERVAL_MINUTES must be an integer"
-  (( value >= 5 && value <= 10080 )) || die "AUTO_UPDATE_INTERVAL_MINUTES must be between 5 and 10080"
+  (( value >= 1 && value <= 10080 )) || die "AUTO_UPDATE_INTERVAL_MINUTES must be between 1 and 10080"
 }
 
 validate_wait() {
@@ -138,7 +138,7 @@ disable_timer() {
 main() {
   local enabled interval ref image_wait
   enabled="$(lower "$(resolve_setting "$EXPLICIT_ENABLED_SET" "$EXPLICIT_ENABLED" AUTO_UPDATE_ENABLED false)")"
-  interval="$(resolve_setting "$EXPLICIT_INTERVAL_SET" "$EXPLICIT_INTERVAL" AUTO_UPDATE_INTERVAL_MINUTES 30)"
+  interval="$(resolve_setting "$EXPLICIT_INTERVAL_SET" "$EXPLICIT_INTERVAL" AUTO_UPDATE_INTERVAL_MINUTES 5)"
   ref="$(resolve_setting "$EXPLICIT_REF_SET" "$EXPLICIT_REF" AUTO_UPDATE_REF main)"
   image_wait="$(resolve_setting "$EXPLICIT_WAIT_SET" "$EXPLICIT_WAIT" AUTO_UPDATE_IMAGE_WAIT_SECONDS 300)"
 
@@ -176,7 +176,7 @@ EnvironmentFile=-$config_q
 Environment="ENV_FILE=$env_q"
 Environment="MYPAAS_INSTALL_DIR=$root_q"
 ExecStartPre=-/usr/bin/rm -f $REQUEST_FILE
-ExecStart=/usr/bin/env bash "$root_q/scripts/update-vm.sh"
+ExecStart=/usr/bin/env bash "$root_q/scripts/update-dispatch.sh"
 
 [Install]
 WantedBy=multi-user.target
@@ -202,9 +202,9 @@ EOF
 Description=Periodically check for MyPaas updates
 
 [Timer]
-OnBootSec=10min
+OnBootSec=5min
 OnUnitActiveSec=${interval}min
-RandomizedDelaySec=2min
+RandomizedDelaySec=30s
 Persistent=true
 Unit=mypaas-update.service
 
