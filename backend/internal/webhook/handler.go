@@ -40,6 +40,21 @@ type pushPayload struct {
 	Ref string `json:"ref"`
 }
 
+type deliveryEvidence struct {
+	GithubDeliveryID *string `json:"githubDeliveryId"`
+	SignatureValid   bool    `json:"signatureValid"`
+	EventType        *string `json:"eventType"`
+	Branch           *string `json:"branch"`
+	Processed        bool    `json:"processed"`
+	DeploymentID     *string `json:"deploymentId"`
+	ReceivedAt       string  `json:"receivedAt"`
+}
+
+type statusResponse struct {
+	Status       string            `json:"status"`
+	LastDelivery *deliveryEvidence `json:"lastDelivery"`
+}
+
 func NewHandler(queries *db.Queries, deploys Deployer) *Handler {
 	return &Handler{
 		queries: queries,
@@ -121,6 +136,64 @@ func (h *Handler) GitHub(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusAccepted, map[string]any{
 		"status":       "queued",
 		"deploymentId": deployment.ID.String(),
+	})
+}
+
+// Status reports evidence from the most recent GitHub delivery. A configured
+// URL or secret alone is not treated as proof of connectivity: only a signed
+// delivery can move the status to connected.
+func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.DomainError(w, errs.ErrNotFound)
+		return
+	}
+
+	if _, err := h.queries.GetProjectByID(r.Context(), projectID); err == pgx.ErrNoRows {
+		httpx.DomainError(w, errs.ErrNotFound)
+		return
+	} else if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+
+	latest, err := h.queries.GetLatestWebhookDelivery(r.Context(), projectID)
+	if err == pgx.ErrNoRows {
+		httpx.JSON(w, http.StatusOK, statusResponse{Status: "unverified"})
+		return
+	}
+	if err != nil {
+		httpx.DomainError(w, err)
+		return
+	}
+
+	status := "issue"
+	if latest.SignatureValid {
+		status = "connected"
+	}
+
+	var deploymentID *string
+	if latest.DeploymentID.Valid {
+		value := uuid.UUID(latest.DeploymentID.Bytes).String()
+		deploymentID = &value
+	}
+
+	receivedAt := ""
+	if latest.ReceivedAt.Valid {
+		receivedAt = latest.ReceivedAt.Time.UTC().Format(time.RFC3339)
+	}
+
+	httpx.JSON(w, http.StatusOK, statusResponse{
+		Status: status,
+		LastDelivery: &deliveryEvidence{
+			GithubDeliveryID: latest.GithubDeliveryID,
+			SignatureValid:   latest.SignatureValid,
+			EventType:        latest.EventType,
+			Branch:           latest.Branch,
+			Processed:        latest.Processed,
+			DeploymentID:     deploymentID,
+			ReceivedAt:       receivedAt,
+		},
 	})
 }
 
