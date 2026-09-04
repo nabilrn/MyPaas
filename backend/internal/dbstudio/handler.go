@@ -141,8 +141,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	h.mutate(w, r, h.service.Update)
 }
 
-func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	h.mutate(w, r, h.service.Delete)
+func (h *Handler) Delete(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Allow", "GET, POST, PATCH")
+	httpx.Error(
+		w,
+		http.StatusMethodNotAllowed,
+		"DBSTUDIO_DELETE_DISABLED",
+		"DB Studio row deletion is disabled. Use the application or a dedicated database client for destructive row operations.",
+		nil,
+	)
 }
 
 func (h *Handler) mutate(w http.ResponseWriter, r *http.Request, fn func(context.Context, uuid.UUID, uuid.UUID, Mutation) error) {
