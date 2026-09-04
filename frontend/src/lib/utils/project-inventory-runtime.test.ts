@@ -12,7 +12,7 @@ describe('project inventory runtime presentation', () => {
 		expect(projectsPage).toContain('<th>Updated</th>');
 		expect(projectsPage).toContain("% CPU</span>");
 		expect(projectsPage).toContain('{project.memoryLimitMb} MB');
-		expect(projectsPage).toContain('{project.cpuLimit} CPU');
+		expect(projectsPage).toContain('{formatCpuLimit(project.cpuLimit)} CPU');
 	});
 
 	it('uses web, Compose, and Docker-shaped runtime icons instead of generic file/package glyphs', () => {

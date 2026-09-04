@@ -21,6 +21,7 @@
 	const chartHeight = 112;
 	const curveTension = 0.72;
 	let inferredResource: Resource = 'neutral';
+	let hoverIndex = -1;
 	const resourceClasses = {
 		neutral: {
 			dot: 'bg-gray-400/75 dark:bg-gray-400/70',
@@ -83,6 +84,35 @@
 		return path;
 	}
 
+	function formatHoverValue(sample: number) {
+		if (inferredResource === 'network') {
+			const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+			let amount = sample;
+			let unitIndex = 0;
+			while (amount >= 1024 && unitIndex < units.length - 1) {
+				amount /= 1024;
+				unitIndex += 1;
+			}
+			const digits = amount >= 100 || unitIndex === 0 ? 0 : amount >= 10 ? 1 : 2;
+			return `${amount.toFixed(digits)} ${units[unitIndex]}`;
+		}
+		return `${sample.toFixed(sample < 10 ? 1 : 0)}%`;
+	}
+
+	function handleChartPointer(event: PointerEvent) {
+		if (cleanSeries.length === 0) return;
+		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+		const ratio = clamp((event.clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+		hoverIndex = cleanSeries.length === 1 ? 0 : Math.round(ratio * (cleanSeries.length - 1));
+	}
+
+	function handleChartKeydown(event: KeyboardEvent) {
+		if (cleanSeries.length === 0 || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+		event.preventDefault();
+		const start = hoverIndex < 0 ? cleanSeries.length - 1 : hoverIndex;
+		hoverIndex = clamp(start + (event.key === 'ArrowRight' ? 1 : -1), 0, cleanSeries.length - 1);
+	}
+
 	$: inferredResource = resource !== 'neutral'
 		? resource
 		: label.toLowerCase().includes('cpu')
@@ -112,6 +142,9 @@
 	$: resourceClass = resourceClasses[inferredResource] ?? resourceClasses.neutral;
 	$: currentPoint = points.length === 1 ? points[0] : null;
 	$: latestPoint = rollingHistory ? points[points.length - 1] : null;
+	$: hoveredPoint = hoverIndex >= 0 && hoverIndex < points.length ? points[hoverIndex] : null;
+	$: hoveredSample = hoverIndex >= 0 && hoverIndex < cleanSeries.length ? cleanSeries[hoverIndex] : null;
+	$: hoverLeftPercent = hoveredPoint ? clamp((hoveredPoint.x / chartWidth) * 100, 14, 86) : 50;
 	$: currentOnly = series.length === 0 && compatibilitySeries.length === 1;
 	$: telemetryUnavailable = cleanSeries.length === 0 && /unavailable/i.test(`${value} ${detail}`);
 	$: chartMessage = cleanSeries.length === 0 ? (telemetryUnavailable ? 'Telemetry unavailable' : 'Waiting for sample') : '';
@@ -151,8 +184,20 @@
 			{/if}
 		</div>
 
-		<div class="relative mt-2 h-32 overflow-hidden rounded-md bg-gray-50/45 dark:bg-neutral-900/45">
-			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" role="img" aria-hidden="true">
+		<div
+			class="app-focus relative mt-2 h-32 overflow-hidden rounded-md bg-gray-50/45 outline-none dark:bg-neutral-900/45"
+			role="img"
+			aria-label={`${label} history. Hover the chart or use the left and right arrow keys to inspect values.`}
+			tabindex={cleanSeries.length > 0 ? 0 : undefined}
+			on:pointermove={handleChartPointer}
+			on:pointerleave={() => (hoverIndex = -1)}
+			on:focus={() => {
+				if (cleanSeries.length > 0 && hoverIndex < 0) hoverIndex = cleanSeries.length - 1;
+			}}
+			on:blur={() => (hoverIndex = -1)}
+			on:keydown={handleChartKeydown}
+		>
+			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
 				<g class="stroke-gray-100/30 dark:stroke-neutral-800/25" stroke-width="0.55">
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
@@ -170,13 +215,22 @@
 						vector-effect="non-scaling-stroke"
 					/>
 				{/if}
-				{#if latestPoint}
+				{#if latestPoint && !hoveredPoint}
 					<circle cx={latestPoint.x} cy={latestPoint.y} r="1.45" class={resourceClass.point} />
-				{:else if currentPoint}
+				{:else if currentPoint && !hoveredPoint}
 					<circle cx={currentPoint.x} cy={currentPoint.y} r="1.65" class={resourceClass.point} />
 				{/if}
+				{#if hoveredPoint}
+					<line x1={hoveredPoint.x} x2={hoveredPoint.x} y1="0" y2={chartHeight} class="stroke-gray-400/35 dark:stroke-gray-500/35" stroke-width="0.8" vector-effect="non-scaling-stroke" />
+					<circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="2.4" class={resourceClass.point} stroke="currentColor" stroke-width="0.8" vector-effect="non-scaling-stroke" />
+				{/if}
 			</svg>
-			{#if chartMessage}
+			{#if hoveredPoint && hoveredSample !== null}
+				<div class="pointer-events-none absolute top-2 z-10 -translate-x-1/2 rounded-md border border-gray-200 bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95" style={`left: ${hoverLeftPercent}%`}>
+					<p class="whitespace-nowrap text-[11px] font-medium text-gray-500 dark:text-gray-400">{label}</p>
+					<p class="metric-value mt-0.5 whitespace-nowrap text-xs font-semibold text-gray-950 dark:text-white">{formatHoverValue(hoveredSample)}</p>
+				</div>
+			{:else if chartMessage}
 				<div class="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-gray-400 dark:text-gray-600">{chartMessage}</div>
 			{/if}
 		</div>

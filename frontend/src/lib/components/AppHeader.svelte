@@ -7,23 +7,24 @@
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
 	import { administrationNavItemForPath, isAdministrationPath } from '$lib/navigation/administration';
+	import { isPrimaryNavigationItemActive, primaryNavigationItems, type PrimaryNavigationKey } from '$lib/navigation/primary';
 	import { shellContext } from '$stores/shell-context';
 	import { theme } from '$stores/theme';
 	import type { User } from '$types';
 
 	export let user: User | null = null;
 
-	const navItems = [
-		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
-		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
-		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true },
-		{ href: '/admin/settings', label: 'Administration', icon: Settings, ownerOnly: true }
-	];
+	const navIconByKey: Record<PrimaryNavigationKey, typeof Layers3> = {
+		projects: Layers3,
+		containers: Boxes,
+		shell: Terminal,
+		administration: Settings
+	};
+	const navItems = primaryNavigationItems.map((item) => ({ ...item, icon: navIconByKey[item.key] }));
 
 	const projectSectionLabels: Record<string, string> = {
 		deployments: 'Deployments',
 		logs: 'Logs',
-		metrics: 'Metrics',
 		env: 'Environment',
 		database: 'Database'
 	};
@@ -78,9 +79,8 @@
 	}
 
 	function isActive(href: string, currentPath = pathname) {
-		if (href === '/admin/settings') return isAdministrationPath(currentPath);
-		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
-		return currentPath === href || currentPath.startsWith(`${href}/`);
+		const item = primaryNavigationItems.find((candidate) => candidate.href === href);
+		return item ? isPrimaryNavigationItemActive(item, currentPath) : false;
 	}
 
 	function navItemClass(href: string, currentPath = pathname) {

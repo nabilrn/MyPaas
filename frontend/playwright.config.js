@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.MYPAAS_AUDIT_BASE_URL || 'https://nabilrn.space';
+const baseURL = process.env.MYPAAS_AUDIT_BASE_URL || 'http://127.0.0.1:4173';
 
 export default defineConfig({
 	testDir: './playwright/audit',

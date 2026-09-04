@@ -28,11 +28,13 @@ import {
   isAdministrationNavItemActive,
   isAdministrationPath,
 } from "../navigation/administration";
+import { administrationNavigationItem } from "../navigation/primary";
 
 describe("administration navigation contract", () => {
   it("keeps the global navigation to one Administration entry", () => {
-    expect(navbar).toMatch(/label:\s*["']Administration["']/);
-    expect(appHeader).toMatch(/label:\s*["']Administration["']/);
+    expect(administrationNavigationItem).toMatchObject({ label: "Administration", href: "/admin/settings" });
+    expect(navbar).toContain("administrationNavigationItem");
+    expect(appHeader).toContain("primaryNavigationItems");
     for (const route of [
       "/admin/users",
       "/admin/audit-logs",
