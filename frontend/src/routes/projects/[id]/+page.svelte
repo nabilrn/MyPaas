@@ -43,17 +43,24 @@
 		void loadOverview();
 		void loadAdditionalRoutes();
 
-		const overviewInterval = setInterval(() => void loadOverview(true), 5000);
-		return () => clearInterval(overviewInterval);
+		const refreshOverviewWhenVisible = () => {
+			if (document.visibilityState === 'visible') void loadOverview();
+		};
+		const overviewInterval = window.setInterval(refreshOverviewWhenVisible, 5000);
+		document.addEventListener('visibilitychange', refreshOverviewWhenVisible);
+		return () => {
+			window.clearInterval(overviewInterval);
+			document.removeEventListener('visibilitychange', refreshOverviewWhenVisible);
+		};
 	});
 
-	async function loadOverview(background = false) {
+	async function loadOverview() {
 		if (overviewInFlight) return;
 		overviewInFlight = true;
 		try {
 			const [projectResult, deploymentRows] = await Promise.all([
 				api.projects.get($page.params.id ?? ''),
-				api.deployments.list($page.params.id ?? '')
+				api.deployments.list($page.params.id ?? '', 0, 1)
 			]);
 			project = projectResult;
 			deployments = deploymentRows;
