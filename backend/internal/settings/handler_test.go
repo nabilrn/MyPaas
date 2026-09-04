@@ -1,14 +1,17 @@
 package settings
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"mypaas/internal/config"
+	"mypaas/internal/db"
 	"mypaas/internal/statd"
 )
 
@@ -25,6 +28,72 @@ func TestUpdateSystemQueuesHostRequest(t *testing.T) {
 	}
 	if _, err := os.Stat(requestPath); err != nil {
 		t.Fatalf("update request was not created: %v", err)
+	}
+}
+
+func TestUpdateS3ConfigValidateOnlyDoesNotRequirePersistence(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodHead, http.MethodPut:
+			w.WriteHeader(http.StatusOK)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	payload := `{"s3_endpoint":"` + server.URL + `","s3_bucket":"mypaas-backups","s3_region":"auto","s3_access_key":"test-access-key","s3_secret_key":"test-secret-key"}`
+	request := httptest.NewRequest(http.MethodPost, "/admin/settings/s3?validate=1", strings.NewReader(payload))
+	response := httptest.NewRecorder()
+	h := &Handler{cfg: &config.Config{}}
+	h.UpdateS3Config(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"valid":true`) {
+		t.Fatalf("response = %s, want valid=true", response.Body.String())
+	}
+}
+
+func TestUpdateS3ConfigRejectsUnreachableStorage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	payload := `{"s3_endpoint":"` + server.URL + `","s3_bucket":"mypaas-backups","s3_region":"auto","s3_access_key":"bad-access-key","s3_secret_key":"bad-secret-key"}`
+	request := httptest.NewRequest(http.MethodPost, "/admin/settings/s3?validate=1", strings.NewReader(payload))
+	response := httptest.NewRecorder()
+	h := &Handler{cfg: &config.Config{}}
+	h.UpdateS3Config(response, request)
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusUnprocessableEntity, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "BACKUP_STORAGE_VALIDATION_FAILED") {
+		t.Fatalf("response = %s, want validation error code", response.Body.String())
+	}
+}
+
+func TestApplyStoredRowsRehydratesS3Config(t *testing.T) {
+	cfg := &config.Config{}
+	h := &Handler{cfg: cfg}
+	h.applyStoredRows([]db.PlatformSetting{
+		{Key: "s3_endpoint", Value: json.RawMessage(`"https://account.r2.cloudflarestorage.com/"`)},
+		{Key: "s3_bucket", Value: json.RawMessage(`"mypaas-backups"`)},
+		{Key: "s3_region", Value: json.RawMessage(`"auto"`)},
+		{Key: "s3_access_key", Value: json.RawMessage(`"access"`)},
+		{Key: "s3_secret_key", Value: json.RawMessage(`"secret"`)},
+	})
+
+	if cfg.S3Endpoint != "https://account.r2.cloudflarestorage.com" || cfg.S3Bucket != "mypaas-backups" || cfg.S3Region != "auto" {
+		t.Fatalf("storage config not rehydrated: endpoint=%q bucket=%q region=%q", cfg.S3Endpoint, cfg.S3Bucket, cfg.S3Region)
+	}
+	if cfg.S3AccessKey != "access" || cfg.S3SecretKey != "secret" {
+		t.Fatal("storage credentials were not rehydrated")
 	}
 }
 
