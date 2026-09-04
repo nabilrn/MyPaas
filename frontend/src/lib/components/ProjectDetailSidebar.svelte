@@ -1,15 +1,12 @@
 <script lang="ts">
 	import {
-		Box,
 		CircleAlert,
 		Database,
 		FileText,
-		GitBranch,
 		History,
 		KeyRound,
 		LayoutDashboard,
-		Settings2,
-		Webhook
+		Settings2
 	} from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ProjectSecondaryNavItem from './ProjectSecondaryNavItem.svelte';
@@ -51,15 +48,7 @@
 		},
 		{
 			label: 'Configuration',
-			items: [
-				{ label: 'General', href: `${base}/settings`, icon: Settings2, exact: true },
-				{ label: 'Source', href: `${base}/settings/source`, icon: GitBranch },
-				{ label: 'Resources', href: `${base}/settings/resources`, icon: Box }
-			]
-		},
-		{
-			label: 'Integrations',
-			items: [{ label: 'Webhook', href: `${base}/settings/webhook`, icon: Webhook }]
+			items: [{ label: 'Settings', href: `${base}/settings`, icon: Settings2, exact: true }]
 		},
 		{
 			label: 'Advanced',

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
+	import ProjectCombinedSettings from '$components/ProjectCombinedSettings.svelte';
 	import SettingsWorkspace from '$components/SettingsWorkspace.svelte';
 </script>
 
-<SettingsWorkspace section="general">
-	<ProjectSettingsSection section="general" />
+<SettingsWorkspace section="settings">
+	<ProjectCombinedSettings />
 </SettingsWorkspace>

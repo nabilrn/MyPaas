@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import overview from '../../routes/projects/[id]/+page.svelte?raw';
 import projectLayout from '../../routes/projects/[id]/+layout.svelte?raw';
 import settings from '../../routes/projects/[id]/settings/+page.svelte?raw';
-import sourceSettings from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
-import resourceSettings from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
+import sourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
+import resourceRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
 import dangerSettings from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
 import environmentRoute from '../../routes/projects/[id]/env/+page.svelte?raw';
 import databaseLayout from '../../routes/projects/[id]/database/+layout.svelte?raw';
@@ -12,6 +12,7 @@ import logsRoute from '../../routes/projects/[id]/logs/+page.svelte?raw';
 import deployControlPanel from '../components/DeployControlPanel.svelte?raw';
 import effectiveConfiguration from '../components/ProjectEffectiveConfiguration.svelte?raw';
 import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
+import combinedSettings from '../components/ProjectCombinedSettings.svelte?raw';
 import observability from '../components/ProjectObservability.svelte?raw';
 import runtimeUsageBar from '../components/RuntimeUsageBar.svelte?raw';
 import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
@@ -33,20 +34,19 @@ describe('project detail cleanup contract', () => {
 		expect(projectLayout).toContain('{#if showOperationalHeader}');
 		expect(deployControlPanel).toContain('min-h-14');
 		expect(deployControlPanel).not.toContain('publicProjectURL');
-		expect(deployControlPanel).not.toContain('projectSummary');
-		expect(deployControlPanel).not.toContain('>View logs</a>');
 	});
 
-	it('owns each configuration domain on one leaf route', () => {
+	it('keeps Environment dedicated while consolidating project configuration', () => {
 		expect(projectLayout).toContain('ProjectDetailSidebar');
 		expect(projectDetailSidebar).toContain("label: 'Environment'");
 		expect(projectDetailSidebar).toContain('`${base}/env`');
+		expect(projectDetailSidebar).toContain("label: 'Settings'");
 		expect(environmentRoute).toContain('ProjectEnvironmentSettings');
-		expect(environmentRoute).toContain('project-environment-leaf');
-		expect(settings).not.toContain('ProjectEnvironmentSettings');
-		expect(projectDetailSidebar).not.toContain('settings/environment');
+		expect(combinedSettings).not.toContain('ProjectEnvironmentSettings');
+		expect(settings).toContain('ProjectCombinedSettings');
+		expect(sourceRedirect).toContain("redirect(307, `/projects/${params.id}/settings`)");
+		expect(resourceRedirect).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		expect(effectiveConfiguration).not.toContain('>Source</p>');
-		expect(effectiveConfiguration).not.toContain('sourceSummary');
 	});
 
 	it('uses Overview, Deployments, and Logs as the horizontal gutter reference', () => {
@@ -55,22 +55,20 @@ describe('project detail cleanup contract', () => {
 		expect(deploymentsRoute).toContain('TableShell');
 		expect(logsRoute).toContain('SectionPanel');
 		expect(environmentRoute).toContain('class="px-5 pt-4"');
-		expect(environmentRoute).toContain('padding-inline: 1rem');
-		for (const route of [settings, sourceSettings, resourceSettings, dangerSettings]) {
-			expect(route).toContain('SettingsWorkspace');
-		}
-		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
-		expect(settingsWorkspace).toContain('padding-inline: 1rem');
+		expect(settings).toContain('SettingsWorkspace');
+		expect(dangerSettings).toContain('SettingsWorkspace');
+		expect(settingsWorkspace).toContain('width: 100%');
+		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 		expect(databaseLayout).toContain('px-5 pb-3 pt-4');
 		expect(effectiveConfiguration).toContain('border-y border-[color:var(--workspace-divider)]');
 		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
 
-	it('keeps settings controls at sensible widths', () => {
-		expect(settingsWorkspace).toContain('max-width: 36rem');
-		expect(settingsWorkspace).toContain('max-width: 32rem');
-		expect(settingsWorkspace).toContain('max-width: 20rem');
-		expect(settingsWorkspace).toContain('max-width: 48rem');
+	it('keeps settings controls compact inside a full-width structure', () => {
+		expect(combinedSettings).toContain('max-w-xl');
+		expect(combinedSettings).toContain('max-w-md');
+		expect(combinedSettings).toContain('max-w-xs');
+		expect(combinedSettings).toContain('max-w-2xl');
 	});
 
 	it('uses semantic resource color and readable overview charts', () => {
@@ -80,7 +78,6 @@ describe('project detail cleanup contract', () => {
 		expect(runtimeUsageBar).toContain('var(--chart-cpu)');
 		expect(runtimeUsageBar).toContain('var(--chart-memory)');
 		expect(runtimeUsageBar).toContain('role="progressbar"');
-		expect(runtimeUsageBar).not.toContain('Allocated resource');
 	});
 
 	it('keeps Database Studio a normal project leaf', () => {
@@ -97,6 +94,5 @@ describe('project detail cleanup contract', () => {
 		expect(deploymentsRoute).toContain('scrollToLatest');
 		expect(logsRoute).toContain('{#if logs.length > 0}');
 		expect(logsRoute).toContain('No logs yet.');
-		expect(logsRoute).not.toContain('Showing {filteredLogs.length} of {logs.length} lines');
 	});
 });

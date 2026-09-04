@@ -22,9 +22,9 @@
 	$: route = publicUrl.replace(/^https?:\/\//, '') || project.subdomain;
 </script>
 
-<section class="border-y border-[color:var(--workspace-divider)]">
+<section class="-mx-4 border-y border-[color:var(--workspace-divider)]">
 	<div class="divide-y divide-[color:var(--workspace-divider)]">
-		<div class="grid gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
+		<div class="grid gap-2 px-4 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
 			<p class="text-sm text-gray-500 dark:text-gray-400">Project name</p>
 			<div class="min-w-0">
 				<p class="text-sm font-semibold text-gray-950 dark:text-white">{project.name}</p>
@@ -32,7 +32,7 @@
 			</div>
 		</div>
 
-		<div class="grid gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
+		<div class="grid gap-2 px-4 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
 			<p class="text-sm text-gray-500 dark:text-gray-400">Public URL</p>
 			<div class="min-w-0">
 				{#if publicUrl}
@@ -47,7 +47,7 @@
 			</div>
 		</div>
 
-		<div class="grid gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
+		<div class="grid gap-2 px-4 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-start">
 			<p class="text-sm text-gray-500 dark:text-gray-400">Deployment type</p>
 			<div class="min-w-0">
 				<p class="text-sm font-semibold text-gray-950 dark:text-white">{deploymentType}</p>

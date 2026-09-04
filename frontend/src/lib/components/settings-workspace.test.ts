@@ -1,30 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import settingsWorkspace from './SettingsWorkspace.svelte?raw';
 import storageCapacityMetric from './StorageCapacityMetric.svelte?raw';
-import projectGeneral from '../../routes/projects/[id]/settings/+page.svelte?raw';
-import projectSource from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
-import projectResources from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
-import projectWebhook from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
+import projectSettings from '../../routes/projects/[id]/settings/+page.svelte?raw';
 import projectDanger from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
+import projectSourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
+import projectResourcesRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
+import projectWebhookRedirect from '../../routes/projects/[id]/settings/webhook/+page.ts?raw';
 
 describe('settings workspace layout contract', () => {
-	it('centralizes project settings geometry instead of route-specific style overrides', () => {
-		for (const page of [projectGeneral, projectSource, projectResources, projectWebhook, projectDanger]) {
+	it('uses the full project main canvas for structural settings strokes', () => {
+		for (const page of [projectSettings, projectDanger]) {
 			expect(page).toContain('SettingsWorkspace');
 			expect(page).not.toContain('<style>');
 		}
-
-		expect(settingsWorkspace).toContain('max-width: 64rem');
+		expect(projectSettings).toContain('section="settings"');
+		expect(settingsWorkspace).toContain('width: 100%');
+		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 		expect(settingsWorkspace).toContain('var(--workspace-divider)');
 		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
 		expect(settingsWorkspace).toContain('padding-inline: 1rem');
-		expect(settingsWorkspace).toContain('padding-top: 1rem');
-		expect(settingsWorkspace).not.toContain('max-width: 56rem');
 	});
 
-	it('keeps decorative icons out of ordinary settings-row geometry', () => {
-		expect(settingsWorkspace).toContain('decorative icons are not part of ordinary field rows');
+	it('preserves legacy settings URLs through redirects', () => {
+		for (const route of [projectSourceRedirect, projectResourcesRedirect, projectWebhookRedirect]) {
+			expect(route).toContain("redirect(307, `/projects/${params.id}/settings`)");
+		}
+	});
+
+	it('keeps workspace geometry free of decorative route-local dependencies', () => {
 		expect(settingsWorkspace).not.toContain('@lucide/svelte');
+		expect(settingsWorkspace).toContain('Controls keep route-specific');
 	});
 });
 
