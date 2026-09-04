@@ -335,6 +335,7 @@ func registerRoutes(
 			r.Post("/{id}/stop", deploymentHandler.Stop)
 			r.Post("/{id}/restart", deploymentHandler.Restart)
 			r.Post("/{id}/webhook-secret/regenerate", projectHandler.RegenerateWebhookSecret)
+			r.Get("/{id}/webhook-status", webhookHandler.Status)
 			r.Get("/{id}/deployments", deploymentHandler.List)
 			r.Get("/{id}/env", envHandler.List)
 			r.Get("/{id}/env/{key}/reveal", envHandler.Reveal)
