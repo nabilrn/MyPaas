@@ -14,8 +14,9 @@
 
 	/* Shared geometry contract for form-heavy settings pages:
 	   - one 64rem content measure
+	   - 1.25rem title gutter aligned with the established project leaves
+	   - 1rem body/control gutter
 	   - one full-width divider between structural blocks
-	   - 1rem horizontal content padding
 	   - inset borders only for alerts/controls, not for page structure
 	   - decorative icons are not part of ordinary field rows */
 	.settings-workspace-contract :global(.space-y-4),
@@ -31,7 +32,9 @@
 	.settings-workspace-contract :global(.space-y-4 > :first-child),
 	.settings-workspace-contract :global(.space-y-5 > :first-child) {
 		border-bottom: 1px solid var(--workspace-divider);
-		padding: 0.75rem 1rem;
+		padding-inline: 1.25rem;
+		padding-top: 1rem;
+		padding-bottom: 0.75rem;
 	}
 
 	.settings-workspace-contract :global(.space-y-5 > .border-t),
@@ -45,7 +48,8 @@
 	.settings-workspace-contract :global(.space-y-5 > .border-t),
 	.settings-workspace-contract :global(.space-y-5 > .border-y:not(.divide-y)),
 	.settings-workspace-contract :global(.space-y-5 > details) {
-		padding: 0.875rem 1rem;
+		padding-block: 0.875rem;
+		padding-inline: 1rem;
 	}
 
 	.settings-workspace-contract :global(.space-y-4 > section.border-y > .divide-y > .grid),
@@ -60,13 +64,15 @@
 
 	.settings-workspace-contract :global(.space-y-5 > .flex.border-b) {
 		border-color: var(--workspace-divider) !important;
-		padding: 0.75rem 1rem;
+		padding-block: 0.75rem;
+		padding-inline: 1rem;
 	}
 
 	.settings-workspace-contract :global(.space-y-4 > .flex:last-child),
 	.settings-workspace-contract :global(.space-y-5 > .flex:last-child) {
 		border-bottom: 1px solid var(--workspace-divider);
-		padding: 0.75rem 1rem;
+		padding-block: 0.75rem;
+		padding-inline: 1rem;
 	}
 
 	.settings-workspace-contract :global(.space-y-5 > .alert-danger),
