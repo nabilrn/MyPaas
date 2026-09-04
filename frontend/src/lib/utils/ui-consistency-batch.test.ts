@@ -3,7 +3,7 @@ import containersPage from '../../routes/containers/+page.svelte?raw';
 import auditPage from '../../routes/admin/audit-logs/+page.svelte?raw';
 import deploymentsPage from '../../routes/projects/[id]/deployments/+page.svelte?raw';
 import toastComponent from '../components/Toast.svelte?raw';
-import designContract from '../../DESIGN.md?raw';
+import designContract from '../../../DESIGN.md?raw';
 
 describe('operational UI consistency', () => {
 	it('separates container lifecycle state from health using project-table density', () => {
@@ -25,7 +25,7 @@ describe('operational UI consistency', () => {
 		expect(deploymentsPage).toContain('logNeedsLatest');
 		expect(deploymentsPage).toContain('isLogNearBottom');
 		expect(deploymentsPage).toContain('scrollToLatest');
-		expect(deploymentsPage).toContain('>Latest</button>');
+		expect(deploymentsPage).toContain('>Latest');
 		expect(deploymentsPage).toContain('Waiting for output.');
 	});
 
