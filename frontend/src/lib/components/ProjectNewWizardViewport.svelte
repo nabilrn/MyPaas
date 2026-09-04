@@ -45,6 +45,7 @@
 			|| form.textContent?.includes('Starting repository inspection')
 			|| false;
 
+		if (!setupReady && $createProjectWizard.activeStep !== 'source') setCreateProjectStep('source');
 		updateCreateProjectWizard({
 			sourceComplete: setupReady,
 			configurationComplete: setupReady,
@@ -76,15 +77,19 @@
 		if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${target}`);
 	}
 
-	$: if (root && $createProjectWizard.activeStep) {
-		applyVisibility();
-	}
+	$: if (root && $createProjectWizard.activeStep) applyVisibility();
 
 	onMount(() => {
 		const requested = window.location.hash.slice(1) as CreateProjectStep;
 		if (order.includes(requested)) setCreateProjectStep(requested);
 		observer = new MutationObserver(scheduleSync);
-		observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true });
+		observer.observe(root, {
+			childList: true,
+			subtree: true,
+			characterData: true,
+			attributes: true,
+			attributeFilter: ['disabled', 'aria-busy']
+		});
 		scheduleSync();
 	});
 
