@@ -109,13 +109,7 @@ for host in hosts:
 }
 
 dashboard_asset_paths() {
-  python3 -c '
-import re, sys
-
-assets = sorted(set(re.findall(r"(?:src|href)=\"(/_app/immutable/[^\"]+)\"", sys.stdin.read())))
-for asset in assets:
-    print(asset)
-'
+  python3 "$ROOT_DIR/scripts/extract_dashboard_assets.py"
 }
 
 echo "Checking production containers..."
