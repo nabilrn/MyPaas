@@ -18,6 +18,7 @@
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { deriveProjectInventoryAction, deriveProjectOperationalState, type ProjectOperationalState, type RuntimeEvidence } from '$lib/utils/project-operational-state';
 	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
+	import { formatCpuLimit } from '$lib/utils/resource-format';
 	import { projectURL } from '$lib/utils/urls';
 	import type { Deployment, Project } from '$types';
 
@@ -46,7 +47,6 @@
 	let hostStatsInFlight = false;
 	let ramSeries: number[] = [];
 	let cpuSeries: number[] = [];
-	let storageSeries: number[] = [];
 	let networkSeries: number[] = [];
 	let cpuBaseline: CPUCounterSample | null = null;
 	let currentCPUUsage: number | null = null;
@@ -78,11 +78,22 @@
 
 	onMount(() => {
 		void refreshDashboardData();
-		const projectRefresh = setInterval(() => void loadProjects(true), 5000);
-		const hostRefresh = setInterval(() => void loadHostStats(), 3000);
+		const refreshProjects = () => {
+			if (!document.hidden) void loadProjects(true);
+		};
+		const refreshHost = () => {
+			if (!document.hidden) void loadHostStats();
+		};
+		const handleVisibilityChange = () => {
+			if (!document.hidden) void refreshDashboardData(true);
+		};
+		const projectRefresh = setInterval(refreshProjects, 5000);
+		const hostRefresh = setInterval(refreshHost, 3000);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 		return () => {
 			clearInterval(projectRefresh);
 			clearInterval(hostRefresh);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
 
@@ -145,11 +156,6 @@
 			currentCPUUsage = null;
 			cpuSeries = [];
 		}
-
-		if (stats.storage && stats.storage.total_bytes > 0) {
-			const used = Math.max(0, stats.storage.total_bytes - stats.storage.available_bytes);
-			storageSeries = appendRollingSample(storageSeries, boundedPercent(used, stats.storage.total_bytes), telemetrySamples);
-		} else storageSeries = [];
 
 		if (stats.network) {
 			const current: NetworkCounterSample = { interface: stats.network.interface, rxBytes: stats.network.rx_bytes, txBytes: stats.network.tx_bytes, sampledAtMs };
@@ -346,11 +352,11 @@
 			</a>
 		</svelte:fragment>
 		{#if hostStats}
-			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
+			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-3">
 				<CapacityMetricChart label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'} value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`} indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`} detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'} series={hostStats.memory ? ramSeries : []} resource="memory" className="bg-white dark:bg-neutral-900" />
 				<CapacityMetricChart label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'} value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`} indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''} detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'} series={hostStats.cpu ? cpuSeries : []} resource="cpu" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label="Storage" value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'} indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''} detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'} series={storageSeries} resource="storage" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label="Network" value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'} indicator={hostStats.network?.interface ?? ''} detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'} series={networkSeries} resource="network" maxValue={null} rangeLabel="auto scale" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="Network" value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'} indicator={hostStats.network?.interface ?? ''} detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'} series={networkSeries} resource="network" maxValue={null} rangeLabel="auto scale" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-1" />
+				<CapacityMetricChart label="Storage" value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'} indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''} detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'} percent={storagePercent} resource="storage" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-3" />
 			</div>
 		{:else if hostStatsLoaded}<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>{/if}
 	</SectionPanel>
@@ -387,7 +393,7 @@
 						<td><div class="flex min-w-0 items-start gap-2"><RuntimeModeIcon mode={project.deployMode} className="mt-0.5 h-4 w-4 text-gray-400 dark:text-gray-500" /><div class="min-w-0"><p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>{#if project.mainService}<p class="mt-0.5 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{project.mainService}</p>{/if}</div></div></td>
 						<td class="text-center"><ProjectDatabaseShortcut projectId={project.id} /></td>
 						<td class="metric-value whitespace-nowrap text-right">{#if project.id in projectMemory}<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{:else if uptimeLoadingIds.has(project.id)}<span class="text-sm text-gray-400 dark:text-gray-500" aria-label="Loading metrics">…</span>{:else}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{/if}</td>
-						<td class="metric-value whitespace-nowrap text-right">{#if project.deployMode === 'static'}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{:else}<div class="text-[13px] text-gray-700 dark:text-gray-300"><p>{project.memoryLimitMb} MB</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{project.cpuLimit} CPU</p></div>{/if}</td>
+						<td class="metric-value whitespace-nowrap text-right">{#if project.deployMode === 'static'}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{:else}<div class="text-[13px] text-gray-700 dark:text-gray-300"><p>{project.memoryLimitMb} MB</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatCpuLimit(project.cpuLimit)} CPU</p></div>{/if}</td>
 						<td class="whitespace-nowrap text-center text-[13px] text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
 						<td class="whitespace-nowrap text-center">
 							{#if primaryHref}<ActionLink href={primaryHref} variant="secondary" size="xs" className="mx-auto min-w-[5.75rem]"><svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionLink>{:else}<ActionButton variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'} size="xs" className="mx-auto min-w-[5.75rem]" on:click={() => handlePrimaryProjectAction(project)} loading={projectActionId === project.id} loadingLabel={projectPrimaryLabel(project)} disabled={projectActionId !== '' && projectActionId !== project.id}><svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionButton>{/if}
@@ -413,7 +419,7 @@
 						{#if source.href}<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white"><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></a>{:else}<span class="inline-flex min-w-0 items-center gap-1 truncate" title={source.label}><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></span>{/if}
 						{#if project.sourceType === 'git' && project.branch}<span class="inline-flex items-center gap-1 whitespace-nowrap font-mono"><GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />{project.branch}</span>{/if}
 						<span class="inline-flex items-center gap-1 whitespace-nowrap"><RuntimeModeIcon mode={project.deployMode} className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />{runtimeLabel(project)}</span>
-						{#if project.deployMode !== 'static'}<span class="metric-value whitespace-nowrap">{project.memoryLimitMb} MB · {project.cpuLimit} CPU</span>{/if}
+						{#if project.deployMode !== 'static'}<span class="metric-value whitespace-nowrap">{project.memoryLimitMb} MB · {formatCpuLimit(project.cpuLimit)} CPU</span>{/if}
 						{#if project.id in projectMemory}<span class="metric-value whitespace-nowrap">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{/if}
 						<span>Updated {formatDate(project.updatedAt)}</span>
 					</div>
