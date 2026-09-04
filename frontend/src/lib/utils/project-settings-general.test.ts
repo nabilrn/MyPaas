@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import combinedSettings from '../components/ProjectCombinedSettings.svelte?raw';
+import webhookSettings from '../components/ProjectWebhookSettings.svelte?raw';
 import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
 import settingsRoute from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import webhookRoute from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
 import sourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
 import resourcesRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
-import webhookRedirect from '../../routes/projects/[id]/settings/webhook/+page.ts?raw';
 import dangerRoute from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
 import environmentRoute from '../../routes/projects/[id]/env/+page.svelte?raw';
 import generalInformation from '../components/ProjectEffectiveConfiguration.svelte?raw';
@@ -13,13 +14,14 @@ import secretField from '../components/SecretField.svelte?raw';
 import selectMenu from '../components/SelectMenu.svelte?raw';
 
 describe('project settings product contract', () => {
-	it('consolidates short configuration domains into one Settings workspace', () => {
+	it('keeps the combined Settings workspace focused on Source and Resources', () => {
 		expect(settingsRoute).toContain('ProjectCombinedSettings');
 		expect(settingsRoute).toContain('section="settings"');
 		expect(combinedSettings).toContain('>Settings</h1>');
-		for (const section of ['General', 'Source', 'Resources', 'Webhook']) {
-			expect(combinedSettings).toContain(`>${section}<`);
-		}
+		expect(combinedSettings).toContain('>Source<');
+		expect(combinedSettings).toContain('>Resources<');
+		expect(combinedSettings).not.toContain('>General<');
+		expect(combinedSettings).not.toContain('>Webhook<');
 		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 	});
 
@@ -58,16 +60,20 @@ describe('project settings product contract', () => {
 		expect(secretField).toContain('••••••••');
 	});
 
-	it('keeps webhook actions in Settings and destructive actions isolated', () => {
-		expect(combinedSettings).toContain('Deploy on GitHub push events.');
-		expect(combinedSettings).toContain('Setup guide');
-		expect(combinedSettings).toContain('ConfirmActionDialog');
+	it('keeps webhook actions on a dedicated configuration leaf and destructive actions isolated', () => {
+		expect(webhookRoute).toContain('ProjectWebhookSettings');
+		expect(webhookRoute).toContain('section="webhook"');
+		expect(webhookSettings).toContain('Deploy this project from signed GitHub push events.');
+		expect(webhookSettings).toContain('api.projects.webhookStatus');
+		expect(webhookSettings).toContain('ConfirmActionDialog');
+		expect(combinedSettings).not.toContain('api.projects.regenerateWebhookSecret');
 		expect(dangerRoute).toContain('section="danger"');
 	});
 
-	it('redirects the old thin settings leaves to the consolidated route', () => {
-		for (const route of [sourceRedirect, resourcesRedirect, webhookRedirect]) {
+	it('redirects only the old Source and Resources leaves to the consolidated route', () => {
+		for (const route of [sourceRedirect, resourcesRedirect]) {
 			expect(route).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		}
+		expect(webhookRoute).not.toContain('redirect(307');
 	});
 });
