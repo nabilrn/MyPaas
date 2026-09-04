@@ -10,20 +10,20 @@ type EnvironmentDraftLike = {
 export function createProjectEnvironmentCopy(sourceType: CreateProjectSourceType) {
 	if (sourceType === 'registry') {
 		return {
-			setupSummary: 'Image runtime and manually configured environment settings are summarized here. Low-level overrides stay in Advanced settings.',
-			sectionDescription: 'Registry images are not scanned for environment variables. Add variables manually or import a .env file if the container requires them.',
-			emptyState: 'No environment variables have been added yet. Add one only if the container requires it.',
-			noRequiredSummary: 'No required environment values are missing.',
-			portRequirement: 'Set the port that the application listens on inside the container.'
+			setupSummary: 'Review image settings and required environment values.',
+			sectionDescription: 'Registry images are not scanned. Add variables only when the container needs them.',
+			emptyState: 'No environment variables have been added.',
+			noRequiredSummary: 'No required values missing.',
+			portRequirement: 'Set the port the application listens on inside the container.'
 		};
 	}
 
 	return {
-		setupSummary: 'Detected deployment and environment results are summarized here. Low-level overrides stay in Advanced settings.',
-		sectionDescription: 'Detected from the repository automatically. Required values are shown first.',
-		emptyState: 'No environment variables detected. Add one only if your application needs it.',
+		setupSummary: 'Review detected runtime, required values, and blockers.',
+		sectionDescription: 'Detected from the repository. Required values appear first.',
+		emptyState: 'No environment variables detected.',
 		noRequiredSummary: 'Scan complete · no required values missing',
-		portRequirement: 'Detection could not resolve this value automatically.'
+		portRequirement: 'Detection did not find a container port. Set it manually.'
 	};
 }
 
