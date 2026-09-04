@@ -19,7 +19,6 @@ import adminSidebar from '../components/AdminSidebar.svelte?raw';
 import appHeader from '../components/AppHeader.svelte?raw';
 import navbar from '../components/Navbar.svelte?raw';
 import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
-import projectNewSidebar from '../components/ProjectNewSidebar.svelte?raw';
 import projectCombinedSettings from '../components/ProjectCombinedSettings.svelte?raw';
 import projectWebhookSettings from '../components/ProjectWebhookSettings.svelte?raw';
 import projectSettingsSection from '../components/ProjectSettingsSection.svelte?raw';
@@ -102,14 +101,11 @@ describe('administration navigation contract', () => {
 });
 
 describe('project secondary navigation contract', () => {
-	it('keeps Create Project as one route with section navigation instead of gated wizard steps', () => {
-		expect(createProjectLayout).toContain('ProjectNewSidebar');
-		expect(createProjectLayout).toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
-		for (const label of ['Source', 'Environment', 'Advanced', 'Create']) {
-			expect(projectNewSidebar).toContain(`label: '${label}'`);
-		}
-		expect(projectNewSidebar).not.toContain('createProjectWizard');
-		expect(projectNewSidebar).toContain('scrollIntoView');
+	it('keeps Create Project full-width without a secondary sidebar', () => {
+		expect(createProjectLayout).not.toContain('ProjectNewSidebar');
+		expect(createProjectLayout).not.toContain('<aside');
+		expect(createProjectLayout).not.toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
+		expect(createProjectLayout).toContain('min-h-[calc(100vh-3.5rem)]');
 	});
 
 	it('uses one compact project-detail secondary sidebar', () => {
