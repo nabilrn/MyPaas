@@ -22,7 +22,7 @@ describe('administration route spacing contract', () => {
 
 	it('keeps every admin child route inside the shared parent-owned header contract', () => {
 		for (const route of [adminSettings, adminBackup, adminMigration, adminMcp, adminUsers, adminAudit]) {
-			expect(route).toContain('class="page-shell"');
+			expect(route).toContain('class="page-shell');
 			expect(route).not.toContain('class="px-5 pt-4"');
 		}
 		expect(adminSettings).toContain('admin-general-workspace w-full');
@@ -30,8 +30,9 @@ describe('administration route spacing contract', () => {
 		expect(adminBackup).toContain('admin-backup-workspace w-full');
 		expect(adminBackup).not.toContain('max-w-5xl');
 		expect(adminBackup).toContain('border-t border-[color:var(--workspace-divider)]');
-		expect(adminMigration).toContain('border-[color:var(--workspace-divider)]');
-		expect(adminMigration).toContain('max-w-4xl');
+		expect(adminMigration).toContain('migration-workspace w-full');
+		expect(adminMigration).not.toContain('max-w-4xl');
+		expect(adminMigration).toContain('border-y border-[color:var(--workspace-divider)]');
 		expect(adminMcp).toContain('border-[color:var(--workspace-divider)]');
 		expect(adminMcp).toContain('max-w-5xl');
 		expect(adminUsers).toContain('TableShell');

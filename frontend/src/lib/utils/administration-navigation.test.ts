@@ -141,9 +141,15 @@ describe("administration navigation contract", () => {
 
     expect(adminMigrationPage).not.toContain("Migration safety");
     expect(adminMigrationPage).not.toContain("What is included?");
+    expect(adminMigrationPage).toContain("migration-workspace w-full");
+    expect(adminMigrationPage).not.toContain("max-w-4xl");
+    expect(adminMigrationPage).toContain("MigrationTransferIllustration");
+    expect(adminMigrationPage).toContain("Move MyPaaS to another VM");
+    expect(adminMigrationPage).toContain("Captured state");
+    expect(adminMigrationPage).toContain("Runtime safety");
+    expect(adminMigrationPage).toContain("ConfirmActionDialog");
     expect(adminMigrationPage).toContain("Prepare package");
     expect(adminMigrationPage).toContain("Restore on the new server");
-    expect(adminMigrationPage).toContain("max-w-4xl");
 
     expect(adminMcpPage).not.toContain("MCP access");
     expect(adminMcpPage).not.toContain("readonly");
