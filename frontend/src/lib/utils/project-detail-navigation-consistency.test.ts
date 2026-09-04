@@ -10,7 +10,7 @@ describe('project detail navigation consistency', () => {
 	});
 
 	it('names settings leaves directly in the breadcrumb', () => {
-		expect(appHeader).toContain("'': 'General'");
+		expect(appHeader).toContain("'': 'Settings'");
 		expect(appHeader).toContain("source: 'Source'");
 		expect(appHeader).toContain("resources: 'Resources'");
 		expect(appHeader).toContain("webhook: 'Webhook'");
