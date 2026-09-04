@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const authFile = path.join(frontendRoot, 'playwright/.auth/user.json');
-const baseURL = process.env.MYPAAS_AUDIT_BASE_URL || 'https://nabilrn.space';
+const baseURL = process.env.MYPAAS_AUDIT_BASE_URL || 'http://127.0.0.1:4173';
 const targetURL = new URL('/projects/new', baseURL).toString();
 
 await fs.mkdir(path.dirname(authFile), { recursive: true });
