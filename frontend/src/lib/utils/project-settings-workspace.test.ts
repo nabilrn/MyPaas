@@ -7,15 +7,17 @@ import webhookSettings from '../components/ProjectWebhookSettings.svelte?raw';
 import sidebar from '../components/ProjectDetailSidebar.svelte?raw';
 
 describe('project settings workspace', () => {
-	it('uses the full main canvas with a compact two-column configuration layout', () => {
+	it('uses the full main canvas with a compact aligned Source and Resources layout', () => {
 		expect(settingsPage).toContain('ProjectCombinedSettings');
 		expect(settingsPage).toContain('section="settings"');
 		expect(settingsWorkspace).toContain('width: 100%');
 		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 		expect(combinedSettings).toContain('project-settings-workspace w-full');
-		expect(combinedSettings).toContain('lg:grid-cols-2');
-		expect(combinedSettings).toContain('max-w-xl');
-		expect(combinedSettings).toContain('max-w-md');
+		expect(combinedSettings).toContain('lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]');
+		expect(combinedSettings).toContain('sm:grid-cols-2');
+		expect(combinedSettings).toContain("grid min-w-0 grid-cols-[7rem_minmax(0,1fr)]");
+		expect(combinedSettings).not.toContain('max-w-xl');
+		expect(combinedSettings).not.toContain('max-w-md');
 	});
 
 	it('keeps source analysis and resource state while removing redundant general and webhook chrome', () => {
