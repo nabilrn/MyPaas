@@ -15,50 +15,49 @@ import (
 )
 
 type Response struct {
-	ID                   string          `json:"id"`
-	UserID               string          `json:"userId"`
-	Name                 string          `json:"name"`
-	SourceType           string          `json:"sourceType"`
-	RepoURL              string          `json:"repoUrl"`
-	ImageRef             *string         `json:"imageRef"`
-	Branch               string          `json:"branch"`
-	Subdomain            string          `json:"subdomain"`
-	DeployMode           string          `json:"deployMode"`
-	ResourceProfile      string          `json:"resourceProfile"`
-	MainService          *string         `json:"mainService"`
-	AppPort              int32           `json:"appPort"`
-	WebhookSecret        string          `json:"webhookSecret"`
-	WebhookStatus        string          `json:"webhookStatus,omitempty"`
-	AllocatedPort        *int32          `json:"allocatedPort"`
-	MemoryLimitMb        int32           `json:"memoryLimitMb"`
-	CPULimit             float64         `json:"cpuLimit"`
-	Status               string          `json:"status"`
-	ActiveDeploymentID   *string         `json:"activeDeploymentId"`
-	ComposeFilePath      *string         `json:"composeFilePath"`
-	ComposeOverridePaths []string        `json:"composeOverridePaths"`
-	ComposeProfiles      []string        `json:"composeProfiles"`
-	ComposeWorkdir       *string         `json:"composeWorkdir"`
+	ID                   string   `json:"id"`
+	UserID               string   `json:"userId"`
+	Name                 string   `json:"name"`
+	SourceType           string   `json:"sourceType"`
+	RepoURL              string   `json:"repoUrl"`
+	ImageRef             *string  `json:"imageRef"`
+	Branch               string   `json:"branch"`
+	Subdomain            string   `json:"subdomain"`
+	DeployMode           string   `json:"deployMode"`
+	ResourceProfile      string   `json:"resourceProfile"`
+	MainService          *string  `json:"mainService"`
+	AppPort              int32    `json:"appPort"`
+	WebhookSecret        string   `json:"webhookSecret"`
+	AllocatedPort        *int32   `json:"allocatedPort"`
+	MemoryLimitMb        int32    `json:"memoryLimitMb"`
+	CPULimit             float64  `json:"cpuLimit"`
+	Status               string   `json:"status"`
+	ActiveDeploymentID   *string  `json:"activeDeploymentId"`
+	ComposeFilePath      *string  `json:"composeFilePath"`
+	ComposeOverridePaths []string `json:"composeOverridePaths"`
+	ComposeProfiles      []string `json:"composeProfiles"`
+	ComposeWorkdir       *string  `json:"composeWorkdir"`
 	ServiceResources     json.RawMessage `json:"serviceResources"`
-	StaticFrontendPath   *string         `json:"staticFrontendPath"`
-	BaseDirectory        *string         `json:"baseDirectory"`
-	CreatedAt            string          `json:"createdAt"`
-	UpdatedAt            string          `json:"updatedAt"`
+	StaticFrontendPath   *string  `json:"staticFrontendPath"`
+	BaseDirectory        *string  `json:"baseDirectory"`
+	CreatedAt            string   `json:"createdAt"`
+	UpdatedAt            string   `json:"updatedAt"`
 }
 
 type DetectResponse struct {
-	DeployMode        string              `json:"deployMode"`
-	Branch            string              `json:"branch"`
-	DefaultBranch     string              `json:"defaultBranch"`
-	Branches          []string            `json:"branches"`
-	MainService       *string             `json:"mainService"`
-	Services          []string            `json:"services"`
-	ComposeFile       *string             `json:"composeFile"`
-	HasDockerfile     bool                `json:"hasDockerfile"`
-	EnvVars           []envdiscover.Var   `json:"envVars"`
-	AppPort           int32               `json:"appPort"`
-	ComposePlan       *ComposePlan        `json:"composePlan"`
-	Tree              []RepoTreeEntry     `json:"tree"`
-	TreeTruncated     bool                `json:"treeTruncated"`
+	DeployMode        string            `json:"deployMode"`
+	Branch            string            `json:"branch"`
+	DefaultBranch     string            `json:"defaultBranch"`
+	Branches          []string          `json:"branches"`
+	MainService       *string           `json:"mainService"`
+	Services          []string          `json:"services"`
+	ComposeFile       *string           `json:"composeFile"`
+	HasDockerfile     bool              `json:"hasDockerfile"`
+	EnvVars           []envdiscover.Var `json:"envVars"`
+	AppPort           int32             `json:"appPort"`
+	ComposePlan       *ComposePlan      `json:"composePlan"`
+	Tree              []RepoTreeEntry   `json:"tree"`
+	TreeTruncated     bool              `json:"treeTruncated"`
 	ComposeCandidates []compose.Candidate `json:"composeCandidates"`
 }
 
@@ -71,24 +70,24 @@ type DetectComposeResponse struct {
 
 func ResponseFromDB(project db.Project) Response {
 	resp := Response{
-		ID:                   project.ID.String(),
-		UserID:               project.UserID.String(),
-		Name:                 project.Name,
-		SourceType:           projectSourceType(project.DeployMode),
-		RepoURL:              project.RepoUrl,
-		ImageRef:             project.ImageRef,
-		Branch:               project.Branch,
-		Subdomain:            project.Subdomain,
-		DeployMode:           project.DeployMode,
-		ResourceProfile:      project.ResourceProfile,
-		MainService:          project.MainService,
-		AppPort:              project.AppPort,
-		WebhookSecret:        project.WebhookSecret,
-		AllocatedPort:        project.AllocatedPort,
-		MemoryLimitMb:        project.MemoryLimitMb,
-		CPULimit:             numericToResponseFloat(project.CpuLimit),
-		Status:               project.Status,
-		ActiveDeploymentID:   uuidString(project.ActiveDeploymentID),
+		ID:                 project.ID.String(),
+		UserID:             project.UserID.String(),
+		Name:               project.Name,
+		SourceType:         projectSourceType(project.DeployMode),
+		RepoURL:            project.RepoUrl,
+		ImageRef:           project.ImageRef,
+		Branch:             project.Branch,
+		Subdomain:          project.Subdomain,
+		DeployMode:         project.DeployMode,
+		ResourceProfile:    project.ResourceProfile,
+		MainService:        project.MainService,
+		AppPort:            project.AppPort,
+		WebhookSecret:      project.WebhookSecret,
+		AllocatedPort:      project.AllocatedPort,
+		MemoryLimitMb:      project.MemoryLimitMb,
+		CPULimit:           numericToResponseFloat(project.CpuLimit),
+		Status:             project.Status,
+		ActiveDeploymentID: uuidString(project.ActiveDeploymentID),
 		ComposeFilePath:      project.ComposeFilePath,
 		ComposeOverridePaths: project.ComposeOverridePaths,
 		ComposeProfiles:      project.ComposeProfiles,
@@ -96,8 +95,8 @@ func ResponseFromDB(project db.Project) Response {
 		ServiceResources:     project.ServiceResources,
 		StaticFrontendPath:   project.StaticFrontendPath,
 		BaseDirectory:        project.BaseDirectory,
-		CreatedAt:            formatTimestamp(project.CreatedAt.Time, project.CreatedAt.Valid),
-		UpdatedAt:            formatTimestamp(project.UpdatedAt.Time, project.UpdatedAt.Valid),
+		CreatedAt:          formatTimestamp(project.CreatedAt.Time, project.CreatedAt.Valid),
+		UpdatedAt:          formatTimestamp(project.UpdatedAt.Time, project.UpdatedAt.Valid),
 	}
 	if resp.ComposeOverridePaths == nil {
 		resp.ComposeOverridePaths = []string{}
