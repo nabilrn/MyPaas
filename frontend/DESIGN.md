@@ -172,13 +172,19 @@ Normal inputs/selects should usually stay between `max-w-sm` and `max-w-xl`. Do 
 
 ### Compact Administration content
 
-Short Administration workflows do not need to consume the full desktop canvas.
+Administration workspaces use the available main-content width. A short workflow MUST NOT collapse into a narrow left column that leaves most of the desktop canvas unused.
 
-- General, Migration, and MCP may use a readable `max-w-4xl` / `max-w-5xl` content region while preserving the parent route gutter;
-- this max width limits readable content, not the outer shell or sidebar geometry;
-- Host stats may use a compact 3-column row;
-- resource defaults should read as `preset | memory | CPU` rather than widely separated fields;
-- single-field sections and update actions stay near their related value.
+- first-level structural strokes span the available workspace width;
+- use horizontal grouping to fill space with real information rather than inflating controls or adding filler copy;
+- bounded-object grids are appropriate for meaningful peer objects such as host metrics or resource profiles, but keep the stroke strength equal to the workspace divider and avoid floating card stacks;
+- controls remain intrinsically sized even when their containing section spans the full canvas;
+- related settings may share a two-column desktop row when that improves scanability and reduces empty vertical space;
+- Host stats use a compact 3-column strip with real capacity/allocation state;
+- resource defaults expose explicit view/edit/save/cancel states and backend-equivalent validation rather than presenting every input as permanently editable;
+- destructive, update, or persistent configuration changes require clear pending state and confirmation when impact is non-trivial;
+- when a page genuinely has little data, prefer one purposeful empty state, illustration, or setup workflow over a narrow content island.
+
+Full-width means the **workspace structure** uses the main canvas; it does not mean stretching a simple input, button, or paragraph to the right edge.
 
 ---
 
