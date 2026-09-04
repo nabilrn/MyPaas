@@ -3,6 +3,7 @@
 
 	$: preparing = state === 'preparing';
 	$: ready = state === 'ready';
+	$: transferClass = preparing ? 'motion-safe:animate-pulse' : '';
 </script>
 
 <div class="migration-transfer-illustration" data-state={state} aria-hidden="true">
@@ -43,8 +44,8 @@
 		</g>
 
 		<g class={preparing || ready ? 'text-gray-950 dark:text-white' : 'text-gray-400 dark:text-gray-600'} fill="none" stroke="currentColor" stroke-width="1.6">
-			<path d="M 224 110 H 300" stroke-dasharray="5 6" marker-end="url(#migration-arrow)" class:motion-safe:animate-pulse={preparing} />
-			<path d="M 420 110 H 496" stroke-dasharray="5 6" marker-end="url(#migration-arrow)" class:motion-safe:animate-pulse={preparing} />
+			<path d="M 224 110 H 300" stroke-dasharray="5 6" marker-end="url(#migration-arrow)" class={transferClass} />
+			<path d="M 420 110 H 496" stroke-dasharray="5 6" marker-end="url(#migration-arrow)" class={transferClass} />
 		</g>
 
 		<g class="text-gray-300 dark:text-neutral-700" fill="currentColor">
