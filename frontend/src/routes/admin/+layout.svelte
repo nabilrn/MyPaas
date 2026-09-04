@@ -15,7 +15,7 @@
 
   <main class="min-w-0 px-3.5 py-3">
     <div class="w-full space-y-3">
-      <header class="border-b border-[color:var(--workspace-divider)] px-5 pb-3">
+      <header class="border-b border-[color:var(--workspace-divider)] px-5 pt-4 pb-3">
         <h1 class="text-lg font-semibold text-gray-950 dark:text-white">
           {currentSection.title}
         </h1>
@@ -50,9 +50,10 @@
   }
 
   /*
-   * Administration follows the same horizontal rhythm as project Overview,
-   * Deployments, and Logs: the route surface/dividers stay full width while
-   * readable headings use the 20px header gutter and row content uses 16px.
+   * Administration follows the same horizontal and vertical rhythm as the
+   * project-detail reference. The route header owns the canonical 20px
+   * readable gutter and 16px optical top offset for every /admin/* leaf;
+   * child routes only own their section/body geometry.
    */
   :global(.admin-content > .page-shell > section > h2) {
     padding-inline: 1.25rem;
