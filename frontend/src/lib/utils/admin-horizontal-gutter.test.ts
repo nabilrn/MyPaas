@@ -8,10 +8,10 @@ import adminUsers from '../../routes/admin/users/+page.svelte?raw';
 import adminAudit from '../../routes/admin/audit-logs/+page.svelte?raw';
 import designContract from '../../../DESIGN.md?raw';
 
-describe('administration horizontal gutter contract', () => {
-	it('uses the same parent and readable-content gutter family as project detail', () => {
+describe('administration route spacing contract', () => {
+	it('uses the same parent, readable-content, and title top rhythm as project detail', () => {
 		expect(adminLayout).toContain('min-w-0 px-3.5 py-3');
-		expect(adminLayout).toContain('px-5 pb-3');
+		expect(adminLayout).toContain('px-5 pt-4 pb-3');
 		expect(adminLayout).toContain('.admin-content > .page-shell > section > h2');
 		expect(adminLayout).toContain('padding-inline: 1.25rem');
 		expect(adminLayout).toContain('padding-left: 1rem !important');
@@ -20,7 +20,11 @@ describe('administration horizontal gutter contract', () => {
 		expect(adminLayout).not.toContain('padding-right: 0 !important');
 	});
 
-	it('keeps admin route surfaces full width while preserving inner row gutters', () => {
+	it('keeps every admin child route inside the shared parent-owned header contract', () => {
+		for (const route of [adminSettings, adminBackup, adminMigration, adminMcp, adminUsers, adminAudit]) {
+			expect(route).toContain('class="page-shell"');
+			expect(route).not.toContain('class="px-5 pt-4"');
+		}
 		expect(adminSettings).toContain('px-4 py-3');
 		expect(adminBackup).toContain('border-y border-[color:var(--workspace-divider)]');
 		expect(adminMigration).toContain('border-y border-gray-100');
