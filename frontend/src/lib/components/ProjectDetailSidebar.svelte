@@ -6,7 +6,8 @@
 		History,
 		KeyRound,
 		LayoutDashboard,
-		Settings2
+		Settings2,
+		Webhook
 	} from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import ProjectSecondaryNavItem from './ProjectSecondaryNavItem.svelte';
@@ -48,7 +49,10 @@
 		},
 		{
 			label: 'Configuration',
-			items: [{ label: 'Settings', href: `${base}/settings`, icon: Settings2, exact: true }]
+			items: [
+				{ label: 'Settings', href: `${base}/settings`, icon: Settings2, exact: true },
+				{ label: 'Webhook', href: `${base}/settings/webhook`, icon: Webhook }
+			]
 		},
 		{
 			label: 'Advanced',
