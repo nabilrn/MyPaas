@@ -15,7 +15,7 @@
 
 <div class="grid grid-cols-2 gap-x-4 gap-y-5 border-t border-[color:var(--workspace-divider)] px-4 py-5 sm:grid-cols-5 xl:grid-cols-10" aria-label="Supported MCP clients">
 	{#each clients as client}
-		<div class="agent-client app-focus flex min-w-0 items-center justify-center rounded-md py-1" role="img" aria-label={client.label} title={client.label} tabindex="0">
+		<div class="agent-client flex min-w-0 items-center justify-center rounded-md py-1" role="img" aria-label={client.label} title={client.label}>
 			<span class="agent-client-mark inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-white" style={`color: ${client.color}`} aria-hidden="true">
 				{#if client.id === 'gemini'}
 					<svg class="h-8 w-8" viewBox="0 0 24 24" role="presentation">
@@ -46,15 +46,13 @@
 	}
 
 	@media (prefers-reduced-motion: no-preference) {
-		.agent-client:hover .agent-client-mark,
-		.agent-client:focus-visible .agent-client-mark {
+		.agent-client:hover .agent-client-mark {
 			animation: agent-hop 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.agent-client:hover .agent-client-mark,
-		.agent-client:focus-visible .agent-client-mark {
+		.agent-client:hover .agent-client-mark {
 			transform: translateY(-4px);
 		}
 	}
