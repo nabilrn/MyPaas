@@ -1,36 +1,8 @@
 <script lang="ts">
 	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
+	import SettingsWorkspace from '$components/SettingsWorkspace.svelte';
 </script>
 
-<div class="project-settings-source">
+<SettingsWorkspace section="source">
 	<ProjectSettingsSection section="source" />
-</div>
-
-<style>
-	.project-settings-source :global(.space-y-5 > :first-child) {
-		padding-inline: 1.25rem;
-		padding-top: 1rem;
-	}
-
-	.project-settings-source :global(.space-y-5 > .border-t),
-	.project-settings-source :global(.space-y-5 > .divide-y > .grid),
-	.project-settings-source :global(.space-y-5 > details),
-	.project-settings-source :global(.space-y-5 > .flex:last-child) {
-		padding-inline: 1rem;
-	}
-
-	.project-settings-source :global(.space-y-5 > :not([hidden]) ~ :not([hidden])) {
-		margin-top: 0.75rem;
-	}
-
-	.project-settings-source :global(.field) {
-		max-width: 36rem;
-	}
-
-	.project-settings-source :global(button[aria-label='Deployment branch']),
-	.project-settings-source :global(button[aria-label='Base directory']),
-	.project-settings-source :global(div[role='listbox'][aria-label='Deployment branch']),
-	.project-settings-source :global(div[role='listbox'][aria-label='Base directory']) {
-		max-width: 36rem;
-	}
-</style>
+</SettingsWorkspace>
