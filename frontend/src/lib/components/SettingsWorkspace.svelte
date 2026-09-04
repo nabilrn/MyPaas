@@ -1,5 +1,5 @@
 <script lang="ts">
-	export let section: 'general' | 'source' | 'resources' | 'webhook' | 'danger' = 'general';
+	export let section: 'settings' | 'general' | 'source' | 'resources' | 'webhook' | 'danger' = 'settings';
 </script>
 
 <div class="settings-workspace-contract" data-settings-section={section}>
@@ -9,16 +9,10 @@
 <style>
 	.settings-workspace-contract {
 		width: 100%;
-		max-width: 64rem;
 	}
 
-	/* Shared geometry contract for form-heavy settings pages:
-	   - one 64rem content measure
-	   - 1.25rem title gutter aligned with the established project leaves
-	   - 1rem body/control gutter
-	   - one full-width divider between structural blocks
-	   - inset borders only for alerts/controls, not for page structure
-	   - decorative icons are not part of ordinary field rows */
+	/* Structural workspace width is always full. Controls keep route-specific
+	   intrinsic measures so a full canvas never turns into oversized inputs. */
 	.settings-workspace-contract :global(.space-y-4),
 	.settings-workspace-contract :global(.space-y-5) {
 		width: 100%;

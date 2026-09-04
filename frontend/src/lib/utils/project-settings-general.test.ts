@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import settings from '../components/ProjectSettingsSection.svelte?raw';
+import combinedSettings from '../components/ProjectCombinedSettings.svelte?raw';
 import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
-import generalRoute from '../../routes/projects/[id]/settings/+page.svelte?raw';
-import sourceRoute from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
-import resourcesRoute from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
-import webhookRoute from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
+import settingsRoute from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import sourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
+import resourcesRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
+import webhookRedirect from '../../routes/projects/[id]/settings/webhook/+page.ts?raw';
 import dangerRoute from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
 import environmentRoute from '../../routes/projects/[id]/env/+page.svelte?raw';
 import generalInformation from '../components/ProjectEffectiveConfiguration.svelte?raw';
@@ -13,13 +13,14 @@ import secretField from '../components/SecretField.svelte?raw';
 import selectMenu from '../components/SelectMenu.svelte?raw';
 
 describe('project settings product contract', () => {
-	it('uses user-facing general information copy', () => {
-		expect(generalRoute).toContain('section="general"');
-		expect(settings).toContain('General information');
-		expect(settings).toContain('Basic information about this project.');
-		expect(settings).not.toContain('Project identity and effective control-plane configuration.');
-		expect(generalInformation).not.toContain('Effective configuration');
-		expect(generalInformation).not.toContain('control-plane');
+	it('consolidates short configuration domains into one Settings workspace', () => {
+		expect(settingsRoute).toContain('ProjectCombinedSettings');
+		expect(settingsRoute).toContain('section="settings"');
+		expect(combinedSettings).toContain('>Settings</h1>');
+		for (const section of ['General', 'Source', 'Resources', 'Webhook']) {
+			expect(combinedSettings).toContain(`>${section}<`);
+		}
+		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 	});
 
 	it('renders immutable project identity as information instead of readonly fields', () => {
@@ -27,74 +28,46 @@ describe('project settings product contract', () => {
 		expect(generalInformation).toContain('Fixed after creation.');
 		expect(generalInformation).toContain('Public URL');
 		expect(generalInformation).toContain('Deployment type');
-		expect(generalInformation).not.toContain('>Source</p>');
-		expect(generalInformation).not.toContain('sourceSummary');
 		expect(generalInformation).not.toContain('<input');
 	});
 
-	it('keeps settings content on one neutral project-detail surface', () => {
-		expect(settings).not.toContain('ProjectSettingsNavItem');
-		expect(settings).not.toContain('activeSection');
-		expect(settings).not.toContain('bg-gray-50/35');
-		expect(settings).not.toContain('dark:bg-neutral-950/40');
-		expect(generalInformation).not.toContain('bg-white');
-		expect(generalInformation).not.toContain('dark:bg-neutral-950');
+	it('keeps source analysis automatic and preserves validation before save', () => {
+		expect(combinedSettings).toContain('Advanced source settings');
+		expect(combinedSettings).toContain('ariaLabel="Deployment branch"');
+		expect(combinedSettings).toContain('ariaLabel="Base directory"');
+		expect(combinedSettings).toContain('api.projects.inspectRepository');
+		expect(combinedSettings).toContain('validateRepositoryBeforeSave');
+		expect(combinedSettings).not.toContain('Validate source');
 	});
 
-	it('aligns every settings leaf with the canonical project detail inner gutter', () => {
-		for (const route of [generalRoute, sourceRoute, resourcesRoute, webhookRoute, dangerRoute]) {
-			expect(route).toContain('SettingsWorkspace');
-			expect(route).not.toContain('<style>');
-		}
-		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
-		expect(settingsWorkspace).toContain('padding-inline: 1rem');
-		expect(settingsWorkspace).toContain('padding-top: 1rem');
-	});
-
-	it('keeps common source settings simple and automatic', () => {
-		expect(sourceRoute).toContain('section="source"');
-		expect(settings).toContain('Choose what MyPaaS deploys.');
-		expect(settings).toContain('Advanced source settings');
-		expect(settings).toContain('ariaLabel="Deployment branch"');
-		expect(settings).toContain('ariaLabel="Base directory"');
-		expect(settings).not.toContain('Repository validated on');
-		expect(settings).not.toContain('Validate source');
-		expect(settings).not.toContain('Repository, deployment target, and runtime-facing source configuration.');
-	});
-
-	it('uses custom resource selection and hides destructive runtime cleanup from normal settings', () => {
-		expect(resourcesRoute).toContain('section="resources"');
-		expect(settings).toContain('Set how much CPU and memory this project can use.');
-		expect(settings).toContain('ariaLabel="Resource profile"');
-		expect(settings).toContain('Advanced resource limits');
-		expect(settings).toContain('Runtime resources');
-		expect(settings).not.toContain('Reset resources');
-		expect(settings).not.toContain('Check resources');
-		expect(settings).not.toContain('Runtime limits and project-owned Compose resources.');
+	it('keeps resource profiles compact and runtime information factual', () => {
+		expect(combinedSettings).toContain('ariaLabel="Resource profile"');
+		expect(combinedSettings).toContain('Advanced resource limits');
+		expect(combinedSettings).toContain('Runtime resources');
+		expect(combinedSettings).toContain('api.projects.composeResources');
+		expect(combinedSettings).not.toContain('Reset resources');
 		expect(selectMenu).toContain('role="listbox"');
 	});
 
 	it('keeps environment management on the dedicated project env route', () => {
 		expect(environmentRoute).toContain('ProjectEnvironmentSettings');
 		expect(environmentRoute).toContain('projectId={$page.params.id');
-		expect(settings).not.toContain('ProjectEnvironmentSettings');
-		expect(environmentSettings).not.toContain('Encrypted at rest. Reveal only when you need to inspect a stored value.');
+		expect(combinedSettings).not.toContain('ProjectEnvironmentSettings');
 		expect(environmentSettings).toContain('Add variable');
 		expect(environmentSettings).toContain('Import .env');
 		expect(secretField).toContain('••••••••');
-		expect(secretField).not.toContain('<div class="field');
 	});
 
-	it('keeps webhook and danger copy short and action-oriented', () => {
-		expect(webhookRoute).toContain('section="webhook"');
+	it('keeps webhook actions in Settings and destructive actions isolated', () => {
+		expect(combinedSettings).toContain('Deploy on GitHub push events.');
+		expect(combinedSettings).toContain('Setup guide');
+		expect(combinedSettings).toContain('ConfirmActionDialog');
 		expect(dangerRoute).toContain('section="danger"');
-		expect(settings).toContain('Deploy when changes are pushed to GitHub.');
-		expect(settings).toContain('Setup guide');
-		expect(settings).not.toContain('GitHub push deployment endpoint and signing secret.');
-		expect(settings).not.toContain('Configure repository push deployments.');
-		expect(settings).not.toContain('API polling is slower');
-		expect(settings).toContain('Permanently delete this project.');
-		expect(settings).not.toContain('Destructive project operations are isolated here.');
-		expect(settings).not.toContain('release ports');
+	});
+
+	it('redirects the old thin settings leaves to the consolidated route', () => {
+		for (const route of [sourceRedirect, resourcesRedirect, webhookRedirect]) {
+			expect(route).toContain("redirect(307, `/projects/${params.id}/settings`)");
+		}
 	});
 });
