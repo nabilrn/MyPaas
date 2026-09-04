@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import settings from '../components/ProjectSettingsSection.svelte?raw';
+import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
 import generalRoute from '../../routes/projects/[id]/settings/+page.svelte?raw';
 import sourceRoute from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
 import resourcesRoute from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
@@ -42,9 +43,12 @@ describe('project settings product contract', () => {
 
 	it('aligns every settings leaf with the canonical project detail inner gutter', () => {
 		for (const route of [generalRoute, sourceRoute, resourcesRoute, webhookRoute, dangerRoute]) {
-			expect(route).toContain('padding-inline: 1.25rem');
-			expect(route).toContain('padding-inline: 1rem');
+			expect(route).toContain('SettingsWorkspace');
+			expect(route).not.toContain('<style>');
 		}
+		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
+		expect(settingsWorkspace).toContain('padding-inline: 1rem');
+		expect(settingsWorkspace).toContain('padding-top: 1rem');
 	});
 
 	it('keeps common source settings simple and automatic', () => {
