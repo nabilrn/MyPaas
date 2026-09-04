@@ -2,19 +2,25 @@
 	import { Boxes, Layers3, Settings, Terminal } from '@lucide/svelte';
 	import { page } from '$app/stores';
 	import BrandLogo from '$components/BrandLogo.svelte';
-	import { isAdministrationPath } from '$lib/navigation/administration';
+	import {
+		administrationNavigationItem,
+		isPrimaryNavigationItemActive,
+		workspaceNavigationItems,
+		type PrimaryNavigationKey
+	} from '$lib/navigation/primary';
 	import type { User } from '$types';
 
 	export let user: User | null = null;
 	export let authPending = false;
 
-	const workspaceItems = [
-		{ href: '/projects', label: 'Projects', icon: Layers3, ownerOnly: false },
-		{ href: '/containers', label: 'Containers', icon: Boxes, ownerOnly: false },
-		{ href: '/shell', label: 'Shell', icon: Terminal, ownerOnly: true }
-	];
-
-	const administrationItem = { href: '/admin/settings', label: 'Administration', icon: Settings, ownerOnly: true };
+	const navIconByKey: Record<PrimaryNavigationKey, typeof Layers3> = {
+		projects: Layers3,
+		containers: Boxes,
+		shell: Terminal,
+		administration: Settings
+	};
+	const workspaceItems = workspaceNavigationItems.map((item) => ({ ...item, icon: navIconByKey[item.key] }));
+	const administrationItem = { ...administrationNavigationItem, icon: navIconByKey[administrationNavigationItem.key] };
 
 	let expanded = false;
 	let sidebar: HTMLElement | null = null;
@@ -24,9 +30,10 @@
 	$: showAdministration = authPending || user?.role === 'owner';
 
 	function isActive(href: string, currentPath: string) {
-		if (href === '/admin/settings') return isAdministrationPath(currentPath);
-		if (href === '/projects') return currentPath === '/projects' || currentPath.startsWith('/projects/');
-		return currentPath === href || currentPath.startsWith(`${href}/`);
+		const item = href === administrationItem.href
+			? administrationNavigationItem
+			: workspaceNavigationItems.find((candidate) => candidate.href === href);
+		return item ? isPrimaryNavigationItemActive(item, currentPath) : false;
 	}
 
 	function navItemClass(href: string, isExpanded: boolean, currentPath: string) {
