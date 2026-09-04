@@ -47,8 +47,9 @@ describe('project settings workspace', () => {
 
 	it('derives webhook connection state from delivery evidence and links official GitHub setup docs', () => {
 		expect(webhookSettings).toContain('api.projects.webhookStatus');
+		expect(webhookSettings).toContain('webhookStatus?.lastDelivery');
+		expect(webhookSettings).toContain('signed GitHub delivery');
 		expect(webhookSettings).toContain('api.projects.regenerateWebhookSecret');
-		expect(webhookSettings).toContain('signatureValid');
 		expect(webhookSettings).toContain('https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks');
 		expect(webhookSettings).toContain('ConfirmActionDialog');
 		expect(webhookSettings).toContain('No GitHub delivery has been verified');
