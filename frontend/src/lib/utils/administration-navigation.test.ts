@@ -11,9 +11,9 @@ import createProjectLayout from '../../routes/projects/new/+layout.svelte?raw';
 import projectLogsPage from '../../routes/projects/[id]/logs/+page.svelte?raw';
 import projectLayout from '../../routes/projects/[id]/+layout.svelte?raw';
 import projectSettingsPage from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import projectWebhookPage from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
 import projectSourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
 import projectResourcesRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
-import projectWebhookRedirect from '../../routes/projects/[id]/settings/webhook/+page.ts?raw';
 import projectDangerSettingsPage from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
 import adminSidebar from '../components/AdminSidebar.svelte?raw';
 import appHeader from '../components/AppHeader.svelte?raw';
@@ -21,6 +21,7 @@ import navbar from '../components/Navbar.svelte?raw';
 import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
 import projectNewSidebar from '../components/ProjectNewSidebar.svelte?raw';
 import projectCombinedSettings from '../components/ProjectCombinedSettings.svelte?raw';
+import projectWebhookSettings from '../components/ProjectWebhookSettings.svelte?raw';
 import projectSettingsSection from '../components/ProjectSettingsSection.svelte?raw';
 import {
 	administrationNavGroups,
@@ -112,32 +113,38 @@ describe('project secondary navigation contract', () => {
 	it('uses one compact project-detail secondary sidebar', () => {
 		expect(projectLayout).toContain('ProjectDetailSidebar');
 		expect(projectLayout).toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
-		for (const label of ['Overview', 'Deployments', 'Logs', 'Environment', 'Database', 'Settings', 'Danger zone']) {
+		for (const label of ['Overview', 'Deployments', 'Logs', 'Environment', 'Database', 'Settings', 'Webhook', 'Danger zone']) {
 			expect(projectDetailSidebar).toContain(`label: '${label}'`);
 		}
-		for (const removedLabel of ['General', 'Source', 'Resources', 'Webhook']) {
+		for (const removedLabel of ['General', 'Source', 'Resources']) {
 			expect(projectDetailSidebar).not.toContain(`label: '${removedLabel}'`);
 		}
 		expect(projectDetailSidebar).not.toContain("label: 'Integrations'");
 	});
 
-	it('consolidates project configuration into one full-width Settings workspace', () => {
+	it('keeps Settings compact while Webhook remains a dedicated configuration workspace', () => {
 		expect(projectSettingsPage).toContain('ProjectCombinedSettings');
 		expect(projectSettingsPage).toContain('section="settings"');
 		expect(projectCombinedSettings).toContain('project-settings-workspace w-full');
-		for (const section of ['General', 'Source', 'Resources', 'Webhook']) {
-			expect(projectCombinedSettings).toContain(`>${section}<`);
-		}
+		expect(projectCombinedSettings).toContain('lg:grid-cols-2');
+		expect(projectCombinedSettings).toContain('>Source<');
+		expect(projectCombinedSettings).toContain('>Resources<');
+		expect(projectCombinedSettings).not.toContain('>General<');
+		expect(projectCombinedSettings).not.toContain('>Webhook<');
 		expect(projectCombinedSettings).toContain('api.projects.inspectRepository');
 		expect(projectCombinedSettings).toContain('api.projects.composeResources');
-		expect(projectCombinedSettings).toContain('api.projects.regenerateWebhookSecret');
-		expect(projectCombinedSettings).toContain('ConfirmActionDialog');
+		expect(projectCombinedSettings).not.toContain('api.projects.regenerateWebhookSecret');
+		expect(projectWebhookPage).toContain('ProjectWebhookSettings');
+		expect(projectWebhookSettings).toContain('api.projects.webhookStatus');
+		expect(projectWebhookSettings).toContain('api.projects.regenerateWebhookSecret');
+		expect(projectWebhookSettings).toContain('ConfirmActionDialog');
 	});
 
-	it('redirects legacy configuration routes while keeping Danger zone separate', () => {
-		for (const redirectSource of [projectSourceRedirect, projectResourcesRedirect, projectWebhookRedirect]) {
+	it('redirects only the legacy Source and Resources routes while keeping Webhook and Danger zone separate', () => {
+		for (const redirectSource of [projectSourceRedirect, projectResourcesRedirect]) {
 			expect(redirectSource).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		}
+		expect(projectWebhookPage).toContain('section="webhook"');
 		expect(projectDangerSettingsPage).toContain('ProjectSettingsSection');
 		expect(projectDangerSettingsPage).toContain('section="danger"');
 		expect(projectSettingsSection).toContain("section: 'general' | 'source' | 'resources' | 'webhook' | 'danger'");
