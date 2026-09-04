@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import overview from '../../routes/projects/[id]/+page.svelte?raw';
 import projectLayout from '../../routes/projects/[id]/+layout.svelte?raw';
 import settings from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import webhookSettings from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
 import sourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
 import resourceRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
 import dangerSettings from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
@@ -27,23 +28,29 @@ describe('project detail cleanup contract', () => {
 		expect(overview).not.toContain('Database Studio');
 	});
 
-	it('shows lifecycle chrome only on Overview and Deployments', () => {
-		expect(projectLayout).toContain('showOperationalHeader');
-		expect(projectLayout).toContain('$page.url.pathname === projectBase');
-		expect(projectLayout).toContain('$page.url.pathname === `${projectBase}/deployments`');
-		expect(projectLayout).toContain('{#if showOperationalHeader}');
+	it('keeps project identity, application URL, and lifecycle actions persistent across project leaves', () => {
+		expect(projectLayout).not.toContain('showOperationalHeader');
+		expect(projectLayout).toContain('projectURL');
+		expect(projectLayout).toContain('<DeployControlPanel');
+		expect(projectLayout).toContain('publicUrl={effectivePublicURL}');
+		expect(deployControlPanel).toContain("export let publicUrl = ''");
+		expect(deployControlPanel).toContain('ExternalLink');
+		expect(deployControlPanel).toContain('publicUrl.replace');
 		expect(deployControlPanel).toContain('min-h-14');
-		expect(deployControlPanel).not.toContain('publicProjectURL');
 	});
 
-	it('keeps Environment dedicated while consolidating project configuration', () => {
+	it('keeps Environment dedicated while making Webhook a first-class configuration leaf', () => {
 		expect(projectLayout).toContain('ProjectDetailSidebar');
 		expect(projectDetailSidebar).toContain("label: 'Environment'");
 		expect(projectDetailSidebar).toContain('`${base}/env`');
 		expect(projectDetailSidebar).toContain("label: 'Settings'");
+		expect(projectDetailSidebar).toContain("label: 'Webhook'");
+		expect(projectDetailSidebar).toContain('`${base}/settings/webhook`');
 		expect(environmentRoute).toContain('ProjectEnvironmentSettings');
 		expect(combinedSettings).not.toContain('ProjectEnvironmentSettings');
+		expect(combinedSettings).not.toContain('api.projects.regenerateWebhookSecret');
 		expect(settings).toContain('ProjectCombinedSettings');
+		expect(webhookSettings).toContain('ProjectWebhookSettings');
 		expect(sourceRedirect).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		expect(resourceRedirect).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		expect(effectiveConfiguration).not.toContain('>Source</p>');
@@ -56,6 +63,7 @@ describe('project detail cleanup contract', () => {
 		expect(logsRoute).toContain('SectionPanel');
 		expect(environmentRoute).toContain('class="px-5 pt-4"');
 		expect(settings).toContain('SettingsWorkspace');
+		expect(webhookSettings).toContain('SettingsWorkspace');
 		expect(dangerSettings).toContain('SettingsWorkspace');
 		expect(settingsWorkspace).toContain('width: 100%');
 		expect(settingsWorkspace).not.toContain('max-width: 64rem');
@@ -64,7 +72,8 @@ describe('project detail cleanup contract', () => {
 		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
 
-	it('keeps settings controls compact inside a full-width structure', () => {
+	it('keeps settings controls compact inside a full-width two-column structure', () => {
+		expect(combinedSettings).toContain('lg:grid-cols-2');
 		expect(combinedSettings).toContain('max-w-xl');
 		expect(combinedSettings).toContain('max-w-md');
 		expect(combinedSettings).toContain('max-w-xs');
