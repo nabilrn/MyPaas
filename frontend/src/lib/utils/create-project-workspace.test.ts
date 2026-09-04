@@ -25,6 +25,14 @@ describe('create project workspace contract', () => {
 		expect(newProjectLayout).toContain('border-top: 1px solid var(--workspace-divider)');
 	});
 
+	it('normalizes remaining dark neutral fills and hover states to the application surface', () => {
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-800']");
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-900']");
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-950']");
+		expect(newProjectLayout).toContain("[class~='dark:hover:bg-gray-900']");
+		expect(newProjectLayout).toContain('background: var(--app-surface) !important');
+	});
+
 	it('keeps readiness and the create action visible as the long form scrolls', () => {
 		expect(newProjectLayout).toContain('form > div:last-child');
 		expect(newProjectLayout).toContain('position: sticky');

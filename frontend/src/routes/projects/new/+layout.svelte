@@ -46,11 +46,12 @@
 	/* First-level setup surfaces stay on the same application surface. */
 	:global(.new-project-content form > section > div.rounded-md.border),
 	:global(.new-project-content form > section > details.group),
+	:global(.new-project-content form > section > details.group > summary),
 	:global(.new-project-content form > section > details.group > div) {
 		border-right: 0 !important;
 		border-left: 0 !important;
 		border-radius: 0 !important;
-		background: transparent !important;
+		background: var(--app-surface) !important;
 		box-shadow: none !important;
 	}
 
@@ -60,15 +61,30 @@
 	}
 
 	:global(.new-project-content form > section > div.rounded-md.border .grid.gap-px > div) {
-		background: transparent !important;
+		background: var(--app-surface) !important;
 	}
 
 	/* Neutral hover/selected fills are not hierarchy in Create Project. */
 	:global(.new-project-content form button[class~='bg-gray-50']),
 	:global(.new-project-content form button[class~='bg-gray-100']),
+	:global(.new-project-content form button[class~='hover:bg-gray-50']),
+	:global(.new-project-content form button[class~='hover:bg-gray-100/70']),
+	:global(.new-project-content form button[class~='dark:bg-gray-800']),
+	:global(.new-project-content form button[class~='dark:bg-gray-900']),
+	:global(.new-project-content form button[class~='dark:bg-gray-950']),
+	:global(.new-project-content form button[class~='dark:hover:bg-gray-900']),
 	:global(.new-project-content form button[class~='dark:bg-neutral-800']),
-	:global(.new-project-content form button[class~='dark:bg-neutral-900']) {
-		background: transparent !important;
+	:global(.new-project-content form button[class~='dark:bg-neutral-900']),
+	:global(.new-project-content form button[class~='dark:hover:bg-neutral-900']) {
+		background: var(--app-surface) !important;
+	}
+
+	/* Details headers must never introduce a tinted strip in dark mode. */
+	:global(.new-project-content form summary[class~='bg-gray-50/60']),
+	:global(.new-project-content form summary[class~='hover:bg-gray-100/70']),
+	:global(.new-project-content form summary[class~='dark:bg-gray-900/40']),
+	:global(.new-project-content form summary[class~='dark:hover:bg-gray-900']) {
+		background: var(--app-surface) !important;
 	}
 
 	/* Keep one readiness/action bar visible while the long form scrolls. */
