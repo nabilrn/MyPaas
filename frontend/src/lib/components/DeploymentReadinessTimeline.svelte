@@ -16,21 +16,21 @@
 	$: lastLogLine = lastDeploymentLogLine(buildLog);
 </script>
 
-<div class="mt-3 border-t border-gray-100/70 pt-3 dark:border-neutral-900">
-	<div class="flex flex-wrap items-start justify-between gap-3">
+<div class="mt-3 border-t border-[color:var(--workspace-divider)] pt-2.5">
+	<div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
 		<div class="min-w-0">
 			<p class="text-sm font-medium text-gray-950 dark:text-white">{summary.title}</p>
-			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{summary.detail}</p>
+			{#if summary.detail}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{summary.detail}</p>{/if}
 		</div>
 		{#if lastLogLine}
-			<div class="min-w-0 max-w-full text-right sm:max-w-[45%]">
-				<p class="metric-label">Last event</p>
-				<code class="mt-1 block truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={lastLogLine}>{lastLogLine}</code>
+			<div class="min-w-0 max-w-full text-right sm:max-w-[48%]">
+				<p class="text-[11px] font-medium uppercase tracking-[0.06em] text-gray-400 dark:text-gray-500">Last event</p>
+				<code class="mt-0.5 block truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={lastLogLine}>{lastLogLine}</code>
 			</div>
 		{/if}
 	</div>
 
-	<ol class="mt-3 grid gap-2 sm:grid-cols-4" aria-label="Deployment readiness stages">
+	<ol class="mt-2.5 grid gap-2 sm:grid-cols-4" aria-label="Deployment readiness stages">
 		{#each timeline as step}
 			<li class={`flex items-center gap-2 text-xs ${step.state === 'pending' ? 'text-gray-400 dark:text-gray-600' : 'text-gray-700 dark:text-gray-300'}`}>
 				<span
