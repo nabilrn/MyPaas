@@ -29,10 +29,13 @@ describe('operational UI consistency', () => {
 		expect(deploymentsPage).toContain('Waiting for output.');
 	});
 
-	it('uses a compact neutral toast with semantic icon color', () => {
-		expect(toastComponent).toContain('border-[color:var(--workspace-divider)]');
-		expect(toastComponent).toContain('px-3 py-2');
+	it('uses a compact high-contrast toast with restrained semantic color', () => {
+		expect(toastComponent).toContain('border-gray-300 bg-white');
+		expect(toastComponent).toContain('dark:bg-neutral-900');
+		expect(toastComponent).toContain('px-3 py-2.5');
 		expect(toastComponent).toContain('text-[13px]');
+		expect(toastComponent).toContain('accentStyles');
+		expect(toastComponent).toContain('iconSurfaceStyles');
 		expect(toastComponent).not.toContain('bg-green-50');
 		expect(toastComponent).not.toContain('shadow-lg');
 	});
