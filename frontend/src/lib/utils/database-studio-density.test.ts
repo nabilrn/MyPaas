@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import databaseLayout from '../../routes/projects/[id]/database/+layout.svelte?raw';
 import databasePage from '../../routes/projects/[id]/database/+page.svelte?raw';
 import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
 
@@ -28,6 +29,15 @@ describe('database studio density contract', () => {
 		expect(databasePage).toContain('lg:flex-nowrap');
 		expect(databasePage).toContain('data-db-table-controls');
 		expect(databasePage).toContain('data-db-row-toolbar');
+	});
+
+	it('uses one workspace surface and stroke-only table selection', () => {
+		expect(databaseLayout).toContain('.database-data-shell');
+		expect(databaseLayout).toContain('[data-db-studio-workspace]');
+		expect(databaseLayout).toContain('background: transparent !important');
+		expect(databaseLayout).toContain('button.bg-gray-100');
+		expect(databaseLayout).toContain('box-shadow: inset 2px 0 0 var(--app-border-strong)');
+		expect(databaseLayout).toContain('tbody tr:hover');
 	});
 
 	it('does not render the danger loading state as a bordered surface card', () => {

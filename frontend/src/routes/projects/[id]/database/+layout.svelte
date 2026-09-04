@@ -125,4 +125,58 @@
 	:global(.database-design-canvas > .space-y-4 > .surface:nth-child(2) > div:first-child span) {
 		font-size: 0.8125rem;
 	}
+
+	.database-data-shell {
+		background: var(--app-surface);
+	}
+
+	/* Database Studio is one surface. Split panes are structural, never alternate neutral fills. */
+	:global(.database-data-shell [data-db-studio-workspace]) {
+		background: transparent !important;
+		border-bottom: 0 !important;
+	}
+
+	:global(.database-data-shell [data-db-studio-workspace] > aside),
+	:global(.database-data-shell [data-db-studio-workspace] > section) {
+		background: transparent !important;
+	}
+
+	/* Merge title + controls visually; one divider after the control group is enough. */
+	:global(.database-data-shell [data-db-studio-workspace] > aside > div:first-child),
+	:global(.database-data-shell [data-db-studio-workspace] > section > div:first-child) {
+		border-bottom: 0 !important;
+	}
+
+	:global(.database-data-shell [data-db-table-controls]),
+	:global(.database-data-shell [data-db-row-toolbar]) {
+		background: transparent !important;
+	}
+
+	/* Active table state uses weight + a thin inset marker, not a filled row. */
+	:global(.database-data-shell [data-db-table-scroll] button) {
+		background: transparent !important;
+		border-radius: 0 !important;
+	}
+
+	:global(.database-data-shell [data-db-table-scroll] button.bg-gray-100) {
+		background: transparent !important;
+		box-shadow: inset 2px 0 0 var(--app-border-strong);
+	}
+
+	:global(.database-data-shell [data-db-table-scroll] button:hover) {
+		background: transparent !important;
+	}
+
+	:global(.database-data-shell [data-db-row-scroll] thead) {
+		background: var(--app-surface) !important;
+	}
+
+	:global(.database-data-shell [data-db-row-scroll] tbody tr:hover) {
+		background: transparent !important;
+	}
+
+	:global(.database-data-shell [data-db-row-scroll] [class~='bg-gray-50']),
+	:global(.database-data-shell [data-db-row-scroll] [class~='dark:bg-neutral-900']) {
+		background: transparent !important;
+	}
 </style>

@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import sidebar from '../components/ProjectNewSidebar.svelte?raw';
 import newProjectLayout from '../../routes/projects/new/+layout.svelte?raw';
 import newProjectPage from '../../routes/projects/new/+page.svelte?raw';
 import capacityMetricChart from '../components/CapacityMetricChart.svelte?raw';
 
 describe('create project workspace contract', () => {
-	it('keeps Create Project as one mounted source-first page instead of a gated wizard', () => {
+	it('keeps Create Project as one mounted source-first page without a secondary sidebar or gated wizard', () => {
+		expect(newProjectLayout).not.toContain('ProjectNewSidebar');
+		expect(newProjectLayout).not.toContain('<aside');
 		expect(newProjectLayout).not.toContain('ProjectNewWizardViewport');
-		expect(sidebar).not.toContain('createProjectWizard');
-		expect(sidebar).not.toContain('setCreateProjectStep');
-		expect(sidebar).toContain('scrollIntoView');
 		expect(newProjectPage).toContain('>Source</h2>');
 		expect(newProjectPage).toContain('label="Deployment type"');
 		expect(newProjectPage).toContain('>Environment</h2>');
@@ -17,13 +15,14 @@ describe('create project workspace contract', () => {
 		expect(newProjectPage).toContain('type="submit"');
 	});
 
-	it('uses the available workspace width without introducing a second card hierarchy', () => {
+	it('uses the full workspace with one neutral surface and structural strokes only', () => {
 		expect(newProjectLayout).toContain('new-project-content min-w-0 w-full');
 		expect(newProjectLayout).toContain('max-width: none');
 		expect(newProjectLayout).not.toContain('64rem');
 		expect(newProjectLayout).toContain("button[aria-pressed='true']");
 		expect(newProjectLayout).toContain('background: transparent !important');
-		expect(newProjectLayout).toContain('form > section > div.rounded-md.border');
+		expect(newProjectLayout).toContain('form > section + section');
+		expect(newProjectLayout).toContain('border-top: 1px solid var(--workspace-divider)');
 	});
 
 	it('keeps readiness and the create action visible as the long form scrolls', () => {
