@@ -53,7 +53,7 @@ export function isNumericMutationColumn(column: DBStudioColumn): boolean {
 export function buildTouchedValues(
 	draftValues: Record<string, string>,
 	touched: Record<string, boolean>,
-	nullValues: Record<string, boolean>
+	nullValues: Record<string, boolean> = {}
 ): Record<string, string | null> {
 	return Object.fromEntries(
 		Object.keys(touched)
