@@ -8,6 +8,7 @@ import resourcesPage from '../../routes/projects/[id]/settings/resources/+page.s
 import webhookPage from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
 import dangerPage from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
 import brandLogo from '../components/BrandLogo.svelte?raw';
+import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
 
 describe('project detail top rhythm', () => {
 	it('aligns leaf title optical top with the operational header reference', () => {
@@ -15,8 +16,9 @@ describe('project detail top rhythm', () => {
 		expect(databaseLayout).toContain('px-5 pb-3 pt-4');
 
 		for (const page of [generalPage, sourcePage, resourcesPage, webhookPage, dangerPage]) {
-			expect(page).toContain('padding-top: 1rem');
+			expect(page).toContain('SettingsWorkspace');
 		}
+		expect(settingsWorkspace).toContain('padding-top: 1rem');
 	});
 });
 

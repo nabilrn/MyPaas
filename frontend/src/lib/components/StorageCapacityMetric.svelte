@@ -23,10 +23,7 @@
 >
 	<div class="flex items-start justify-between gap-3">
 		<div class="min-w-0">
-			<div class="flex items-center gap-2">
-				<HardDrive class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
-				<p class="metric-label truncate">{label}</p>
-			</div>
+			<p class="metric-label truncate">{label}</p>
 			<p class="metric-value mt-1 truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">{available ? value : 'Unavailable'}</p>
 		</div>
 		{#if available}
@@ -34,10 +31,13 @@
 		{/if}
 	</div>
 
-	<div class="flex h-32 items-center">
-		<div class="w-full">
+	<div class="mt-9 grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3">
+		<div class="flex h-11 w-11 items-center justify-center" aria-hidden="true">
+			<HardDrive class="h-9 w-9 text-gray-500 dark:text-gray-400" />
+		</div>
+		<div class="min-w-0">
 			<div
-				class="h-3 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
+				class="h-4 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
 				role={available ? 'progressbar' : undefined}
 				aria-label={available ? `${label} used` : undefined}
 				aria-valuemin={available ? 0 : undefined}
@@ -54,9 +54,8 @@
 </article>
 
 <style>
-	/* The host resources surface contains exactly the four capacity metrics.
-	   Keep Storage in that same row on desktop while preserving the existing
-	   two-column tablet layout. */
+	/* Host resources contain exactly four peers. Keep them equal-width on desktop,
+	   while the tablet layout remains two columns. */
 	@media (min-width: 1280px) {
 		:global(.grid:has(> .storage-capacity-metric)) {
 			grid-template-columns: repeat(4, minmax(0, 1fr));
