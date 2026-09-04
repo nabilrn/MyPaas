@@ -57,7 +57,7 @@ func (a sqliteAdapter) Columns(ctx context.Context, conn *sql.DB, schema, table 
 		return nil, err
 	}
 	rows, err := conn.QueryContext(ctx, `
-SELECT name, COALESCE(type, ''), "notnull", pk
+SELECT name, COALESCE(type, ''), "notnull", pk, dflt_value
 FROM pragma_table_info(?)
 ORDER BY cid`, table)
 	if err != nil {
@@ -69,11 +69,16 @@ ORDER BY cid`, table)
 	for rows.Next() {
 		var item Column
 		var notNull, primaryPosition int
-		if err := rows.Scan(&item.Name, &item.DataType, &notNull, &primaryPosition); err != nil {
+		var defaultValue sql.NullString
+		if err := rows.Scan(&item.Name, &item.DataType, &notNull, &primaryPosition, &defaultValue); err != nil {
 			return nil, err
 		}
 		item.PrimaryKey = primaryPosition > 0
 		item.Nullable = !item.PrimaryKey && notNull == 0
+		item.HasDefault = defaultValue.Valid
+		if defaultValue.Valid {
+			item.DefaultValue = defaultValue.String
+		}
 		columns = append(columns, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -250,27 +255,51 @@ func sqliteInsertSQL(m Mutation, columns []Column) (string, []any, error) {
 	if err := validateSQLiteSchema(m.Schema); err != nil {
 		return "", nil, err
 	}
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
 		return "", nil, err
 	}
+	if len(names) == 0 && len(nowColumns) == 0 {
+		return fmt.Sprintf("INSERT INTO %s DEFAULT VALUES", quoteSQLiteIdent(m.Table)), nil, nil
+	}
+	allNames := append([]string(nil), names...)
+	valueParts := make([]string, 0, len(names)+len(nowColumns))
+	for range names {
+		valueParts = append(valueParts, "?")
+	}
+	for _, column := range nowColumns {
+		allNames = append(allNames, column.Name)
+		expression, _ := temporalDatabaseExpression(column)
+		valueParts = append(valueParts, expression)
+	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", quoteSQLiteIdent(m.Table),
-		joinQuoted(names, quoteSQLiteIdent), sqlitePlaceholders(len(names))), values, nil
+		joinQuoted(allNames, quoteSQLiteIdent), strings.Join(valueParts, ", ")), values, nil
 }
 
 func sqliteUpdateSQL(m Mutation, columns []Column) (string, []any, error) {
 	if err := validateSQLiteSchema(m.Schema); err != nil {
 		return "", nil, err
 	}
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
+		return "", nil, err
+	}
+	if err := requireMutationFields(names, nowColumns); err != nil {
 		return "", nil, err
 	}
 	where, pkValues, err := sqlitePrimaryKeyWhere(m.PrimaryKey, columns)
 	if err != nil {
 		return "", nil, err
 	}
-	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", quoteSQLiteIdent(m.Table), sqliteSetList(names), where), append(values, pkValues...), nil
+	setParts := make([]string, 0, len(names)+len(nowColumns))
+	for _, name := range names {
+		setParts = append(setParts, quoteSQLiteIdent(name)+" = ?")
+	}
+	for _, column := range nowColumns {
+		expression, _ := temporalDatabaseExpression(column)
+		setParts = append(setParts, quoteSQLiteIdent(column.Name)+" = "+expression)
+	}
+	return fmt.Sprintf("UPDATE %s SET %s WHERE %s", quoteSQLiteIdent(m.Table), strings.Join(setParts, ", "), where), append(values, pkValues...), nil
 }
 
 func sqliteDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
@@ -282,22 +311,6 @@ func sqliteDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
 		return "", nil, err
 	}
 	return fmt.Sprintf("DELETE FROM %s WHERE %s", quoteSQLiteIdent(m.Table), where), values, nil
-}
-
-func sqlitePlaceholders(count int) string {
-	parts := make([]string, count)
-	for index := range parts {
-		parts[index] = "?"
-	}
-	return strings.Join(parts, ", ")
-}
-
-func sqliteSetList(names []string) string {
-	parts := make([]string, 0, len(names))
-	for _, name := range names {
-		parts = append(parts, quoteSQLiteIdent(name)+" = ?")
-	}
-	return strings.Join(parts, ", ")
 }
 
 func sqlitePrimaryKeyWhere(values map[string]any, columns []Column) (string, []any, error) {
