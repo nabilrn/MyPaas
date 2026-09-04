@@ -1,9 +1,12 @@
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 VERIFY_SCRIPT = ROOT_DIR / "scripts" / "verify-production.sh"
+ASSET_EXTRACTOR = ROOT_DIR / "scripts" / "extract_dashboard_assets.py"
 CADDY_FILE = ROOT_DIR / "Caddyfile.prod"
 SVELTE_CONFIG = ROOT_DIR / "frontend" / "svelte.config.js"
 ROOT_LAYOUT = ROOT_DIR / "frontend" / "src" / "routes" / "+layout.svelte"
@@ -50,6 +53,29 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('port mypaas-caddy-prod 2019/tcp', content)
         self.assertNotIn("http://127.0.0.1:2019", content)
 
+    def test_dashboard_asset_parser_accepts_link_and_inline_import_references(self) -> None:
+        html = """
+        <link rel="stylesheet" href="/_app/immutable/assets/0.ABC123.css">
+        <link rel="icon" href="data:image/svg+xml,%3Csvg%3E">
+        <script>Promise.all([import("/_app/immutable/entry/start.REVZG4IO.js"), import("/_app/immutable/entry/app.D7lxbEp-.js")])</script>
+        """
+        result = subprocess.run(
+            [sys.executable, str(ASSET_EXTRACTOR)],
+            input=html,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                "/_app/immutable/assets/0.ABC123.css",
+                "/_app/immutable/entry/app.D7lxbEp-.js",
+                "/_app/immutable/entry/start.REVZG4IO.js",
+            ],
+        )
+
     def test_dashboard_release_assets_cannot_drift_from_html_shell(self) -> None:
         verify = VERIFY_SCRIPT.read_text(encoding="utf-8")
         caddy = CADDY_FILE.read_text(encoding="utf-8")
@@ -62,6 +88,7 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn("@asset_error status 4xx 5xx", caddy)
         self.assertIn('header Cache-Control "no-store"', caddy)
         self.assertIn("dashboard_asset_paths", verify)
+        self.assertIn('python3 "$ROOT_DIR/scripts/extract_dashboard_assets.py"', verify)
         self.assertIn("curl -fsSL --max-redirs 5", verify)
         self.assertIn("Dashboard HTML must be served with Cache-Control: no-store.", verify)
         self.assertIn("Dashboard HTML references an unavailable release asset", verify)
