@@ -126,7 +126,7 @@ describe('project secondary navigation contract', () => {
 		expect(projectSettingsPage).toContain('ProjectCombinedSettings');
 		expect(projectSettingsPage).toContain('section="settings"');
 		expect(projectCombinedSettings).toContain('project-settings-workspace w-full');
-		expect(projectCombinedSettings).toContain('lg:grid-cols-2');
+		expect(projectCombinedSettings).toContain('lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]');
 		expect(projectCombinedSettings).toContain('>Source<');
 		expect(projectCombinedSettings).toContain('>Resources<');
 		expect(projectCombinedSettings).not.toContain('>General<');
