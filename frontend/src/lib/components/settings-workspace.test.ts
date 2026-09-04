@@ -3,17 +3,18 @@ import settingsWorkspace from './SettingsWorkspace.svelte?raw';
 import storageCapacityMetric from './StorageCapacityMetric.svelte?raw';
 import projectSettings from '../../routes/projects/[id]/settings/+page.svelte?raw';
 import projectDanger from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
+import projectWebhook from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
 import projectSourceRedirect from '../../routes/projects/[id]/settings/source/+page.ts?raw';
 import projectResourcesRedirect from '../../routes/projects/[id]/settings/resources/+page.ts?raw';
-import projectWebhookRedirect from '../../routes/projects/[id]/settings/webhook/+page.ts?raw';
 
 describe('settings workspace layout contract', () => {
 	it('uses the full project main canvas for structural settings strokes', () => {
-		for (const page of [projectSettings, projectDanger]) {
+		for (const page of [projectSettings, projectDanger, projectWebhook]) {
 			expect(page).toContain('SettingsWorkspace');
 			expect(page).not.toContain('<style>');
 		}
 		expect(projectSettings).toContain('section="settings"');
+		expect(projectWebhook).toContain('section="webhook"');
 		expect(settingsWorkspace).toContain('width: 100%');
 		expect(settingsWorkspace).not.toContain('max-width: 64rem');
 		expect(settingsWorkspace).toContain('var(--workspace-divider)');
@@ -21,10 +22,11 @@ describe('settings workspace layout contract', () => {
 		expect(settingsWorkspace).toContain('padding-inline: 1rem');
 	});
 
-	it('preserves legacy settings URLs through redirects', () => {
-		for (const route of [projectSourceRedirect, projectResourcesRedirect, projectWebhookRedirect]) {
+	it('preserves only the consolidated legacy source and resource settings URLs through redirects', () => {
+		for (const route of [projectSourceRedirect, projectResourcesRedirect]) {
 			expect(route).toContain("redirect(307, `/projects/${params.id}/settings`)");
 		}
+		expect(projectWebhook).toContain('ProjectWebhookSettings');
 	});
 
 	it('keeps workspace geometry free of decorative route-local dependencies', () => {
