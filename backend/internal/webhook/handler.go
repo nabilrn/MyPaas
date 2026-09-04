@@ -139,9 +139,10 @@ func (h *Handler) GitHub(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Status reports evidence from the most recent GitHub delivery. A configured
-// URL or secret alone is not treated as proof of connectivity: only a signed
-// delivery can move the status to connected.
+// Status reports delivery evidence rather than treating configuration alone as
+// proof of connectivity. Once a signed GitHub delivery has been observed it is
+// preferred over later unsigned probes, so arbitrary invalid traffic cannot
+// flap a verified project back into an error state.
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -159,7 +160,7 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 
 	latest, err := h.queries.GetLatestWebhookDelivery(r.Context(), projectID)
 	if err == pgx.ErrNoRows {
-		httpx.JSON(w, http.StatusOK, statusResponse{Status: "unverified"})
+		httpx.JSON(w, http.StatusOK, statusResponse{Status: webhookStatus(false, false)})
 		return
 	}
 	if err != nil {
@@ -167,34 +168,55 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := "issue"
-	if latest.SignatureValid {
-		status = "connected"
+	verified, verifiedErr := h.queries.GetLatestVerifiedWebhookDelivery(r.Context(), projectID)
+	hasVerified := verifiedErr == nil
+	if verifiedErr != nil && verifiedErr != pgx.ErrNoRows {
+		httpx.DomainError(w, verifiedErr)
+		return
 	}
 
+	evidence := latest
+	if hasVerified {
+		evidence = verified
+	}
+
+	httpx.JSON(w, http.StatusOK, statusResponse{
+		Status:       webhookStatus(true, hasVerified),
+		LastDelivery: deliveryEvidenceFromDB(evidence),
+	})
+}
+
+func webhookStatus(hasDelivery, hasVerifiedDelivery bool) string {
+	if hasVerifiedDelivery {
+		return "connected"
+	}
+	if hasDelivery {
+		return "issue"
+	}
+	return "unverified"
+}
+
+func deliveryEvidenceFromDB(delivery db.WebhookDelivery) *deliveryEvidence {
 	var deploymentID *string
-	if latest.DeploymentID.Valid {
-		value := uuid.UUID(latest.DeploymentID.Bytes).String()
+	if delivery.DeploymentID.Valid {
+		value := uuid.UUID(delivery.DeploymentID.Bytes).String()
 		deploymentID = &value
 	}
 
 	receivedAt := ""
-	if latest.ReceivedAt.Valid {
-		receivedAt = latest.ReceivedAt.Time.UTC().Format(time.RFC3339)
+	if delivery.ReceivedAt.Valid {
+		receivedAt = delivery.ReceivedAt.Time.UTC().Format(time.RFC3339)
 	}
 
-	httpx.JSON(w, http.StatusOK, statusResponse{
-		Status: status,
-		LastDelivery: &deliveryEvidence{
-			GithubDeliveryID: latest.GithubDeliveryID,
-			SignatureValid:   latest.SignatureValid,
-			EventType:        latest.EventType,
-			Branch:           latest.Branch,
-			Processed:        latest.Processed,
-			DeploymentID:     deploymentID,
-			ReceivedAt:       receivedAt,
-		},
-	})
+	return &deliveryEvidence{
+		GithubDeliveryID: delivery.GithubDeliveryID,
+		SignatureValid:   delivery.SignatureValid,
+		EventType:        delivery.EventType,
+		Branch:           delivery.Branch,
+		Processed:        delivery.Processed,
+		DeploymentID:     deploymentID,
+		ReceivedAt:       receivedAt,
+	}
 }
 
 func (h *Handler) logDelivery(ctx context.Context, projectID uuid.UUID, deliveryID, eventType string, branch *string, signatureValid, processed bool, deploymentID uuid.UUID) {
