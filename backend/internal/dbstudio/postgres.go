@@ -50,7 +50,11 @@ func (a postgresAdapter) Columns(ctx context.Context, conn *sql.DB, schema, tabl
 	rows, err := conn.QueryContext(ctx, `
 SELECT c.column_name, c.data_type, c.is_nullable = 'YES',
        COALESCE(tc.constraint_name IS NOT NULL, false),
-       c.column_default IS NOT NULL AND c.column_default <> '',
+       c.is_identity = 'YES'
+         OR c.is_generated <> 'NEVER'
+         OR COALESCE(c.column_default, '') LIKE 'nextval(%',
+       c.column_default IS NOT NULL,
+       COALESCE(c.column_default, ''),
        COALESCE(enum_values.labels, '')
 FROM information_schema.columns c
 LEFT JOIN information_schema.key_column_usage k
@@ -200,27 +204,51 @@ func postgresOrderClause(columns []Column) string {
 }
 
 func postgresInsertSQL(m Mutation, columns []Column) (string, []any, error) {
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
 		return "", nil, err
 	}
+	if len(names) == 0 && len(nowColumns) == 0 {
+		return fmt.Sprintf("INSERT INTO %s.%s DEFAULT VALUES", quotePostgresIdent(m.Schema), quotePostgresIdent(m.Table)), nil, nil
+	}
+	allNames := append([]string(nil), names...)
+	valueParts := make([]string, 0, len(names)+len(nowColumns))
+	for index := range names {
+		valueParts = append(valueParts, fmt.Sprintf("$%d", index+1))
+	}
+	for _, column := range nowColumns {
+		allNames = append(allNames, column.Name)
+		expression, _ := temporalDatabaseExpression(column)
+		valueParts = append(valueParts, expression)
+	}
 	return fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
 		quotePostgresIdent(m.Schema), quotePostgresIdent(m.Table),
-		joinQuoted(names, quotePostgresIdent), postgresPlaceholders(1, len(names))), values, nil
+		joinQuoted(allNames, quotePostgresIdent), strings.Join(valueParts, ", ")), values, nil
 }
 
 func postgresUpdateSQL(m Mutation, columns []Column) (string, []any, error) {
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
+		return "", nil, err
+	}
+	if err := requireMutationFields(names, nowColumns); err != nil {
 		return "", nil, err
 	}
 	where, pkValues, err := postgresPrimaryKeyWhere(m.PrimaryKey, columns, len(values)+1)
 	if err != nil {
 		return "", nil, err
 	}
+	setParts := make([]string, 0, len(names)+len(nowColumns))
+	for index, name := range names {
+		setParts = append(setParts, fmt.Sprintf("%s = $%d", quotePostgresIdent(name), index+1))
+	}
+	for _, column := range nowColumns {
+		expression, _ := temporalDatabaseExpression(column)
+		setParts = append(setParts, fmt.Sprintf("%s = %s", quotePostgresIdent(column.Name), expression))
+	}
 	return fmt.Sprintf("UPDATE %s.%s SET %s WHERE %s",
 		quotePostgresIdent(m.Schema), quotePostgresIdent(m.Table),
-		postgresSetList(names), where), append(values, pkValues...), nil
+		strings.Join(setParts, ", "), where), append(values, pkValues...), nil
 }
 
 func postgresDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
@@ -230,14 +258,6 @@ func postgresDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
 	}
 	return fmt.Sprintf("DELETE FROM %s.%s WHERE %s",
 		quotePostgresIdent(m.Schema), quotePostgresIdent(m.Table), where), values, nil
-}
-
-func postgresSetList(names []string) string {
-	parts := make([]string, 0, len(names))
-	for index, name := range names {
-		parts = append(parts, fmt.Sprintf("%s = $%d", quotePostgresIdent(name), index+1))
-	}
-	return strings.Join(parts, ", ")
 }
 
 func postgresPrimaryKeyWhere(values map[string]any, columns []Column, start int) (string, []any, error) {
@@ -256,12 +276,4 @@ func postgresPrimaryKeyWhere(values map[string]any, columns []Column, start int)
 		parts = append(parts, fmt.Sprintf("%s = $%d", quotePostgresIdent(column.Name), start+index))
 	}
 	return strings.Join(parts, " AND "), args, nil
-}
-
-func postgresPlaceholders(start, count int) string {
-	parts := make([]string, 0, count)
-	for index := 0; index < count; index++ {
-		parts = append(parts, fmt.Sprintf("$%d", start+index))
-	}
-	return strings.Join(parts, ", ")
 }
