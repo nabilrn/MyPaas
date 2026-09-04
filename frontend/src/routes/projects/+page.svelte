@@ -9,6 +9,7 @@
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectDatabaseShortcut from '$components/ProjectDatabaseShortcut.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
+	import ProjectWebhookStatus from '$components/ProjectWebhookStatus.svelte';
 	import RuntimeModeIcon from '$components/RuntimeModeIcon.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
@@ -361,7 +362,7 @@
 		{:else if hostStatsLoaded}<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>{/if}
 	</SectionPanel>
 
-	<TableShell title="Inventory" description="Projects, runtime, database access, and lifecycle controls." {loading} loadingRows={3} error={error && projects.length === 0 ? error : ''} empty={filteredProjects.length === 0} emptyTitle={normalizedSearch ? 'No projects match this search' : 'No projects yet'} emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaaS will prepare the runtime.'} contentClass="overflow-hidden" on:retry={() => refreshDashboardData()}>
+	<TableShell title="Inventory" description="Projects, runtime, webhook, database access, and lifecycle controls." {loading} loadingRows={3} error={error && projects.length === 0 ? error : ''} empty={filteredProjects.length === 0} emptyTitle={normalizedSearch ? 'No projects match this search' : 'No projects yet'} emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaaS will prepare the runtime.'} contentClass="overflow-hidden" on:retry={() => refreshDashboardData()}>
 		<svelte:fragment slot="actions">
 			<div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
 				<label class="relative block w-full sm:w-72">
@@ -375,8 +376,8 @@
 		<svelte:fragment slot="notice">{#if error}<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"><span class="min-w-0 flex-1">{error}</span><ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Retry</ActionButton></div>{/if}</svelte:fragment>
 
 		<table class="data-table hidden table-fixed xl:table">
-			<colgroup><col class="w-[16%]" /><col class="w-[7%]" /><col class="w-[18%]" /><col class="w-[7%]" /><col class="w-[10%]" /><col class="w-[10%]" /><col class="w-[9%]" /><col class="w-[7%]" /><col class="w-[6%]" /><col class="w-[10%]" /></colgroup>
-			<thead><tr><th>Project</th><th>Status</th><th>Repository</th><th>Branch</th><th>Runtime</th><th>Database</th><th>Usage</th><th>Limits</th><th>Updated</th><th>Next action</th></tr></thead>
+			<colgroup><col class="w-[15%]" /><col class="w-[7%]" /><col class="w-[16%]" /><col class="w-[7%]" /><col class="w-[8%]" /><col class="w-[9%]" /><col class="w-[9%]" /><col class="w-[8%]" /><col class="w-[7%]" /><col class="w-[6%]" /><col class="w-[8%]" /></colgroup>
+			<thead><tr><th>Project</th><th>Status</th><th>Repository</th><th>Branch</th><th>Webhook</th><th>Runtime</th><th>Database</th><th>Usage</th><th>Limits</th><th>Updated</th><th>Next action</th></tr></thead>
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
@@ -390,6 +391,7 @@
 							{#if source.href}<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white"><svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span></a>{:else}<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300"><svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span></span>{/if}
 						</td>
 						<td class="whitespace-nowrap text-center">{#if project.sourceType === 'git' && project.branch}<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}><GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{project.branch}</span></span>{:else}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{/if}</td>
+						<td class="whitespace-nowrap text-center"><ProjectWebhookStatus projectId={project.id} applicable={project.sourceType === 'git'} /></td>
 						<td><div class="flex min-w-0 items-start gap-2"><RuntimeModeIcon mode={project.deployMode} className="mt-0.5 h-4 w-4 text-gray-400 dark:text-gray-500" /><div class="min-w-0"><p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>{#if project.mainService}<p class="mt-0.5 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{project.mainService}</p>{/if}</div></div></td>
 						<td class="text-center"><ProjectDatabaseShortcut projectId={project.id} /></td>
 						<td class="metric-value whitespace-nowrap text-right">{#if project.id in projectMemory}<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{:else if uptimeLoadingIds.has(project.id)}<span class="text-sm text-gray-400 dark:text-gray-500" aria-label="Loading metrics">…</span>{:else}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{/if}</td>
@@ -418,6 +420,7 @@
 					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
 						{#if source.href}<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white"><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></a>{:else}<span class="inline-flex min-w-0 items-center gap-1 truncate" title={source.label}><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></span>{/if}
 						{#if project.sourceType === 'git' && project.branch}<span class="inline-flex items-center gap-1 whitespace-nowrap font-mono"><GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />{project.branch}</span>{/if}
+						<span class="inline-flex items-center gap-1 whitespace-nowrap"><span>Webhook</span><ProjectWebhookStatus projectId={project.id} applicable={project.sourceType === 'git'} compact /></span>
 						<span class="inline-flex items-center gap-1 whitespace-nowrap"><RuntimeModeIcon mode={project.deployMode} className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />{runtimeLabel(project)}</span>
 						{#if project.deployMode !== 'static'}<span class="metric-value whitespace-nowrap">{project.memoryLimitMb} MB · {formatCpuLimit(project.cpuLimit)} CPU</span>{/if}
 						{#if project.id in projectMemory}<span class="metric-value whitespace-nowrap">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{/if}
