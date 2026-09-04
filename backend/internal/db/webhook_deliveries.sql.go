@@ -87,6 +87,33 @@ func (q *Queries) GetLatestWebhookDelivery(ctx context.Context, projectID uuid.U
 	return i, err
 }
 
+const getLatestVerifiedWebhookDelivery = `-- name: GetLatestVerifiedWebhookDelivery :one
+SELECT id, project_id, github_delivery_id, signature_valid, event_type,
+       branch, processed, deployment_id, received_at
+FROM webhook_deliveries
+WHERE project_id = $1
+  AND signature_valid = TRUE
+ORDER BY received_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestVerifiedWebhookDelivery(ctx context.Context, projectID uuid.UUID) (WebhookDelivery, error) {
+	row := q.db.QueryRow(ctx, getLatestVerifiedWebhookDelivery, projectID)
+	var i WebhookDelivery
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.GithubDeliveryID,
+		&i.SignatureValid,
+		&i.EventType,
+		&i.Branch,
+		&i.Processed,
+		&i.DeploymentID,
+		&i.ReceivedAt,
+	)
+	return i, err
+}
+
 const markWebhookDeliveryProcessed = `-- name: MarkWebhookDeliveryProcessed :exec
 UPDATE webhook_deliveries
 SET processed     = TRUE,
