@@ -16,7 +16,9 @@ describe('settings workspace layout contract', () => {
 
 		expect(settingsWorkspace).toContain('max-width: 64rem');
 		expect(settingsWorkspace).toContain('var(--workspace-divider)');
-		expect(settingsWorkspace).toContain('padding: 0.75rem 1rem');
+		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
+		expect(settingsWorkspace).toContain('padding-inline: 1rem');
+		expect(settingsWorkspace).toContain('padding-top: 1rem');
 		expect(settingsWorkspace).not.toContain('max-width: 56rem');
 	});
 
