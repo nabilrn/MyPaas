@@ -25,13 +25,12 @@ describe('create project workspace contract', () => {
 		expect(newProjectLayout).toContain('border-top: 1px solid var(--workspace-divider)');
 	});
 
-	it('normalizes dark neutral fills so selection and Advanced settings never become tinted surfaces', () => {
-		expect(newProjectLayout).toContain("button[class~='dark:bg-gray-800']");
-		expect(newProjectLayout).toContain("button[class~='dark:bg-gray-900']");
-		expect(newProjectLayout).toContain("button[class~='dark:hover:bg-gray-900']");
-		expect(newProjectLayout).toContain("details.group > summary");
-		expect(newProjectLayout).toContain("summary[class~='dark:bg-gray-900/40']");
-		expect(newProjectLayout).toContain('background: var(--app-surface) !important');
+	it('normalizes remaining dark neutral fills and hover states to the application surface', () => {
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-800']");
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-900']");
+		expect(newProjectLayout).toContain("[class~='dark:bg-gray-950']");
+		expect(newProjectLayout).toContain("[class~='dark:hover:bg-gray-900']");
+		expect(newProjectLayout).toContain('background-color: var(--app-surface) !important');
 	});
 
 	it('keeps readiness and the create action visible as the long form scrolls', () => {
