@@ -122,19 +122,25 @@ func (h *Handler) Rows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := RowQuery{
-		Schema:  r.URL.Query().Get("schema"),
-		Table:   r.URL.Query().Get("table"),
-		Limit:   intQuery(r, "limit", 100),
-		Offset:  intQuery(r, "offset", 0),
-		Search:  strings.TrimSpace(r.URL.Query().Get("search")),
-		Filters: filterQuery(r),
+		Schema: r.URL.Query().Get("schema"),
+		Table:  r.URL.Query().Get("table"),
+		Limit:  intQuery(r, "limit", 100),
+		Offset: intQuery(r, "offset", 0),
+		Search: strings.TrimSpace(r.URL.Query().Get("search")),
 	}
 	out, err := h.service.Rows(r.Context(), projectID, query)
 	writeResult(w, out, err)
 }
 
-func (h *Handler) Insert(w http.ResponseWriter, r *http.Request) {
-	h.mutate(w, r, h.service.Insert)
+func (h *Handler) Insert(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Allow", "GET, PATCH")
+	httpx.Error(
+		w,
+		http.StatusMethodNotAllowed,
+		"DBSTUDIO_INSERT_DISABLED",
+		"DB Studio row insertion is disabled for the stable write boundary. Use the application or a dedicated database client.",
+		nil,
+	)
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +148,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Allow", "GET, POST, PATCH")
+	w.Header().Set("Allow", "GET, PATCH")
 	httpx.Error(
 		w,
 		http.StatusMethodNotAllowed,
@@ -205,27 +211,4 @@ func intQuery(r *http.Request, key string, fallback int) int {
 		return fallback
 	}
 	return value
-}
-
-func filterQuery(r *http.Request) map[string]string {
-	values := r.URL.Query()
-	out := make(map[string]string)
-	for key, items := range values {
-		if !strings.HasPrefix(key, "filter[") || !strings.HasSuffix(key, "]") {
-			continue
-		}
-		column := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(key, "filter["), "]"))
-		if column == "" || len(items) == 0 {
-			continue
-		}
-		value := strings.TrimSpace(items[0])
-		if value == "" {
-			continue
-		}
-		out[column] = value
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }

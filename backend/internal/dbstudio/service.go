@@ -99,6 +99,9 @@ func (s *Service) StartWriteSession(ctx context.Context, projectID, userID uuid.
 	if _, err := s.queries.GetProjectByID(ctx, projectID); err != nil {
 		return WriteSession{}, projectErr(err)
 	}
+	if err := s.revokeActiveWriteSessions(ctx, projectID, userID); err != nil {
+		return WriteSession{}, err
+	}
 	expiresAt := time.Now().Add(ttl).UTC()
 	row, err := s.queries.CreateDBStudioSession(ctx, db.CreateDBStudioSessionParams{
 		ProjectID: projectID,
@@ -112,9 +115,12 @@ func (s *Service) StartWriteSession(ctx context.Context, projectID, userID uuid.
 }
 
 func (s *Service) RevokeWriteSession(ctx context.Context, projectID, userID, sessionID uuid.UUID) error {
-	return s.queries.RevokeDBStudioSession(ctx, db.RevokeDBStudioSessionParams{
+	if err := s.queries.RevokeDBStudioSession(ctx, db.RevokeDBStudioSessionParams{
 		ID: sessionID, ProjectID: projectID, UserID: userID,
-	})
+	}); err != nil {
+		return err
+	}
+	return s.revokeActiveWriteSessions(ctx, projectID, userID)
 }
 
 func (s *Service) Insert(ctx context.Context, projectID, userID uuid.UUID, mutation Mutation) error {
@@ -284,6 +290,28 @@ func (s *Service) activeSession(ctx context.Context, projectID, userID uuid.UUID
 	}
 	session := sessionResponse(row)
 	return &session
+}
+
+func (s *Service) revokeActiveWriteSessions(ctx context.Context, projectID, userID uuid.UUID) error {
+	const maxRevocations = 32
+	for attempt := 0; attempt < maxRevocations; attempt++ {
+		row, err := s.queries.GetActiveDBStudioSession(ctx, db.GetActiveDBStudioSessionParams{
+			ProjectID: projectID,
+			UserID:    userID,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := s.queries.RevokeDBStudioSession(ctx, db.RevokeDBStudioSessionParams{
+			ID: row.ID, ProjectID: projectID, UserID: userID,
+		}); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("%w: too many active DB Studio write sessions", errs.ErrValidation)
 }
 
 func (s *Service) auditMutation(ctx context.Context, userID, projectID uuid.UUID, action string, mutation Mutation, err error) error {

@@ -69,7 +69,7 @@
 		<header class="flex flex-col gap-3 border-b border-[color:var(--workspace-divider)] px-5 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="min-w-0">
 				<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Database Studio</h1>
-				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse project data and schema. Write mode supports insert and update only.</p>
+				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse project data and schema. Write mode supports safe row updates only.</p>
 			</div>
 			<a href={`${base}/schema`} class="app-focus control-height inline-flex shrink-0 items-center gap-2 border border-gray-200 px-3 font-medium text-gray-700 hover:text-gray-950 dark:border-neutral-800 dark:text-gray-300 dark:hover:text-white">
 				<Workflow class="h-4 w-4" aria-hidden="true" />
@@ -130,7 +130,6 @@
 		background: var(--app-surface);
 	}
 
-	/* Database Studio is one surface. Split panes are structural, never alternate neutral fills. */
 	:global(.database-data-shell [data-db-studio-workspace]) {
 		background: transparent !important;
 		border-bottom: 0 !important;
@@ -141,7 +140,6 @@
 		background: transparent !important;
 	}
 
-	/* Merge title + controls visually; one divider after the control group is enough. */
 	:global(.database-data-shell [data-db-studio-workspace] > aside > div:first-child),
 	:global(.database-data-shell [data-db-studio-workspace] > section > div:first-child) {
 		border-bottom: 0 !important;
@@ -152,7 +150,6 @@
 		background: transparent !important;
 	}
 
-	/* Active table state uses weight + a thin inset marker, not a filled row. */
 	:global(.database-data-shell [data-db-table-scroll] button) {
 		background: transparent !important;
 		border-radius: 0 !important;
@@ -178,10 +175,5 @@
 	:global(.database-data-shell [data-db-row-scroll] [class~='bg-gray-50']),
 	:global(.database-data-shell [data-db-row-scroll] [class~='dark:bg-neutral-900']) {
 		background: transparent !important;
-	}
-
-	/* Destructive row mutation is intentionally outside the current DB Studio maturity contract. */
-	:global(.database-data-shell button[aria-label^='Delete database row']) {
-		display: none !important;
 	}
 </style>
