@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, RotateCcw, X } from '@lucide/svelte';
+	import { ArrowDownToLine, ChevronDown, ChevronUp, RotateCcw, X } from '@lucide/svelte';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -15,11 +15,13 @@
 	import type { Deployment, Project } from '$types';
 
 	const pageSize = 20;
+	const latestThreshold = 28;
 	let deployments: Deployment[] = [];
 	let project: Project | null = null;
 	let loading = true;
 	let error = '';
 	let expanded = new Set<string>();
+	let logNeedsLatest = new Set<string>();
 	let rollingBackId = '';
 	let confirmRollbackId = '';
 	let currentPage = 0;
@@ -85,6 +87,32 @@
 		return deployment.commitMessage || (deployment.imageTag ? 'Container image deployment' : 'No source metadata');
 	}
 
+	function logElement(id: string): HTMLElement | null {
+		return document.getElementById(`deployment-log-${id}`);
+	}
+
+	function isLogNearBottom(id: string): boolean {
+		const element = logElement(id);
+		if (!element) return false;
+		return element.scrollHeight - element.scrollTop - element.clientHeight <= latestThreshold;
+	}
+
+	function updateLogPosition(id: string) {
+		const next = new Set(logNeedsLatest);
+		if (isLogNearBottom(id)) next.delete(id);
+		else next.add(id);
+		logNeedsLatest = next;
+	}
+
+	function scrollToLatest(id: string, behavior: ScrollBehavior = 'smooth') {
+		const element = logElement(id);
+		if (!element) return;
+		element.scrollTo({ top: element.scrollHeight, behavior });
+		const next = new Set(logNeedsLatest);
+		next.delete(id);
+		logNeedsLatest = next;
+	}
+
 	onMount(() => {
 		mounted = true;
 		void load();
@@ -99,6 +127,7 @@
 		const requestedFocusId = focusId;
 		const projectId = $page.params.id ?? '';
 		const foreground = loadedPage === -1 || requestedPage !== loadedPage;
+		const followingLogs = new Set([...expanded].filter((id) => isLogNearBottom(id)));
 		if (foreground) loading = true;
 		try {
 			const [rows, currentProject] = await Promise.all([
@@ -112,6 +141,11 @@
 			hasNext = rows.length > pageSize;
 			loadedPage = requestedPage;
 			error = '';
+			await tick();
+			for (const id of expanded) {
+				if (followingLogs.has(id)) scrollToLatest(id, 'auto');
+				else updateLogPosition(id);
+			}
 			void revealFocusedDeployment();
 		} catch (err) {
 			if (requestedPage === currentPage && requestedFocusId === focusId) {
@@ -147,9 +181,20 @@
 		revealedFocusId = targetId;
 	}
 
-	function toggle(id: string) {
-		expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+	async function toggle(id: string) {
+		if (expanded.has(id)) {
+			expanded.delete(id);
+			const next = new Set(logNeedsLatest);
+			next.delete(id);
+			logNeedsLatest = next;
+		} else {
+			expanded.add(id);
+		}
 		expanded = new Set(expanded);
+		if (expanded.has(id)) {
+			await tick();
+			scrollToLatest(id, 'auto');
+		}
 	}
 </script>
 
@@ -165,7 +210,7 @@
 	error={error && deployments.length === 0 ? error : ''}
 	empty={deployments.length === 0}
 	emptyTitle="No deployments yet."
-	emptyDescription="Trigger a deploy from the project actions panel to create the first deployment record."
+	emptyDescription="Deploy this project to create the first deployment record."
 	contentClass=""
 	on:retry={load}
 >
@@ -174,29 +219,28 @@
 			<div class="alert-warning mx-4 mt-3 flex-wrap items-center justify-between">
 				<span class="min-w-0 flex-1">{error}</span>
 				<ActionButton variant="ghost" size="xs" on:click={load}>
-					<RotateCcw slot="icon" class="h-3.5 w-3.5" />
-					Retry
+					<RotateCcw slot="icon" class="h-3.5 w-3.5" />Retry
 				</ActionButton>
 			</div>
 		{/if}
 	</svelte:fragment>
 
-	<div class="grid border-b border-gray-100 bg-gray-50/50 dark:border-neutral-800 dark:bg-neutral-900/40 sm:grid-cols-3">
-		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
-			<p class="metric-label">In-progress pipelines</p>
+	<div class="grid border-b border-[color:var(--workspace-divider)] sm:grid-cols-3">
+		<div class="border-b border-[color:var(--workspace-divider)] p-4 sm:border-b-0 sm:border-r">
+			<p class="metric-label">In progress</p>
 			<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{activeCount}</p>
 		</div>
-		<div class="border-b border-gray-100 p-4 dark:border-neutral-800 sm:border-b-0 sm:border-r">
-			<p class="metric-label">Recoverable targets</p>
+		<div class="border-b border-[color:var(--workspace-divider)] p-4 sm:border-b-0 sm:border-r">
+			<p class="metric-label">Rollback targets</p>
 			<p class="metric-value mt-1 text-xl font-semibold text-gray-950 dark:text-white">{recoverableCount}</p>
 		</div>
 		<div class="p-4">
-			<p class="metric-label">Failed attempts</p>
+			<p class="metric-label">Failed</p>
 			<p class="metric-value mt-1 text-xl font-semibold {failedCount > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-950 dark:text-white'}">{failedCount}</p>
 		</div>
 	</div>
 
-	<div class="divide-y divide-gray-100 dark:divide-neutral-800">
+	<div class="divide-y divide-[color:var(--workspace-divider)]">
 		{#each visibleDeployments as d}
 			<div id={`deployment-${d.id}`} class={`scroll-mt-6 px-4 py-3 transition-colors ${focusId === d.id ? 'bg-gray-50 dark:bg-neutral-900/70' : ''}`} aria-current={focusId === d.id ? 'true' : undefined}>
 				<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_6rem_auto] lg:items-center">
@@ -217,19 +261,10 @@
 						</IconButton>
 						{#if canRollbackDeployment(d.status, d.id, project?.activeDeploymentId)}
 							{#if confirmRollbackId === d.id}
-								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRollbackId = '')} disabled={rollingBackId === d.id}>
-									<X slot="icon" class="h-3.5 w-3.5" />
-									Cancel
-								</ActionButton>
-								<ActionButton variant="danger" size="xs" on:click={() => handleRollback(d.id)} disabled={rollingBackId !== '' && rollingBackId !== d.id} loading={rollingBackId === d.id} loadingLabel="Rolling back">
-									<RotateCcw slot="icon" class="h-3.5 w-3.5" />
-									Confirm rollback
-								</ActionButton>
+								<ActionButton variant="ghost" size="xs" on:click={() => (confirmRollbackId = '')} disabled={rollingBackId === d.id}><X slot="icon" class="h-3.5 w-3.5" />Cancel</ActionButton>
+								<ActionButton variant="danger" size="xs" on:click={() => handleRollback(d.id)} disabled={rollingBackId !== '' && rollingBackId !== d.id} loading={rollingBackId === d.id} loadingLabel="Rolling back"><RotateCcw slot="icon" class="h-3.5 w-3.5" />Confirm rollback</ActionButton>
 							{:else}
-								<ActionButton variant="ghostDanger" size="xs" on:click={() => requestRollback(d.id)} disabled={rollingBackId !== ''}>
-									<RotateCcw slot="icon" class="h-3.5 w-3.5" />
-									Rollback
-								</ActionButton>
+								<ActionButton variant="ghostDanger" size="xs" on:click={() => requestRollback(d.id)} disabled={rollingBackId !== ''}><RotateCcw slot="icon" class="h-3.5 w-3.5" />Rollback</ActionButton>
 							{/if}
 						{/if}
 					</div>
@@ -242,20 +277,19 @@
 					<div class="console-surface mt-3 overflow-hidden">
 						<div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 px-3 py-2">
 							<p class="font-mono text-xs font-semibold uppercase tracking-wide text-gray-300">Deployment output</p>
-							<p class="text-xs text-gray-500">
-								{#if isPipelineActive(d.status)}
-									{d.buildLog ? 'Live · refreshes every 3 seconds' : 'Waiting for output'}
-								{:else}
-									{d.buildLog ? 'Final output' : 'No output captured'}
+							<div class="flex items-center gap-2">
+								<span class="text-xs text-gray-500">{isPipelineActive(d.status) ? (d.buildLog ? 'Live' : 'Waiting') : d.buildLog ? 'Final' : 'No output'}</span>
+								{#if d.buildLog && logNeedsLatest.has(d.id)}
+									<button type="button" class="app-focus inline-flex h-7 items-center gap-1.5 rounded border border-gray-700 px-2 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-white" on:click={() => scrollToLatest(d.id)}>
+										<ArrowDownToLine class="h-3.5 w-3.5" aria-hidden="true" />Latest
+									</button>
 								{/if}
-							</p>
+							</div>
 						</div>
 						{#if d.buildLog}
-							<pre class="max-h-80 overflow-auto p-3">{d.buildLog}</pre>
+							<pre id={`deployment-log-${d.id}`} class="max-h-80 overflow-auto p-3" on:scroll={() => updateLogPosition(d.id)}>{d.buildLog}</pre>
 						{:else}
-							<div class="px-3 py-6 text-center text-sm text-gray-400" role={isPipelineActive(d.status) ? 'status' : undefined}>
-								{isPipelineActive(d.status) ? `Pipeline is ${d.status}. Deployment output will appear here automatically.` : 'This deployment did not produce build output.'}
-							</div>
+							<div class="px-3 py-6 text-center text-sm text-gray-400" role={isPipelineActive(d.status) ? 'status' : undefined}>{isPipelineActive(d.status) ? 'Waiting for output.' : 'No output captured.'}</div>
 						{/if}
 					</div>
 				{/if}
@@ -264,8 +298,6 @@
 	</div>
 
 	<svelte:fragment slot="footer">
-		{#if showPagination}
-			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleDeployments.length} {hasNext} {loading} label="Deployments" />
-		{/if}
+		{#if showPagination}<Pagination bind:page={currentPage} {pageSize} totalShown={visibleDeployments.length} {hasNext} {loading} label="Deployments" />{/if}
 	</svelte:fragment>
 </TableShell>
