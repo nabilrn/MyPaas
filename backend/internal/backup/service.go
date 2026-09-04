@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -18,8 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	
+
 	mpconfig "mypaas/internal/config"
 	"mypaas/internal/container"
 )
@@ -39,6 +39,14 @@ type Service struct {
 type Result struct {
 	DailyPath  string
 	WeeklyPath string
+}
+
+type S3Config struct {
+	Endpoint  string
+	Bucket    string
+	Region    string
+	AccessKey string
+	SecretKey string
 }
 
 func NewService(cfg *mpconfig.Config, docker *container.DockerCLI) *Service {
@@ -160,40 +168,40 @@ func (s *Service) pgDump(ctx context.Context, outputPath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	tempDir, err := os.MkdirTemp("", "mypaas-backup-")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
-	
+
 	dbPath := filepath.Join(tempDir, "database.sql")
 	envPath := filepath.Join(tempDir, ".env")
-	
+
 	envData, err := os.ReadFile("/etc/mypaas/.env")
 	if err != nil {
 		slog.Warn("could not read /etc/mypaas/.env, falling back to os.Environ", "error", err)
 		envContent := strings.Join(os.Environ(), "\n")
 		envData = []byte(envContent)
 	}
-	
+
 	if err := os.WriteFile(envPath, envData, 0600); err != nil {
 		return fmt.Errorf("write .env: %w", err)
 	}
-	
+
 	cmd := exec.CommandContext(ctx, "sh", "-c", fmt.Sprintf("pg_dump --no-owner --no-privileges > %s", dbPath))
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pg_dump: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	
+
 	tarCmd := exec.CommandContext(ctx, "tar", "-czf", outputPath, "-C", tempDir, "database.sql", ".env")
 	out, err = tarCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("tar: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	
+
 	return nil
 }
 
@@ -253,38 +261,96 @@ func (s *Service) uploadToS3(ctx context.Context, filePath string) error {
 	}
 	defer file.Close()
 
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL: s.cfg.S3Endpoint,
-		}, nil
+	client, normalized, err := newS3Client(ctx, S3Config{
+		Endpoint:  s.cfg.S3Endpoint,
+		Bucket:    s.cfg.S3Bucket,
+		Region:    s.cfg.S3Region,
+		AccessKey: s.cfg.S3AccessKey,
+		SecretKey: s.cfg.S3SecretKey,
 	})
-
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(s.cfg.S3Region),
-		config.WithEndpointResolverWithOptions(customResolver),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(s.cfg.S3AccessKey, s.cfg.S3SecretKey, "")),
-	)
 	if err != nil {
-		return fmt.Errorf("load aws config: %w", err)
+		return err
 	}
 
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.UsePathStyle = true
-	})
-
 	key := filepath.Base(filePath)
-
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(s.cfg.S3Bucket),
+		Bucket: aws.String(normalized.Bucket),
 		Key:    aws.String(key),
 		Body:   file,
-		ACL:    types.ObjectCannedACLPrivate,
 	})
 	if err != nil {
 		return fmt.Errorf("put object: %w", err)
 	}
 
 	return nil
+}
+
+func ValidateS3Connection(ctx context.Context, candidate S3Config) error {
+	client, normalized, err := newS3Client(ctx, candidate)
+	if err != nil {
+		return err
+	}
+
+	if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(normalized.Bucket)}); err != nil {
+		return fmt.Errorf("access bucket: %w", err)
+	}
+
+	probeKey := fmt.Sprintf(".mypaas/connection-check-%d", time.Now().UnixNano())
+	probeBody := []byte("mypaas-backup-storage-check")
+	if _, err := client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(normalized.Bucket),
+		Key:    aws.String(probeKey),
+		Body:   bytes.NewReader(probeBody),
+	}); err != nil {
+		return fmt.Errorf("write probe: %w", err)
+	}
+
+	if _, err := client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(normalized.Bucket),
+		Key:    aws.String(probeKey),
+	}); err != nil {
+		return fmt.Errorf("remove probe: %w", err)
+	}
+
+	return nil
+}
+
+func newS3Client(ctx context.Context, candidate S3Config) (*s3.Client, S3Config, error) {
+	normalized := S3Config{
+		Endpoint:  strings.TrimRight(strings.TrimSpace(candidate.Endpoint), "/"),
+		Bucket:    strings.TrimSpace(candidate.Bucket),
+		Region:    strings.TrimSpace(candidate.Region),
+		AccessKey: strings.TrimSpace(candidate.AccessKey),
+		SecretKey: candidate.SecretKey,
+	}
+	if normalized.Region == "" {
+		normalized.Region = "auto"
+	}
+	if normalized.Endpoint == "" || normalized.Bucket == "" || normalized.AccessKey == "" || strings.TrimSpace(normalized.SecretKey) == "" {
+		return nil, normalized, fmt.Errorf("endpoint, bucket, access key, and secret key are required")
+	}
+	parsedEndpoint, err := url.Parse(normalized.Endpoint)
+	if err != nil || parsedEndpoint.Host == "" || (parsedEndpoint.Scheme != "https" && parsedEndpoint.Scheme != "http") {
+		return nil, normalized, fmt.Errorf("endpoint must be a valid HTTP or HTTPS URL")
+	}
+
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{URL: normalized.Endpoint}, nil
+	})
+
+	awsConfig, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(normalized.Region),
+		config.WithEndpointResolverWithOptions(customResolver),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(normalized.AccessKey, normalized.SecretKey, "")),
+	)
+	if err != nil {
+		return nil, normalized, fmt.Errorf("load S3 config: %w", err)
+	}
+
+	client := s3.NewFromConfig(awsConfig, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
+	return client, normalized, nil
 }
 
 func applyRetention(dir, prefix string, keep int) error {
