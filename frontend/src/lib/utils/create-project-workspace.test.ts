@@ -30,7 +30,7 @@ describe('create project workspace contract', () => {
 		expect(newProjectLayout).toContain("[class~='dark:bg-gray-900']");
 		expect(newProjectLayout).toContain("[class~='dark:bg-gray-950']");
 		expect(newProjectLayout).toContain("[class~='dark:hover:bg-gray-900']");
-		expect(newProjectLayout).toContain('background-color: var(--app-surface) !important');
+		expect(newProjectLayout).toContain('background: var(--app-surface) !important');
 	});
 
 	it('keeps readiness and the create action visible as the long form scrolls', () => {
