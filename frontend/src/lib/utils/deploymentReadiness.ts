@@ -23,42 +23,36 @@ const steps: Array<{ key: DeploymentStepKey; label: string }> = [
 
 const activeStepDetails: Record<DeployStatus, DeploymentReadinessSummary> = {
   queued: {
-    title: "Waiting for a deploy slot",
-    detail: "The deployment worker will start when host capacity is available.",
+    title: "Waiting to deploy",
+    detail: "Queued until a deploy slot is free.",
   },
   cloning: {
-    title: "Reading the repository",
-    detail:
-      "MyPaaS is cloning the selected branch before it inspects the runtime.",
+    title: "Fetching source",
+    detail: "Cloning the selected branch.",
   },
   building: {
-    title: "Building the workload",
-    detail:
-      "The image or static release is being built from the selected source.",
+    title: "Building",
+    detail: "Creating the release.",
   },
   starting: {
-    title: "Waiting for service readiness",
-    detail:
-      "The runtime is starting and its main service must become healthy or respond.",
+    title: "Starting",
+    detail: "Waiting for the app to become ready.",
   },
   running: {
-    title: "Deployment is serving traffic",
-    detail:
-      "All deployment stages completed and the selected runtime is active.",
+    title: "Deployment live",
+    detail: "Your app is running.",
   },
   failed: {
     title: "Deployment failed",
-    detail:
-      "Review the error and the last output line to find the failing stage.",
+    detail: "Check the last output lines for the error.",
   },
   stopped: {
-    title: "Deployment is stopped",
-    detail:
-      "The last deployment completed, but the project runtime is not serving traffic.",
+    title: "Deployment stopped",
+    detail: "The app is not running.",
   },
   rolled_back: {
-    title: "Deployment was rolled back",
-    detail: "The deployment was replaced by an earlier successful release.",
+    title: "Rolled back",
+    detail: "An earlier release is active.",
   },
 };
 
@@ -83,9 +77,8 @@ export function deploymentReadinessSummary(
 ): DeploymentReadinessSummary {
   if (status === "running" && !active) {
     return {
-      title: "Deployment completed",
-      detail:
-        "This release finished successfully and is not the selected runtime.",
+      title: "Deployment complete",
+      detail: "This release is not active.",
     };
   }
   return activeStepDetails[status];
