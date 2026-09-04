@@ -16,10 +16,11 @@ describe('responsive data surfaces', () => {
 		expect(databaseSchemaPage).toContain('overflow-x-auto');
 	});
 
-	it('keeps storage compact and in the four-column desktop host resource grid', () => {
+	it('keeps storage readable and in the four-column desktop host resource grid', () => {
 		expect(storageMetric).toContain('data-storage-capacity');
 		expect(storageMetric).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))');
-		expect(storageMetric).toContain('h-3 overflow-hidden rounded-sm border');
+		expect(storageMetric).toContain('h-4 overflow-hidden rounded-sm border');
+		expect(storageMetric).toContain('h-9 w-9');
 		expect(storageMetric).not.toContain('Windows');
 	});
 });
