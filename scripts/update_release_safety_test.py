@@ -119,11 +119,29 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn("github.event.workflow_run.conclusion == 'success'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
         self.assertIn("github.event.workflow_run.head_branch == 'main'", workflow)
-        self.assertIn('RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}', workflow)
+        self.assertIn(
+            "RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}",
+            workflow,
+        )
         self.assertIn('rollback_tag=rollback-${RELEASE_SHA:0:12}', workflow)
         self.assertIn('ref: ${{ steps.release.outputs.sha }}', workflow)
         self.assertIn('${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.rollback_tag }}', workflow)
         self.assertIn('${{ env.REGISTRY }}/nabilrn/mypaas-dashboard:${{ steps.release.outputs.rollback_tag }}', workflow)
+
+    def test_publish_recovery_dispatch_is_main_only_and_forces_full_release(self):
+        workflow = self.text(".github/workflows/docker-publish.yml")
+        self.assertIn('workflow_dispatch:', workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", workflow)
+        self.assertIn('force_full:', workflow)
+        self.assertIn('default: true', workflow)
+        self.assertIn(
+            "FORCE_FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full || false }}",
+            workflow,
+        )
+        self.assertIn('if [[ "$FORCE_FULL" != "true" ]]', workflow)
+        self.assertIn("if: steps.scope.outputs.frontend_only != 'true'", workflow)
+        self.assertIn('group: docker-publish-main', workflow)
+        self.assertIn('cancel-in-progress: false', workflow)
 
     def test_post_update_verifier_checks_dashboard_identity_and_project_route(self):
         verify = self.text("scripts/verify-production.sh")
