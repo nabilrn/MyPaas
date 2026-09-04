@@ -42,5 +42,8 @@ describe('administration route spacing contract', () => {
 		expect(designContract).toContain('route heading: `px-5`');
 		expect(designContract).toContain('body/setting rows: `px-4`');
 		expect(designContract).toContain('Compact Administration content');
+		expect(designContract).toContain('Administration workspaces use the available main-content width');
+		expect(designContract).toContain('first-level structural strokes span the available workspace width');
+		expect(designContract).toContain('Full-width means the **workspace structure** uses the main canvas');
 	});
 });
