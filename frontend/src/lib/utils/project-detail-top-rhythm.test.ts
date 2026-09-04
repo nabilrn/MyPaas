@@ -21,11 +21,11 @@ describe('project detail top rhythm', () => {
 });
 
 describe('MyPaaS SVG brand contract', () => {
-	it('uses the optimized SVG icon and wordmark throughout the dashboard chrome', () => {
+	it('uses the optimized SVG icon, wordmark, and explicit white favicon throughout the dashboard chrome', () => {
 		expect(brandLogo).toContain("assets/brand/mypaas-icon.svg");
 		expect(brandLogo).toContain("assets/brand/mypaas-logo.svg");
 		expect(brandLogo).not.toContain('.png');
-		expect(rootLayout).toContain("assets/brand/mypaas-icon.svg");
+		expect(rootLayout).toContain("assets/brand/mypaas-favicon.svg");
 		expect(rootLayout).toContain('type="image/svg+xml"');
 		expect(rootLayout).not.toContain('.png');
 	});
