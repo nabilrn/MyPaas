@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Filter, Lock, Pencil, Plus, RefreshCw, RotateCcw, Save, Trash2, Unlock, X } from '@lucide/svelte';
+	import { Clock3, Filter, Lock, Pencil, Plus, RefreshCw, RotateCcw, Save, Trash2, Unlock, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -11,7 +11,15 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
-	import type { DBStudioRowPage, DBStudioSchema, DBStudioStatus, DBStudioTable } from '$types';
+	import {
+		activeDatabaseNowColumns,
+		buildTouchedValues,
+		columnDefaultValue,
+		columnHasDefault,
+		isTemporalColumn,
+		missingRequiredInsertColumns
+	} from '$lib/dbstudio/mutation';
+	import type { DBStudioColumn, DBStudioRowPage, DBStudioSchema, DBStudioStatus, DBStudioTable } from '$types';
 
 	type MutationMode = 'insert' | 'edit' | 'delete';
 
@@ -42,6 +50,8 @@
 	let mutationMode: MutationMode | null = null;
 	let selectedRow: Record<string, unknown> | null = null;
 	let draftValues: Record<string, string> = {};
+	let touchedValues: Record<string, boolean> = {};
+	let databaseNowValues: Record<string, boolean> = {};
 	let now = Date.now();
 	let lastPageIndex = 0;
 
@@ -64,6 +74,9 @@
 	$: selectedTableLabel = selectedSchema && selectedTable ? `${selectedSchema}.${selectedTable}` : 'No table selected';
 	$: activeFilterCount = Number(Boolean(appliedRowSearch)) + Object.values(appliedEnumFilters).filter(Boolean).length;
 	$: filterDirty = rowSearch.trim() !== appliedRowSearch || JSON.stringify(cleanEnumFilters(enumFilters)) !== JSON.stringify(appliedEnumFilters);
+	$: missingRequiredColumns = mutationMode === 'insert' ? missingRequiredInsertColumns(insertColumns, touchedValues, databaseNowValues) : [];
+	$: mutationHasChanges = Object.values(touchedValues).some(Boolean) || Object.values(databaseNowValues).some(Boolean);
+	$: canSaveMutation = mutationMode === 'delete' || (mutationMode === 'insert' ? missingRequiredColumns.length === 0 : mutationHasChanges);
 	$: if (pageIndex !== lastPageIndex) {
 		lastPageIndex = pageIndex;
 		void loadRows();
@@ -201,44 +214,80 @@
 		}
 	}
 
+	function resetMutationDraft() {
+		touchedValues = {};
+		databaseNowValues = {};
+	}
+
 	function openInsert() {
 		mutationMode = 'insert';
 		selectedRow = null;
-		draftValues = Object.fromEntries(insertColumns.map((column) => [column.name, '']));
+		draftValues = {};
+		resetMutationDraft();
 	}
 
 	function openEdit(row: Record<string, unknown>) {
 		mutationMode = 'edit';
 		selectedRow = row;
 		draftValues = Object.fromEntries(writableColumns.map((column) => [column.name, valueToInput(row[column.name])]));
+		resetMutationDraft();
 	}
 
 	function openDelete(row: Record<string, unknown>) {
 		mutationMode = 'delete';
 		selectedRow = row;
 		draftValues = {};
+		resetMutationDraft();
 	}
 
 	function closeMutation() {
 		mutationMode = null;
 		selectedRow = null;
 		draftValues = {};
+		resetMutationDraft();
+	}
+
+	function setMutationValue(name: string, value: string) {
+		draftValues = { ...draftValues, [name]: value };
+		touchedValues = { ...touchedValues, [name]: true };
+		databaseNowValues = { ...databaseNowValues, [name]: false };
+	}
+
+	function useDatabaseNow(name: string) {
+		databaseNowValues = { ...databaseNowValues, [name]: true };
+		touchedValues = { ...touchedValues, [name]: false };
+	}
+
+	function useDatabaseDefault(name: string) {
+		databaseNowValues = { ...databaseNowValues, [name]: false };
+		touchedValues = { ...touchedValues, [name]: false };
+	}
+
+	function defaultPlaceholder(column: DBStudioColumn) {
+		const value = columnDefaultValue(column);
+		return value ? `Database default · ${value}` : 'Database default';
 	}
 
 	async function submitMutation() {
 		if (!mutationMode || !selectedSchema || !selectedTable) return;
+		if (mutationMode === 'insert' && missingRequiredColumns.length > 0) {
+			toast.error(`Required: ${missingRequiredColumns.map((column) => column.name).join(', ')}`);
+			return;
+		}
+		if (mutationMode === 'edit' && !mutationHasChanges) return;
 		mutating = true;
 		const payload = {
 			schema: selectedSchema,
 			table: selectedTable,
-			values: draftValues,
+			values: buildTouchedValues(draftValues, touchedValues),
+			databaseNow: activeDatabaseNowColumns(databaseNowValues),
 			primaryKey: selectedRow ? primaryKeyPayload(selectedRow) : {}
 		};
 		try {
 			if (mutationMode === 'insert') await api.dbStudio.insert(projectId, payload);
 			if (mutationMode === 'edit') await api.dbStudio.update(projectId, payload);
 			if (mutationMode === 'delete') await api.dbStudio.delete(projectId, payload);
-			toast.success('Database row saved');
+			toast.success(mutationMode === 'delete' ? 'Database row deleted' : 'Database row saved');
 			closeMutation();
 			await loadRows();
 		} catch (err) {
@@ -442,12 +491,63 @@
 					<p class="text-sm leading-6 text-gray-600 dark:text-gray-300">Delete this row by primary key. This action runs immediately and cannot be undone by MyPaaS.</p>
 					<div class="code-surface mt-4 space-y-1">{#each primaryColumns as column}<p><span class="font-medium">{column.name}</span>: {formatCell(selectedRow?.[column.name])}</p>{/each}</div>
 				{:else}
-					<div class="grid gap-4 sm:grid-cols-2">{#each mutationMode === 'insert' ? insertColumns : writableColumns as column}<label class="block"><span class="field-label">{column.name} <span class="font-normal text-gray-400">({column.dataType})</span></span><input value={draftValues[column.name] ?? ''} class="field w-full font-mono" placeholder={column.nullable ? 'nullable' : ''} on:input={(event) => (draftValues = { ...draftValues, [column.name]: (event.currentTarget as HTMLInputElement).value })} /></label>{/each}</div>
+					{#if (mutationMode === 'insert' ? insertColumns : writableColumns).some(isTemporalColumn)}
+						<div class="mb-4 flex items-start gap-2 border-b border-[color:var(--workspace-divider)] pb-3 text-xs text-gray-500 dark:text-gray-400">
+							<Clock3 class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+							<span><strong class="font-medium text-gray-700 dark:text-gray-300">Database time</strong> is evaluated by {connection ? driverLabel(connection.driver) : 'the database'} using CURRENT_TIMESTAMP / CURRENT_DATE / CURRENT_TIME. MyPaaS does not convert it through the browser timezone.</span>
+						</div>
+					{/if}
+					<div class="grid gap-4 sm:grid-cols-2">
+						{#each mutationMode === 'insert' ? insertColumns : writableColumns as column}
+							<div class="min-w-0">
+								<label class="field-label" for={`db-value-${column.name}`}>
+									{column.name} <span class="font-normal text-gray-400">({column.dataType})</span>
+									{#if mutationMode === 'insert' && columnHasDefault(column)}<span class="ml-1 font-normal text-emerald-600 dark:text-emerald-400">default</span>{/if}
+								</label>
+								{#if databaseNowValues[column.name]}
+									<div class="field flex w-full items-center justify-between gap-3 font-mono text-sm">
+										<span class="inline-flex min-w-0 items-center gap-2"><Clock3 class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />Database time</span>
+										<button type="button" class="app-focus shrink-0 text-xs font-sans font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white" on:click={() => setMutationValue(column.name, draftValues[column.name] ?? '')}>Enter value</button>
+									</div>
+								{:else}
+									<input
+										id={`db-value-${column.name}`}
+										value={draftValues[column.name] ?? ''}
+										class="field w-full font-mono"
+										placeholder={mutationMode === 'insert' && columnHasDefault(column) && !touchedValues[column.name] ? defaultPlaceholder(column) : column.nullable ? 'nullable' : ''}
+										on:input={(event) => setMutationValue(column.name, (event.currentTarget as HTMLInputElement).value)}
+									/>
+								{/if}
+								<div class="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+									{#if isTemporalColumn(column) && !databaseNowValues[column.name]}
+										<button type="button" class="app-focus font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white" on:click={() => useDatabaseNow(column.name)}>Use database time</button>
+									{/if}
+									{#if mutationMode === 'insert' && columnHasDefault(column) && (touchedValues[column.name] || databaseNowValues[column.name])}
+										<button type="button" class="app-focus font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white" on:click={() => useDatabaseDefault(column.name)}>Use database default</button>
+									{/if}
+									{#if mutationMode === 'insert' && !column.nullable && !columnHasDefault(column) && !touchedValues[column.name] && !databaseNowValues[column.name]}
+										<span class="text-amber-700 dark:text-amber-300">Required</span>
+									{:else if mutationMode === 'insert' && columnHasDefault(column) && !touchedValues[column.name] && !databaseNowValues[column.name]}
+										<span class="truncate text-gray-400" title={columnDefaultValue(column) || 'Database default'}>Using database default</span>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
 				{/if}
 			</div>
-			<div class="flex justify-end gap-2 border-t border-gray-100 p-4 dark:border-neutral-800">
-				<ActionButton variant="ghost" on:click={closeMutation} disabled={mutating}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
-				<ActionButton variant={mutationMode === 'delete' ? 'danger' : 'primary'} on:click={() => void submitMutation()} loading={mutating} loadingLabel="Saving">{#if mutationMode === 'delete'}<Trash2 slot="icon" class="h-4 w-4" />{:else}<Save slot="icon" class="h-4 w-4" />{/if}{mutationMode === 'delete' ? 'Delete row' : 'Save row'}</ActionButton>
+			<div class="flex items-center justify-between gap-3 border-t border-gray-100 p-4 dark:border-neutral-800">
+				<div class="min-w-0 text-xs text-gray-500 dark:text-gray-400">
+					{#if mutationMode === 'insert' && missingRequiredColumns.length > 0}
+						Required: {missingRequiredColumns.map((column) => column.name).join(', ')}
+					{:else if mutationMode === 'edit' && !mutationHasChanges}
+						Change a field or choose database time before saving.
+					{/if}
+				</div>
+				<div class="flex shrink-0 gap-2">
+					<ActionButton variant="ghost" on:click={closeMutation} disabled={mutating}><X slot="icon" class="h-4 w-4" />Cancel</ActionButton>
+					<ActionButton variant={mutationMode === 'delete' ? 'danger' : 'primary'} on:click={() => void submitMutation()} disabled={!canSaveMutation} loading={mutating} loadingLabel="Saving">{#if mutationMode === 'delete'}<Trash2 slot="icon" class="h-4 w-4" />{:else}<Save slot="icon" class="h-4 w-4" />{/if}{mutationMode === 'delete' ? 'Delete row' : 'Save row'}</ActionButton>
+				</div>
 			</div>
 		</div>
 	</div>
