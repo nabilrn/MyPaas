@@ -1,0 +1,1 @@
+MCP workspace review scope: full-width Administration geometry, branded supported-client grid, access/bridge summary, capability strip, setup workflow, and confirmation before token regeneration.
