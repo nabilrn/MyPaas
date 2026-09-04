@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { Boxes, ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -222,6 +222,12 @@
 		if (project.deployMode === 'dockerfile') return 'Dockerfile';
 		if (project.deployMode === 'static') return 'Static';
 		return 'Container Image';
+	}
+
+	function runtimeIcon(project: Project) {
+		if (project.deployMode === 'compose') return Boxes;
+		if (project.deployMode === 'static') return FileText;
+		return Package;
 	}
 
 	function sourceIcon(host: RepositoryHost) {
@@ -553,9 +559,12 @@
 							{/if}
 						</td>
 						<td>
-							<div class="min-w-0">
-								<p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>
-								<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
+							<div class="flex min-w-0 items-start gap-2">
+								<svelte:component this={runtimeIcon(project)} class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+								<div class="min-w-0">
+									<p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>
+									<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
+								</div>
 							</div>
 						</td>
 						<td class="text-center"><ProjectDatabaseShortcut projectId={project.id} /></td>
@@ -662,7 +671,10 @@
 								{project.branch}
 							</span>
 						{/if}
-						<span>{runtimeLabel(project)}</span>
+						<span class="inline-flex items-center gap-1 whitespace-nowrap">
+							<svelte:component this={runtimeIcon(project)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+							{runtimeLabel(project)}
+						</span>
 						{#if project.deployMode === 'static' && project.activeDeploymentId}
 							<span>Published{latestDeployments[project.id]?.finishedAt ? ` ${formatDate(latestDeployments[project.id]?.finishedAt)}` : ''}</span>
 						{:else}
