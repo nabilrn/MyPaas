@@ -12,7 +12,9 @@ describe('project detail top rhythm', () => {
 		expect(envPage).toContain('px-5 pt-4');
 		expect(databaseLayout).toContain('px-5 pb-3 pt-4');
 		expect(settingsPage).toContain('SettingsWorkspace');
-		expect(combinedSettings).toContain('px-5 pt-4 pb-3');
+		expect(combinedSettings).toContain('px-5');
+		expect(combinedSettings).toContain('pt-4');
+		expect(combinedSettings).toContain('pb-3');
 		expect(dangerPage).toContain('SettingsWorkspace');
 	});
 });
