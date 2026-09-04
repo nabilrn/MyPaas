@@ -112,10 +112,16 @@ describe("administration navigation contract", () => {
     expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
     expect(adminSettingsPage).toContain("Update MyPaaS");
     expect(adminSettingsPage).toContain("MyPaaS may restart");
-    expect(adminSettingsPage).toContain("max-w-5xl");
+    expect(adminSettingsPage).toContain("admin-general-workspace w-full");
+    expect(adminSettingsPage).not.toContain("max-w-5xl");
     expect(adminSettingsPage).toContain("workspace-divider");
     expect(adminSettingsPage).not.toContain("rounded-lg border border-gray-200");
     expect(adminSettingsPage).toContain("compact-number-input");
+    expect(adminSettingsPage).toContain("ConfirmActionDialog");
+    expect(adminSettingsPage).toContain("requestProfileSave");
+    expect(adminSettingsPage).toContain("requestBuildTimeoutSave");
+    expect(adminSettingsPage).toContain("api.admin.updateSettings({");
+    expect(adminSettingsPage).toContain("Built-in profile floors cannot be lowered");
 
     expect(adminUsersPage).not.toContain('title="Owners"');
     expect(adminUsersPage).not.toContain('title="Add owner"');
