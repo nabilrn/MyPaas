@@ -373,13 +373,13 @@ func persistentSQLiteMountRoots(inspect sqliteRuntimeInspect) []string {
 func (c *sqliteRuntimeClient) call(ctx context.Context, request SQLiteHelperRequest) (SQLiteHelperResponse, error) {
 	if c.databasePath != "" {
 		request.DatabasePath = c.databasePath
-		if c.runtimeUser == "" {
-			user, err := sqliteRuntimeUser(ctx, c.container)
-			if err != nil {
-				return SQLiteHelperResponse{}, err
-			}
-			c.runtimeUser = user
+	}
+	if c.runtimeUser == "" {
+		user, err := sqliteRuntimeUser(ctx, c.container)
+		if err != nil {
+			return SQLiteHelperResponse{}, err
 		}
+		c.runtimeUser = user
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
