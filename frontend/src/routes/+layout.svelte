@@ -15,7 +15,7 @@
 	import { registerWebMCPTools } from '$lib/webmcp';
 	import { mainContentLoading } from '$stores/main-loading';
 	import type { User } from '$types';
-	import favicon from '../assets/brand/mypaas-icon.svg';
+	import favicon from '../assets/brand/mypaas-favicon.svg';
 
 	let user: User | null = null;
 	let checked = false;
