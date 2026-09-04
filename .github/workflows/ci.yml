@@ -14,8 +14,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect change scope
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_only: ${{ steps.scope.outputs.frontend_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify changed paths
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          PUSH_HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+            head_sha="$PR_HEAD_SHA"
+          else
+            base_sha="$PUSH_BASE_SHA"
+            head_sha="$PUSH_HEAD_SHA"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse "${head_sha}^")"
+          fi
+
+          mapfile -t changed_files < <(git diff --name-only "$base_sha" "$head_sha")
+          frontend_only=false
+          if (( ${#changed_files[@]} > 0 )); then
+            frontend_only=true
+            for path in "${changed_files[@]}"; do
+              if [[ "$path" != frontend/* ]]; then
+                frontend_only=false
+                break
+              fi
+            done
+          fi
+
+          printf 'Changed files:\n'
+          printf '  %s\n' "${changed_files[@]}"
+          echo "frontend_only=$frontend_only" >> "$GITHUB_OUTPUT"
+
   backend:
     name: Backend tests
+    needs: changes
+    if: needs.changes.outputs.frontend_only != 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,6 +84,7 @@ jobs:
 
   frontend:
     name: Frontend checks
+    needs: changes
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,6 +112,8 @@ jobs:
 
   scripts:
     name: Deployment checks
+    needs: changes
+    if: needs.changes.outputs.frontend_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,6 +128,8 @@ jobs:
 
   podman:
     name: Podman compatibility gate
+    needs: changes
+    if: needs.changes.outputs.frontend_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
