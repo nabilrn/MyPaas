@@ -24,12 +24,10 @@
 		<div class="min-w-0 flex-1">
 			<p class="metric-label">{label}</p>
 			{#if available}
-				<div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
-					<p class="metric-value text-xl font-semibold tracking-tight text-gray-950 dark:text-white sm:text-2xl">{value}</p>
-					<p class="metric-value text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{usedPercent.toFixed(0)}%</p>
-				</div>
+				<p class="metric-value mt-1 text-xl font-semibold tracking-tight text-gray-950 dark:text-white sm:text-2xl">{value}</p>
+				<p class="metric-value mt-3 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">{usedPercent.toFixed(0)}%</p>
 				<div
-					class="mt-4 h-2 overflow-hidden rounded-full bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-neutral-800 dark:ring-neutral-700"
+					class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-neutral-800 dark:ring-neutral-700"
 					role="progressbar"
 					aria-label={`${label} used`}
 					aria-valuemin="0"
@@ -41,7 +39,7 @@
 				<p class="mt-3 text-[13px] text-gray-500 dark:text-gray-400">{detail}</p>
 			{:else}
 				<p class="metric-value mt-1 text-xl font-semibold tracking-tight text-gray-950 dark:text-white">Unavailable</p>
-				<div class="mt-4 h-2 rounded-full bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-neutral-800 dark:ring-neutral-700"></div>
+				<div class="mt-3 h-2 rounded-full bg-gray-100 ring-1 ring-inset ring-gray-200 dark:bg-neutral-800 dark:ring-neutral-700"></div>
 				<p class="mt-3 text-[13px] text-gray-500 dark:text-gray-400">{detail}</p>
 			{/if}
 		</div>
