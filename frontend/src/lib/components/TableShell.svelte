@@ -13,7 +13,7 @@
 	// Retained as a compatibility prop for existing callers. TableShell no longer
 	// owns initial loading visuals; authenticated main content owns that state.
 	export let loadingRows = 3;
-	export let contentClass = 'overflow-x-auto';
+	export let contentClass = '';
 
 	const dispatch = createEventDispatcher<{ retry: void }>();
 </script>
@@ -44,7 +44,7 @@
 		<EmptyState title={emptyTitle} description={emptyDescription} compact />
 	{:else}
 		<slot name="notice" />
-		<div class={contentClass}>
+		<div class={`table-scroll-region min-w-0 ${contentClass}`.trim()}>
 			<slot />
 		</div>
 		<slot name="footer" />
@@ -52,6 +52,13 @@
 </section>
 
 <style>
+	.table-scroll-region {
+		overflow-x: auto !important;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+
 	:global(.table-toolbar [data-action-button]),
 	:global(.table-toolbar [data-action-link]) {
 		min-height: 2.25rem;
