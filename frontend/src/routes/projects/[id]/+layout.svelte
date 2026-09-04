@@ -18,6 +18,7 @@
 		setProjectStreamReconnect
 	} from '$stores/project-stream';
 	import { projectStreamTopics } from '$lib/utils/project-stream-topics';
+	import { projectURL } from '$lib/utils/urls';
 	import type { Deployment, MetricsSnapshot, Project, ProjectStatus } from '$types';
 
 	const terminalProjectStatuses = new Set<ProjectStatus>(['running', 'stopped', 'crashed', 'pending']);
@@ -36,8 +37,7 @@
 	$: setShellContext(project ? { projectId: project.id, projectName: project.name } : {});
 	$: desiredTopics = project ? projectStreamTopics($page.url.pathname, project.id, project.deployMode) : 'status';
 	$: desiredStreamKey = `${$page.params.id}:${desiredTopics}`;
-	$: projectBase = project ? `/projects/${project.id}` : '';
-	$: showOperationalHeader = Boolean(projectBase && ($page.url.pathname === projectBase || $page.url.pathname === `${projectBase}/deployments`));
+	$: effectivePublicURL = project ? projectURL(project.subdomain, $page.url.protocol, $page.url.hostname) : '';
 	$: if (mounted && project && desiredStreamKey !== activeStreamKey) connectProjectStream();
 
 	onMount(() => {
@@ -226,18 +226,17 @@
 			</aside>
 
 			<main class="min-w-0 px-3.5 py-3">
-				<div class={showOperationalHeader ? 'space-y-3' : ''}>
-					{#if showOperationalHeader}
-						<DeployControlPanel
-							{project}
-							{latestDeployment}
-							{pendingAction}
-							on:start={handleStart}
-							on:stop={handleStop}
-							on:restart={handleRestart}
-							on:deploy={handleDeploy}
-						/>
-					{/if}
+				<div class="space-y-3">
+					<DeployControlPanel
+						{project}
+						publicUrl={effectivePublicURL}
+						{latestDeployment}
+						{pendingAction}
+						on:start={handleStart}
+						on:stop={handleStop}
+						on:restart={handleRestart}
+						on:deploy={handleDeploy}
+					/>
 
 					<div class="project-detail-content min-w-0">
 						<slot />
