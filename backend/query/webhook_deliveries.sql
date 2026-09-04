@@ -24,3 +24,12 @@ FROM webhook_deliveries
 WHERE project_id = $1
 ORDER BY received_at DESC
 LIMIT 1;
+
+-- name: GetLatestVerifiedWebhookDelivery :one
+SELECT id, project_id, github_delivery_id, signature_valid, event_type,
+       branch, processed, deployment_id, received_at
+FROM webhook_deliveries
+WHERE project_id = $1
+  AND signature_valid = TRUE
+ORDER BY received_at DESC
+LIMIT 1;
