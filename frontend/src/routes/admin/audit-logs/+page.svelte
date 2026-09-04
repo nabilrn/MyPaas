@@ -24,6 +24,7 @@
 	$: pageRows = rows.slice(0, pageSize);
 	$: probeCount = pageRows.filter((row) => probeActions.has(row.action)).length;
 	$: visibleRows = showProbeEvents ? pageRows : pageRows.filter((row) => !probeActions.has(row.action));
+	$: showPagination = currentPage > 0 || hasNext;
 	$: if (mounted && currentPage !== loadedPage) void load();
 
 	onMount(() => {
@@ -94,47 +95,52 @@
 <svelte:head><title>Audit Logs · MyPaaS Admin</title></svelte:head>
 
 <div class="page-shell">
-	<TableShell {loading} loadingRows={3} {error} empty={rows.length === 0} emptyTitle="No audit logs yet." emptyDescription="Changes will appear here." on:retry={load}>
+	<TableShell
+		{loading}
+		loadingRows={3}
+		{error}
+		empty={rows.length === 0}
+		emptyTitle="No audit logs yet."
+		emptyDescription="Activity will appear here."
+		contentClass="overflow-hidden"
+		on:retry={load}
+	>
 		<svelte:fragment slot="actions">
-			{#if probeCount > 0}
-				<ActionButton variant="ghost" size="sm" on:click={() => (showProbeEvents = !showProbeEvents)}>{showProbeEvents ? 'Hide probes' : `Show probes (${probeCount})`}</ActionButton>
-			{/if}
+			{#if probeCount > 0}<ActionButton variant="ghost" size="sm" on:click={() => (showProbeEvents = !showProbeEvents)}>{showProbeEvents ? 'Hide probes' : `Show probes (${probeCount})`}</ActionButton>{/if}
 			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={copyLogs}><Copy slot="icon" class="h-4 w-4" />Copy</ActionButton>
 			<ActionButton variant="secondary" size="sm" disabled={visibleRows.length === 0} on:click={exportLogs}><Download slot="icon" class="h-4 w-4" />Export</ActionButton>
 			<ActionButton variant="secondary" size="sm" loading={loading} loadingLabel="Refreshing" on:click={load}><RefreshCw slot="icon" class="h-4 w-4" />Refresh</ActionButton>
 		</svelte:fragment>
 
+		<svelte:fragment slot="notice">
+			{#if probeCount > 0 && !showProbeEvents}
+				<div class="border-b border-[color:var(--workspace-divider)] px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{visibleRows.length} shown · {probeCount} routine probe{probeCount === 1 ? '' : 's'} hidden</div>
+			{/if}
+		</svelte:fragment>
+
 		<table class="data-table table-fixed min-w-[50rem]">
-			<colgroup>
-				<col class="w-[28%]" />
-				<col class="w-[34%]" />
-				<col class="w-[12%]" />
-				<col class="w-[20%]" />
-				<col class="w-[6%]" />
-			</colgroup>
-			<thead><tr><th>Action</th><th>Resource</th><th>Status</th><th>Time</th><th class="text-right"><span class="sr-only">Details</span></th></tr></thead>
+			<colgroup><col class="w-[29%]" /><col class="w-[33%]" /><col class="w-[11%]" /><col class="w-[21%]" /><col class="w-[6%]" /></colgroup>
+			<thead><tr><th>Action</th><th>Resource</th><th>Result</th><th>Time</th><th class="text-right"><span class="sr-only">Details</span></th></tr></thead>
 			<tbody>
 				{#if visibleRows.length === 0 && probeCount > 0 && !showProbeEvents}
-					<tr><td colspan="5" class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">{probeCount} routine detection event{probeCount === 1 ? '' : 's'} hidden on this page. Use <strong class="font-medium text-gray-700 dark:text-gray-300">Show probes</strong> to inspect them.</td></tr>
+					<tr class="h-[3.75rem]"><td colspan="5" class="text-center text-sm text-gray-500 dark:text-gray-400">Only routine probes are on this page.</td></tr>
 				{:else}
 					{#each visibleRows as row}
-						<tr class="align-top">
-							<td><p class="truncate font-mono text-sm font-medium text-gray-950 dark:text-white" title={row.action}>{row.action}</p></td>
-							<td>
-								<p class="truncate text-sm text-gray-700 dark:text-gray-300" title={row.resourceType ?? '—'}>{row.resourceType ?? '—'}</p>
-								{#if row.resourceId}<p class="mt-0.5 truncate font-mono text-xs text-gray-400 dark:text-gray-500" title={row.resourceId}>{row.resourceId}</p>{/if}
-							</td>
-							<td class="whitespace-nowrap"><span class={`inline-flex items-center gap-2 font-mono text-sm ${statusTextClass(row.metadata.status)}`}><span class={`status-dot ${statusDotClass(row.metadata.status)}`}></span>{String(row.metadata.status ?? '—')}</span></td>
-							<td class="whitespace-nowrap text-sm tabular-nums">{formatDateTime(row.createdAt)}</td>
+						<tr class="h-[3.75rem]">
+							<td><p class="truncate font-mono text-[13px] font-medium text-gray-950 dark:text-white" title={row.action}>{row.action}</p></td>
+							<td><div class="min-w-0"><p class="truncate text-[13px] text-gray-700 dark:text-gray-300" title={row.resourceType ?? '—'}>{row.resourceType ?? '—'}</p>{#if row.resourceId}<p class="mt-0.5 truncate font-mono text-xs text-gray-400 dark:text-gray-500" title={row.resourceId}>{row.resourceId}</p>{/if}</div></td>
+							<td class="whitespace-nowrap"><span class={`inline-flex items-center gap-2 font-mono text-[13px] ${statusTextClass(row.metadata.status)}`}><span class={`status-dot ${statusDotClass(row.metadata.status)}`}></span>{String(row.metadata.status ?? '—')}</span></td>
+							<td class="whitespace-nowrap text-[13px] tabular-nums text-gray-500 dark:text-gray-400">{formatDateTime(row.createdAt)}</td>
 							<td class="whitespace-nowrap text-right"><IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} audit log details`} variant="ghost" on:click={() => toggle(row.id)}>{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></td>
 						</tr>
 						{#if expanded.has(row.id)}
-							<tr><td colspan="5" class="!border-y !border-[color:var(--workspace-divider)] !p-4"><div class="grid gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]"><div class="space-y-3 text-sm text-gray-500 dark:text-gray-400"><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">IP address</p><p class="mt-1 font-mono text-xs">{row.ipAddress ?? 'unknown'}</p></div><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">User agent</p><p class="mt-1 line-clamp-4 break-words text-xs">{row.userAgent ?? 'unknown'}</p></div></div><pre class="console-surface max-h-80 overflow-auto p-3">{JSON.stringify(row.metadata, null, 2)}</pre></div></td></tr>
+							<tr><td colspan="5" class="!border-y !border-[color:var(--workspace-divider)] !p-0"><div class="grid gap-4 px-4 py-3 lg:grid-cols-[13rem_minmax(0,1fr)]"><div class="space-y-3 text-sm text-gray-500 dark:text-gray-400"><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">IP address</p><p class="mt-1 font-mono text-xs">{row.ipAddress ?? 'unknown'}</p></div><div><p class="text-xs font-medium text-gray-700 dark:text-gray-200">User agent</p><p class="mt-1 line-clamp-4 break-words text-xs">{row.userAgent ?? 'unknown'}</p></div></div><pre class="console-surface max-h-72 overflow-auto p-3">{JSON.stringify(row.metadata, null, 2)}</pre></div></td></tr>
 						{/if}
 					{/each}
 				{/if}
 			</tbody>
 		</table>
-		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={pageRows.length} {hasNext} {loading} label="Audit logs" /></svelte:fragment>
+
+		<svelte:fragment slot="footer">{#if showPagination}<Pagination bind:page={currentPage} {pageSize} totalShown={visibleRows.length} {hasNext} {loading} label="Audit logs" />{/if}</svelte:fragment>
 	</TableShell>
 </div>

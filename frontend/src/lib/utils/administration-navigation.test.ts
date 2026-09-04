@@ -56,24 +56,15 @@ describe("administration navigation contract", () => {
       "/admin/audit-logs",
     ]) {
       expect(isAdministrationPath(pathname)).toBe(true);
-      expect(
-        isAdministrationNavItemActive(administrationNavItems[0], pathname),
-      ).toBe(pathname === "/admin/settings");
+      expect(isAdministrationNavItemActive(administrationNavItems[0], pathname)).toBe(pathname === "/admin/settings");
     }
     expect(isAdministrationPath("/projects")).toBe(false);
     expect(isAdministrationPath("/administer")).toBe(false);
   });
 
   it("defines the shared secondary navigation groups and breadcrumbs", () => {
-    expect(administrationNavGroups.map((group) => group.label)).toEqual([
-      "Platform",
-      "Operations",
-      "Integrations",
-      "Activity",
-    ]);
-    expect(
-      administrationNavItems.map((item) => [item.label, item.href]),
-    ).toEqual([
+    expect(administrationNavGroups.map((group) => group.label)).toEqual(["Platform", "Operations", "Integrations", "Activity"]);
+    expect(administrationNavItems.map((item) => [item.label, item.href])).toEqual([
       ["General", "/admin/settings"],
       ["Users", "/admin/users"],
       ["Backup", "/admin/backup"],
@@ -82,9 +73,7 @@ describe("administration navigation contract", () => {
       ["Audit logs", "/admin/audit-logs"],
     ]);
     expect(administrationNavItemForPath("/admin/users").label).toBe("Users");
-    expect(administrationNavItemForPath("/admin/audit-logs/detail").label).toBe(
-      "Audit logs",
-    );
+    expect(administrationNavItemForPath("/admin/audit-logs/detail").label).toBe("Audit logs");
     expect(appHeader).toMatch(/root:\s*["']Administration["']/);
     expect(appHeader).toMatch(/rootHref:\s*["']\/admin\/settings["']/);
     expect(appHeader).toContain("administrationNavItemForPath");
@@ -109,29 +98,22 @@ describe("administration navigation contract", () => {
     expect(projectLogsPage).not.toContain("AdminSidebar");
   });
 
-  it("keeps administration page copy short", () => {
-    expect(administrationNavItemForPath("/admin/settings")).toMatchObject({
-      title: "General",
-      description: "Host and platform defaults.",
-    });
-    expect(administrationNavItemForPath("/admin/users").description).toBe(
-      "Manage owner access.",
-    );
-    expect(administrationNavItemForPath("/admin/mcp").title).toBe("MCP");
-    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe(
-      "Review control-plane changes.",
-    );
+  it("keeps administration page copy short and user-facing", () => {
+    expect(administrationNavItemForPath("/admin/settings")).toMatchObject({ title: "General", description: "Host and platform defaults." });
+    expect(administrationNavItemForPath("/admin/users").description).toBe("Manage owner access.");
+    expect(administrationNavItemForPath("/admin/mcp")).toMatchObject({ title: "MCP", description: "Connect an AI agent to MyPaaS." });
+    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe("Review activity and changes.");
   });
 
-  it("uses task-first administration content instead of nested panel narration", () => {
+  it("uses compact task-first administration content", () => {
     expect(adminSettingsPage).not.toContain("SectionPanel");
     expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
     expect(adminSettingsPage).toContain("Update MyPaaS");
-    expect(adminSettingsPage).toContain("may restart the control plane");
-    expect(adminSettingsPage).toContain("rounded-lg border border-gray-200");
-    expect(adminSettingsPage).toContain("divide-y divide-gray-200");
+    expect(adminSettingsPage).toContain("MyPaaS may restart");
+    expect(adminSettingsPage).toContain("max-w-5xl");
+    expect(adminSettingsPage).toContain("workspace-divider");
+    expect(adminSettingsPage).not.toContain("rounded-lg border border-gray-200");
     expect(adminSettingsPage).toContain("compact-number-input");
-    expect(adminSettingsPage).not.toContain("border-y border-gray-100");
 
     expect(adminUsersPage).not.toContain('title="Owners"');
     expect(adminUsersPage).not.toContain('title="Add owner"');
@@ -143,18 +125,22 @@ describe("administration navigation contract", () => {
     expect(adminBackupPage).toContain('role="dialog"');
 
     expect(adminMigrationPage).not.toContain("Migration safety");
-    expect(adminMigrationPage).toContain("What is included?");
+    expect(adminMigrationPage).not.toContain("What is included?");
     expect(adminMigrationPage).toContain("Prepare package");
-    expect(adminMigrationPage).toContain("Running container projects pause briefly");
+    expect(adminMigrationPage).toContain("Restore on the new server");
+    expect(adminMigrationPage).toContain("max-w-4xl");
 
     expect(adminMcpPage).not.toContain("MCP access");
     expect(adminMcpPage).not.toContain("readonly");
     expect(adminMcpPage).toContain("Reveal API token");
+    expect(adminMcpPage).toContain("Agent capabilities");
+    expect(adminMcpPage).toContain("Observability");
     expect(adminMcpPage).toContain("Agent setup");
 
     expect(adminAuditPage).not.toContain("System event log");
-    expect(adminAuditPage).not.toContain("!bg-gray-50/70");
     expect(adminAuditPage).toContain("Audit logs copied");
+    expect(adminAuditPage).toContain("routine probe");
+    expect(adminAuditPage).toContain("<th>Result</th>");
   });
 
   it("keeps administration dialogs keyboard reachable", () => {
@@ -171,27 +157,14 @@ describe("project secondary navigation contract", () => {
   it("keeps create project as one parent route with a local four-step sidebar", () => {
     expect(createProjectLayout).toContain("ProjectNewSidebar");
     expect(createProjectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
-    for (const label of ["Source", "Configuration", "Environment", "Review"]) {
-      expect(projectNewSidebar).toContain(`label: '${label}'`);
-    }
+    for (const label of ["Source", "Configuration", "Environment", "Review"]) expect(projectNewSidebar).toContain(`label: '${label}'`);
   });
 
   it("keeps one global secondary sidebar across project detail routes", () => {
     expect(projectLayout).toContain("ProjectDetailSidebar");
     expect(projectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
     expect(projectLayout).not.toContain("project-settings-shell");
-    for (const label of [
-      "Overview",
-      "Deployments",
-      "Logs",
-      "Environment",
-      "Database",
-      "General",
-      "Source",
-      "Resources",
-      "Webhook",
-      "Danger zone",
-    ]) {
+    for (const label of ["Overview", "Deployments", "Logs", "Environment", "Database", "General", "Source", "Resources", "Webhook", "Danger zone"]) {
       expect(projectDetailSidebar).toContain(`label: '${label}'`);
     }
     expect(projectDetailSidebar).toContain("`${base}/env`");
@@ -199,13 +172,7 @@ describe("project secondary navigation contract", () => {
   });
 
   it("splits settings into route-backed sections without a nested settings sidebar", () => {
-    for (const pageSource of [
-      projectSettingsPage,
-      projectSourceSettingsPage,
-      projectResourcesSettingsPage,
-      projectWebhookSettingsPage,
-      projectDangerSettingsPage,
-    ]) {
+    for (const pageSource of [projectSettingsPage, projectSourceSettingsPage, projectResourcesSettingsPage, projectWebhookSettingsPage, projectDangerSettingsPage]) {
       expect(pageSource).toContain("ProjectSettingsSection");
       expect(pageSource).not.toContain("ProjectSettingsNavItem");
     }

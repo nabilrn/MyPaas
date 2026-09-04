@@ -92,9 +92,10 @@ describe('project detail cleanup contract', () => {
 	});
 
 	it('removes low-value duplicate status chrome from deployments and logs', () => {
-		expect(deploymentsRoute).toContain('In-progress pipelines');
+		expect(deploymentsRoute).toContain('>In progress</p>');
 		expect(deploymentsRoute).not.toContain('Active pipeline');
 		expect(deploymentsRoute).toContain('{#if showPagination}');
+		expect(deploymentsRoute).toContain('scrollToLatest');
 		expect(logsRoute).toContain('{#if logs.length > 0}');
 		expect(logsRoute).toContain('No logs yet.');
 		expect(logsRoute).not.toContain('Showing {filteredLogs.length} of {logs.length} lines');

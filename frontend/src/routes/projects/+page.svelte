@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Boxes, ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
+	import { ExternalLink, FileText, FolderGit2, GitBranch, History, Package, Play, Plus, RefreshCw, Rocket, Search, Square, TriangleAlert, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -9,6 +9,7 @@
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectDatabaseShortcut from '$components/ProjectDatabaseShortcut.svelte';
 	import ProjectStatus from '$components/ProjectStatus.svelte';
+	import RuntimeModeIcon from '$components/RuntimeModeIcon.svelte';
 	import SectionPanel from '$components/SectionPanel.svelte';
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
@@ -54,9 +55,7 @@
 
 	$: normalizedSearch = searchQuery.trim().toLowerCase();
 	$: filteredProjects = normalizedSearch
-		? projects.filter((project) =>
-				[project.name, project.subdomain, project.repoUrl, project.imageRef ?? '', project.sourceType, project.branch, project.deployMode, project.mainService ?? '', project.status].join(' ').toLowerCase().includes(normalizedSearch)
-			)
+		? projects.filter((project) => [project.name, project.subdomain, project.repoUrl, project.imageRef ?? '', project.sourceType, project.branch, project.deployMode, project.mainService ?? '', project.status].join(' ').toLowerCase().includes(normalizedSearch))
 		: projects;
 	$: hostRamMb = hostStats ? hostStats.host_ram_bytes / (1024 * 1024) : 0;
 	$: ramAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_ram_mb, hostRamMb) : 0;
@@ -134,15 +133,10 @@
 		if (stats.memory && stats.memory.total_bytes > 0) {
 			const used = Math.max(0, stats.memory.total_bytes - stats.memory.available_bytes);
 			ramSeries = appendRollingSample(ramSeries, boundedPercent(used, stats.memory.total_bytes), telemetrySamples);
-		} else {
-			ramSeries = [];
-		}
+		} else ramSeries = [];
 
 		if (stats.cpu) {
-			const current: CPUCounterSample = {
-				totalTicks: stats.cpu.total_ticks,
-				idleTicks: stats.cpu.idle_ticks
-			};
+			const current: CPUCounterSample = { totalTicks: stats.cpu.total_ticks, idleTicks: stats.cpu.idle_ticks };
 			currentCPUUsage = deriveCPUUsage(cpuBaseline, current);
 			cpuBaseline = current;
 			if (currentCPUUsage !== null) cpuSeries = appendRollingSample(cpuSeries, currentCPUUsage, telemetrySamples);
@@ -155,17 +149,10 @@
 		if (stats.storage && stats.storage.total_bytes > 0) {
 			const used = Math.max(0, stats.storage.total_bytes - stats.storage.available_bytes);
 			storageSeries = appendRollingSample(storageSeries, boundedPercent(used, stats.storage.total_bytes), telemetrySamples);
-		} else {
-			storageSeries = [];
-		}
+		} else storageSeries = [];
 
 		if (stats.network) {
-			const current: NetworkCounterSample = {
-				interface: stats.network.interface,
-				rxBytes: stats.network.rx_bytes,
-				txBytes: stats.network.tx_bytes,
-				sampledAtMs
-			};
+			const current: NetworkCounterSample = { interface: stats.network.interface, rxBytes: stats.network.rx_bytes, txBytes: stats.network.tx_bytes, sampledAtMs };
 			currentNetworkRate = deriveNetworkRate(networkBaseline, current);
 			networkBaseline = current;
 			if (currentNetworkRate) networkSeries = appendRollingSample(networkSeries, currentNetworkRate.totalBytesPerSecond, telemetrySamples);
@@ -224,12 +211,6 @@
 		return 'Container Image';
 	}
 
-	function runtimeIcon(project: Project) {
-		if (project.deployMode === 'compose') return Boxes;
-		if (project.deployMode === 'static') return FileText;
-		return Package;
-	}
-
 	function sourceIcon(host: RepositoryHost) {
 		if (host === 'github') return GitHubMark;
 		if (host === 'registry') return Package;
@@ -240,7 +221,6 @@
 		if (projectActionId) return;
 		const action = inventoryActionFor(project).action;
 		if (action === 'view_logs' || action === 'view_deployment') return;
-
 		projectActionId = project.id;
 		projectActionType = action === 'start' ? 'start' : action === 'stop' ? 'stop' : 'deploy';
 		try {
@@ -301,221 +281,96 @@
 	async function loadLatestDeploymentsFor(rows: Project[]) {
 		const pending = rows.filter((project) => latestDeploymentKeys[project.id] !== deploymentKey(project) && !latestDeploymentLoadingIds.has(project.id));
 		if (pending.length === 0) return;
-
 		latestDeploymentLoadingIds = new Set([...latestDeploymentLoadingIds, ...pending.map((project) => project.id)]);
-		await Promise.all(
-			pending.map(async (project) => {
-				try {
-					const deploymentRows = await api.deployments.list(project.id, 0, 1);
-					latestDeployments = { ...latestDeployments, [project.id]: deploymentRows[0] ?? null };
-				} finally {
-					latestDeploymentKeys = { ...latestDeploymentKeys, [project.id]: deploymentKey(project) };
-					const next = new Set(latestDeploymentLoadingIds);
-					next.delete(project.id);
-					latestDeploymentLoadingIds = next;
-				}
-			})
-		);
+		await Promise.all(pending.map(async (project) => {
+			try {
+				const deploymentRows = await api.deployments.list(project.id, 0, 1);
+				latestDeployments = { ...latestDeployments, [project.id]: deploymentRows[0] ?? null };
+			} finally {
+				latestDeploymentKeys = { ...latestDeploymentKeys, [project.id]: deploymentKey(project) };
+				const next = new Set(latestDeploymentLoadingIds);
+				next.delete(project.id);
+				latestDeploymentLoadingIds = next;
+			}
+		}));
 	}
 
 	async function loadUptimesFor(rows: Project[]) {
 		const staticProjects = rows.filter((project) => project.deployMode === 'static');
 		if (staticProjects.length > 0) {
-			projectRuntimeEvidence = {
-				...projectRuntimeEvidence,
-				...Object.fromEntries(staticProjects.map((project) => [project.id, 'not_applicable' as RuntimeEvidence]))
-			};
+			projectRuntimeEvidence = { ...projectRuntimeEvidence, ...Object.fromEntries(staticProjects.map((project) => [project.id, 'not_applicable' as RuntimeEvidence])) };
 		}
 		const pending = rows.filter((project) => project.deployMode !== 'static' && !(project.id in projectUptimes) && !uptimeLoadingIds.has(project.id));
 		if (pending.length === 0) return;
-
 		const refreshToken = uptimeRefreshToken;
 		uptimeLoadingIds = new Set([...uptimeLoadingIds, ...pending.map((project) => project.id)]);
-		await Promise.all(
-			pending.map(async (project) => {
-				try {
-					const snapshot = await api.metrics.snapshot(project.id);
-					if (refreshToken !== uptimeRefreshToken) return;
-					const metrics = selectPrimaryProjectMetric(snapshot, project.mainService);
-					projectUptimes = { ...projectUptimes, [project.id]: metrics?.uptime ?? '-' };
-					projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: metrics ? 'available' : 'unavailable' };
-					if (metrics) {
-						projectCpu = { ...projectCpu, [project.id]: metrics.cpu };
-						projectMemory = { ...projectMemory, [project.id]: metrics.memoryMb };
-					}
-				} catch {
-					if (refreshToken !== uptimeRefreshToken) return;
-					projectUptimes = { ...projectUptimes, [project.id]: '-' };
-					projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: 'unavailable' };
-				} finally {
-					if (refreshToken !== uptimeRefreshToken) return;
-					const next = new Set(uptimeLoadingIds);
-					next.delete(project.id);
-					uptimeLoadingIds = next;
+		await Promise.all(pending.map(async (project) => {
+			try {
+				const snapshot = await api.metrics.snapshot(project.id);
+				if (refreshToken !== uptimeRefreshToken) return;
+				const metrics = selectPrimaryProjectMetric(snapshot, project.mainService);
+				projectUptimes = { ...projectUptimes, [project.id]: metrics?.uptime ?? '-' };
+				projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: metrics ? 'available' : 'unavailable' };
+				if (metrics) {
+					projectCpu = { ...projectCpu, [project.id]: metrics.cpu };
+					projectMemory = { ...projectMemory, [project.id]: metrics.memoryMb };
 				}
-			})
-		);
+			} catch {
+				if (refreshToken !== uptimeRefreshToken) return;
+				projectUptimes = { ...projectUptimes, [project.id]: '-' };
+				projectRuntimeEvidence = { ...projectRuntimeEvidence, [project.id]: 'unavailable' };
+			} finally {
+				if (refreshToken !== uptimeRefreshToken) return;
+				const next = new Set(uptimeLoadingIds);
+				next.delete(project.id);
+				uptimeLoadingIds = next;
+			}
+		}));
 	}
 </script>
 
-<svelte:head>
-	<title>Projects · MyPaas</title>
-</svelte:head>
+<svelte:head><title>Projects · MyPaas</title></svelte:head>
 
 <div class="page-shell">
 	{#if hostRamWarning || cpuAllocationWarning || storageWarning}
 		<div class="flex gap-3 border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
 			<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-			<div>
-				<p class="font-semibold">Host capacity needs attention</p>
-				<p class="mt-1">
-					{#if liveMemoryAvailable && hostMemoryUsagePercent >= 90}RAM usage is {hostMemoryUsagePercent.toFixed(0)}%.{:else if ramAllocationPercent >= 85}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}
-					{#if cpuAllocationWarning} CPU allocation is {cpuAllocationRawPercent.toFixed(0)}%.{/if}
-					{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if}
-					 Keep enough headroom for builds, runtime spikes, and platform services.
-				</p>
-			</div>
+			<div><p class="font-semibold">Host capacity needs attention</p><p class="mt-1">{#if liveMemoryAvailable && hostMemoryUsagePercent >= 90}RAM usage is {hostMemoryUsagePercent.toFixed(0)}%.{:else if ramAllocationPercent >= 85}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}{#if cpuAllocationWarning} CPU allocation is {cpuAllocationRawPercent.toFixed(0)}%.{/if}{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if} Keep enough headroom for builds, runtime spikes, and platform services.</p></div>
 		</div>
 	{/if}
 
 	<SectionPanel title="Host resources" description="CPU, memory, storage, and network." contentClass="p-0">
 		<svelte:fragment slot="actions">
-			<a
-				href="https://github.com/nabilrn/mypaas-statd"
-				target="_blank"
-				rel="noopener"
-				class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-gray-500 transition-colors hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
-				title="Open mypaas-statd repository"
-			>
-				<GitHubMark class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-				<span>Telemetry by <span class="font-medium">mypaas-statd</span></span>
-				<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+			<a href="https://github.com/nabilrn/mypaas-statd" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-gray-500 transition-colors hover:text-gray-950 dark:text-gray-400 dark:hover:text-white" title="Open mypaas-statd repository">
+				<GitHubMark class="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>Telemetry by <span class="font-medium">mypaas-statd</span></span><ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
 			</a>
 		</svelte:fragment>
-
 		{#if hostStats}
 			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-4">
-				<CapacityMetricChart
-					label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'}
-					value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`}
-					indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`}
-					detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'}
-					series={hostStats.memory ? ramSeries : []}
-					resource="memory"
-					className="bg-white dark:bg-neutral-900"
-				/>
-				<CapacityMetricChart
-					label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'}
-					value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`}
-					indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''}
-					detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'}
-					series={hostStats.cpu ? cpuSeries : []}
-					resource="cpu"
-					className="bg-white dark:bg-neutral-900"
-				/>
-				<CapacityMetricChart
-					label="Storage"
-					value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'}
-					indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''}
-					detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'}
-					series={storageSeries}
-					resource="storage"
-					className="bg-white dark:bg-neutral-900"
-				/>
-				<CapacityMetricChart
-					label="Network"
-					value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'}
-					indicator={hostStats.network?.interface ?? ''}
-					detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'}
-					series={networkSeries}
-					resource="network"
-					maxValue={null}
-					rangeLabel="auto scale"
-					className="bg-white dark:bg-neutral-900"
-				/>
+				<CapacityMetricChart label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'} value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`} indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`} detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'} series={hostStats.memory ? ramSeries : []} resource="memory" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'} value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`} indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''} detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'} series={hostStats.cpu ? cpuSeries : []} resource="cpu" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="Storage" value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'} indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''} detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'} series={storageSeries} resource="storage" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="Network" value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'} indicator={hostStats.network?.interface ?? ''} detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'} series={networkSeries} resource="network" maxValue={null} rangeLabel="auto scale" className="bg-white dark:bg-neutral-900" />
 			</div>
-		{:else if hostStatsLoaded}
-			<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>
-		{/if}
+		{:else if hostStatsLoaded}<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>{/if}
 	</SectionPanel>
 
-	<TableShell
-		title="Inventory"
-		description="Projects, runtime, database access, and lifecycle controls."
-		{loading}
-		loadingRows={3}
-		error={error && projects.length === 0 ? error : ''}
-		empty={filteredProjects.length === 0}
-		emptyTitle={normalizedSearch ? 'No projects match this search' : 'No projects yet'}
-		emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaaS will prepare the runtime.'}
-		contentClass="overflow-hidden"
-		on:retry={() => refreshDashboardData()}
-	>
+	<TableShell title="Inventory" description="Projects, runtime, database access, and lifecycle controls." {loading} loadingRows={3} error={error && projects.length === 0 ? error : ''} empty={filteredProjects.length === 0} emptyTitle={normalizedSearch ? 'No projects match this search' : 'No projects yet'} emptyDescription={normalizedSearch ? 'Try a project name, subdomain, branch, deploy mode, or status.' : 'Connect a Git repository or public container image and MyPaaS will prepare the runtime.'} contentClass="overflow-hidden" on:retry={() => refreshDashboardData()}>
 		<svelte:fragment slot="actions">
 			<div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
 				<label class="relative block w-full sm:w-72">
-					<span class="sr-only">Search projects</span>
-					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<input
-						type="text"
-						inputmode="search"
-						value={searchQuery}
-						on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)}
-						placeholder="Search projects"
-						class="field h-9 w-full !pl-9"
-					/>
-					{#if searchQuery}
-						<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search">
-							<X class="h-4 w-4" aria-hidden="true" />
-						</button>
-					{/if}
+					<span class="sr-only">Search projects</span><Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+					<input type="text" inputmode="search" value={searchQuery} on:input={(event) => handleSearch((event.currentTarget as HTMLInputElement).value)} placeholder="Search projects" class="field h-9 w-full !pl-9" />
+					{#if searchQuery}<button type="button" on:click={() => handleSearch('')} class="app-focus absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-500 dark:hover:bg-neutral-800 dark:hover:text-gray-200" aria-label="Clear search" title="Clear search"><X class="h-4 w-4" aria-hidden="true" /></button>{/if}
 				</label>
-				<ActionLink href="/projects/new" variant="primary" size="xs" className="shrink-0">
-					<Plus slot="icon" class="h-3.5 w-3.5" aria-hidden="true" />
-					New project
-				</ActionLink>
+				<ActionLink href="/projects/new" variant="primary" size="xs" className="shrink-0"><Plus slot="icon" class="h-3.5 w-3.5" aria-hidden="true" />New project</ActionLink>
 			</div>
 		</svelte:fragment>
-
-		<svelte:fragment slot="notice">
-			{#if error}
-				<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-					<span class="min-w-0 flex-1">{error}</span>
-					<ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying">
-						<RefreshCw slot="icon" class="h-3.5 w-3.5" />
-						Retry
-					</ActionButton>
-				</div>
-			{/if}
-		</svelte:fragment>
+		<svelte:fragment slot="notice">{#if error}<div role="alert" class="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200"><span class="min-w-0 flex-1">{error}</span><ActionButton variant="ghost" size="xs" on:click={() => refreshDashboardData()} {loading} loadingLabel="Retrying"><RefreshCw slot="icon" class="h-3.5 w-3.5" />Retry</ActionButton></div>{/if}</svelte:fragment>
 
 		<table class="data-table hidden table-fixed xl:table">
-			<colgroup>
-				<col class="w-[16%]" />
-				<col class="w-[7%]" />
-				<col class="w-[18%]" />
-				<col class="w-[7%]" />
-				<col class="w-[10%]" />
-				<col class="w-[10%]" />
-				<col class="w-[9%]" />
-				<col class="w-[7%]" />
-				<col class="w-[6%]" />
-				<col class="w-[10%]" />
-			</colgroup>
-			<thead>
-				<tr>
-					<th>Project</th>
-					<th>Status</th>
-					<th>Repository</th>
-					<th>Branch</th>
-					<th>Runtime</th>
-					<th>Database</th>
-					<th>Usage</th>
-					<th>Uptime / release</th>
-					<th>Updated</th>
-					<th>Next action</th>
-				</tr>
-			</thead>
+			<colgroup><col class="w-[16%]" /><col class="w-[7%]" /><col class="w-[18%]" /><col class="w-[7%]" /><col class="w-[10%]" /><col class="w-[10%]" /><col class="w-[9%]" /><col class="w-[7%]" /><col class="w-[6%]" /><col class="w-[10%]" /></colgroup>
+			<thead><tr><th>Project</th><th>Status</th><th>Repository</th><th>Branch</th><th>Runtime</th><th>Database</th><th>Usage</th><th>Limits</th><th>Updated</th><th>Next action</th></tr></thead>
 			<tbody>
 				{#each visibleProjects as project}
 					{@const source = describeProjectSource(project)}
@@ -523,92 +378,19 @@
 					{@const inventoryAction = inventoryActionFor(project)}
 					{@const primaryHref = projectPrimaryHref(project)}
 					<tr class="h-[3.75rem]">
-						<td>
-							<div class="min-w-0">
-								<a href="/projects/{project.id}" class="flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
-									<span class="truncate">{project.name}</span>
-								</a>
-								<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 flex w-fit max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
-									<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
-									<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
-								</a>
-							</div>
-						</td>
+						<td><div class="min-w-0"><a href="/projects/{project.id}" class="flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white"><span class="truncate">{project.name}</span></a><a href={appUrl(project)} target="_blank" rel="noopener" class="mt-0.5 flex w-fit max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white"><span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span><ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" /></a></div></td>
 						<td class="whitespace-nowrap text-center"><ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} /></td>
 						<td>
-							{#if source.href}
-								<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white">
-									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span>
-								</a>
-							{:else}
-								<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-									<svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span>
-								</span>
-							{/if}
+							{#if source.href}<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 hover:text-gray-950 hover:underline dark:text-gray-300 dark:hover:text-white"><svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span></a>{:else}<span title={source.label} class="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300"><svelte:component this={sourceIcon(source.host)} class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="max-w-[28ch] truncate">{compactRepositoryLabel(source.label, 28)}</span></span>{/if}
 						</td>
-						<td class="whitespace-nowrap text-center">
-							{#if project.sourceType === 'git' && project.branch}
-								<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}>
-									<GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-									<span class="truncate">{project.branch}</span>
-								</span>
-							{:else}
-								<span class="text-sm text-gray-400 dark:text-gray-500">—</span>
-							{/if}
-						</td>
-						<td>
-							<div class="flex min-w-0 items-start gap-2">
-								<svelte:component this={runtimeIcon(project)} class="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								<div class="min-w-0">
-									<p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>
-									<p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{project.mainService ? `${project.mainService} · ` : ''}{project.memoryLimitMb} MB</p>
-								</div>
-							</div>
-						</td>
+						<td class="whitespace-nowrap text-center">{#if project.sourceType === 'git' && project.branch}<span class="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={project.branch}><GitBranch class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{project.branch}</span></span>{:else}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{/if}</td>
+						<td><div class="flex min-w-0 items-start gap-2"><RuntimeModeIcon mode={project.deployMode} className="mt-0.5 h-4 w-4 text-gray-400 dark:text-gray-500" /><div class="min-w-0"><p class="truncate text-sm text-gray-800 dark:text-gray-200">{runtimeLabel(project)}</p>{#if project.mainService}<p class="mt-0.5 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{project.mainService}</p>{/if}</div></div></td>
 						<td class="text-center"><ProjectDatabaseShortcut projectId={project.id} /></td>
-						<td class="metric-value whitespace-nowrap text-right">
-							{#if project.id in projectMemory}
-								<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%</span>
-							{:else if uptimeLoadingIds.has(project.id)}
-								<span class="text-sm text-gray-400 dark:text-gray-500" aria-label="Loading metrics">…</span>
-							{:else}
-								<span class="text-sm text-gray-400 dark:text-gray-500">-</span>
-							{/if}
-						</td>
-						<td class="metric-value whitespace-nowrap text-right text-sm text-gray-800 dark:text-gray-200">
-							{#if project.deployMode === 'static'}
-								{#if project.activeDeploymentId}
-									Published{latestDeployments[project.id]?.finishedAt ? ` ${formatDate(latestDeployments[project.id]?.finishedAt)}` : ''}
-								{:else}
-									—
-								{/if}
-							{:else}
-								{projectUptimes[project.id] ?? (uptimeLoadingIds.has(project.id) ? '…' : '-')}
-							{/if}
-						</td>
+						<td class="metric-value whitespace-nowrap text-right">{#if project.id in projectMemory}<span class="text-sm text-gray-800 dark:text-gray-200">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{:else if uptimeLoadingIds.has(project.id)}<span class="text-sm text-gray-400 dark:text-gray-500" aria-label="Loading metrics">…</span>{:else}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{/if}</td>
+						<td class="metric-value whitespace-nowrap text-right">{#if project.deployMode === 'static'}<span class="text-sm text-gray-400 dark:text-gray-500">—</span>{:else}<div class="text-[13px] text-gray-700 dark:text-gray-300"><p>{project.memoryLimitMb} MB</p><p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{project.cpuLimit} CPU</p></div>{/if}</td>
 						<td class="whitespace-nowrap text-center text-[13px] text-gray-500 dark:text-gray-400">{formatDate(project.updatedAt)}</td>
 						<td class="whitespace-nowrap text-center">
-							{#if primaryHref}
-								<ActionLink href={primaryHref} variant="secondary" size="xs" className="mx-auto min-w-[5.75rem]">
-									<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-									{projectPrimaryLabel(project)}
-								</ActionLink>
-							{:else}
-								<ActionButton
-									variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'}
-									size="xs"
-									className="mx-auto min-w-[5.75rem]"
-									on:click={() => handlePrimaryProjectAction(project)}
-									loading={projectActionId === project.id}
-									loadingLabel={projectPrimaryLabel(project)}
-									disabled={projectActionId !== '' && projectActionId !== project.id}
-								>
-									<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-									{projectPrimaryLabel(project)}
-								</ActionButton>
-							{/if}
+							{#if primaryHref}<ActionLink href={primaryHref} variant="secondary" size="xs" className="mx-auto min-w-[5.75rem]"><svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionLink>{:else}<ActionButton variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'} size="xs" className="mx-auto min-w-[5.75rem]" on:click={() => handlePrimaryProjectAction(project)} loading={projectActionId === project.id} loadingLabel={projectPrimaryLabel(project)} disabled={projectActionId !== '' && projectActionId !== project.id}><svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionButton>{/if}
 						</td>
 					</tr>
 				{/each}
@@ -623,75 +405,21 @@
 				{@const primaryHref = projectPrimaryHref(project)}
 				<div class="px-4 py-3">
 					<div class="flex items-center justify-between gap-3">
-						<div class="min-w-0">
-							<a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white">
-								<span class="truncate">{project.name}</span>
-							</a>
-							<div class="mt-1"><ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} /></div>
-						</div>
-						{#if primaryHref}
-							<ActionLink href={primaryHref} variant="secondary" size="xs" className="min-w-[5.75rem]">
-								<svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-								{projectPrimaryLabel(project)}
-							</ActionLink>
-						{:else}
-							<ActionButton
-								variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'}
-								size="xs"
-								className="min-w-[5.75rem]"
-								on:click={() => handlePrimaryProjectAction(project)}
-								loading={projectActionId === project.id}
-								loadingLabel={projectPrimaryLabel(project)}
-								disabled={projectActionId !== '' && projectActionId !== project.id}
-							>
-								<svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-								{projectPrimaryLabel(project)}
-							</ActionButton>
-						{/if}
+						<div class="min-w-0"><a href="/projects/{project.id}" class="inline-flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-gray-950 hover:underline dark:text-white"><span class="truncate">{project.name}</span></a><div class="mt-1"><ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} /></div></div>
+						{#if primaryHref}<ActionLink href={primaryHref} variant="secondary" size="xs" className="min-w-[5.75rem]"><svelte:component this={projectPrimaryIcon(project)} slot="icon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionLink>{:else}<ActionButton variant={inventoryAction.action === 'stop' ? 'secondary' : 'primary'} size="xs" className="min-w-[5.75rem]" on:click={() => handlePrimaryProjectAction(project)} loading={projectActionId === project.id} loadingLabel={projectPrimaryLabel(project)} disabled={projectActionId !== '' && projectActionId !== project.id}><svelte:component this={projectPrimaryIcon(project)} class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{projectPrimaryLabel(project)}</ActionButton>{/if}
 					</div>
-					<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white">
-						<span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span>
-						<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
-					</a>
+					<a href={appUrl(project)} target="_blank" rel="noopener" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-gray-500 hover:text-gray-950 hover:underline dark:text-gray-400 dark:hover:text-white"><span class="truncate">{appUrl(project).replace(/^https?:\/\//, '')}</span><ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" /></a>
 					<div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-						{#if source.href}
-							<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white">
-								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								<span class="truncate">{compactRepositoryLabel(source.label, 36)}</span>
-							</a>
-						{:else}
-							<span class="inline-flex min-w-0 items-center gap-1 truncate" title={source.label}>
-								<svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								<span class="truncate">{compactRepositoryLabel(source.label, 36)}</span>
-							</span>
-						{/if}
-						{#if project.sourceType === 'git' && project.branch}
-							<span class="inline-flex items-center gap-1 whitespace-nowrap font-mono">
-								<GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-								{project.branch}
-							</span>
-						{/if}
-						<span class="inline-flex items-center gap-1 whitespace-nowrap">
-							<svelte:component this={runtimeIcon(project)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-							{runtimeLabel(project)}
-						</span>
-						{#if project.deployMode === 'static' && project.activeDeploymentId}
-							<span>Published{latestDeployments[project.id]?.finishedAt ? ` ${formatDate(latestDeployments[project.id]?.finishedAt)}` : ''}</span>
-						{:else}
-							<span class="metric-value whitespace-nowrap">
-								{#if project.id in projectMemory}
-									{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}%
-								{:else}
-									—
-								{/if}
-							</span>
-						{/if}
+						{#if source.href}<a href={source.href} target="_blank" rel="noopener" title={source.label} class="inline-flex min-w-0 items-center gap-1 truncate hover:text-gray-950 hover:underline dark:hover:text-white"><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></a>{:else}<span class="inline-flex min-w-0 items-center gap-1 truncate" title={source.label}><svelte:component this={sourceIcon(source.host)} class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" /><span class="truncate">{compactRepositoryLabel(source.label, 36)}</span></span>{/if}
+						{#if project.sourceType === 'git' && project.branch}<span class="inline-flex items-center gap-1 whitespace-nowrap font-mono"><GitBranch class="h-3 w-3 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />{project.branch}</span>{/if}
+						<span class="inline-flex items-center gap-1 whitespace-nowrap"><RuntimeModeIcon mode={project.deployMode} className="h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />{runtimeLabel(project)}</span>
+						{#if project.deployMode !== 'static'}<span class="metric-value whitespace-nowrap">{project.memoryLimitMb} MB · {project.cpuLimit} CPU</span>{/if}
+						{#if project.id in projectMemory}<span class="metric-value whitespace-nowrap">{projectMemory[project.id].toFixed(0)} MB · {projectCpu[project.id].toFixed(1)}% CPU</span>{/if}
+						<span>Updated {formatDate(project.updatedAt)}</span>
 					</div>
 				</div>
 			{/each}
 		</div>
-		<svelte:fragment slot="footer">
-			<Pagination bind:page={currentPage} {pageSize} totalShown={visibleProjects.length} {hasNext} {loading} label="Projects" />
-		</svelte:fragment>
+		<svelte:fragment slot="footer"><Pagination bind:page={currentPage} {pageSize} totalShown={visibleProjects.length} {hasNext} {loading} label="Projects" /></svelte:fragment>
 	</TableShell>
 </div>

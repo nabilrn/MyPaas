@@ -87,7 +87,25 @@
 		}
 	}
 
-	function healthClass(health: string) {
+	function healthLabel(health: string) {
+		switch (health) {
+			case 'healthy': return 'Healthy';
+			case 'unhealthy': return 'Unhealthy';
+			case 'starting': return 'Starting';
+			default: return 'No check';
+		}
+	}
+
+	function healthDot(health: string) {
+		switch (health) {
+			case 'healthy': return 'bg-emerald-500';
+			case 'unhealthy': return 'bg-red-500';
+			case 'starting': return 'bg-amber-500';
+			default: return 'bg-gray-300 dark:bg-neutral-700';
+		}
+	}
+
+	function healthTextClass(health: string) {
 		switch (health) {
 			case 'healthy': return 'text-emerald-700 dark:text-emerald-300';
 			case 'unhealthy': return 'text-red-700 dark:text-red-300';
@@ -126,117 +144,56 @@
 		empty={filteredRows.length === 0}
 		emptyTitle={rows.length === 0 ? 'No containers found.' : 'No containers match the current filters.'}
 		emptyDescription={rows.length === 0 ? 'The Docker-compatible runtime currently reports no containers.' : 'Clear search or filters to see the host inventory.'}
+		contentClass="overflow-hidden"
 		on:retry={() => load()}
 	>
 		<svelte:fragment slot="actions">
 			<div class="grid w-full gap-2 md:grid-cols-2 xl:grid-cols-[minmax(18rem,1fr)_10rem_13rem_7rem]">
 				<div class="relative min-w-0">
 					<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" aria-hidden="true" />
-					<input
-						id="container-search"
-						class="field w-full !pl-9 font-mono"
-						placeholder="Search container, image, project, port…"
-						aria-label="Search containers"
-						bind:value={query}
-						on:input={resetPage}
-					/>
+					<input id="container-search" class="field w-full !pl-9 font-mono" placeholder="Search container, image, project, port…" aria-label="Search containers" bind:value={query} on:input={resetPage} />
 				</div>
-
 				<select id="container-state" class="field w-full" aria-label="Filter containers by state" bind:value={stateFilter} on:change={resetPage}>
 					<option value="all">All states</option>
 					{#each stateOptions as state}<option value={state}>{state}</option>{/each}
 				</select>
-
 				<select id="container-runtime" class="field w-full font-mono" aria-label="Filter containers by runtime group" bind:value={runtimeFilter} on:change={resetPage}>
 					<option value="all">All runtime groups</option>
 					{#each runtimeOptions as runtime}<option value={runtime}>{runtime}</option>{/each}
 				</select>
-
 				<select id="container-page-size" class="field w-full" aria-label="Rows per page" bind:value={pageSize} on:change={resetPage}>
-					<option value={10}>10 rows</option>
-					<option value={20}>20 rows</option>
-					<option value={50}>50 rows</option>
-					<option value={100}>100 rows</option>
+					<option value={10}>10 rows</option><option value={20}>20 rows</option><option value={50}>50 rows</option><option value={100}>100 rows</option>
 				</select>
 			</div>
 		</svelte:fragment>
 
-		<table class="data-table table-fixed min-w-[76rem]">
+		<table class="data-table table-fixed min-w-[80rem]">
 			<colgroup>
-				<col class="w-[18%]" />
-				<col class="w-[17%]" />
-				<col class="w-[23%]" />
-				<col class="w-[12%]" />
-				<col class="w-[8%]" />
-				<col class="w-[12%]" />
-				<col class="w-[7%]" />
-				<col class="w-[3%]" />
+				<col class="w-[17%]" /><col class="w-[15%]" /><col class="w-[21%]" /><col class="w-[10%]" /><col class="w-[10%]" /><col class="w-[7%]" /><col class="w-[11%]" /><col class="w-[6%]" /><col class="w-[3%]" />
 			</colgroup>
 			<thead>
-				<tr>
-					<th>Container</th>
-					<th>Project / service</th>
-					<th>Image</th>
-					<th>State</th>
-					<th class="text-right">Restarts</th>
-					<th>Ports</th>
-					<th>Uptime</th>
-					<th class="text-right"><span class="sr-only">Details</span></th>
-				</tr>
+				<tr><th>Container</th><th>Project / service</th><th>Image</th><th>State</th><th>Health</th><th class="text-right">Restarts</th><th>Ports</th><th>Uptime</th><th class="text-right"><span class="sr-only">Details</span></th></tr>
 			</thead>
 			<tbody>
 				{#each visibleRows as row (row.id)}
-					<tr>
-						<td>
-							<div class="min-w-0">
-								<p class="truncate font-mono text-[13px] font-medium text-gray-950 dark:text-white" title={row.name}>{row.name}</p>
-								<p class="mt-0.5 truncate font-mono text-xs text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p>
-							</div>
-						</td>
+					<tr class="h-[3.75rem]">
+						<td><div class="min-w-0"><p class="truncate font-mono text-[13px] font-medium text-gray-950 dark:text-white" title={row.name}>{row.name}</p><p class="mt-0.5 truncate font-mono text-xs text-gray-400" title={row.id}>{row.id.slice(0, 12)}</p></div></td>
 						<td><p class="truncate font-mono text-[13px] text-gray-700 dark:text-gray-300" title={runtimeGroup(row)}>{runtimeGroup(row)}</p></td>
 						<td><p class="truncate font-mono text-[13px] text-gray-600 dark:text-gray-300" title={row.image}>{compactImage(row.image) || '—'}</p></td>
-						<td>
-							<div class="min-w-0">
-								<span class="inline-flex items-center gap-2 text-sm capitalize text-gray-700 dark:text-gray-300">
-									<span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}
-								</span>
-								{#if row.health}<p class={`mt-0.5 text-xs capitalize ${healthClass(row.health)}`}>{row.health}</p>{/if}
-							</div>
-						</td>
+						<td class="whitespace-nowrap"><span class="inline-flex items-center gap-2 text-[13px] capitalize text-gray-700 dark:text-gray-300"><span class={`status-dot ${stateDot(row.state)}`}></span>{row.state || 'unknown'}</span></td>
+						<td class="whitespace-nowrap"><span class={`inline-flex items-center gap-2 text-[13px] ${healthTextClass(row.health)}`}><span class={`status-dot ${healthDot(row.health)}`}></span>{healthLabel(row.health)}</span></td>
 						<td class="whitespace-nowrap text-right font-mono text-[13px] tabular-nums">{row.detailsAvailable ? row.restartCount : '—'}</td>
 						<td><p class="truncate font-mono text-xs text-gray-600 dark:text-gray-300" title={row.ports}>{row.ports || '—'}</p></td>
 						<td class="whitespace-nowrap text-[13px] text-gray-500 dark:text-gray-400" title={row.status}>{row.state === 'running' ? row.uptime || '—' : '—'}</td>
-						<td class="text-right">
-							<IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} ${row.name} details`} variant="ghost" on:click={() => toggleDetails(row.id)}>
-								{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
-							</IconButton>
-						</td>
+						<td class="text-right"><IconButton label={`${expanded.has(row.id) ? 'Hide' : 'Show'} ${row.name} details`} variant="ghost" on:click={() => toggleDetails(row.id)}>{#if expanded.has(row.id)}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}</IconButton></td>
 					</tr>
 					{#if expanded.has(row.id)}
 						<tr>
-							<td colspan="8" class="!p-0">
-								<div class="grid gap-5 border-t border-gray-100/70 px-4 py-4 dark:border-neutral-900 md:grid-cols-3 lg:px-5">
-									<div class="min-w-0">
-										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Identity</p>
-										<p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.id}</p>
-										<p class="mt-2 break-all font-mono text-xs text-gray-500 dark:text-gray-400">{row.image || '—'}</p>
-									</div>
-									<div class="min-w-0">
-										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Runtime</p>
-										<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{row.status || '—'}</p>
-										<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Restarts: {row.detailsAvailable ? row.restartCount : 'unavailable'}</p>
-									</div>
-									<div class="min-w-0">
-										<p class="text-xs font-medium text-gray-500 dark:text-gray-400">Network</p>
-										<p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.ports || 'No published ports'}</p>
-										{#if row.networks.length > 0}
-											<div class="mt-2 space-y-1">
-												{#each row.networks as network}
-													<p class="font-mono text-xs text-gray-500 dark:text-gray-400">{network.name}{network.ipAddress ? ` · ${network.ipAddress}` : ''}</p>
-												{/each}
-											</div>
-										{:else}<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Network details unavailable.</p>{/if}
-									</div>
+							<td colspan="9" class="!p-0">
+								<div class="grid gap-5 border-t border-[color:var(--workspace-divider)] px-4 py-3 md:grid-cols-3">
+									<div class="min-w-0"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Identity</p><p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.id}</p><p class="mt-2 break-all font-mono text-xs text-gray-500 dark:text-gray-400">{row.image || '—'}</p></div>
+									<div class="min-w-0"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Runtime</p><p class="mt-2 text-sm text-gray-700 dark:text-gray-300">{row.status || '—'}</p><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Restarts: {row.detailsAvailable ? row.restartCount : 'unavailable'}</p></div>
+									<div class="min-w-0"><p class="text-xs font-medium text-gray-500 dark:text-gray-400">Network</p><p class="mt-2 break-all font-mono text-xs text-gray-700 dark:text-gray-300">{row.ports || 'No published ports'}</p>{#if row.networks.length > 0}<div class="mt-2 space-y-1">{#each row.networks as network}<p class="font-mono text-xs text-gray-500 dark:text-gray-400">{network.name}{network.ipAddress ? ` · ${network.ipAddress}` : ''}</p>{/each}</div>{:else}<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Network details unavailable.</p>{/if}</div>
 								</div>
 							</td>
 						</tr>
@@ -246,9 +203,7 @@
 		</table>
 
 		<svelte:fragment slot="footer">
-			{#if filteredRows.length > 0}
-				<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={loading} label="Containers" />
-			{/if}
+			{#if filteredRows.length > pageSize}<Pagination bind:page={pageIndex} {pageSize} totalShown={visibleRows.length} {hasNext} loading={loading} label="Containers" />{/if}
 		</svelte:fragment>
 	</TableShell>
 </div>
