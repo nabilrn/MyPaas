@@ -8,9 +8,12 @@ import {
 
 describe("deployment readiness diagnostics", () => {
   it("shows the current stage and completed stages for an active pipeline", () => {
-    expect(
-      deploymentReadinessSteps("starting").map((step) => step.state),
-    ).toEqual(["complete", "complete", "complete", "active"]);
+    expect(deploymentReadinessSteps("starting").map((step) => step.state)).toEqual([
+      "complete",
+      "complete",
+      "complete",
+      "active",
+    ]);
   });
 
   it("marks every stage complete after a running deployment", () => {
@@ -21,23 +24,23 @@ describe("deployment readiness diagnostics", () => {
     ).toBe(true);
   });
 
-  it("uses readiness language for the long-running starting phase", () => {
+  it("uses short outcome-oriented copy", () => {
     expect(deploymentReadinessSummary("starting")).toEqual({
-      title: "Waiting for service readiness",
-      detail:
-        "The runtime is starting and its main service must become healthy or respond.",
+      title: "Starting",
+      detail: "Waiting for the app to become ready.",
+    });
+    expect(deploymentReadinessSummary("running")).toEqual({
+      title: "Deployment live",
+      detail: "Your app is running.",
     });
     expect(deploymentReadinessSummary("running", false)).toEqual({
-      title: "Deployment completed",
-      detail:
-        "This release finished successfully and is not the selected runtime.",
+      title: "Deployment complete",
+      detail: "This release is not active.",
     });
   });
 
   it("returns the last non-empty log line without terminal color codes", () => {
-    expect(
-      lastDeploymentLogLine("Starting\n\u001b[32mHealthy\u001b[0m\n"),
-    ).toBe("Healthy");
+    expect(lastDeploymentLogLine("Starting\n\u001b[32mHealthy\u001b[0m\n")).toBe("Healthy");
     expect(lastDeploymentLogLine(null)).toBe("");
   });
 });
