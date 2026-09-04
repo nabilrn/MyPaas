@@ -198,7 +198,18 @@
 			on:keydown={handleChartKeydown}
 		>
 			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
-				<g class="stroke-gray-100/30 dark:stroke-neutral-800/25" stroke-width="0.55">
+				<g class="stroke-gray-200/20 dark:stroke-neutral-700/20" stroke-width="1.15" opacity="0.45" style="filter: blur(1.1px);">
+					<line x1={chartWidth * 0.25} x2={chartWidth * 0.25} y1="0" y2={chartHeight} />
+					<line x1={chartWidth * 0.5} x2={chartWidth * 0.5} y1="0" y2={chartHeight} />
+					<line x1={chartWidth * 0.75} x2={chartWidth * 0.75} y1="0" y2={chartHeight} />
+					<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
+					<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
+					<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
+				</g>
+				<g class="stroke-gray-200/55 dark:stroke-neutral-700/45" stroke-width="0.6">
+					<line x1={chartWidth * 0.25} x2={chartWidth * 0.25} y1="0" y2={chartHeight} />
+					<line x1={chartWidth * 0.5} x2={chartWidth * 0.5} y1="0" y2={chartHeight} />
+					<line x1={chartWidth * 0.75} x2={chartWidth * 0.75} y1="0" y2={chartHeight} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
 					<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
