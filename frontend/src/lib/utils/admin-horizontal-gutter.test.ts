@@ -26,17 +26,21 @@ describe('administration route spacing contract', () => {
 			expect(route).not.toContain('class="px-5 pt-4"');
 		}
 		expect(adminSettings).toContain('px-4 py-3');
+		expect(adminSettings).toContain('max-w-5xl');
 		expect(adminBackup).toContain('border-y border-[color:var(--workspace-divider)]');
-		expect(adminMigration).toContain('border-y border-gray-100');
-		expect(adminMcp).toContain('divide-y divide-[color:var(--workspace-divider)]');
+		expect(adminMigration).toContain('border-[color:var(--workspace-divider)]');
+		expect(adminMigration).toContain('max-w-4xl');
+		expect(adminMcp).toContain('border-[color:var(--workspace-divider)]');
+		expect(adminMcp).toContain('max-w-5xl');
 		expect(adminUsers).toContain('TableShell');
 		expect(adminAudit).toContain('TableShell');
 	});
 
 	it('documents administration as part of the canonical gutter contract', () => {
-		expect(designContract).toContain('Canonical Administration horizontal gutter');
-		expect(designContract).toContain('parent admin `main`: **14px** horizontal (`px-3.5`)');
-		expect(designContract).toContain('Administration route heading: **20px** horizontal (`px-5`)');
-		expect(designContract).toContain('ordinary admin section rows/body content: **16px** horizontal (`px-4` or equivalent)');
+		expect(designContract).toContain('### Administration gutters');
+		expect(designContract).toContain('parent main: `px-3.5 py-3`');
+		expect(designContract).toContain('route heading: `px-5`');
+		expect(designContract).toContain('body/setting rows: `px-4`');
+		expect(designContract).toContain('Compact Administration content');
 	});
 });
