@@ -1,52 +1,31 @@
 <script lang="ts">
 	import { CheckSquare2, GitBranch, KeyRound, SlidersHorizontal } from '@lucide/svelte';
-	import { onMount } from 'svelte';
 	import ProjectSecondaryNavItem from './ProjectSecondaryNavItem.svelte';
+	import { createProjectWizard, setCreateProjectStep, type CreateProjectStep } from '$lib/stores/create-project-wizard';
 
-	type WizardSection = 'source' | 'configuration' | 'environment' | 'review';
-	let activeSection: WizardSection = 'source';
-
-	const items = [
-		{ id: 'source' as const, label: 'Source', icon: GitBranch },
-		{ id: 'configuration' as const, label: 'Configuration', icon: SlidersHorizontal },
-		{ id: 'environment' as const, label: 'Environment', icon: KeyRound },
-		{ id: 'review' as const, label: 'Review', icon: CheckSquare2 }
+	const items: Array<{ id: CreateProjectStep; label: string; icon: any }> = [
+		{ id: 'source', label: 'Source', icon: GitBranch },
+		{ id: 'configuration', label: 'Configuration', icon: SlidersHorizontal },
+		{ id: 'environment', label: 'Environment', icon: KeyRound },
+		{ id: 'review', label: 'Review', icon: CheckSquare2 }
 	];
 
-	onMount(() => {
-		const hash = window.location.hash.slice(1) as WizardSection;
-		if (items.some((item) => item.id === hash)) activeSection = hash;
-	});
-
-	function heading(text: string) {
-		return Array.from(document.querySelectorAll('form h2')).find((node) => node.textContent?.trim() === text)?.closest('section') ?? null;
+	function canOpen(step: CreateProjectStep) {
+		if (step === 'source') return true;
+		if (step === 'configuration') return $createProjectWizard.sourceComplete;
+		if (step === 'environment') return $createProjectWizard.sourceComplete && $createProjectWizard.configurationComplete;
+		return $createProjectWizard.sourceComplete
+			&& $createProjectWizard.configurationComplete
+			&& $createProjectWizard.environmentComplete;
 	}
 
-	function configurationTarget() {
-		return heading('Preparing project')
-			?? heading('Deployment setup')
-			?? Array.from(document.querySelectorAll('form summary')).find((node) => node.textContent?.includes('Advanced settings'))?.closest('section')
-			?? null;
-	}
-
-	function reviewTarget() {
-		return document.querySelector('form button[type="submit"]')?.closest('.border-t') ?? document.querySelector('form button[type="submit"]');
-	}
-
-	function targetFor(section: WizardSection) {
-		if (section === 'source') return heading('Source');
-		if (section === 'configuration') return configurationTarget();
-		if (section === 'environment') return heading('Environment');
-		return reviewTarget();
-	}
-
-	function navigate(event: MouseEvent, section: WizardSection) {
+	function navigate(event: MouseEvent, step: CreateProjectStep) {
 		event.preventDefault();
-		activeSection = section;
-		window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${section}`);
-		requestAnimationFrame(() => {
-			targetFor(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		});
+		if (!canOpen(step) || $createProjectWizard.busy) return;
+		setCreateProjectStep(step);
+		if (typeof window !== 'undefined') {
+			window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${step}`);
+		}
 	}
 </script>
 
@@ -54,7 +33,8 @@
 	<p class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Create project</p>
 	{#each items as item}
 		<ProjectSecondaryNavItem
-			active={activeSection === item.id}
+			active={$createProjectWizard.activeStep === item.id}
+			disabled={!canOpen(item.id) || $createProjectWizard.busy}
 			href={`#${item.id}`}
 			label={item.label}
 			icon={item.icon}
