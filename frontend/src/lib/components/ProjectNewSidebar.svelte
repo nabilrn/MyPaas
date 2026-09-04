@@ -1,40 +1,52 @@
 <script lang="ts">
 	import { CheckSquare2, GitBranch, KeyRound, SlidersHorizontal } from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import ProjectSecondaryNavItem from './ProjectSecondaryNavItem.svelte';
-	import { createProjectWizard, setCreateProjectStep, type CreateProjectStep } from '$lib/stores/create-project-wizard';
 
-	const items: Array<{ id: CreateProjectStep; label: string; icon: any }> = [
+	type SectionId = 'source' | 'environment' | 'advanced' | 'create';
+	let activeSection: SectionId = 'source';
+
+	const items: Array<{ id: SectionId; label: string; icon: any }> = [
 		{ id: 'source', label: 'Source', icon: GitBranch },
-		{ id: 'configuration', label: 'Configuration', icon: SlidersHorizontal },
 		{ id: 'environment', label: 'Environment', icon: KeyRound },
-		{ id: 'review', label: 'Review', icon: CheckSquare2 }
+		{ id: 'advanced', label: 'Advanced', icon: SlidersHorizontal },
+		{ id: 'create', label: 'Create', icon: CheckSquare2 }
 	];
 
-	function canOpen(step: CreateProjectStep) {
-		if (step === 'source') return true;
-		if (step === 'configuration') return $createProjectWizard.sourceComplete;
-		if (step === 'environment') return $createProjectWizard.sourceComplete && $createProjectWizard.configurationComplete;
-		return $createProjectWizard.sourceComplete
-			&& $createProjectWizard.configurationComplete
-			&& $createProjectWizard.environmentComplete;
+	function heading(text: string) {
+		return Array.from(document.querySelectorAll('form h2')).find((node) => node.textContent?.trim() === text)?.closest('section') ?? null;
 	}
 
-	function navigate(event: MouseEvent, step: CreateProjectStep) {
+	function targetFor(section: SectionId): Element | null {
+		if (section === 'source') return heading('Source');
+		if (section === 'environment') return heading('Environment');
+		if (section === 'advanced') {
+			return Array.from(document.querySelectorAll('form summary')).find((node) => node.textContent?.includes('Advanced settings'))?.closest('section') ?? null;
+		}
+		return document.querySelector('form button[type="submit"]')?.closest('form > div:last-child')
+			?? document.querySelector('form button[type="submit"]');
+	}
+
+	function navigate(event: MouseEvent, section: SectionId) {
 		event.preventDefault();
-		if (!canOpen(step) || $createProjectWizard.busy) return;
-		setCreateProjectStep(step);
+		activeSection = section;
 		if (typeof window !== 'undefined') {
-			window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${step}`);
+			window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${section}`);
+			requestAnimationFrame(() => targetFor(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 		}
 	}
+
+	onMount(() => {
+		const requested = window.location.hash.slice(1) as SectionId;
+		if (items.some((item) => item.id === requested)) activeSection = requested;
+	});
 </script>
 
-<nav aria-label="Create project steps" class="space-y-1 lg:sticky lg:top-4">
-	<p class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">Create project</p>
+<nav aria-label="New project sections" class="space-y-1 lg:sticky lg:top-4">
+	<p class="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 dark:text-gray-500">New project</p>
 	{#each items as item}
 		<ProjectSecondaryNavItem
-			active={$createProjectWizard.activeStep === item.id}
-			disabled={!canOpen(item.id) || $createProjectWizard.busy}
+			active={activeSection === item.id}
 			href={`#${item.id}`}
 			label={item.label}
 			icon={item.icon}
