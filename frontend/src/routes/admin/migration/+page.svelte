@@ -120,9 +120,9 @@
 </svelte:head>
 
 <div class="page-shell migration-workspace w-full">
-	<section class="border-y border-[color:var(--workspace-divider)]">
+	<section class="border-b border-[color:var(--workspace-divider)]">
 		<div class="grid lg:grid-cols-[minmax(0,1.05fr)_minmax(28rem,0.95fr)]">
-			<div class="flex min-w-0 flex-col justify-between px-4 py-4 lg:min-h-[17rem] lg:border-r lg:border-[color:var(--workspace-divider)]">
+			<div class="flex min-w-0 flex-col justify-between px-4 py-4 lg:min-h-[20rem] lg:border-r lg:border-[color:var(--workspace-divider)]">
 				<div>
 					<p class="text-xs font-medium uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">Migration package</p>
 					<h2 class="mt-2 text-base font-semibold text-gray-950 dark:text-white">Move MyPaaS to another VM</h2>
@@ -157,8 +157,10 @@
 				{/if}
 			</div>
 
-			<div class="flex min-h-[17rem] items-center px-4 py-4">
-				<MigrationTransferIllustration state={visualState} />
+			<div class="flex min-h-[20rem] items-center justify-center px-6 py-6">
+				<div class="w-full max-w-[46rem]">
+					<MigrationTransferIllustration state={visualState} />
+				</div>
 			</div>
 		</div>
 	</section>
@@ -179,7 +181,7 @@
 			</div>
 			<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3 sm:border-r xl:border-t-0">
 				<p class="text-sm font-medium text-gray-950 dark:text-white">Persistent data</p>
-				<p class="mt-0.5 font-mono text-xs leading-5 text-gray-500 dark:text-gray-400">volumes · compose · static</p>
+				<p class="mt-0.5 font-mono text-xs leading-5 text-gray-500 dark:text-gray-400">bind mounts · Compose named volumes · static</p>
 			</div>
 			<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3 xl:border-t-0">
 				<p class="text-sm font-medium text-gray-950 dark:text-white">Configuration</p>
@@ -192,10 +194,10 @@
 		<div class="grid lg:grid-cols-[18rem_minmax(0,1fr)]">
 			<div class="px-4 py-3 lg:border-r lg:border-[color:var(--workspace-divider)]">
 				<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime safety</h2>
-				<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Running project runtimes pause during capture and are started again before a package is marked ready.</p>
+				<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Running project runtimes pause during capture. Compose named volumes are staged only after their consumers stop, then runtimes are started again before the package is marked ready.</p>
 			</div>
 			<div class="grid sm:grid-cols-3">
-				<div class="px-4 py-3 sm:border-r sm:border-[color:var(--workspace-divider)]"><p class="text-xs text-gray-500 dark:text-gray-400">1 · Preflight</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">Check storage</p></div>
+				<div class="px-4 py-3 sm:border-r sm:border-[color:var(--workspace-divider)]"><p class="text-xs text-gray-500 dark:text-gray-400">1 · Preflight</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">Inspect storage</p></div>
 				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3 sm:border-t-0 sm:border-r"><p class="text-xs text-gray-500 dark:text-gray-400">2 · Capture</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">Pause and export</p></div>
 				<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3 sm:border-t-0"><p class="text-xs text-gray-500 dark:text-gray-400">3 · Resume</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">Restore runtime state</p></div>
 			</div>
@@ -228,5 +230,5 @@
 	on:confirm={startMigration}
 	on:cancel={() => (confirmPrepare = false)}
 >
-	<p>The export captures platform and shared databases, persistent runtime data, and readable platform configuration. Project runtimes are resumed before the package becomes downloadable.</p>
+	<p>The export captures platform and shared databases, bind-mounted persistent data, Compose named volumes, and readable platform configuration. Project runtimes are resumed before the package becomes downloadable.</p>
 </ConfirmActionDialog>

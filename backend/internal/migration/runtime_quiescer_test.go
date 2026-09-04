@@ -183,3 +183,63 @@ func TestResumeTargetsAttemptsEveryRuntime(t *testing.T) {
 		t.Fatalf("operations = %#v, want both start attempts", engine.operations)
 	}
 }
+
+func TestPrepareMigrationResumeCapturesBeforeReturningAndCleansAfterResume(t *testing.T) {
+	operations := []string{}
+	resume, err := prepareMigrationResume(
+		context.Background(),
+		func(context.Context) error {
+			operations = append(operations, "resume")
+			return nil
+		},
+		func(context.Context) error {
+			operations = append(operations, "capture")
+			return nil
+		},
+		func() error {
+			operations = append(operations, "cleanup")
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("prepareMigrationResume() error = %v", err)
+	}
+	if !reflect.DeepEqual(operations, []string{"capture"}) {
+		t.Fatalf("operations before resume = %#v", operations)
+	}
+	if err := resume(context.Background()); err != nil {
+		t.Fatalf("resume() error = %v", err)
+	}
+	if !reflect.DeepEqual(operations, []string{"capture", "resume", "cleanup"}) {
+		t.Fatalf("operations after resume = %#v", operations)
+	}
+}
+
+func TestPrepareMigrationResumeRollsBackAndCleansWhenCaptureFails(t *testing.T) {
+	captureErr := errors.New("copy failed")
+	operations := []string{}
+	resume, err := prepareMigrationResume(
+		context.Background(),
+		func(context.Context) error {
+			operations = append(operations, "resume")
+			return nil
+		},
+		func(context.Context) error {
+			operations = append(operations, "capture")
+			return captureErr
+		},
+		func() error {
+			operations = append(operations, "cleanup")
+			return nil
+		},
+	)
+	if !errors.Is(err, captureErr) {
+		t.Fatalf("prepareMigrationResume() error = %v, want capture error", err)
+	}
+	if resume != nil {
+		t.Fatal("resume must be nil when capture fails")
+	}
+	if !reflect.DeepEqual(operations, []string{"capture", "resume", "cleanup"}) {
+		t.Fatalf("operations = %#v", operations)
+	}
+}

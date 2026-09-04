@@ -46,6 +46,28 @@ func TestBranchFromRef(t *testing.T) {
 	}
 }
 
+func TestWebhookStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		hasDelivery bool
+		hasVerified bool
+		want        string
+	}{
+		{name: "no delivery", want: "unverified"},
+		{name: "unsigned delivery only", hasDelivery: true, want: "issue"},
+		{name: "verified delivery", hasDelivery: true, hasVerified: true, want: "connected"},
+		{name: "verified evidence wins", hasVerified: true, want: "connected"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := webhookStatus(tt.hasDelivery, tt.hasVerified); got != tt.want {
+				t.Fatalf("webhookStatus(%v, %v) = %q, want %q", tt.hasDelivery, tt.hasVerified, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRateLimiter(t *testing.T) {
 	now := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
 	limiter := newRateLimiter(2, time.Minute, func() time.Time { return now })

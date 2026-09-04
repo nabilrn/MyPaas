@@ -96,6 +96,13 @@
 		max-width: 48rem;
 	}
 
+	.settings-workspace-contract[data-settings-section='danger'] :global(.surface) {
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+
 	.settings-workspace-contract[data-settings-section='danger'] :global(.space-y-5 > section.border-y) {
 		padding: 1rem;
 	}

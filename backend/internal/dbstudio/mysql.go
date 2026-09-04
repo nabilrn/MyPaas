@@ -49,7 +49,9 @@ func (a mysqlAdapter) Columns(ctx context.Context, conn *sql.DB, schema, table s
 SELECT column_name, column_type, is_nullable = 'YES',
        column_key = 'PRI',
        COALESCE(extra, '') LIKE '%auto_increment%'
-       OR COALESCE(generation_expression, '') <> '',
+         OR COALESCE(generation_expression, '') <> '',
+       column_default IS NOT NULL OR COALESCE(extra, '') LIKE '%DEFAULT_GENERATED%',
+       COALESCE(column_default, ''),
        CASE WHEN LOWER(column_type) LIKE 'enum(%' THEN column_type ELSE '' END
 FROM information_schema.columns
 WHERE table_schema = ?
@@ -183,27 +185,51 @@ func mysqlOrderClause(columns []Column) string {
 }
 
 func mysqlInsertSQL(m Mutation, columns []Column) (string, []any, error) {
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
 		return "", nil, err
 	}
+	if len(names) == 0 && len(nowColumns) == 0 {
+		return fmt.Sprintf("INSERT INTO %s.%s () VALUES ()", quoteMySQLIdent(m.Schema), quoteMySQLIdent(m.Table)), nil, nil
+	}
+	allNames := append([]string(nil), names...)
+	valueParts := make([]string, 0, len(names)+len(nowColumns))
+	for range names {
+		valueParts = append(valueParts, "?")
+	}
+	for _, column := range nowColumns {
+		allNames = append(allNames, column.Name)
+		expression, _ := temporalDatabaseExpression(column)
+		valueParts = append(valueParts, expression)
+	}
 	return fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
 		quoteMySQLIdent(m.Schema), quoteMySQLIdent(m.Table),
-		joinQuoted(names, quoteMySQLIdent), mysqlPlaceholders(len(names))), values, nil
+		joinQuoted(allNames, quoteMySQLIdent), strings.Join(valueParts, ", ")), values, nil
 }
 
 func mysqlUpdateSQL(m Mutation, columns []Column) (string, []any, error) {
-	names, values, err := mutationValues(m.Values, columns)
+	names, values, nowColumns, err := mutationParts(m, columns)
 	if err != nil {
+		return "", nil, err
+	}
+	if err := requireMutationFields(names, nowColumns); err != nil {
 		return "", nil, err
 	}
 	where, pkValues, err := mysqlPrimaryKeyWhere(m.PrimaryKey, columns)
 	if err != nil {
 		return "", nil, err
 	}
+	setParts := make([]string, 0, len(names)+len(nowColumns))
+	for _, name := range names {
+		setParts = append(setParts, quoteMySQLIdent(name)+" = ?")
+	}
+	for _, column := range nowColumns {
+		expression, _ := temporalDatabaseExpression(column)
+		setParts = append(setParts, quoteMySQLIdent(column.Name)+" = "+expression)
+	}
 	return fmt.Sprintf("UPDATE %s.%s SET %s WHERE %s",
 		quoteMySQLIdent(m.Schema), quoteMySQLIdent(m.Table),
-		mysqlSetList(names), where), append(values, pkValues...), nil
+		strings.Join(setParts, ", "), where), append(values, pkValues...), nil
 }
 
 func mysqlDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
@@ -213,14 +239,6 @@ func mysqlDeleteSQL(m Mutation, columns []Column) (string, []any, error) {
 	}
 	return fmt.Sprintf("DELETE FROM %s.%s WHERE %s",
 		quoteMySQLIdent(m.Schema), quoteMySQLIdent(m.Table), where), values, nil
-}
-
-func mysqlSetList(names []string) string {
-	parts := make([]string, 0, len(names))
-	for _, name := range names {
-		parts = append(parts, quoteMySQLIdent(name)+" = ?")
-	}
-	return strings.Join(parts, ", ")
 }
 
 func mysqlPrimaryKeyWhere(values map[string]any, columns []Column) (string, []any, error) {
@@ -239,12 +257,4 @@ func mysqlPrimaryKeyWhere(values map[string]any, columns []Column) (string, []an
 		parts = append(parts, quoteMySQLIdent(column.Name)+" = ?")
 	}
 	return strings.Join(parts, " AND "), args, nil
-}
-
-func mysqlPlaceholders(count int) string {
-	parts := make([]string, 0, count)
-	for index := 0; index < count; index++ {
-		parts = append(parts, "?")
-	}
-	return strings.Join(parts, ", ")
 }

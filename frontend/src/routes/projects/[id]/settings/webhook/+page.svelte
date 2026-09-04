@@ -1,8 +1,8 @@
 <script lang="ts">
-	import ProjectSettingsSection from '$components/ProjectSettingsSection.svelte';
+	import ProjectWebhookSettings from '$components/ProjectWebhookSettings.svelte';
 	import SettingsWorkspace from '$components/SettingsWorkspace.svelte';
 </script>
 
 <SettingsWorkspace section="webhook">
-	<ProjectSettingsSection section="webhook" />
+	<ProjectWebhookSettings />
 </SettingsWorkspace>

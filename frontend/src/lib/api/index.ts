@@ -72,6 +72,21 @@ export interface MigrationStatus {
 	error?: string;
 }
 
+export interface WebhookDeliveryEvidence {
+	githubDeliveryId: string | null;
+	signatureValid: boolean;
+	eventType: string | null;
+	branch: string | null;
+	processed: boolean;
+	deploymentId: string | null;
+	receivedAt: string;
+}
+
+export interface WebhookStatus {
+	status: 'unverified' | 'connected' | 'issue';
+	lastDelivery: WebhookDeliveryEvidence | null;
+}
+
 class ApiError extends Error {
 	constructor(
 		public code: string,
@@ -175,7 +190,8 @@ export const api = {
 		composeResources: (id: string): Promise<ComposeResourceSummary> => request(`/projects/${id}/compose-resources`),
 		resetComposeResources: (id: string): Promise<void> => request(`/projects/${id}/compose-resources/reset`, { method: 'POST' }),
 		regenerateWebhookSecret: (id: string): Promise<{ webhookSecret: string }> =>
-			request(`/projects/${id}/webhook-secret/regenerate`, { method: 'POST' })
+			request(`/projects/${id}/webhook-secret/regenerate`, { method: 'POST' }),
+		webhookStatus: (id: string): Promise<WebhookStatus> => request(`/projects/${id}/webhook-status`)
 	},
 
 	deployments: {

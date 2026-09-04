@@ -32,7 +32,8 @@ describe('administration route spacing contract', () => {
 		expect(adminBackup).toContain('border-t border-[color:var(--workspace-divider)]');
 		expect(adminMigration).toContain('migration-workspace w-full');
 		expect(adminMigration).not.toContain('max-w-4xl');
-		expect(adminMigration).toContain('border-y border-[color:var(--workspace-divider)]');
+		expect(adminMigration).toContain('<section class="border-b border-[color:var(--workspace-divider)]">');
+		expect(adminMigration).not.toContain('<section class="border-y border-[color:var(--workspace-divider)]">');
 		expect(adminMcp).toContain('admin-mcp-workspace w-full');
 		expect(adminMcp).not.toContain('max-w-5xl');
 		expect(adminMcp).toContain('border-[color:var(--workspace-divider)]');

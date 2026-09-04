@@ -31,16 +31,20 @@ type runtimeTarget struct {
 }
 
 type dockerRuntimeQuiescer struct {
-	cfg       *config.Config
-	engine    runtimeEngine
-	preflight StoragePreflight
+	cfg            *config.Config
+	engine         runtimeEngine
+	preflight      StoragePreflight
+	captureVolumes func(context.Context) error
+	cleanupVolumes func() error
 }
 
 func newRuntimeQuiescer(cfg *config.Config) RuntimeQuiescer {
 	return &dockerRuntimeQuiescer{
-		cfg:       cfg,
-		engine:    container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
-		preflight: newStoragePreflight(),
+		cfg:            cfg,
+		engine:         container.NewDockerCLI(cfg.DockerBindHost, cfg.ProjectNetwork),
+		preflight:      newStoragePreflight(),
+		captureVolumes: captureProjectEngineVolumes,
+		cleanupVolumes: cleanupProjectEngineVolumeStage,
 	}
 }
 
@@ -62,7 +66,43 @@ func (q *dockerRuntimeQuiescer) Quiesce(ctx context.Context) (ResumeFunc, error)
 		return nil, fmt.Errorf("list running projects: %w", err)
 	}
 
-	return quiesceTargets(ctx, q.engine, runtimeTargets(projects))
+	resume, err := quiesceTargets(ctx, q.engine, runtimeTargets(projects))
+	if err != nil {
+		return nil, err
+	}
+	return prepareMigrationResume(ctx, resume, q.captureVolumes, q.cleanupVolumes)
+}
+
+func prepareMigrationResume(
+	ctx context.Context,
+	resume ResumeFunc,
+	capture func(context.Context) error,
+	cleanup func() error,
+) (ResumeFunc, error) {
+	if resume == nil {
+		resume = func(context.Context) error { return nil }
+	}
+	if capture != nil {
+		if err := capture(ctx); err != nil {
+			resumeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			resumeErr := resume(resumeCtx)
+			cancel()
+			var cleanupErr error
+			if cleanup != nil {
+				cleanupErr = cleanup()
+			}
+			return nil, errors.Join(fmt.Errorf("capture engine-managed project volumes: %w", err), resumeErr, cleanupErr)
+		}
+	}
+
+	return func(ctx context.Context) error {
+		resumeErr := resume(ctx)
+		var cleanupErr error
+		if cleanup != nil {
+			cleanupErr = cleanup()
+		}
+		return errors.Join(resumeErr, cleanupErr)
+	}, nil
 }
 
 func runtimeTargets(projects []db.Project) []runtimeTarget {

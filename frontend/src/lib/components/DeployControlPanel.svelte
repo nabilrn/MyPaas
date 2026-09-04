@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FileText, History, MoreHorizontal, Play, Rocket, RotateCcw, Square } from '@lucide/svelte';
+	import { ExternalLink, FileText, History, MoreHorizontal, Play, Rocket, RotateCcw, Square } from '@lucide/svelte';
 	import { createEventDispatcher } from 'svelte';
 	import ActionButton from './ActionButton.svelte';
 	import ActionLink from './ActionLink.svelte';
@@ -9,6 +9,7 @@
 	import type { Deployment, Project } from '$types';
 
 	export let project: Project;
+	export let publicUrl = '';
 	export let latestDeployment: Deployment | null | undefined = undefined;
 	export let pendingAction: 'start' | 'stop' | 'restart' | 'deploy' | null = null;
 
@@ -63,9 +64,22 @@
 
 <section class="workspace-section border-b border-[color:var(--workspace-divider)]">
 	<div class="flex min-h-14 items-center justify-between gap-3 px-4 py-2.5">
-		<div class="flex min-w-0 items-center gap-2.5">
-			<h1 class="truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">{project.name}</h1>
-			<ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} />
+		<div class="min-w-0">
+			<div class="flex min-w-0 items-center gap-2.5">
+				<h1 class="truncate text-lg font-semibold tracking-tight text-gray-950 dark:text-white">{project.name}</h1>
+				<ProjectStatus status={project.status} label={operationalState.statusLabel} tone={operationalState.statusTone} />
+			</div>
+			{#if publicUrl}
+				<a
+					href={publicUrl}
+					target="_blank"
+					rel="noreferrer"
+					class="app-focus mt-1 inline-flex max-w-full items-center gap-1 text-xs text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white"
+				>
+					<span class="truncate">{publicUrl.replace(/^https?:\/\//, '')}</span>
+					<ExternalLink class="h-3 w-3 shrink-0" aria-hidden="true" />
+				</a>
+			{/if}
 		</div>
 
 		<div class="flex shrink-0 items-center gap-2">

@@ -108,8 +108,39 @@ restore_dir() {
     fi
 }
 
+restore_engine_volumes() {
+    local stage="/var/lib/mypaas/volumes/.migration-engine-volumes"
+    [ -d "$stage" ] || return 0
+
+    info "Restoring engine-managed Compose volumes..."
+    local volume_dir volume_name mountpoint restored=0
+    for volume_dir in "$stage"/*; do
+        [ -d "$volume_dir" ] || continue
+        volume_name="$(basename "$volume_dir")"
+        [[ "$volume_name" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || fail "Unsafe volume name in migration package: $volume_name"
+
+        docker volume create "$volume_name" >/dev/null
+        mountpoint="$(docker volume inspect "$volume_name" --format '{{ .Mountpoint }}' 2>/dev/null || true)"
+        [ -n "$mountpoint" ] || fail "Could not resolve mountpoint for restored volume: $volume_name"
+
+        sudo mkdir -p "$mountpoint"
+        sudo find "$mountpoint" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+        sudo cp -a "$volume_dir/." "$mountpoint/"
+        ok "  named volume $volume_name"
+        restored=$((restored + 1))
+    done
+
+    sudo rm -rf "$stage"
+    if [ "$restored" -eq 0 ]; then
+        warn "  engine-volume staging directory was empty"
+    else
+        ok "Restored $restored engine-managed Compose volume(s)"
+    fi
+}
+
 sudo mkdir -p /var/lib/mypaas
 restore_dir "volumes"
+restore_engine_volumes
 restore_dir "compose"
 restore_dir "static"
 sudo mkdir -p /var/lib/mypaas/backups
