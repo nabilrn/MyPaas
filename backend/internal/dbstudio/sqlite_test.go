@@ -228,6 +228,9 @@ func TestResolveSQLiteRuntimeConnectionUsesPersistentMountDiscovery(t *testing.T
 		if len(args) > 0 && args[0] == "inspect" {
 			return []byte(`[{"Config":{"WorkingDir":"/app"},"Mounts":[{"Type":"volume","Destination":"/app/data","RW":true}]}]`), nil
 		}
+		if len(args) == 4 && args[0] == "exec" && args[1] == "mypaas-wago" && args[2] == "id" && (args[3] == "-u" || args[3] == "-g") {
+			return []byte("1000\n"), nil
+		}
 		return nil, fmt.Errorf("unexpected runtime command: %v", args)
 	}
 	sqliteRuntimeHelperCommand = func(_ context.Context, args []string, payload []byte) ([]byte, error) {
@@ -277,6 +280,9 @@ func TestResolveSQLiteRuntimeConnectionFindsComposeLabeledRuntimeWhenStableNameI
 		}
 		if len(args) > 0 && args[0] == "inspect" {
 			return []byte(`[ {"Config":{"WorkingDir":"/app"},"Mounts":[{"Type":"volume","Destination":"/app/data","RW":true}] } ]`), nil
+		}
+		if len(args) == 4 && args[0] == "exec" && args[1] == "mypaas-wago-wago-1" && args[2] == "id" && (args[3] == "-u" || args[3] == "-g") {
+			return []byte("1000\n"), nil
 		}
 		return nil, fmt.Errorf("unexpected runtime command: %v", args)
 	}
