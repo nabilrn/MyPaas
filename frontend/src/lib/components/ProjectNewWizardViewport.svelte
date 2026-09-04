@@ -39,11 +39,7 @@
 
 		const setupReady = sections.some((section) => sectionHeading(section) === 'Deployment setup');
 		const submit = form.querySelector('button[type="submit"]') as HTMLButtonElement | null;
-		const busy = Boolean(form.querySelector('[aria-busy="true"]'))
-			|| form.textContent?.includes('Analyzing deployment')
-			|| form.textContent?.includes('Checking repository and branches')
-			|| form.textContent?.includes('Starting repository inspection')
-			|| false;
+		const busy = Boolean(form.querySelector('[aria-busy="true"]'));
 
 		if (!setupReady && $createProjectWizard.activeStep !== 'source') setCreateProjectStep('source');
 		updateCreateProjectWizard({
@@ -86,7 +82,6 @@
 		observer.observe(root, {
 			childList: true,
 			subtree: true,
-			characterData: true,
 			attributes: true,
 			attributeFilter: ['disabled', 'aria-busy']
 		});
