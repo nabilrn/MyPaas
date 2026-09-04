@@ -14,6 +14,7 @@ import effectiveConfiguration from '../components/ProjectEffectiveConfiguration.
 import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
 import observability from '../components/ProjectObservability.svelte?raw';
 import runtimeUsageBar from '../components/RuntimeUsageBar.svelte?raw';
+import settingsWorkspace from '../components/SettingsWorkspace.svelte?raw';
 
 describe('project detail cleanup contract', () => {
 	it('keeps duplicate sibling navigation out of Overview', () => {
@@ -55,23 +56,21 @@ describe('project detail cleanup contract', () => {
 		expect(logsRoute).toContain('SectionPanel');
 		expect(environmentRoute).toContain('class="px-5 pt-4"');
 		expect(environmentRoute).toContain('padding-inline: 1rem');
-		expect(settings).toContain('padding-inline: 1.25rem');
-		expect(settings).toContain('padding-inline: 1rem');
-		expect(sourceSettings).toContain('padding-inline: 1.25rem');
-		expect(sourceSettings).toContain('padding-inline: 1rem');
-		expect(resourceSettings).toContain('padding-inline: 1.25rem');
-		expect(resourceSettings).toContain('padding-inline: 1rem');
-		expect(dangerSettings).toContain('padding-inline: 1.25rem');
-		expect(dangerSettings).toContain('padding-inline: 1rem');
+		for (const route of [settings, sourceSettings, resourceSettings, dangerSettings]) {
+			expect(route).toContain('SettingsWorkspace');
+		}
+		expect(settingsWorkspace).toContain('padding-inline: 1.25rem');
+		expect(settingsWorkspace).toContain('padding-inline: 1rem');
 		expect(databaseLayout).toContain('px-5 pb-3 pt-4');
 		expect(effectiveConfiguration).toContain('border-y border-[color:var(--workspace-divider)]');
 		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
 
 	it('keeps settings controls at sensible widths', () => {
-		expect(sourceSettings).toContain('max-width: 36rem');
-		expect(resourceSettings).toContain('max-width: 32rem');
-		expect(dangerSettings).toContain('max-width: 36rem');
+		expect(settingsWorkspace).toContain('max-width: 36rem');
+		expect(settingsWorkspace).toContain('max-width: 32rem');
+		expect(settingsWorkspace).toContain('max-width: 20rem');
+		expect(settingsWorkspace).toContain('max-width: 48rem');
 	});
 
 	it('uses semantic resource color and readable overview charts', () => {
