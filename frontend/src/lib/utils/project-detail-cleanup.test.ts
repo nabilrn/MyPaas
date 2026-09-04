@@ -72,12 +72,12 @@ describe('project detail cleanup contract', () => {
 		expect(effectiveConfiguration).not.toContain('rounded-lg');
 	});
 
-	it('keeps settings controls compact inside a full-width two-column structure', () => {
-		expect(combinedSettings).toContain('lg:grid-cols-2');
-		expect(combinedSettings).toContain('max-w-xl');
-		expect(combinedSettings).toContain('max-w-md');
-		expect(combinedSettings).toContain('max-w-xs');
-		expect(combinedSettings).toContain('max-w-2xl');
+	it('keeps settings controls aligned inside the full-width two-column structure', () => {
+		expect(combinedSettings).toContain('lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]');
+		expect(combinedSettings).toContain('sm:grid-cols-2');
+		expect(combinedSettings).toContain('grid-cols-[7rem_minmax(0,1fr)]');
+		expect(combinedSettings).not.toContain('max-w-xl');
+		expect(combinedSettings).not.toContain('max-w-md');
 	});
 
 	it('uses semantic resource color and readable overview charts', () => {

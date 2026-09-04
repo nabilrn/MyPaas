@@ -102,12 +102,14 @@ describe('administration navigation contract', () => {
 });
 
 describe('project secondary navigation contract', () => {
-	it('keeps Create Project as one route with a local four-step sidebar', () => {
+	it('keeps Create Project as one route with section navigation instead of gated wizard steps', () => {
 		expect(createProjectLayout).toContain('ProjectNewSidebar');
 		expect(createProjectLayout).toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
-		for (const label of ['Source', 'Configuration', 'Environment', 'Review']) {
+		for (const label of ['Source', 'Environment', 'Advanced', 'Create']) {
 			expect(projectNewSidebar).toContain(`label: '${label}'`);
 		}
+		expect(projectNewSidebar).not.toContain('createProjectWizard');
+		expect(projectNewSidebar).toContain('scrollIntoView');
 	});
 
 	it('uses one compact project-detail secondary sidebar', () => {
@@ -126,7 +128,7 @@ describe('project secondary navigation contract', () => {
 		expect(projectSettingsPage).toContain('ProjectCombinedSettings');
 		expect(projectSettingsPage).toContain('section="settings"');
 		expect(projectCombinedSettings).toContain('project-settings-workspace w-full');
-		expect(projectCombinedSettings).toContain('lg:grid-cols-2');
+		expect(projectCombinedSettings).toContain('lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]');
 		expect(projectCombinedSettings).toContain('>Source<');
 		expect(projectCombinedSettings).toContain('>Resources<');
 		expect(projectCombinedSettings).not.toContain('>General<');

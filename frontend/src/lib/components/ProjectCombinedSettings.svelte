@@ -285,36 +285,38 @@
 	<ErrorState title="Could not load settings" message={loadError || 'Project not found'} on:retry={() => void load()} />
 {:else if project}
 	<div class="project-settings-workspace w-full">
-		<div class="border-b border-[color:var(--workspace-divider)] px-5 pb-3 pt-4">
+		<div class="border-b border-[color:var(--workspace-divider)] px-4 pb-3 pt-4">
 			<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Settings</h1>
 			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deployment source and runtime allocation.</p>
 		</div>
 
-		<div class="grid min-w-0 lg:grid-cols-2">
-			<section class="min-w-0 px-4 py-4 lg:border-r lg:border-[color:var(--workspace-divider)]">
-				<div>
+		<div class="grid min-w-0 items-start lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
+			<section class="flex min-w-0 flex-col px-4 py-4 lg:border-r lg:border-[color:var(--workspace-divider)]">
+				<div class="min-h-11">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Source</h2>
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">What MyPaaS deploys and where it is found.</p>
 				</div>
 
-				<div class="mt-4 space-y-4">
+				<div class="mt-3 space-y-3">
 					{#if project.sourceType === 'registry'}
 						<div>
 							<label class="field-label" for="imageRef">Container image</label>
-							<input id="imageRef" type="text" bind:value={imageRef} class="field w-full max-w-xl font-mono" />
+							<input id="imageRef" type="text" bind:value={imageRef} class="field w-full font-mono" />
 						</div>
 					{:else}
-						<div>
-							<p class="field-label">Repository</p>
+						<div class="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] items-center gap-3 py-1">
+							<p class="field-label !mb-0">Repository</p>
 							<p class="min-w-0 truncate font-mono text-sm text-gray-950 dark:text-white" title={project.repoUrl}>{project.repoUrl}</p>
 						</div>
-						<div>
-							<span class="field-label">Branch</span>
-							<div class="max-w-xl"><SelectMenu value={branch} options={branchOptions} ariaLabel="Deployment branch" disabled={inspectingRepo || branchOptions.length === 0} on:change={(event) => handleBranchChange(event.detail)} /></div>
-						</div>
-						<div>
-							<span class="field-label">Base directory</span>
-							<div class="max-w-xl"><SelectMenu value={baseDirectory} options={baseDirectoryOptions} ariaLabel="Base directory" disabled={inspectingRepo} on:change={(event) => handleBaseDirectoryChange(event.detail)} /></div>
+						<div class="grid gap-3 sm:grid-cols-2">
+							<div class="min-w-0">
+								<span class="field-label">Branch</span>
+								<SelectMenu value={branch} options={branchOptions} ariaLabel="Deployment branch" disabled={inspectingRepo || branchOptions.length === 0} on:change={(event) => handleBranchChange(event.detail)} />
+							</div>
+							<div class="min-w-0">
+								<span class="field-label">Base directory</span>
+								<SelectMenu value={baseDirectory} options={baseDirectoryOptions} ariaLabel="Base directory" disabled={inspectingRepo} on:change={(event) => handleBaseDirectoryChange(event.detail)} />
+							</div>
 						</div>
 					{/if}
 
@@ -327,52 +329,52 @@
 
 					<details>
 						<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Advanced source settings</summary>
-						<div class="mt-4 grid gap-4 sm:grid-cols-2">
-							{#if project.deployMode !== 'static'}<div><label class="field-label" for="appPort">App port</label><input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full max-w-xs font-mono" /></div>{/if}
+						<div class="mt-3 grid gap-3 sm:grid-cols-2">
+							{#if project.deployMode !== 'static'}<div><label class="field-label" for="appPort">App port</label><input id="appPort" type="number" min="1" max="65535" bind:value={appPort} class="field w-full font-mono" /></div>{/if}
 							{#if project.deployMode === 'compose'}
-								<div><label class="field-label" for="mainService">Main service</label><input id="mainService" type="text" bind:value={mainService} class="field w-full max-w-sm font-mono" /></div>
-								<div><label class="field-label" for="composeFilePath">Compose file</label><input id="composeFilePath" type="text" bind:value={composeFilePath} class="field w-full max-w-sm font-mono" /></div>
-								<div><label class="field-label" for="composeWorkdir">Working directory</label><input id="composeWorkdir" type="text" bind:value={composeWorkdir} class="field w-full max-w-sm font-mono" /></div>
-								<div><label class="field-label" for="composeOverridePaths">Override files</label><input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} class="field w-full max-w-sm font-mono" /></div>
-								<div><label class="field-label" for="composeProfiles">Profiles</label><input id="composeProfiles" type="text" bind:value={composeProfiles} class="field w-full max-w-sm font-mono" /></div>
+								<div><label class="field-label" for="mainService">Main service</label><input id="mainService" type="text" bind:value={mainService} class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeFilePath">Compose file</label><input id="composeFilePath" type="text" bind:value={composeFilePath} class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeWorkdir">Working directory</label><input id="composeWorkdir" type="text" bind:value={composeWorkdir} class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeOverridePaths">Override files</label><input id="composeOverridePaths" type="text" bind:value={composeOverridePaths} class="field w-full font-mono" /></div>
+								<div><label class="field-label" for="composeProfiles">Profiles</label><input id="composeProfiles" type="text" bind:value={composeProfiles} class="field w-full font-mono" /></div>
 							{/if}
-							{#if project.sourceType === 'git' && (project.deployMode === 'compose' || project.deployMode === 'dockerfile')}<div><label class="field-label" for="staticFrontendPath">Static frontend path</label><input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} class="field w-full max-w-sm font-mono" /></div>{/if}
+							{#if project.sourceType === 'git' && (project.deployMode === 'compose' || project.deployMode === 'dockerfile')}<div><label class="field-label" for="staticFrontendPath">Static frontend path</label><input id="staticFrontendPath" type="text" bind:value={staticFrontendPath} class="field w-full font-mono" /></div>{/if}
 						</div>
 					</details>
 				</div>
 
-				<div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+				<div class="mt-4 flex min-h-9 flex-wrap items-center justify-between gap-3">
 					<p class="text-xs text-gray-500 dark:text-gray-400">Changes apply on the next deployment.</p>
 					{#if sourceChanged}<ActionButton variant="primary" size="sm" on:click={saveSource} loading={savingSource} loadingLabel="Saving">Save source</ActionButton>{/if}
 				</div>
 			</section>
 
-			<section class="min-w-0 border-t border-[color:var(--workspace-divider)] px-4 py-4 lg:border-t-0">
-				<div>
+			<section class="flex min-w-0 flex-col border-t border-[color:var(--workspace-divider)] px-4 py-4 lg:border-t-0">
+				<div class="min-h-11">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resources</h2>
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">CPU and memory allocation for this project.</p>
 				</div>
 
-				<div class="mt-4 space-y-4">
+				<div class="mt-3 space-y-3">
 					<div>
 						<label class="field-label">Resource profile</label>
-						<div class="max-w-md"><SelectMenu value={resourceProfile} options={resourceProfileOptions} ariaLabel="Resource profile" on:change={(event) => applyResourceProfile(event.detail as ResourceProfile)} /></div>
+						<SelectMenu value={resourceProfile} options={resourceProfileOptions} ariaLabel="Resource profile" on:change={(event) => applyResourceProfile(event.detail as ResourceProfile)} />
 					</div>
 
 					{#if resourceProfile === 'custom'}
-						<div class="grid max-w-md gap-3 sm:grid-cols-2">
+						<div class="grid gap-3 sm:grid-cols-2">
 							<div><label class="field-label" for="mem">Memory (MB)</label><input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" /></div>
 							<div><label class="field-label" for="cpu">CPU</label><input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" /></div>
 						</div>
 					{:else}
-						<div class="grid max-w-md grid-cols-2 gap-4">
-							<div><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">{memoryMb} MB</p></div>
-							<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-1 text-sm font-medium text-gray-950 dark:text-white">{formatCpu(cpuLimit)} CPU</p></div>
+						<div class="grid grid-cols-2 gap-3">
+							<div><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">{memoryMb} MB</p></div>
+							<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">{formatCpu(cpuLimit)} CPU</p></div>
 						</div>
 					{/if}
 
 					{#if project.deployMode === 'compose'}
-						<div class="flex items-start justify-between gap-3">
+						<div class="flex items-start justify-between gap-3 pt-0.5">
 							<div>
 								<p class="text-sm font-medium text-gray-950 dark:text-white">Runtime resources</p>
 								<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{composeResources?.containers ?? 0} container{(composeResources?.containers ?? 0) === 1 ? '' : 's'} · {composeResources?.volumes ?? 0} volume{(composeResources?.volumes ?? 0) === 1 ? '' : 's'} · {composeResources?.networks ?? 0} network{(composeResources?.networks ?? 0) === 1 ? '' : 's'}</p>
@@ -382,17 +384,17 @@
 						{#if composeResourceError}<div class="alert-danger">{composeResourceError}</div>{/if}
 						<details>
 							<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Advanced resource limits</summary>
-							<div class="mt-3"><label class="field-label" for="service_resources">Other services (JSON)</label><textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full max-w-2xl font-mono text-sm"></textarea></div>
+							<div class="mt-3"><label class="field-label" for="service_resources">Other services (JSON)</label><textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full font-mono text-sm"></textarea></div>
 						</details>
 					{:else}
-						<div>
+						<div class="pt-0.5">
 							<p class="text-sm font-medium text-gray-950 dark:text-white">Single runtime</p>
 							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The selected profile controls this project's container allocation.</p>
 						</div>
 					{/if}
 				</div>
 
-				<div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+				<div class="mt-4 flex min-h-9 flex-wrap items-center justify-between gap-3">
 					<p class="text-xs text-gray-500 dark:text-gray-400">New limits apply after the next deployment.</p>
 					{#if resourcesChanged}<ActionButton variant="primary" size="sm" on:click={saveResources} loading={savingResources} loadingLabel="Saving">Save resources</ActionButton>{/if}
 				</div>

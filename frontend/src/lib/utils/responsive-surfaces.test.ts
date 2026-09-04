@@ -12,7 +12,8 @@ describe('responsive data surfaces', () => {
 	});
 
 	it('keeps standalone database tables inside horizontal scroll regions', () => {
-		expect(databasePage).toContain('overflow-x-auto');
+		expect(databasePage).toContain('data-db-row-scroll');
+		expect(databasePage).toContain('overflow-auto');
 		expect(databaseSchemaPage).toContain('overflow-x-auto');
 	});
 
