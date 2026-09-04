@@ -33,8 +33,9 @@ describe('administration route spacing contract', () => {
 		expect(adminMigration).toContain('migration-workspace w-full');
 		expect(adminMigration).not.toContain('max-w-4xl');
 		expect(adminMigration).toContain('border-y border-[color:var(--workspace-divider)]');
+		expect(adminMcp).toContain('admin-mcp-workspace w-full');
+		expect(adminMcp).not.toContain('max-w-5xl');
 		expect(adminMcp).toContain('border-[color:var(--workspace-divider)]');
-		expect(adminMcp).toContain('max-w-5xl');
 		expect(adminUsers).toContain('TableShell');
 		expect(adminAudit).toContain('TableShell');
 	});

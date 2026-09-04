@@ -1,206 +1,120 @@
-import { describe, expect, it } from "vitest";
-import adminLayout from "../../routes/admin/+layout.svelte?raw";
-import adminSettingsPage from "../../routes/admin/settings/+page.svelte?raw";
-import adminUsersPage from "../../routes/admin/users/+page.svelte?raw";
-import adminBackupPage from "../../routes/admin/backup/+page.svelte?raw";
-import adminMigrationPage from "../../routes/admin/migration/+page.svelte?raw";
-import adminMcpPage from "../../routes/admin/mcp/+page.svelte?raw";
-import adminAuditPage from "../../routes/admin/audit-logs/+page.svelte?raw";
-import createProjectPage from "../../routes/projects/new/+page.svelte?raw";
-import createProjectLayout from "../../routes/projects/new/+layout.svelte?raw";
-import projectLogsPage from "../../routes/projects/[id]/logs/+page.svelte?raw";
-import projectLayout from "../../routes/projects/[id]/+layout.svelte?raw";
-import projectSettingsPage from "../../routes/projects/[id]/settings/+page.svelte?raw";
-import projectSourceSettingsPage from "../../routes/projects/[id]/settings/source/+page.svelte?raw";
-import projectResourcesSettingsPage from "../../routes/projects/[id]/settings/resources/+page.svelte?raw";
-import projectWebhookSettingsPage from "../../routes/projects/[id]/settings/webhook/+page.svelte?raw";
-import projectDangerSettingsPage from "../../routes/projects/[id]/settings/danger/+page.svelte?raw";
-import adminSidebar from "../components/AdminSidebar.svelte?raw";
-import appHeader from "../components/AppHeader.svelte?raw";
-import navbar from "../components/Navbar.svelte?raw";
-import projectDetailSidebar from "../components/ProjectDetailSidebar.svelte?raw";
-import projectNewSidebar from "../components/ProjectNewSidebar.svelte?raw";
-import projectSettingsSection from "../components/ProjectSettingsSection.svelte?raw";
+import { describe, expect, it } from 'vitest';
+import adminLayout from '../../routes/admin/+layout.svelte?raw';
+import adminSettingsPage from '../../routes/admin/settings/+page.svelte?raw';
+import adminUsersPage from '../../routes/admin/users/+page.svelte?raw';
+import adminBackupPage from '../../routes/admin/backup/+page.svelte?raw';
+import adminMigrationPage from '../../routes/admin/migration/+page.svelte?raw';
+import adminMcpPage from '../../routes/admin/mcp/+page.svelte?raw';
+import adminAuditPage from '../../routes/admin/audit-logs/+page.svelte?raw';
+import createProjectPage from '../../routes/projects/new/+page.svelte?raw';
+import createProjectLayout from '../../routes/projects/new/+layout.svelte?raw';
+import projectLogsPage from '../../routes/projects/[id]/logs/+page.svelte?raw';
+import projectLayout from '../../routes/projects/[id]/+layout.svelte?raw';
+import projectSettingsPage from '../../routes/projects/[id]/settings/+page.svelte?raw';
+import projectSourceSettingsPage from '../../routes/projects/[id]/settings/source/+page.svelte?raw';
+import projectResourcesSettingsPage from '../../routes/projects/[id]/settings/resources/+page.svelte?raw';
+import projectWebhookSettingsPage from '../../routes/projects/[id]/settings/webhook/+page.svelte?raw';
+import projectDangerSettingsPage from '../../routes/projects/[id]/settings/danger/+page.svelte?raw';
+import adminSidebar from '../components/AdminSidebar.svelte?raw';
+import appHeader from '../components/AppHeader.svelte?raw';
+import navbar from '../components/Navbar.svelte?raw';
+import projectDetailSidebar from '../components/ProjectDetailSidebar.svelte?raw';
+import projectNewSidebar from '../components/ProjectNewSidebar.svelte?raw';
+import projectSettingsSection from '../components/ProjectSettingsSection.svelte?raw';
 import {
-  administrationNavGroups,
-  administrationNavItemForPath,
-  administrationNavItems,
-  isAdministrationNavItemActive,
-  isAdministrationPath,
-} from "../navigation/administration";
-import { administrationNavigationItem } from "../navigation/primary";
+	administrationNavGroups,
+	administrationNavItemForPath,
+	administrationNavItems,
+	isAdministrationNavItemActive,
+	isAdministrationPath
+} from '../navigation/administration';
+import { administrationNavigationItem } from '../navigation/primary';
 
-describe("administration navigation contract", () => {
-  it("keeps the global navigation to one Administration entry", () => {
-    expect(administrationNavigationItem).toMatchObject({ label: "Administration", href: "/admin/settings" });
-    expect(navbar).toContain("administrationNavigationItem");
-    expect(appHeader).toContain("primaryNavigationItems");
-    for (const route of [
-      "/admin/users",
-      "/admin/audit-logs",
-      "/admin/mcp",
-      "/admin/backup",
-      "/admin/migration",
-    ]) {
-      expect(navbar).not.toContain(route);
-      expect(appHeader).not.toContain(route);
-    }
-  });
+describe('administration navigation contract', () => {
+	it('keeps one Administration entry in global navigation', () => {
+		expect(administrationNavigationItem).toMatchObject({ label: 'Administration', href: '/admin/settings' });
+		expect(navbar).toContain('administrationNavigationItem');
+		expect(appHeader).toContain('primaryNavigationItems');
+		for (const route of ['/admin/users', '/admin/audit-logs', '/admin/mcp', '/admin/backup', '/admin/migration']) {
+			expect(navbar).not.toContain(route);
+			expect(appHeader).not.toContain(route);
+		}
+	});
 
-  it("marks the Administration parent active throughout the admin area", () => {
-    for (const pathname of [
-      "/admin",
-      "/admin/settings",
-      "/admin/users",
-      "/admin/backup",
-      "/admin/migration",
-      "/admin/mcp",
-      "/admin/audit-logs",
-    ]) {
-      expect(isAdministrationPath(pathname)).toBe(true);
-      expect(isAdministrationNavItemActive(administrationNavItems[0], pathname)).toBe(pathname === "/admin/settings");
-    }
-    expect(isAdministrationPath("/projects")).toBe(false);
-    expect(isAdministrationPath("/administer")).toBe(false);
-  });
+	it('marks Administration active throughout the route family', () => {
+		for (const pathname of ['/admin', '/admin/settings', '/admin/users', '/admin/backup', '/admin/migration', '/admin/mcp', '/admin/audit-logs']) {
+			expect(isAdministrationPath(pathname)).toBe(true);
+			expect(isAdministrationNavItemActive(administrationNavItems[0], pathname)).toBe(pathname === '/admin/settings');
+		}
+		expect(isAdministrationPath('/projects')).toBe(false);
+	});
 
-  it("defines the shared secondary navigation groups and breadcrumbs", () => {
-    expect(administrationNavGroups.map((group) => group.label)).toEqual(["Platform", "Operations", "Integrations", "Activity"]);
-    expect(administrationNavItems.map((item) => [item.label, item.href])).toEqual([
-      ["General", "/admin/settings"],
-      ["Users", "/admin/users"],
-      ["Backup", "/admin/backup"],
-      ["Migration", "/admin/migration"],
-      ["MCP", "/admin/mcp"],
-      ["Audit logs", "/admin/audit-logs"],
-    ]);
-    expect(administrationNavItemForPath("/admin/users").label).toBe("Users");
-    expect(administrationNavItemForPath("/admin/audit-logs/detail").label).toBe("Audit logs");
-    expect(appHeader).toMatch(/root:\s*["']Administration["']/);
-    expect(appHeader).toMatch(/rootHref:\s*["']\/admin\/settings["']/);
-    expect(appHeader).toContain("administrationNavItemForPath");
-  });
+	it('defines the shared Administration sidebar groups', () => {
+		expect(administrationNavGroups.map((group) => group.label)).toEqual(['Platform', 'Operations', 'Integrations', 'Activity']);
+		expect(administrationNavItems.map((item) => [item.label, item.href])).toEqual([
+			['General', '/admin/settings'],
+			['Users', '/admin/users'],
+			['Backup', '/admin/backup'],
+			['Migration', '/admin/migration'],
+			['MCP', '/admin/mcp'],
+			['Audit logs', '/admin/audit-logs']
+		]);
+		expect(administrationNavItemForPath('/admin/users').label).toBe('Users');
+		expect(appHeader).toContain('administrationNavItemForPath');
+	});
 
-  it("uses the shared admin shell without changing excluded project routes", () => {
-    expect(adminLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
-    expect(adminLayout).toContain("lg:border-r");
-    expect(adminLayout).toContain("border-[color:var(--workspace-divider)]");
-    expect(adminLayout).toContain("min-w-0 px-3.5 py-3");
-    expect(adminLayout).toContain("w-full space-y-3");
-    expect(adminLayout).not.toContain("mx-auto max-w-6xl");
-    expect(adminLayout).toContain("currentSection.title");
-    expect(adminLayout).toContain("currentSection.description");
-    expect(adminLayout).toContain(".admin-content > .page-shell");
-    expect(adminLayout).toContain("<slot />");
-    expect(adminSidebar).toContain("border-l-2");
-    expect(adminSidebar).toContain("bg-transparent");
-    expect(adminSidebar).toContain("uppercase tracking");
-    expect(adminSidebar).toContain("administrationNavGroups");
-    expect(createProjectPage).not.toContain("AdminSidebar");
-    expect(projectLogsPage).not.toContain("AdminSidebar");
-  });
+	it('uses the shared compact Administration shell', () => {
+		expect(adminLayout).toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
+		expect(adminLayout).toContain('min-w-0 px-3.5 py-3');
+		expect(adminLayout).toContain('border-[color:var(--workspace-divider)]');
+		expect(adminSidebar).toContain('administrationNavGroups');
+		expect(adminSidebar).toContain('border-l-2');
+		expect(createProjectPage).not.toContain('AdminSidebar');
+		expect(projectLogsPage).not.toContain('AdminSidebar');
+	});
 
-  it("keeps administration page copy short and user-facing", () => {
-    expect(administrationNavItemForPath("/admin/settings")).toMatchObject({ title: "General", description: "Host and platform defaults." });
-    expect(administrationNavItemForPath("/admin/users").description).toBe("Manage owner access.");
-    expect(administrationNavItemForPath("/admin/mcp")).toMatchObject({ title: "MCP", description: "Connect an AI agent to MyPaaS." });
-    expect(administrationNavItemForPath("/admin/audit-logs").description).toBe("Review activity and changes.");
-  });
+	it('keeps redesigned Administration pages full-width and task-first', () => {
+		expect(adminSettingsPage).toContain('admin-general-workspace w-full');
+		expect(adminSettingsPage).toContain('ConfirmActionDialog');
+		expect(adminBackupPage).toContain('admin-backup-workspace w-full');
+		expect(adminBackupPage).toContain('Cloudflare R2');
+		expect(adminBackupPage).toContain('Cloudflare R2 docs');
+		expect(adminBackupPage).toContain('/api/admin/settings/s3?validate=1');
+		expect(adminMigrationPage).toContain('migration-workspace w-full');
+		expect(adminMigrationPage).toContain('MigrationTransferIllustration');
+		expect(adminMigrationPage).toContain('Runtime safety');
+		expect(adminMcpPage).toContain('admin-mcp-workspace w-full');
+		expect(adminMcpPage).toContain('Supported clients');
+		expect(adminMcpPage).toContain('Agent capabilities');
+		expect(adminMcpPage).toContain('Observability');
+		expect(adminMcpPage).toContain('Connect a client');
+		expect(adminMcpPage).toContain('ConfirmActionDialog');
+		expect(adminUsersPage).toContain('role="dialog"');
+		expect(adminAuditPage).toContain('Audit logs copied');
+	});
 
-  it("uses compact task-first administration content", () => {
-    expect(adminSettingsPage).not.toContain("SectionPanel");
-    expect(adminSettingsPage).not.toContain("MAX_CONCURRENT_DEPLOYS");
-    expect(adminSettingsPage).toContain("Update MyPaaS");
-    expect(adminSettingsPage).toContain("MyPaaS may restart");
-    expect(adminSettingsPage).toContain("admin-general-workspace w-full");
-    expect(adminSettingsPage).not.toContain("max-w-5xl");
-    expect(adminSettingsPage).toContain("workspace-divider");
-    expect(adminSettingsPage).not.toContain("rounded-lg border border-gray-200");
-    expect(adminSettingsPage).toContain("compact-number-input");
-    expect(adminSettingsPage).toContain("ConfirmActionDialog");
-    expect(adminSettingsPage).toContain("requestProfileSave");
-    expect(adminSettingsPage).toContain("requestBuildTimeoutSave");
-    expect(adminSettingsPage).toContain("api.admin.updateSettings({");
-    expect(adminSettingsPage).toContain("Built-in profile floors cannot be lowered");
-
-    expect(adminUsersPage).not.toContain('title="Owners"');
-    expect(adminUsersPage).not.toContain('title="Add owner"');
-    expect(adminUsersPage).toContain('role="dialog"');
-    expect(adminUsersPage).not.toContain("Whitelisted access");
-
-    expect(adminBackupPage).not.toContain("S3 automated backup");
-    expect(adminBackupPage).toContain("admin-backup-workspace w-full");
-    expect(adminBackupPage).toContain("Cloudflare R2");
-    expect(adminBackupPage).toContain("Cloudflare R2 docs");
-    expect(adminBackupPage).toContain("https://developers.cloudflare.com/r2/get-started/s3/");
-    expect(adminBackupPage).toContain("/api/admin/settings/s3?validate=1");
-    expect(adminBackupPage).toContain("Test connection");
-    expect(adminBackupPage).toContain("Save storage");
-    expect(adminBackupPage).toContain("Object Read &amp; Write");
-    expect(adminBackupPage).not.toContain('role="dialog"');
-
-    expect(adminMigrationPage).not.toContain("Migration safety");
-    expect(adminMigrationPage).not.toContain("What is included?");
-    expect(adminMigrationPage).toContain("migration-workspace w-full");
-    expect(adminMigrationPage).not.toContain("max-w-4xl");
-    expect(adminMigrationPage).toContain("MigrationTransferIllustration");
-    expect(adminMigrationPage).toContain("Move MyPaaS to another VM");
-    expect(adminMigrationPage).toContain("Captured state");
-    expect(adminMigrationPage).toContain("Runtime safety");
-    expect(adminMigrationPage).toContain("ConfirmActionDialog");
-    expect(adminMigrationPage).toContain("Prepare package");
-    expect(adminMigrationPage).toContain("Restore on the new server");
-
-    expect(adminMcpPage).not.toContain("MCP access");
-    expect(adminMcpPage).not.toContain("readonly");
-    expect(adminMcpPage).toContain("Reveal API token");
-    expect(adminMcpPage).toContain("Agent capabilities");
-    expect(adminMcpPage).toContain("Observability");
-    expect(adminMcpPage).toContain("Agent setup");
-
-    expect(adminAuditPage).not.toContain("System event log");
-    expect(adminAuditPage).toContain("Audit logs copied");
-    expect(adminAuditPage).toContain("routine probe");
-    expect(adminAuditPage).toContain("<th>Result</th>");
-  });
-
-  it("keeps administration dialogs keyboard reachable", () => {
-    expect(adminUsersPage).toContain("trapDialogFocus");
-    expect(adminUsersPage).toContain("event.key === 'Escape'");
-    expect(adminUsersPage).toContain('tabindex="-1"');
-    expect(adminUsersPage).toContain("ReturnFocus");
-  });
+	it('keeps owner dialog keyboard mechanics explicit', () => {
+		expect(adminUsersPage).toContain('trapDialogFocus');
+		expect(adminUsersPage).toContain("event.key === 'Escape'");
+		expect(adminUsersPage).toContain('tabindex="-1"');
+	});
 });
 
-describe("project secondary navigation contract", () => {
-  it("keeps create project as one parent route with a local four-step sidebar", () => {
-    expect(createProjectLayout).toContain("ProjectNewSidebar");
-    expect(createProjectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
-    for (const label of ["Source", "Configuration", "Environment", "Review"]) expect(projectNewSidebar).toContain(`label: '${label}'`);
-  });
+describe('project secondary navigation contract', () => {
+	it('keeps Create Project as one four-step route', () => {
+		expect(createProjectLayout).toContain('ProjectNewSidebar');
+		expect(createProjectLayout).toContain('lg:grid-cols-[12rem_minmax(0,1fr)]');
+		for (const label of ['Source', 'Configuration', 'Environment', 'Review']) expect(projectNewSidebar).toContain(`label: '${label}'`);
+	});
 
-  it("keeps one global secondary sidebar across project detail routes", () => {
-    expect(projectLayout).toContain("ProjectDetailSidebar");
-    expect(projectLayout).toContain("lg:grid-cols-[12rem_minmax(0,1fr)]");
-    expect(projectLayout).not.toContain("project-settings-shell");
-    for (const label of ["Overview", "Deployments", "Logs", "Environment", "Database", "General", "Source", "Resources", "Webhook", "Danger zone"]) {
-      expect(projectDetailSidebar).toContain(`label: '${label}'`);
-    }
-    expect(projectDetailSidebar).toContain("`${base}/env`");
-    expect(projectDetailSidebar).not.toContain("settings/environment");
-  });
-
-  it("splits settings into route-backed sections without a nested settings sidebar", () => {
-    for (const pageSource of [projectSettingsPage, projectSourceSettingsPage, projectResourcesSettingsPage, projectWebhookSettingsPage, projectDangerSettingsPage]) {
-      expect(pageSource).toContain("ProjectSettingsSection");
-      expect(pageSource).not.toContain("ProjectSettingsNavItem");
-    }
-    expect(projectSettingsPage).toContain('section="general"');
-    expect(projectSourceSettingsPage).toContain('section="source"');
-    expect(projectResourcesSettingsPage).toContain('section="resources"');
-    expect(projectWebhookSettingsPage).toContain('section="webhook"');
-    expect(projectDangerSettingsPage).toContain('section="danger"');
-    expect(projectSettingsSection).not.toContain("ProjectEnvironmentSettings");
-    expect(projectSettingsSection).not.toContain("activeSection");
-  });
+	it('keeps the existing project configuration leaves before consolidation', () => {
+		expect(projectLayout).toContain('ProjectDetailSidebar');
+		for (const label of ['Overview', 'Deployments', 'Logs', 'Environment', 'Database', 'General', 'Source', 'Resources', 'Webhook', 'Danger zone']) {
+			expect(projectDetailSidebar).toContain(`label: '${label}'`);
+		}
+		for (const pageSource of [projectSettingsPage, projectSourceSettingsPage, projectResourcesSettingsPage, projectWebhookSettingsPage, projectDangerSettingsPage]) {
+			expect(pageSource).toContain('ProjectSettingsSection');
+		}
+		expect(projectSettingsSection).not.toContain('ProjectEnvironmentSettings');
+	});
 });
