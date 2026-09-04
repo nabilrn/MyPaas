@@ -35,18 +35,15 @@ func (dockerStoragePreflight) Check(ctx context.Context) error {
 		return fmt.Errorf("inspect container storage: docker inspect: %w: %s", err, strings.TrimSpace(string(inspectRaw)))
 	}
 
-	volumes, err := projectEngineVolumes(inspectRaw)
-	if err != nil {
+	// Engine-managed Compose volumes are portable now: the migration runtime
+	// quiescer stages their contents under /var/lib/mypaas/volumes after the
+	// project containers stop, and the importer hydrates the original named
+	// volumes on the destination. Keep this preflight focused on proving the
+	// Docker storage metadata is inspectable instead of blocking valid exports.
+	if _, err := projectEngineVolumes(inspectRaw); err != nil {
 		return fmt.Errorf("inspect container storage: %w", err)
 	}
-	if len(volumes) == 0 {
-		return nil
-	}
-
-	return fmt.Errorf(
-		"migration export blocked: engine-managed volumes are attached to MyPaas Compose projects: %s; move persistent data to bind mounts under /var/lib/mypaas/volumes or migrate these volumes separately before exporting",
-		strings.Join(volumes, ", "),
-	)
+	return nil
 }
 
 func projectEngineVolumes(raw []byte) ([]string, error) {
