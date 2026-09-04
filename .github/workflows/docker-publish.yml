@@ -4,12 +4,19 @@ on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      force_full:
+        description: "Build both API and dashboard images from the current main commit"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: docker-publish-${{ github.event.workflow_run.head_branch }}
+  group: docker-publish-main
   cancel-in-progress: false
 
 env:
@@ -18,9 +25,11 @@ env:
 jobs:
   build-and-push:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,11 +40,11 @@ jobs:
         id: release
         shell: bash
         env:
-          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Invalid CI head SHA: $RELEASE_SHA" >&2
+            echo "Invalid release SHA: $RELEASE_SHA" >&2
             exit 1
           fi
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
@@ -57,10 +66,13 @@ jobs:
       - name: Detect frontend-only release
         id: scope
         shell: bash
+        env:
+          FORCE_FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full || false }}
         run: |
           set -euo pipefail
           frontend_only=false
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
+
+          if [[ "$FORCE_FULL" != "true" ]] && git rev-parse HEAD^ >/dev/null 2>&1; then
             mapfile -t changed_files < <(git diff --name-only HEAD^ HEAD)
             if (( ${#changed_files[@]} > 0 )); then
               frontend_only=true
@@ -72,8 +84,10 @@ jobs:
               done
             fi
           fi
+
           printf 'Release files:\n'
           git diff --name-only HEAD^ HEAD 2>/dev/null || true
+          echo "force_full=$FORCE_FULL"
           echo "frontend_only=$frontend_only" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
