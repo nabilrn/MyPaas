@@ -1,254 +1,190 @@
 # MyPaaS Frontend Design Contract
 
-`frontend/DESIGN.md` is the visual source of truth for the authenticated MyPaaS application.
+`frontend/DESIGN.md` is the visual and copywriting source of truth for the authenticated MyPaaS application.
 
-Any change to layout, spacing, surfaces, typography, navigation, tables, charts, loading behavior, route chrome, or interaction affordances MUST follow this document. Do not invent route-local visual grammar when the same problem exists elsewhere.
-
-MyPaaS is an operational single-host control plane. It should feel like one compact desktop workspace, not a collection of unrelated SaaS pages.
+Any change to layout, spacing, surfaces, strokes, typography, navigation, tables, charts, loading, copy, or interaction affordances MUST follow this file. Do not invent route-local grammar when an existing canonical screen already solves the same problem.
 
 ---
 
 ## 1. Product character
 
-The authenticated UI is:
+MyPaaS is a compact operational workspace.
 
-- operational rather than promotional;
+It is:
+
 - compact rather than spacious;
 - flat rather than elevated;
 - monochrome by default;
 - information-dense without tiny text;
-- structured by alignment, padding, typography, and strokes;
-- explicit about real runtime state.
+- structured by alignment, typography, and thin strokes;
+- explicit about real runtime state;
+- written in short, direct language.
 
-Avoid decorative gradients, card stacks, unnecessary shadows, oversized whitespace, filler copy, and decorative accent colors.
+Avoid decorative gradients, card stacks, large shadows, oversized whitespace, filler copy, unnecessary neutral fills, and jargon that describes internal architecture instead of the user's task.
 
 ---
 
 ## 2. Application shell
 
-### Desktop shell
+### Desktop
 
-- Top header height: **56px**.
-- Collapsed primary navigation rail width: **56px**.
-- Hover/focus expansion may overlay to approximately **240px**.
-- Expanded primary navigation MUST NOT resize or reflow main content.
-- Main workspace starts immediately after the primary rail and below the top header.
+- top header: **56px**;
+- collapsed primary rail: **56px**;
+- expanded primary navigation may overlay to roughly **240px** and MUST NOT reflow content;
+- Administration and project-detail families use a structural **12rem** secondary sidebar.
 
-### Secondary sidebar
+### Canonical outer inset
 
-Administration and project-detail families use a local secondary sidebar.
-
-- Canonical desktop width: **12rem**.
-- The sidebar is structural navigation, not a card.
-- Its right divider uses `--workspace-divider` and must remain visible in dark mode.
-- Sidebar navigation is the canonical route map for sibling destinations.
-- Do not duplicate sidebar destinations as low-value shortcut cards in page content.
-
-### Canonical outer page inset
-
-For route families with a secondary sidebar, the content column owns exactly one outer inset:
+Routes with a secondary sidebar own one parent inset:
 
 - horizontal: **14px** (`px-3.5`);
 - vertical: **12px** (`py-3`).
 
-The `/projects/:id` project-detail layout is the reference implementation for this parent inset.
+Child routes MUST NOT add a second route-level outer-padding wrapper.
 
-Child routes MUST NOT add another route-level outer padding wrapper. A nested `page-shell` inside these families is normalized to full width with zero extra padding.
+### Project-detail readable gutters
 
-Do not compensate for inconsistent child anatomy by changing this outer inset route-by-route.
+`/projects/:id`, `/projects/:id/deployments`, and `/projects/:id/logs` are the reference for project-detail geometry.
 
-### Canonical project-detail horizontal gutter
+- parent main: `px-3.5 py-3`;
+- ordinary rows/body content: **16px** horizontal (`px-4`);
+- first-level title/header bars: **20px** horizontal (`px-5`) where the existing header geometry uses it;
+- leaf title optical offset: **16px** (`pt-4`) after the parent's top inset.
 
-For every `/projects/:id/*` route, the final left/right content alignment is defined by the geometry already used by **Overview, Deployments, and Logs**. Those three routes are the canonical visual reference for project-detail horizontal spacing.
+Overview, Deployments, and Logs already have the correct optical position. Environment, Database, General, Source, Resources, Webhook, and Danger zone align to them without duplicating the operational header.
 
-The parent `main` inset and the inner content gutter are two separate layers:
+### Administration gutters
 
-- parent project `main`: **14px** horizontal (`px-3.5`);
-- ordinary section/body/row content inside the route surface: **16px** horizontal (`px-4` or equivalent);
-- shared page/section heading bars may use **20px** horizontal (`px-5` / `.panel-header`) when matching Deployments/Logs header geometry.
+Administration uses the same rhythm:
 
-Rules:
+- parent main: `px-3.5 py-3`;
+- route heading: `px-5`;
+- body/setting rows: `px-4`;
+- first-level dividers remain full width inside the content column.
 
-- first-level route surfaces and divider lines remain full width inside the parent project content column;
-- do **not** fix alignment by wrapping the entire leaf page in another `px-4`, because that incorrectly indents the surface/divider itself;
-- place horizontal padding on the readable content, heading, toolbar, or row inside the surface;
-- Environment, Database data view, General, Source, Resources, Webhook, and Danger zone MUST align their readable content to the same gutter family as Overview, Deployments, and Logs;
-- Schema Design remains a full-canvas exception because it deliberately leaves the ordinary project-detail surface.
-
-### Canonical project-detail top rhythm
-
-**Overview, Deployments, and Logs are also the vertical alignment reference for the first readable content in `/projects/:id/*`.** The presence or absence of `Deploy again` must not make sibling routes appear to start at unrelated heights.
-
-The vertical contract has two layers:
-
-- parent project `main` owns **12px** top/bottom inset (`py-3`);
-- the first leaf title block owns an additional **16px** top inset (`pt-4`) before its title baseline.
-
-Operational pages may use the existing `min-h-14` action header with vertically centered title/status/actions. Ordinary leaves such as Environment, Database, General, Source, Resources, Webhook, and Danger zone do not copy that operational action bar; instead their title/description block uses the canonical `pt-4` optical offset so the title begins at the same visual level.
-
-Rules:
-
-- align the **title optical top**, not the total height of the header block;
-- a title + subtitle leaf may naturally be taller than a one-line operational header;
-- keep the existing horizontal gutter contract (`px-5` for the leaf heading, `px-4` for ordinary body rows);
-- do not add arbitrary `mt-*` to individual titles, change parent `py-3`, or add another route-level wrapper merely to compensate for a missing leaf-header inset;
-- full-canvas Schema Design remains exempt from ordinary leaf top rhythm.
-
-### Canonical Administration horizontal gutter
-
-Administration uses the **same horizontal rhythm** as the project-detail reference above. `/admin/settings`, `/admin/users`, `/admin/backup`, `/admin/migration`, `/admin/mcp`, and `/admin/audit-logs` do not define a separate spacing system.
-
-- parent admin `main`: **14px** horizontal (`px-3.5`);
-- Administration route heading: **20px** horizontal (`px-5`);
-- ordinary admin section rows/body content: **16px** horizontal (`px-4` or equivalent);
-- shared `TableShell` / `.panel-header` / toolbar geometry remains canonical for Users and Audit logs;
-- first-level section borders/dividers remain full width inside the admin content column.
-
-Do not zero out row padding in Administration to make a section look wider. The surface may be full width; the readable content inside it still follows the 16px/20px gutter contract.
-
-If a future Administration page looks horizontally inconsistent, compare its heading/body alignment against project Overview, Deployments, and Logs before inventing a route-local padding value.
-
-If a future project-detail page looks horizontally inconsistent, compare it against `/projects/:id`, `/projects/:id/deployments`, and `/projects/:id/logs` before changing any padding value.
+Do not fix perceived misalignment with arbitrary route-local `mt-*`, `px-*`, or nested `page-shell` values.
 
 ---
 
-## 3. Route anatomy
+## 3. Canonical stroke grammar
 
-Every ordinary authenticated leaf route follows the same composition:
+**Project Overview is the source of truth for strokes and section boundaries.**
+
+The canonical boundary is `--workspace-divider` or an optically equivalent low-contrast 1px line.
+
+Rules:
+
+- use thin, low-contrast dividers;
+- ordinary first-level sections remain flat;
+- use borders to separate rows/sections, not to wrap every object;
+- avoid strong box grids, nested rectangles, and repeated outer outlines;
+- dark and light themes must have equivalent optical hierarchy;
+- if another route conflicts with Overview's stroke strength, Overview wins.
+
+Inset controls, dialogs, overlays, and technical output may retain an explicit boundary because they are a different interaction/content layer.
+
+---
+
+## 4. Page anatomy and information ownership
+
+An ordinary authenticated leaf follows:
 
 ```text
-breadcrumb / global header
-secondary sidebar | route content
-                    page heading or operational header
+global header / breadcrumb
+secondary sidebar | page heading or operational header
                     first section
                     next section
 ```
 
 ### Page heading
 
-A normal leaf page heading is:
-
 - title: `text-lg`, semibold;
 - subtitle: at most one short sentence;
-- left aligned to the same x-origin as the readable section content below it;
-- horizontally padded using the canonical project-detail gutter when inside `/projects/:id/*`;
-- vertically positioned using the canonical project-detail top rhythm when inside `/projects/:id/*`;
-- separated from following content by deliberate section rhythm, not a floating card.
+- no nested application header;
+- no title card.
 
-Do not create a black nested title strip, rounded title card, or second application header inside a route.
+### Project operational header
 
-### Operational header exception
+Project lifecycle actions may appear in the shared operational header only where they are a primary task:
 
-A project operational action bar may exist only where lifecycle action is a primary task:
-
-- Project Overview;
+- Overview;
 - Deployments.
 
-Logs, Environment, Database, General, Source, Resources, Webhook, and Danger zone MUST NOT repeat project name/status plus `Deploy again` above their own content. Breadcrumb + project sidebar already establish context.
+Logs, Environment, Database, General, Source, Resources, Webhook, and Danger zone MUST NOT repeat project name/status/Deploy actions.
 
-### Administration heading ownership
+### Route ownership
 
-`/admin/+layout.svelte` owns the Administration page title and subtitle. Child admin routes MUST NOT render a second page-level title for the same route. Child routes begin with their first meaningful section.
+- Overview: operational summary and observability;
+- Deployments: deployment history, deployment output, rollback;
+- Logs: application log filtering/export;
+- Environment: environment variables;
+- Database: Database Studio;
+- General: identity/public URL/deployment type;
+- Source: repository/image/source configuration;
+- Resources: allocation/profile limits;
+- Webhook: endpoint/secret/setup;
+- Danger zone: deletion.
+
+Do not duplicate sibling-route information unless required to perform the current task.
 
 ---
 
-## 4. Dashboard surface invariant
+## 5. Surfaces
 
-This applies to every authenticated dashboard route, including Project Overview, Deployments, Logs, Environment, Database Studio, project settings leaves, Containers, Users, Audit logs, Backup, Migration, MCP, and Administration General.
+Ordinary authenticated sections share one workspace surface.
 
-Ordinary authenticated regions use **one base workspace surface**.
+Do not create hierarchy by alternating neutral backgrounds. Hierarchy comes from:
 
-The following MUST NOT create hierarchy by changing neutral background tone:
-
-- first-level sections;
-- section headers and bodies;
-- metric cells;
-- table toolbar/header/body rows;
-- pagination strips;
-- ordinary setting rows;
-- idle inputs and secondary controls;
-- neutral hover states.
-
-Hierarchy is communicated by:
-
-- 1px dividers;
-- stronger/quieter stroke contrast;
 - alignment;
 - typography;
-- state dots/icons;
-- semantic data marks.
+- 1px strokes;
+- semantic state dots/icons;
+- real data color.
 
-Different fills are reserved for real semantic/layer changes: warnings/errors/success/info, primary/destructive actions, overlays, technical output, and chart data marks.
+Reserved alternate surfaces:
+
+- semantic warning/error/success/info states;
+- overlays/dialogs;
+- technical output;
+- chart data marks;
+- primary/destructive controls.
+
+First-level rounded card stacks and decorative shadows are prohibited.
 
 ---
 
-## 5. Sections, rows, and settings geometry
+## 6. Settings and compact content
 
-### First-level sections
-
-- No rounded outer card silhouette.
-- No shadow.
-- No large external card gap.
-- Use a bottom divider between consecutive sections.
-- Section header padding is typically `12px 16px`.
-- Section body rows use the same x-origin.
-
-### Canonical settings row
-
-Settings/configuration pages use one row grammar:
+Settings/configuration rows use:
 
 ```text
-[label column] [value / control column] [optional row actions]
+[label] [value/control] [optional actions]
 ```
 
-Desktop target:
+Desktop targets:
 
-- label column: **9–12rem**;
-- row vertical padding: **12px**;
-- divider between rows;
-- content column remains flexible but controls do not stretch arbitrarily.
+- label column: roughly **9–12rem**;
+- row vertical padding: roughly **10–12px**;
+- divider between logical rows;
+- controls use the smallest width that remains usable.
 
-### Control width rule
+Normal inputs/selects should usually stay between `max-w-sm` and `max-w-xl`. Do not stretch a simple input across a 1400px canvas.
 
-Editable controls should use the smallest width that preserves usability.
+### Compact Administration content
 
-- ordinary select/input: `max-w-md` to `max-w-xl`;
-- repository/URL/technical text may use a wider readable column;
-- a single simple select MUST NOT span a 1400px desktop canvas;
-- destructive confirmation input should normally stay `max-w-xl`;
-- full width is reserved for search bars, logs, tables, code/JSON editors, and genuinely canvas-wide tools.
+Short Administration workflows do not need to consume the full desktop canvas.
 
-### General-information ownership
-
-Project General owns project identity and public endpoint information only. Source details belong to Source. Resource limits belong to Resources. Do not repeat sibling-route data merely because it is available.
+- General, Migration, and MCP may use a readable `max-w-4xl` / `max-w-5xl` content region while preserving the parent route gutter;
+- this max width limits readable content, not the outer shell or sidebar geometry;
+- Host stats may use a compact 3-column row;
+- resource defaults should read as `preset | memory | CPU` rather than widely separated fields;
+- single-field sections and update actions stay near their related value.
 
 ---
 
-## 6. Navigation and redundancy
+## 7. Typography and brand
 
-Sidebar is the primary navigation source for sibling routes.
-
-A page may link to a sibling route only when the link is attached to unique summary information, for example:
-
-- Latest deployment → `View all` Deployments;
-- an actionable failure → `View logs`;
-- a real summary metric → detail page.
-
-Do NOT add navigation-only blocks such as `Project settings` or `Database Studio` when the secondary sidebar already exposes those routes and the block adds no unique status/data.
-
-Do not repeat the same nearby state, count, label, or action twice. Examples to avoid:
-
-- `0 variables` plus an empty state saying there are no variables;
-- `171 visible` plus `Showing 171 of 171 lines`;
-- one-page datasets with disabled Previous/Page 1/Next chrome;
-- project name in breadcrumb, repeated project bar, and repeated General row when the intermediate bar adds no operational value.
-
----
-
-## 7. Typography
-
-Primary family: Inter Variable.
-Technical identifiers/output: IBM Plex Mono.
+Primary family: Inter Variable. Technical identifiers/output: IBM Plex Mono.
 
 Targets:
 
@@ -256,87 +192,112 @@ Targets:
 - section titles: **15–16px**;
 - supporting text: **13px**;
 - technical mono: **12–13px**;
-- true object/page titles: **18–24px** when needed.
+- true page/object titles: **18–24px** when needed.
 
-Compactness comes from layout and chrome, not unreadable type.
+Compactness comes from layout, not unreadable text.
 
-### Canonical brand assets
+Canonical vector assets:
 
-MyPaaS branding is vector-first. The canonical production assets are:
+- `src/assets/brand/mypaas-icon.svg` — application mark;
+- `src/assets/brand/mypaas-logo.svg` — wordmark;
+- `src/assets/brand/mypaas-favicon.svg` — explicit white browser favicon.
 
-- `src/assets/brand/mypaas-icon.svg` for compact marks and favicons;
-- `src/assets/brand/mypaas-logo.svg` for the wordmark.
-
-These assets come from the optimized theme-aware SVG bundle and replace the legacy black/white PNG variants. Dashboard chrome, favicon usage, and installer branding MUST reference the canonical SVG assets rather than maintaining parallel raster logo copies.
-
-Do not reintroduce route-local logo files, duplicated black/white PNG exports, or rasterized favicons when the canonical SVG can serve the same purpose.
+Do not reintroduce legacy raster logo variants.
 
 ---
 
 ## 8. Color semantics
 
-Default chrome is monochrome neutral. Color must encode meaning.
+Default chrome is monochrome. Color encodes meaning.
 
-Resource semantics are stable throughout the product:
+- CPU: `--chart-cpu`;
+- memory/RAM: `--chart-memory`;
+- storage: `--chart-storage`;
+- network: `--chart-network`.
 
-- CPU: **blue** (`--chart-cpu`);
-- memory/RAM: **green** (`--chart-memory`);
-- storage: **amber** (`--chart-storage`);
-- network: **violet** (`--chart-network`).
-
-Resource progress bars, chart marks, and matching resource indicators SHOULD use these tokens. Do not reduce real resource telemetry to neutral gray when semantic tokens already exist.
-
-Success/warning/danger/info colors are reserved for real state. Primary workflow actions use monochrome inversion.
+Success/warning/danger/info colors are reserved for real state. Resource telemetry should not be reduced to decorative gray when semantic tokens exist.
 
 ---
 
 ## 9. Controls
 
-Inputs and actions belong to one shared control system.
+Canonical desktop control geometry:
 
-### Geometry
+- height: **36px**;
+- text: **14px**;
+- icon-only: **36×36px**;
+- coarse-pointer target: **44px**.
 
-- canonical desktop height: **36px**;
-- canonical text: **14px**;
-- icon-only controls: **36×36px**;
-- `ActionButton` and `ActionLink` size variants may change horizontal padding, not height/font size;
-- adjacent controls align on the same top/bottom edges;
-- coarse-pointer layouts use **44px** targets consistently.
+Adjacent controls align on the same edges. Idle controls inherit the workspace fill; hover/focus raises boundary/text contrast instead of adding decorative fills.
 
-### Visual state
-
-Idle controls inherit the workspace fill. Hover raises boundary/text contrast without decorative fill. Focus uses the shared monochrome focus treatment. Disabled/read-only controls remain restrained.
-
-Use existing shared controls instead of route-local button/input palettes.
+Use shared `ActionButton`, `ActionLink`, `IconButton`, and `.field` before creating route-local controls.
 
 ---
 
-## 10. Tables and pagination
+## 10. Canonical table grammar
 
-Operational tables are workspace content, not cards.
+**The Projects inventory table is the visual source of truth for operational tables.**
+
+Containers and Audit Logs MUST feel like the same table family rather than separate admin widgets.
+
+Preserve the Projects table qualities:
+
+- roughly **60px** (`h-[3.75rem]`) rows when primary + secondary metadata are present;
+- compact 13–14px primary text;
+- secondary metadata directly beneath the primary value;
+- deliberate `table-fixed` column geometry;
+- technical values use mono/tabular numerals when helpful;
+- quiet header and row strokes;
+- contextual action/chevron at the far right;
+- no decorative card around the table.
 
 Order:
 
 ```text
-table context / section heading
-toolbar
+table context / heading
+toolbar when needed
 column header
 rows
-pagination/result count only when needed
+pagination only when needed
 ```
 
-Rules:
+Pagination chrome MUST NOT appear when the complete dataset demonstrably fits on one page.
 
-- toolbar/header/rows/pagination share the workspace fill;
-- separators define the grid;
-- stable datasets use deliberate column geometry;
-- technical identifiers truncate rather than stretching the table;
-- textual identity is left aligned; numeric/status columns may center/right align as appropriate;
-- typical row height: roughly **52–60px**.
+### Projects inventory semantics
 
-### Pagination visibility
+Keep Projects as the baseline rather than redesigning it route-by-route.
 
-Do not render pagination chrome when the dataset demonstrably fits on one page. A single-row Users table must not show `Previous · Page 1 · Next` or a redundant `Owners: 1-1` footer.
+- `Updated` remains the concise project-change timestamp.
+- Do not pair it with a redundant `Uptime / release` column.
+- Runtime-backed projects use a compact **Limits** column for configured memory/CPU allocation.
+- `Usage` explicitly identifies CPU (`% CPU`) rather than displaying an ambiguous percentage.
+- Static projects do not pretend to have runtime usage/allocation.
+
+### Runtime icon semantics
+
+Runtime icons are meaningful, not generic file/package placeholders:
+
+- Static → **web/globe**;
+- Dockerfile → **Docker**;
+- Docker Compose → **Compose**;
+- OCI image → **Docker/container**.
+
+Icons remain small, monochrome, and aligned with Repository/Branch icon treatment.
+
+### Containers State vs Health
+
+Container lifecycle and health are separate dimensions:
+
+- **State**: running, exited, paused, restarting, dead, etc.;
+- **Health**: Healthy, Unhealthy, Starting, or No check.
+
+Never render `Running` and `Healthy` as one mixed status cell. A container without a healthcheck is `No check`, not Healthy and not Unhealthy.
+
+### Audit Logs
+
+Audit rows follow the same density and primary/secondary hierarchy as Projects. Routine probe events may be hidden by default, but hidden-row counts must be explicit and pagination/result copy must not claim that hidden rows are visible.
+
+Destructive/security/failure evidence must never be hidden merely to make the table cleaner.
 
 ---
 
@@ -344,199 +305,202 @@ Do not render pagination chrome when the dataset demonstrably fits on one page. 
 
 Charts are data visualization, not decorative cards.
 
-- plot areas use the workspace fill;
-- data marks may use semantic resource/metric color;
+- use the workspace surface;
+- data marks may use semantic resource color;
 - grid lines remain faint;
-- do not fabricate history;
-- preserve last-known telemetry during successful background refresh;
-- network counters remain cumulative unless the API explicitly returns a rate.
+- never fabricate history;
+- preserve last-known telemetry during background refresh failures.
 
-### Overview chart density
+Overview time-series charts should have meaningful vertical space, roughly **96–120px** when compact.
 
-Overview is an observability dashboard. When time-series data exists, charts should use meaningful vertical space. A chart compressed to roughly 50px high is too small for a wide desktop dashboard.
-
-Compact Overview charts should target approximately **96–120px** height while keeping the section itself compact.
-
-### Runtime usage
-
-CPU and memory usage show:
+Runtime CPU/memory usage shows:
 
 ```text
 used / allocation    percentage
 semantic progress bar
 ```
 
-Do not repeat the allocation again underneath the same bar.
+Do not repeat the same allocation immediately beneath the bar.
 
 ---
 
-## 12. Empty states and low-value chrome
+## 12. Deployment status and output
 
-An empty page should become simpler, not noisier.
+Deployment status copy must be short and outcome-oriented.
 
-- Do not repeat zero counts next to an empty-state sentence that communicates the same fact.
-- Disable or hide actions that cannot operate on empty data when keeping them visible adds no orientation value.
-- Notes such as `latest 5000 lines kept in memory` belong to non-empty log state, not an empty console.
-- Empty states remain concise: title + one actionable sentence.
+Preferred pattern:
 
----
+```text
+Deployment live
+Your app is running.
+```
 
-## 13. Project-detail route contract
+Avoid architecture-heavy narration such as “selected runtime is active” when a simple outcome says the same thing.
 
-The project secondary sidebar is the persistent navigation model for all `/projects/:id/*` leaves.
+### Deployment output
 
-Routes:
+Deployment/build logs use the canonical technical output surface.
 
-- Overview
-- Deployments
-- Logs
-- Environment
-- Database
-- General
-- Source
-- Resources
-- Webhook
-- Danger zone
-
-Rules:
-
-- Overview owns operational summary/observability.
-- Deployments owns deployment history and deployment lifecycle context.
-- Logs owns log filtering/export and technical output.
-- Environment owns environment variable management.
-- Database owns Database Studio.
-- General owns identity/public URL/deployment type.
-- Source owns repository/image/branch/base-directory/runtime-source configuration.
-- Resources owns resource profile and limits.
-- Webhook owns webhook endpoint/secret/setup.
-- Danger zone owns deletion only.
-
-No route should restate data whose canonical owner is a sibling route unless the duplicate is required to execute the current task.
+- opening a deployment output should land at the latest output;
+- while the user remains near the bottom, new output may continue following naturally;
+- if the user scrolls upward, polling MUST NOT force them back to the bottom;
+- when newer output is below the viewport, expose a compact **Latest** / scroll-to-latest action;
+- empty output copy is short (`Waiting for output.` / `No output captured.`).
 
 ---
 
-## 14. Administration route contract
+## 13. Technical output surface
 
-Administration uses the same outer geometry and inner readable-content gutters as the project-detail source of truth for General, Users, Backup, Migration, MCP, and Audit logs.
-
-- Parent layout owns route heading/subtitle and gives it the canonical **20px** horizontal heading gutter.
-- Child pages begin at the same content x-origin.
-- Ordinary admin rows use the canonical **16px** horizontal content gutter while their parent border/divider remains full width.
-- General uses flat rows, not a rounded settings card silhouette.
-- Backup/Migration/MCP use the same divider-based section grammar.
-- Users/Audit use the shared table grammar, which already owns its header/toolbar/cell gutters.
-
-MCP token actions that act on the same secret belong in the same row/action group. Avoid separate action strips for Reveal/Copy/Regenerate when they operate on one token.
-
----
-
-## 15. Database Studio
-
-Database Studio is a project leaf, not a separate embedded application.
-
-- Do not render an additional dark/black nested application header.
-- `Database Studio` uses the normal project leaf heading grammar.
-- `Schema design` is a contextual page action aligned with that heading.
-- Connection status and table browsing are ordinary sections below it.
-- The table/data workspace may still consume the available width because it is a real data tool.
-
----
-
-## 16. Audit logs
-
-Audit logs should emphasize meaningful control-plane mutations.
-
-- Actor/IP belongs in a dedicated compact column or expanded metadata, not repeated as secondary text under every action when it reduces scanability.
-- High-frequency probe/detection events should not visually dominate actual mutations. If the backend returns them, the UI should filter or classify repetitive read/probe events when doing so does not hide meaningful security/destructive activity.
-- Expanded metadata uses the canonical technical-output surface.
-
-Never hide destructive/security/failure audit evidence merely to make the table look cleaner.
-
----
-
-## 17. Canonical technical/output surface
-
-Host Shell output is the canonical palette for technical output across authenticated MyPaaS.
-
-This includes:
+Host Shell is the palette reference for technical output, including:
 
 - project logs;
 - deployment/build logs;
 - audit metadata JSON;
 - MCP setup prompt;
 - migration commands;
-- repository inspection details;
-- configuration examples.
+- repository inspection/config examples.
 
-Technical output may use its own surface because it represents a different content mode, not a hierarchy trick.
-
----
-
-## 18. Theme paint and loading
-
-Theme state must be correct before first paint.
-
-- stored/system theme is applied before Svelte hydration;
-- ordinary client-side navigation does not trigger a global blocking loader;
-- local operations use local loading state;
-- polling/SSE/background refresh must not destroy usable last-known data unnecessarily.
+Technical output may use a dark `console-surface` because it represents a different content mode, not a hierarchy trick.
 
 ---
 
-## 19. Full-canvas tools
+## 14. Toasts
 
-ERD/schema design and Host Shell are workspace tools, not cards.
+Toasts are lightweight confirmations, not floating cards.
 
-They may consume the useful workspace height/width and own their interaction model while preserving the global shell, divider, control, and technical-output contracts.
+Canonical toast:
 
----
-
-## 20. Responsive and accessibility
-
-- Desktop is the primary density target.
-- Mobile exposes the same authorized destinations.
-- Tables may use a deliberate compact/mobile representation rather than shrinking type below the floor.
-- Preserve keyboard access and visible focus.
-- Hover-only behavior requires keyboard/focus equivalent where needed.
-- Color is never the only signal for critical state.
-- Avoid noisy live announcements during polling/background refresh.
+- neutral workspace surface;
+- thin `--workspace-divider` border;
+- small radius (`rounded-md`);
+- compact `px-3 py-2` geometry;
+- 13px text;
+- small semantic icon is the primary color signal;
+- compact close control near the message;
+- no large pastel background or heavy shadow;
+- keep copy to one line when practical.
 
 ---
 
-## 21. Explicit anti-patterns
+## 15. UI copywriting
+
+User-facing UI copy describes **what happened, what exists, or what the user can do**. It does not expose internal architecture terminology merely because the implementation uses it.
+
+### Direct-copy rule
+
+Prefer:
+
+- `Review activity and changes.`
+- `Your app is running.`
+- `Waiting for output.`
+- `MyPaaS may restart.`
+
+Avoid:
+
+- `Review control-plane changes.`
+- `selected runtime is active`;
+- long explanations that restate the visible status;
+- internal component names used as user concepts.
+
+`control-plane` is valid in engineering docs, comments, architecture, and code. It SHOULD NOT appear in ordinary user-facing dashboard copy. Replace it with the concrete context: MyPaaS, services, settings, activity, deployment, app, or server.
+
+Status presentation should normally be:
+
+1. short status/title;
+2. at most one short supporting sentence when it adds information.
+
+---
+
+## 16. Migration and MCP
+
+### Migration
+
+Migration is a focused workflow:
+
+1. package status;
+2. Prepare or Download;
+3. when ready, restore command + Copy.
+
+Do not add a generic `What is included?` filler disclosure to the main screen. Operational caveats belong next to the action they affect.
+
+### MCP
+
+MCP must explain what the connected agent can actually do. Present a compact capability summary derived from the real tool surface, covering projects, deployments/lifecycle, observability, and environment variables. Keep token/client/setup controls compact and task-oriented.
+
+---
+
+## 17. Empty states and redundancy
+
+An empty page becomes simpler, not noisier.
+
+Do not repeat:
+
+- `0 variables` plus `No variables`;
+- `0 visible` plus `No logs`;
+- one-page pagination;
+- adjacent dates that communicate the same event;
+- sidebar links as navigation-only content blocks.
+
+An empty state is normally a short title plus one actionable sentence.
+
+---
+
+## 18. Database Studio and full-canvas tools
+
+Database Studio is a normal project leaf. Do not add a nested black application header. Connection/table browsing use ordinary section grammar.
+
+Schema Design and Host Shell are genuine full-canvas tools and may consume useful workspace width/height while preserving global shell, stroke, control, and technical-output contracts.
+
+---
+
+## 19. Theme, loading, responsive, accessibility
+
+- theme state is correct before first paint;
+- local operations use local loading state rather than blocking the whole application;
+- polling/SSE refresh does not discard usable last-known data without reason;
+- desktop is the primary density target;
+- mobile exposes the same authorized destinations;
+- tables may use an intentional compact mobile representation instead of shrinking type below the floor;
+- keyboard access and visible focus are preserved;
+- hover-only affordances require keyboard/focus equivalents;
+- color is never the only signal for critical state;
+- background polling should not create noisy live announcements.
+
+---
+
+## 20. Explicit anti-patterns
 
 Do not introduce:
 
 - first-level rounded card stacks;
-- route-local outer padding that conflicts with the parent family inset;
-- arbitrary route-local top margins used to compensate for missing canonical leaf-header rhythm;
-- nested application headers inside leaf pages;
-- repeated project operational bars on non-operational settings/data leaves;
-- sibling-route shortcut cards with no unique data;
-- controls stretched across the full desktop canvas without a functional reason;
-- pagination for a one-page dataset;
-- repeated zero counts + empty-state copy;
+- arbitrary route-local outer padding/top margins;
+- nested application headers;
+- repeated project lifecycle bars on non-operational leaves;
+- strong nested border grids;
 - alternating neutral section fills;
-- route-local control/console palettes;
-- nested border rectangles at every level;
-- decorative shadows on ordinary sections;
+- controls stretched across the desktop without need;
+- pagination for a one-page dataset;
+- repeated zero-state copy;
+- generic runtime icons that hide the deployment mode;
+- mixed container lifecycle + health in one cell;
+- large pastel toast cards;
 - fake telemetry history;
-- semantic resource telemetry rendered as meaningless neutral gray;
-- duplicated raster black/white logo variants when the canonical SVG assets exist;
+- user-facing internal jargon where direct language works;
 - explanatory copy that only restates the label directly above it.
 
 ---
 
-## 22. Change rule
+## 21. Change rule
 
-When implementing authenticated UI work:
+When changing authenticated UI:
 
-1. Read this file first.
-2. Identify the parent route family and its canonical outer inset.
-3. Identify the single owner of each piece of information and each action.
-4. Fix shared behavior centrally before adding route-specific CSS.
-5. Keep route-specific exceptions only when workflow semantics genuinely differ.
-6. Audit loading, empty, disabled, focus, error, destructive, and responsive states.
-7. Run frontend unit tests, Svelte/TypeScript checks, production build, and repository CI before merge.
+1. read this file first;
+2. identify the parent route family and its canonical geometry;
+3. use **Project Overview for stroke grammar**;
+4. use **Projects inventory for operational table grammar**;
+5. identify one owner for each piece of data/action;
+6. fix shared behavior centrally before adding route-local CSS;
+7. audit loading, empty, error, disabled, destructive, focus, responsive, and polling states;
+8. run frontend unit tests, Svelte/TypeScript checks, production build, and repository CI before merge.
 
-The target is one coherent operational workspace: **one outer geometry, one section grammar, one control system, one technical-output palette, semantic color where data requires it, and no redundant navigation or state.**
+The target is one coherent operational workspace: **one geometry, one stroke language, one table family, one control system, one technical-output palette, short direct copy, and no redundant state.**
