@@ -30,7 +30,7 @@
 	};
 
 	const projectSettingsLabels: Record<string, string> = {
-		'': 'General',
+		'': 'Settings',
 		source: 'Source',
 		resources: 'Resources',
 		webhook: 'Webhook',
@@ -57,7 +57,7 @@
 			const sectionKey = projectMatch[2] ?? '';
 			const nestedKey = projectMatch[3] ?? '';
 			const section = sectionKey === 'settings'
-				? (projectSettingsLabels[nestedKey] ?? 'General')
+				? (projectSettingsLabels[nestedKey] ?? 'Settings')
 				: sectionKey
 					? (projectSectionLabels[sectionKey] ?? 'Project')
 					: '';
