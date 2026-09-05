@@ -227,3 +227,17 @@ for (const viewport of viewports) {
 		});
 	}
 }
+
+test('login wordmark keeps its intended emphasis', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await page.goto('/login', { waitUntil: 'domcontentloaded' });
+
+	await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+	const logo = page.locator('main img[aria-hidden="true"]').first();
+	await expect(logo).toBeVisible();
+
+	const box = await logo.boundingBox();
+	expect(box).not.toBeNull();
+	expect(box.width).toBeGreaterThanOrEqual(220);
+	expect(box.height).toBeGreaterThanOrEqual(72);
+});
