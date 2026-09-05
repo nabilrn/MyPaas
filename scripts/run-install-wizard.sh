@@ -7,6 +7,7 @@ WIZARD_PORT="${WIZARD_PORT:-8787}"
 WIZARD_TOKEN="${WIZARD_TOKEN:?WIZARD_TOKEN is required}"
 WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
 WIZARD_TUNNEL_TIMEOUT="${WIZARD_TUNNEL_TIMEOUT:-120}"
+WIZARD_APP_SCRIPT="${WIZARD_APP_SCRIPT:-$(dirname "$WIZARD_SCRIPT")/install-wizard-preflight-app.py}"
 
 WIZARD_PID=""
 TUNNEL_PID=""
@@ -73,6 +74,15 @@ wait_for_tunnel_url() {
   return 1
 }
 
+start_wizard_server() {
+  if [[ -f "$WIZARD_APP_SCRIPT" ]]; then
+    WIZARD_BASE_SCRIPT="$WIZARD_SCRIPT" python3 "$WIZARD_APP_SCRIPT" &
+  else
+    python3 "$WIZARD_SCRIPT" &
+  fi
+  WIZARD_PID=$!
+}
+
 main() {
   local public_url=""
   trap cleanup EXIT INT TERM
@@ -81,8 +91,7 @@ main() {
     return 1
   }
 
-  python3 "$WIZARD_SCRIPT" &
-  WIZARD_PID=$!
+  start_wizard_server
 
   if [[ "$WIZARD_PUBLIC_TUNNEL" == "true" ]]; then
     printf 'Creating temporary HTTPS wizard URL...\n'
@@ -100,7 +109,7 @@ main() {
   fi
 
   wait "$WIZARD_PID"
-  
+
   # Allow time for the final HTTP response to reach the browser
   sleep 3
 }
