@@ -1,5 +1,4 @@
 import os
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,6 +42,7 @@ CADDY_UPSTREAM_HOST=old-host
                 "PROJECT_NETWORK=mypaas-projects\n"
                 "ROUTING_NETWORK=mypaas-routing\n"
                 "DOCKER_SOCKET=/var/run/docker.sock\n"
+                "DOCKER_BIND_HOST=172.31.0.1\n"
                 "CADDY_ADMIN=unix//run/mypaas/caddy-admin.sock\n"
                 "CADDY_UPSTREAM_HOST=runtime\n",
                 encoding="utf-8",
@@ -58,9 +58,13 @@ CADDY_UPSTREAM_HOST=old-host
             self.assertEqual(merged["PROJECT_NETWORK"], "mypaas-projects")
             self.assertEqual(merged["ROUTING_NETWORK"], "mypaas-routing")
             self.assertEqual(merged["DOCKER_SOCKET"], "/var/run/docker.sock")
+            self.assertEqual(merged["DOCKER_BIND_HOST"], "172.31.0.1")
             self.assertEqual(merged["CADDY_ADMIN"], "unix//run/mypaas/caddy-admin.sock")
             self.assertEqual(merged["CADDY_UPSTREAM_HOST"], "runtime")
             self.assertEqual(os.stat(current).st_mode & 0o777, 0o600)
+            text = current.read_text(encoding="utf-8")
+            self.assertIn("PUBLIC_DOMAIN=example.com\n", text)
+            self.assertNotIn("PUBLIC_DOMAIN='example.com'", text)
 
     def test_restore_rejects_shell_environment_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -79,12 +83,14 @@ CADDY_UPSTREAM_HOST=old-host
             with self.assertRaisesRegex(restore_env.RestoreEnvError, "duplicate environment key PUBLIC_DOMAIN"):
                 restore_env.parse_env(restored, allowed_keys=restore_env.allowed_keys_from_example(EXAMPLE))
 
-    def test_merged_file_does_not_execute_command_substitution_when_sourced(self) -> None:
+    def test_restore_rejects_command_substitution_before_replacing_current_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             current = root / ".env"
             restored = root / "restored.env"
             marker = root / "executed"
+            current.write_text("CONTROL_NETWORK=mypaas-control\n", encoding="utf-8")
+            before = current.read_text(encoding="utf-8")
             restored.write_text(
                 self.valid_restored_env().replace(
                     "GITHUB_CLIENT_SECRET=client-secret",
@@ -93,18 +99,12 @@ CADDY_UPSTREAM_HOST=old-host
                 encoding="utf-8",
             )
 
-            restore_env.merge_env_files(current, restored, EXAMPLE)
-            completed = subprocess.run(
-                ["bash", "-c", 'set -a; source "$1"; set +a; printf "%s" "$GITHUB_CLIENT_SECRET"', "bash", str(current)],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            with self.assertRaisesRegex(restore_env.RestoreEnvError, "cannot be represented safely"):
+                restore_env.merge_env_files(current, restored, EXAMPLE)
             self.assertFalse(marker.exists())
-            self.assertIn("$(touch", completed.stdout)
+            self.assertEqual(current.read_text(encoding="utf-8"), before)
 
-    def test_restore_rejects_single_quote_before_replacing_current_file(self) -> None:
+    def test_restore_rejects_ambiguous_quotes_before_replacing_current_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             current = root / ".env"
@@ -115,7 +115,7 @@ CADDY_UPSTREAM_HOST=old-host
                 encoding="utf-8",
             )
             before = current.read_text(encoding="utf-8")
-            with self.assertRaisesRegex(restore_env.RestoreEnvError, "single quote"):
+            with self.assertRaisesRegex(restore_env.RestoreEnvError, "cannot be represented safely"):
                 restore_env.merge_env_files(current, restored, EXAMPLE)
             self.assertEqual(current.read_text(encoding="utf-8"), before)
 
