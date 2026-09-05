@@ -13,6 +13,7 @@ IMAGE_WAIT_SECONDS="${AUTO_UPDATE_IMAGE_WAIT_SECONDS:-300}"
 LOCK_DIR="${AUTO_UPDATE_LOCK_DIR:-$ROOT_DIR/.git/mypaas-update.lock}"
 STATUS_DIR="${MYPAAS_UPDATE_STATUS_DIR:-/run/mypaas/update}"
 STATUS_FILE="${MYPAAS_UPDATE_STATUS_FILE:-$STATUS_DIR/status}"
+STATUS_HELPER="$ROOT_DIR/scripts/update-status.sh"
 CHECKOUT_OWNER="$(stat -c '%u:%g' "$ROOT_DIR" 2>/dev/null || true)"
 LOCK_HELD=false
 TERMINAL_STATUS_WRITTEN=false
@@ -20,6 +21,7 @@ CURRENT_SHA=""
 TARGET_SHA=""
 TARGET_VERSION=""
 TARGET_REF=""
+CURRENT_PHASE="idle"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -73,27 +75,23 @@ wait_for_image() {
   done
 }
 
-status_value() {
-  printf '%s' "$1" | tr '\r\n=' '   '
+sync_status_context() {
+  export MYPAAS_UPDATE_STATUS_ENABLED=true
+  export MYPAAS_UPDATE_STATUS_DIR="$STATUS_DIR"
+  export MYPAAS_UPDATE_STATUS_FILE="$STATUS_FILE"
+  export MYPAAS_UPDATE_CHANNEL="$CHANNEL"
+  export MYPAAS_UPDATE_CURRENT_SHA="$CURRENT_SHA"
+  export MYPAAS_UPDATE_TARGET_SHA="$TARGET_SHA"
+  export MYPAAS_UPDATE_TARGET_VERSION="$TARGET_VERSION"
 }
 
 write_status() {
   local state="$1"
-  local message="$2"
-  local tmp
-  mkdir -p "$STATUS_DIR"
-  tmp="$(mktemp "$STATUS_DIR/.status.XXXXXX")"
-  {
-    printf 'state=%s\n' "$(status_value "$state")"
-    printf 'channel=%s\n' "$(status_value "$CHANNEL")"
-    printf 'current_sha=%s\n' "$(status_value "$CURRENT_SHA")"
-    printf 'target_sha=%s\n' "$(status_value "$TARGET_SHA")"
-    printf 'target_version=%s\n' "$(status_value "$TARGET_VERSION")"
-    printf 'message=%s\n' "$(status_value "$message")"
-    printf 'updated_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  } > "$tmp"
-  chmod 0644 "$tmp"
-  mv -f "$tmp" "$STATUS_FILE"
+  local phase="$2"
+  local message="$3"
+  CURRENT_PHASE="$phase"
+  sync_status_context
+  mypaas_update_status_write "$state" "$phase" "$message"
   case "$state" in
     idle|succeeded|failed|rolled_back|blocked) TERMINAL_STATUS_WRITTEN=true ;;
   esac
@@ -110,7 +108,7 @@ on_exit() {
   local code=$?
   cleanup_lock
   if (( code != 0 )) && [[ "$TERMINAL_STATUS_WRITTEN" != "true" ]]; then
-    write_status failed "Updater exited before completing the requested revision"
+    write_status failed "$CURRENT_PHASE" "Updater exited before completing the requested revision"
   fi
   trap - EXIT
   exit "$code"
@@ -215,48 +213,51 @@ main() {
   INCLUDE_PRERELEASES="$(normalize_bool AUTO_UPDATE_INCLUDE_PRERELEASES "$INCLUDE_PRERELEASES")"
   [[ -d "$ROOT_DIR/.git" ]] || die "$ROOT_DIR is not a Git checkout"
   [[ -f "$ENV_FILE" ]] || die "missing $ENV_FILE"
+  [[ -r "$STATUS_HELPER" ]] || die "missing updater status helper $STATUS_HELPER"
   command_exists curl || die "curl is required for release discovery"
 
+  # shellcheck source=scripts/update-status.sh
+  source "$STATUS_HELPER"
   trap on_exit EXIT
   CURRENT_SHA="$(git_repo rev-parse HEAD)"
-  write_status checking "Checking for a published MyPaas update"
+  write_status checking resolving_release "Checking for a published MyPaas update"
 
   resolve_target
+  write_status checking validating_target "Resolved $TARGET_VERSION at ${TARGET_SHA:0:12}"
   ensure_complete_history
-  write_status checking "Resolved $TARGET_VERSION at ${TARGET_SHA:0:12}"
 
   if [[ "$CURRENT_SHA" != "$TARGET_SHA" ]] && ! git_repo merge-base --is-ancestor "$CURRENT_SHA" "$TARGET_SHA"; then
-    write_status blocked "Refusing to move to a target that is not a descendant of the current checkout"
+    write_status blocked validating_target "Refusing to move to a target that is not a descendant of the current checkout"
     log "Target ${TARGET_SHA:0:12} is not a descendant of ${CURRENT_SHA:0:12}; leaving the installation unchanged"
     return 0
   fi
 
   if [[ "$CURRENT_SHA" == "$TARGET_SHA" ]]; then
-    write_status updating "Reconciling host dependencies for the current revision"
+    write_status checking preflight "Reconciling host dependencies for the current revision"
     if env MYPAAS_REF="$TARGET_REF" MYPAAS_INSTALL_DIR="$ROOT_DIR" ENV_FILE="$ENV_FILE" \
       bash "$ROOT_DIR/scripts/update-vm.sh"; then
-      write_status idle "MyPaas is already up to date"
+      write_status idle idle "MyPaas is already up to date"
       return 0
     fi
-    write_status failed "Current revision reconciliation failed"
+    write_status failed preflight "Current revision reconciliation failed"
     return 1
   fi
 
   if ! is_frontend_only "$CURRENT_SHA" "$TARGET_SHA"; then
     local full_log
     full_log="$(mktemp)"
-    write_status updating "Applying MyPaas release $TARGET_VERSION"
+    sync_status_context
     if run_logged "$full_log" env MYPAAS_REF="$TARGET_REF" MYPAAS_INSTALL_DIR="$ROOT_DIR" ENV_FILE="$ENV_FILE" \
       bash "$ROOT_DIR/scripts/update-vm.sh"; then
       rm -f "$full_log"
       CURRENT_SHA="$TARGET_SHA"
-      write_status succeeded "MyPaas updated successfully to $TARGET_VERSION"
+      write_status succeeded complete "MyPaas updated successfully to $TARGET_VERSION"
       return 0
     fi
     if grep -q 'was restored and verified' "$full_log"; then
-      write_status rolled_back "Update failed; the previous runtime was restored and verified"
+      write_status rolled_back rolling_back "Update failed; the previous runtime was restored and verified"
     else
-      write_status failed "Update failed; inspect the host updater logs"
+      write_status failed "$CURRENT_PHASE" "Update failed; inspect the host updater logs"
     fi
     rm -f "$full_log"
     return 1
@@ -264,7 +265,7 @@ main() {
 
   log "Frontend-only update detected; using dashboard fast path"
   if [[ -n "$(git_repo status --porcelain)" ]]; then
-    write_status blocked "$ROOT_DIR has local changes; automatic update is disabled until the checkout is clean"
+    write_status blocked preflight "$ROOT_DIR has local changes; automatic update is disabled until the checkout is clean"
     return 0
   fi
   if ! mkdir "$LOCK_DIR" >/dev/null 2>&1; then
@@ -276,35 +277,39 @@ main() {
   local docker_cmd target_dashboard dashboard_log
   docker_cmd="$(docker_prefix)"
   target_dashboard="$DASHBOARD_IMAGE_REPO:$TARGET_SHA"
+  write_status checking checking_images "Checking dashboard image for $TARGET_VERSION"
   log "Waiting for dashboard image for ${TARGET_SHA:0:12}"
   if ! wait_for_image "$docker_cmd" "$target_dashboard"; then
-    write_status blocked "Dashboard image for $TARGET_VERSION is not published yet"
+    write_status blocked checking_images "Dashboard image for $TARGET_VERSION is not published yet"
     log "Dashboard image is not published yet; leaving the running installation unchanged"
     return 0
   fi
 
-  write_status updating "Applying dashboard release $TARGET_VERSION"
+  write_status checking preflight "Validating dashboard-only update path"
+  write_status updating applying "Applying dashboard release $TARGET_VERSION"
   log "Updating checkout ${CURRENT_SHA:0:12} -> ${TARGET_SHA:0:12}"
   git_repo reset --hard "$TARGET_SHA"
   restore_checkout_owner
 
   dashboard_log="$(mktemp)"
+  sync_status_context
   if run_logged "$dashboard_log" env DOCKER_BIN="$docker_cmd" MYPAAS_INSTALL_DIR="$ROOT_DIR" ENV_FILE="$ENV_FILE" \
     MYPAAS_DASHBOARD_IMAGE_TAG="$TARGET_SHA" bash "$ROOT_DIR/scripts/update-dashboard.sh"; then
     rm -f "$dashboard_log"
     CURRENT_SHA="$TARGET_SHA"
-    write_status succeeded "Dashboard updated successfully to $TARGET_VERSION"
+    write_status succeeded complete "Dashboard updated successfully to $TARGET_VERSION"
     log "Frontend-only MyPaas update completed at ${TARGET_SHA:0:12}"
     return 0
   fi
 
+  write_status updating rolling_back "Dashboard update failed; restoring the previous dashboard runtime"
   log "Frontend fast path failed; restoring checkout ${CURRENT_SHA:0:12}"
   git_repo reset --hard "$CURRENT_SHA"
   restore_checkout_owner
   if grep -q 'previous dashboard runtime was restored' "$dashboard_log"; then
-    write_status rolled_back "Dashboard update failed; the previous dashboard runtime was restored"
+    write_status rolled_back rolling_back "Dashboard update failed; the previous dashboard runtime was restored"
   else
-    write_status failed "Dashboard update failed and rollback could not be verified"
+    write_status failed rolling_back "Dashboard update failed and rollback could not be verified"
   fi
   rm -f "$dashboard_log"
   return 1
