@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Check, CircleAlert, CircleCheck, CircleDashed, Copy, ExternalLink, Eye, EyeOff, RefreshCw } from '@lucide/svelte';
+	import { Check, CircleAlert, CircleCheck, CircleDashed, Copy, ExternalLink, Eye, EyeOff, Github, RefreshCw } from '@lucide/svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
@@ -120,7 +120,10 @@
 {:else if project}
 	<div class="w-full">
 		<div class="border-b border-[color:var(--workspace-divider)] px-5 pb-3 pt-4">
-			<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
+			<div class="flex items-center gap-2">
+				<Github class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-300" aria-hidden="true" />
+				<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
+			</div>
 			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy this project from signed GitHub push events.</p>
 		</div>
 
@@ -171,17 +174,19 @@
 					<div class="mt-4 space-y-4">
 						<div>
 							<p class="field-label">Payload URL</p>
-							<div class="flex min-w-0 items-center gap-2">
-								<p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-950 dark:text-white">{publicWebhookURL}</p>
-								<IconButton label={copiedTarget === 'url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyText(publicWebhookURL, 'Webhook URL copied', 'url')}>{#if copiedTarget === 'url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+							<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] items-center gap-2">
+								<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{publicWebhookURL}</p>
+								<div class="flex shrink-0 justify-end">
+									<IconButton label={copiedTarget === 'url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyText(publicWebhookURL, 'Webhook URL copied', 'url')}>{#if copiedTarget === 'url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+								</div>
 							</div>
 						</div>
 
 						<div>
 							<p class="field-label">Secret</p>
-							<div class="flex min-w-0 items-center gap-2">
-								<p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-950 dark:text-white">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••'}</p>
-								<div class="flex shrink-0 items-center gap-1">
+							<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] items-center gap-2">
+								<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••'}</p>
+								<div class="flex shrink-0 items-center justify-end gap-1">
 									<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Reveal webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>{#if showWebhookSecret}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}</IconButton>
 									<IconButton label={copiedTarget === 'secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'secret')}>{#if copiedTarget === 'secret'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
 								</div>
@@ -195,7 +200,10 @@
 				</section>
 
 				<section class="border-t border-[color:var(--workspace-divider)] px-4 py-4 lg:border-t-0">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub setup</h2>
+					<div class="flex items-center gap-2">
+						<Github class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-300" aria-hidden="true" />
+						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub setup</h2>
+					</div>
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Create a repository webhook with these delivery rules.</p>
 
 					<dl class="mt-4 grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-3 text-sm">
