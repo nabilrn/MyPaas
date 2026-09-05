@@ -268,7 +268,6 @@ main() {
     return 0
   fi
   if ! mkdir "$LOCK_DIR" >/dev/null 2>&1; then
-    write_status blocked "Another MyPaas update is already running"
     log "Another MyPaas update is already running; skipping"
     return 0
   fi
