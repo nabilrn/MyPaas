@@ -8,6 +8,18 @@ DASHBOARD_IMAGE_REPO="${MYPAAS_DASHBOARD_IMAGE_REPO:-ghcr.io/nabilrn/mypaas-dash
 TARGET_TAG="${MYPAAS_DASHBOARD_IMAGE_TAG:-${1:-}}"
 VERIFY_ATTEMPTS="${DASHBOARD_UPDATE_VERIFY_ATTEMPTS:-12}"
 VERIFY_DELAY_SECONDS="${DASHBOARD_UPDATE_VERIFY_DELAY_SECONDS:-2}"
+STATUS_HELPER="$ROOT_DIR/scripts/update-status.sh"
+
+if [[ -r "$STATUS_HELPER" ]]; then
+  # shellcheck source=scripts/update-status.sh
+  source "$STATUS_HELPER"
+fi
+
+status_phase() {
+  if declare -F mypaas_update_status_write >/dev/null 2>&1; then
+    mypaas_update_status_write "$1" "$2" "$3"
+  fi
+}
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -81,17 +93,21 @@ main() {
   log "Pulling dashboard image $target_image"
   $docker_cmd pull "$target_image"
 
+  status_phase updating applying "Recreating the MyPaas dashboard"
   log "Recreating dashboard only"
-  if MYPAAS_IMAGE_TAG="$TARGET_TAG" $compose_cmd -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard \
-    && verify_dashboard "$docker_cmd" "$TARGET_TAG"; then
-    log "Dashboard updated successfully to ${TARGET_TAG:0:12}"
-    if [[ "$rollback_ready" == "true" ]]; then
-      $docker_cmd image rm "$DASHBOARD_IMAGE_REPO:$rollback_tag" >/dev/null 2>&1 || true
+  if MYPAAS_IMAGE_TAG="$TARGET_TAG" $compose_cmd -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard; then
+    status_phase updating verifying "Verifying the updated MyPaas dashboard"
+    if verify_dashboard "$docker_cmd" "$TARGET_TAG"; then
+      log "Dashboard updated successfully to ${TARGET_TAG:0:12}"
+      if [[ "$rollback_ready" == "true" ]]; then
+        $docker_cmd image rm "$DASHBOARD_IMAGE_REPO:$rollback_tag" >/dev/null 2>&1 || true
+      fi
+      return 0
     fi
-    return 0
   fi
 
   if [[ "$rollback_ready" == "true" ]]; then
+    status_phase updating rolling_back "Dashboard verification failed; restoring the previous dashboard image"
     log "Dashboard update failed; restoring previous dashboard image"
     if MYPAAS_IMAGE_TAG="$rollback_tag" $compose_cmd -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-deps dashboard \
       && verify_dashboard "$docker_cmd" "$rollback_tag"; then

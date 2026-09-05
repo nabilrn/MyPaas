@@ -4,6 +4,7 @@
     Bot,
     ClipboardList,
     Database,
+    RefreshCw,
     Settings2,
     Users,
   } from "@lucide/svelte";
@@ -17,6 +18,7 @@
   const icons = {
     general: Settings2,
     users: Users,
+    "system-update": RefreshCw,
     backup: Database,
     migration: ArrowRightLeft,
     mcp: Bot,

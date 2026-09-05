@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import adminLayout from '../../routes/admin/+layout.svelte?raw';
 import adminSettingsPage from '../../routes/admin/settings/+page.svelte?raw';
+import adminUpdatePage from '../../routes/admin/update/+page.svelte?raw';
 import adminUsersPage from '../../routes/admin/users/+page.svelte?raw';
 import adminBackupPage from '../../routes/admin/backup/+page.svelte?raw';
 import adminMigrationPage from '../../routes/admin/migration/+page.svelte?raw';
@@ -36,14 +37,14 @@ describe('administration navigation contract', () => {
 		expect(administrationNavigationItem).toMatchObject({ label: 'Administration', href: '/admin/settings' });
 		expect(navbar).toContain('administrationNavigationItem');
 		expect(appHeader).toContain('primaryNavigationItems');
-		for (const route of ['/admin/users', '/admin/audit-logs', '/admin/mcp', '/admin/backup', '/admin/migration']) {
+		for (const route of ['/admin/update', '/admin/users', '/admin/audit-logs', '/admin/mcp', '/admin/backup', '/admin/migration']) {
 			expect(navbar).not.toContain(route);
 			expect(appHeader).not.toContain(route);
 		}
 	});
 
 	it('marks Administration active throughout the admin route family', () => {
-		for (const pathname of ['/admin', '/admin/settings', '/admin/users', '/admin/backup', '/admin/migration', '/admin/mcp', '/admin/audit-logs']) {
+		for (const pathname of ['/admin', '/admin/settings', '/admin/update', '/admin/users', '/admin/backup', '/admin/migration', '/admin/mcp', '/admin/audit-logs']) {
 			expect(isAdministrationPath(pathname)).toBe(true);
 			expect(isAdministrationNavItemActive(administrationNavItems[0], pathname)).toBe(pathname === '/admin/settings');
 		}
@@ -55,12 +56,14 @@ describe('administration navigation contract', () => {
 		expect(administrationNavItems.map((item) => [item.label, item.href])).toEqual([
 			['General', '/admin/settings'],
 			['Users', '/admin/users'],
+			['System update', '/admin/update'],
 			['Backup', '/admin/backup'],
 			['Migration', '/admin/migration'],
 			['MCP', '/admin/mcp'],
 			['Audit logs', '/admin/audit-logs']
 		]);
 		expect(administrationNavItemForPath('/admin/users').label).toBe('Users');
+		expect(administrationNavItemForPath('/admin/update').label).toBe('System update');
 		expect(appHeader).toContain('administrationNavItemForPath');
 	});
 
@@ -77,6 +80,9 @@ describe('administration navigation contract', () => {
 	it('keeps the redesigned Administration pages task-first and full-width', () => {
 		expect(adminSettingsPage).toContain('admin-general-workspace w-full');
 		expect(adminSettingsPage).toContain('ConfirmActionDialog');
+		expect(adminUpdatePage).toContain('admin-update-workspace w-full');
+		expect(adminUpdatePage).toContain('Update progress');
+		expect(adminUpdatePage).toContain('api.admin.triggerUpdate');
 		expect(adminBackupPage).toContain('admin-backup-workspace w-full');
 		expect(adminBackupPage).toContain('Cloudflare R2');
 		expect(adminBackupPage).toContain('Cloudflare R2 docs');

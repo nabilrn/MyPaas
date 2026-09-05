@@ -1,48 +1,24 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { AlertTriangle, Bell, CheckCircle2, ExternalLink, LoaderCircle, RotateCcw } from '@lucide/svelte';
-	import { api } from '$api';
-	import { toast } from '$stores/toast';
 	import { dismissable } from '$lib/actions/dismissable';
+	import { isUpdateBusy, type UpdateSnapshot } from '$lib/system-update';
 	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
-
-	type UpdateState = 'idle' | 'checking' | 'updating' | 'succeeded' | 'failed' | 'rolled_back' | 'blocked';
-	type Snapshot = {
-		status: {
-			state: UpdateState;
-			channel: string;
-			currentSha: string;
-			targetSha: string;
-			targetVersion: string;
-			message: string;
-			updatedAt: string;
-		};
-		release: null | {
-			tagName: string;
-			name: string;
-			targetSha: string;
-			prerelease: boolean;
-			publishedAt: string;
-			htmlUrl: string;
-			available: boolean;
-		};
-	};
 
 	export let enabled = false;
 
 	let open = false;
-	let snapshot: Snapshot | null = null;
+	let snapshot: UpdateSnapshot | null = null;
 	let loading = false;
-	let queueing = false;
 	let mounted = false;
 	let poll: ReturnType<typeof setInterval> | undefined;
 
-	$: busy = snapshot?.status.state === 'checking' || snapshot?.status.state === 'updating';
-	$: attention = Boolean(snapshot?.release?.available)
-		|| snapshot?.status.state === 'failed'
-		|| snapshot?.status.state === 'rolled_back'
-		|| snapshot?.status.state === 'blocked';
+	$: busy = isUpdateBusy(snapshot);
+	$: releaseAvailable = Boolean(snapshot?.release?.available);
+	$: lastFailure = !releaseAvailable && !busy && (snapshot?.status.state === 'failed' || snapshot?.status.state === 'rolled_back' || snapshot?.status.state === 'blocked');
+	$: attention = releaseAvailable || busy || lastFailure;
 
 	onMount(() => {
 		mounted = true;
@@ -85,42 +61,30 @@
 		try {
 			const response = await fetch('/internal/system-update', { cache: 'no-store', credentials: 'include' });
 			if (!response.ok) return;
-			snapshot = await response.json() as Snapshot;
+			snapshot = await response.json() as UpdateSnapshot;
 		} catch {
-			// A control-plane restart is expected while an update is running.
+			// Keep the last useful snapshot while the dashboard or API restarts.
 		} finally {
 			if (showLoading) loading = false;
 		}
 	}
 
-	async function queueUpdate() {
-		if (queueing || busy) return;
-		queueing = true;
-		try {
-			await api.admin.triggerUpdate();
-			toast.info('Update queued');
-			await refresh(false);
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to queue update');
-		} finally {
-			queueing = false;
-		}
+	async function openUpdatePage() {
+		open = false;
+		await goto('/admin/update');
 	}
 
 	function shortSha(value: string) {
 		return value ? value.slice(0, 12) : 'unknown';
 	}
 
-	function stateLabel(state: UpdateState) {
-		switch (state) {
-			case 'checking': return 'Checking for update';
-			case 'updating': return 'Updating MyPaaS';
-			case 'succeeded': return 'Update completed';
-			case 'rolled_back': return 'Update rolled back';
-			case 'failed': return 'Update failed';
-			case 'blocked': return 'Update blocked';
-			default: return 'Updater idle';
-		}
+	function statusLabel() {
+		if (busy) return 'Update in progress';
+		if (snapshot?.status.state === 'rolled_back') return 'Last update rolled back';
+		if (snapshot?.status.state === 'failed') return 'Last update failed';
+		if (snapshot?.status.state === 'blocked') return 'Last update was blocked';
+		if (snapshot?.status.state === 'succeeded') return 'Update completed';
+		return 'Updater idle';
 	}
 </script>
 
@@ -148,35 +112,27 @@
 						Checking release status
 					</div>
 				{:else if snapshot}
-					<div class="space-y-0">
-						<div class="px-4 py-3">
-							<div class="flex items-start gap-2.5">
-								{#if busy}
+					<div>
+						{#if busy}
+							<div class="px-4 py-3">
+								<div class="flex items-start gap-2.5">
 									<LoaderCircle class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-gray-500" aria-hidden="true" />
-								{:else if snapshot.status.state === 'failed' || snapshot.status.state === 'blocked'}
-									<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
-								{:else if snapshot.status.state === 'rolled_back'}
-									<RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
-								{:else}
-									<CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
-								{/if}
-								<div class="min-w-0">
-									<p class="text-sm font-medium text-gray-950 dark:text-white">{stateLabel(snapshot.status.state)}</p>
-									<p class="mt-0.5 text-[13px] leading-5 text-gray-500 dark:text-gray-400">{snapshot.status.message || 'No updater activity.'}</p>
-									<p class="mt-1 font-mono text-[11px] text-gray-400 dark:text-gray-500">build {shortSha(snapshot.status.currentSha)}</p>
+									<div class="min-w-0">
+										<p class="text-sm font-medium text-gray-950 dark:text-white">Update in progress</p>
+										<p class="mt-0.5 text-[13px] leading-5 text-gray-500 dark:text-gray-400">{snapshot.status.message || 'The host updater is running.'}</p>
+									</div>
 								</div>
+								<ActionButton variant="secondary" size="xs" full className="mt-3" on:click={openUpdatePage}>View progress</ActionButton>
 							</div>
-						</div>
-
-						{#if snapshot.release}
-							<div class="border-t border-gray-100 px-4 py-3 dark:border-neutral-800">
+						{:else if releaseAvailable && snapshot.release}
+							<div class="px-4 py-3">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
 										<div class="flex items-center gap-2">
 											<p class="text-sm font-semibold text-gray-950 dark:text-white">{snapshot.release.tagName}</p>
 											{#if snapshot.release.prerelease}<span class="chip px-1.5 py-0.5 text-[10px]">RC</span>{/if}
 										</div>
-										<p class="mt-0.5 truncate text-[13px] text-gray-500 dark:text-gray-400">{snapshot.release.available ? 'New published release available' : 'Current release is installed'}</p>
+										<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">New published release available</p>
 									</div>
 									{#if snapshot.release.htmlUrl}
 										<a class="app-focus inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-white" href={snapshot.release.htmlUrl} target="_blank" rel="noreferrer" aria-label="View release on GitHub">
@@ -184,12 +140,30 @@
 										</a>
 									{/if}
 								</div>
-
-								{#if snapshot.release.available}
-									<ActionButton variant="secondary" size="xs" full className="mt-3" disabled={busy || queueing} on:click={queueUpdate}>
-										{queueing ? 'Queuing update…' : busy ? 'Update in progress' : `Update to ${snapshot.release.tagName}`}
-									</ActionButton>
-								{/if}
+								<ActionButton variant="secondary" size="xs" full className="mt-3" on:click={openUpdatePage}>View update</ActionButton>
+							</div>
+						{:else if lastFailure}
+							<div class="px-4 py-3">
+								<div class="flex items-start gap-2.5">
+									{#if snapshot.status.state === 'rolled_back'}
+										<RotateCcw class="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+									{:else}
+										<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+									{/if}
+									<div class="min-w-0">
+										<p class="text-sm font-medium text-gray-950 dark:text-white">{statusLabel()}</p>
+										<p class="mt-0.5 text-[13px] leading-5 text-gray-500 dark:text-gray-400">{snapshot.status.message || 'Open System update for details.'}</p>
+										<p class="mt-1 font-mono text-[11px] text-gray-400 dark:text-gray-500">build {shortSha(snapshot.status.currentSha)}</p>
+									</div>
+								</div>
+								<ActionButton variant="secondary" size="xs" full className="mt-3" on:click={openUpdatePage}>View details</ActionButton>
+							</div>
+						{:else}
+							<div class="px-4 py-5 text-center">
+								<CheckCircle2 class="mx-auto h-5 w-5 text-gray-400" aria-hidden="true" />
+								<p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">MyPaaS is up to date</p>
+								{#if snapshot.release}<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">{snapshot.release.tagName} is installed.</p>{/if}
+								<ActionButton variant="ghost" size="xs" className="mt-2" on:click={openUpdatePage}>Open updater</ActionButton>
 							</div>
 						{/if}
 					</div>
@@ -197,7 +171,8 @@
 					<div class="px-4 py-8 text-center">
 						<Bell class="mx-auto h-5 w-5 text-gray-300 dark:text-gray-700" aria-hidden="true" />
 						<p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">Status unavailable</p>
-						<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">The host update status could not be read.</p>
+						<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">Open System update to retry the status check.</p>
+						<ActionButton variant="ghost" size="xs" className="mt-2" on:click={openUpdatePage}>Open updater</ActionButton>
 					</div>
 				{/if}
 			</div>

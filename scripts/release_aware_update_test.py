@@ -30,18 +30,38 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn('main)', dispatch)
         self.assertIn('TARGET_REF="$REF"', dispatch)
 
-    def test_dispatcher_status_is_atomic_and_has_terminal_states(self):
+    def test_status_helper_is_atomic_and_phase_aware(self):
+        helper = self.text("scripts/update-status.sh")
         dispatch = self.text("scripts/update-dispatch.sh")
-        self.assertIn('mktemp "$STATUS_DIR/.status.XXXXXX"', dispatch)
-        self.assertIn('mv -f "$tmp" "$STATUS_FILE"', dispatch)
+        self.assertIn('status_parent="$(dirname "$status_file")"', helper)
+        self.assertIn('mktemp "$status_parent/.status.XXXXXX"', helper)
+        self.assertIn('mv -f "$tmp" "$status_file"', helper)
+        self.assertIn("printf 'phase=%s\\n'", helper)
         for state in ("succeeded", "failed", "rolled_back", "blocked"):
             self.assertIn(f"write_status {state}", dispatch)
+
+    def test_dispatcher_reports_real_update_phases(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        dashboard = self.text("scripts/update-dashboard.sh")
+        full = self.text("scripts/update-vm.sh")
+        for phase in ("resolving_release", "validating_target", "checking_images", "preflight", "applying", "rolling_back", "complete"):
+            self.assertIn(phase, dispatch)
+        self.assertIn('status_phase updating verifying "Verifying the updated MyPaas control plane"', full)
+        self.assertIn('status_phase updating verifying "Verifying the updated MyPaas dashboard"', dashboard)
+
+    def test_dispatcher_preserves_child_phase_and_requires_checkout_advance(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        self.assertIn("latest_status_phase()", dispatch)
+        self.assertIn('actual_sha="$(git_repo rev-parse HEAD)"', dispatch)
+        self.assertIn('if [[ "$actual_sha" != "$TARGET_SHA" ]]', dispatch)
+        self.assertIn("Updater left the installation unchanged", dispatch)
+        self.assertIn('write_status failed "$(latest_status_phase)"', dispatch)
 
     def test_dispatcher_expands_shallow_history_before_ancestry_guard(self):
         dispatch = self.text("scripts/update-dispatch.sh")
         self.assertIn('git_repo rev-parse --is-shallow-repository', dispatch)
         self.assertIn('git_repo fetch --unshallow "$REMOTE"', dispatch)
-        self.assertIn('resolve_target\n  ensure_complete_history\n  write_status checking', dispatch)
+        self.assertLess(dispatch.index("ensure_complete_history"), dispatch.index('git_repo merge-base --is-ancestor "$CURRENT_SHA" "$TARGET_SHA"'))
 
     def test_dispatcher_refuses_non_descendant_release(self):
         dispatch = self.text("scripts/update-dispatch.sh")
@@ -72,9 +92,8 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
     def test_release_status_route_is_owner_authenticated_and_descendant_aware(self):
         route = self.text("frontend/src/routes/internal/system-update/+server.ts")
         header = self.text("frontend/src/lib/components/AppHeader.svelte")
-        settings = self.text("frontend/src/routes/admin/settings/+page.svelte")
         self.assertIn("apiRequest('/auth/me', cookie)", route)
-        self.assertIn("user.role !== 'owner'", route)
+        self.assertIn("user?.role !== 'owner'", route)
         self.assertIn("/run/mypaas/update/status", route)
         self.assertIn("/etc/mypaas/update.env", route)
         self.assertIn("AUTO_UPDATE_INCLUDE_PRERELEASES", route)
@@ -83,10 +102,25 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("comparison.status === 'ahead'", route)
         self.assertIn("GITHUB_CACHE_TTL_MS = 5 * 60_000", route)
         self.assertIn("redirect: 'error'", route)
+        self.assertIn("phaseCandidate", route)
         self.assertIn("<ReleaseNotification enabled={user?.role === 'owner'} />", header)
-        self.assertNotIn("startUpdatePolling", settings)
-        self.assertNotIn("/api/health", settings)
-        self.assertIn("Track progress from the notification bell", settings)
+
+    def test_system_update_page_is_server_rendered_and_survives_restart(self):
+        server = self.text("frontend/src/routes/admin/update/+page.server.ts")
+        page = self.text("frontend/src/routes/admin/update/+page.svelte")
+        bell = self.text("frontend/src/lib/components/ReleaseNotification.svelte")
+        self.assertIn("fetch('/internal/system-update'", server)
+        self.assertIn("Update progress", page)
+        self.assertIn("queuedLocally", page)
+        self.assertIn("connectionLost", page)
+        self.assertIn("window.location.reload()", page)
+        self.assertIn("pollingFast ? 1000 : 30_000", page)
+        self.assertIn("baselineStatusKey", page)
+        self.assertIn("statusAdvanced", page)
+        self.assertIn("statusTargetsAvailableRelease", page)
+        self.assertIn("release?.available && !busy && !statusTargetsAvailableRelease", page)
+        self.assertIn("goto('/admin/update')", bell)
+        self.assertNotIn("api.admin.triggerUpdate", bell)
 
     def test_release_publish_targets_qualified_main_images(self):
         workflow = self.text(".github/workflows/release-publish.yml")

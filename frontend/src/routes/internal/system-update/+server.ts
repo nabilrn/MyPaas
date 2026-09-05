@@ -2,16 +2,7 @@ import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { readFile } from 'node:fs/promises';
 import type { RequestHandler } from './$types';
-
-type UpdateStatus = {
-	state: 'idle' | 'checking' | 'updating' | 'succeeded' | 'failed' | 'rolled_back' | 'blocked';
-	channel: 'release' | 'main' | 'unknown';
-	currentSha: string;
-	targetSha: string;
-	targetVersion: string;
-	message: string;
-	updatedAt: string;
-};
+import type { UpdatePhase, UpdateSnapshot, UpdateStatus } from '$lib/system-update';
 
 type ReleaseInfo = {
 	tagName: string;
@@ -41,8 +32,21 @@ type ApiEnvelope<T> = {
 	data: T;
 };
 
+const UPDATE_PHASES: UpdatePhase[] = [
+	'idle',
+	'resolving_release',
+	'validating_target',
+	'checking_images',
+	'preflight',
+	'applying',
+	'verifying',
+	'rolling_back',
+	'complete'
+];
+
 const DEFAULT_STATUS: UpdateStatus = {
 	state: 'idle',
+	phase: 'idle',
 	channel: 'unknown',
 	currentSha: '',
 	targetSha: '',
@@ -74,16 +78,29 @@ function parseValues(raw: string) {
 	return values;
 }
 
+function fallbackPhase(state: UpdateStatus['state']): UpdatePhase {
+	if (state === 'succeeded') return 'complete';
+	if (state === 'checking') return 'resolving_release';
+	if (state === 'updating') return 'applying';
+	if (state === 'rolled_back') return 'rolling_back';
+	return 'idle';
+}
+
 function parseStatus(raw: string): UpdateStatus {
 	const values = parseValues(raw);
 	const candidate = values.get('state') ?? 'idle';
 	const state = ['idle', 'checking', 'updating', 'succeeded', 'failed', 'rolled_back', 'blocked'].includes(candidate)
 		? candidate as UpdateStatus['state']
 		: 'idle';
+	const phaseCandidate = values.get('phase') ?? '';
+	const phase = UPDATE_PHASES.includes(phaseCandidate as UpdatePhase)
+		? phaseCandidate as UpdatePhase
+		: fallbackPhase(state);
 	const channelValue = values.get('channel') ?? 'unknown';
 	const channel = ['release', 'main'].includes(channelValue) ? channelValue as UpdateStatus['channel'] : 'unknown';
 	return {
 		state,
+		phase,
 		channel,
 		currentSha: values.get('current_sha') ?? '',
 		targetSha: values.get('target_sha') ?? '',
@@ -214,10 +231,11 @@ export const GET: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	return json({
+	const payload: UpdateSnapshot = {
 		status: { ...status, channel, currentSha },
 		release: release ? { ...release, available: releaseAvailable } : null
-	}, {
+	};
+	return json(payload, {
 		headers: { 'Cache-Control': 'no-store' }
 	});
 };

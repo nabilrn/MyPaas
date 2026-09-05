@@ -5,6 +5,7 @@ ROOT_DIR="${MYPAAS_INSTALL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 UPDATE_CONFIG_FILE="${MYPAAS_UPDATE_CONFIG:-/etc/mypaas/update.env}"
+STATUS_HELPER="$ROOT_DIR/scripts/update-status.sh"
 EXPLICIT_REF_SET="${MYPAAS_REF+x}"
 EXPLICIT_WAIT_SET="${AUTO_UPDATE_IMAGE_WAIT_SECONDS+x}"
 
@@ -47,6 +48,17 @@ VERIFY_ATTEMPTS="${AUTO_UPDATE_VERIFY_ATTEMPTS:-12}"
 VERIFY_DELAY_SECONDS="${AUTO_UPDATE_VERIFY_DELAY_SECONDS:-5}"
 LOCK_DIR="${AUTO_UPDATE_LOCK_DIR:-$ROOT_DIR/.git/mypaas-update.lock}"
 CHECKOUT_OWNER="$(stat -c '%u:%g' "$ROOT_DIR" 2>/dev/null || true)"
+
+if [[ -r "$STATUS_HELPER" ]]; then
+  # shellcheck source=scripts/update-status.sh
+  source "$STATUS_HELPER"
+fi
+
+status_phase() {
+  if declare -F mypaas_update_status_write >/dev/null 2>&1; then
+    mypaas_update_status_write "$1" "$2" "$3"
+  fi
+}
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -218,6 +230,7 @@ redeploy_current_for_env_drift() {
     log "API runtime environment is missing the reconciled STATD_SOCKET; recreating the current stack"
     MYPAAS_IMAGE_TAG="$current_sha" MYPAAS_BUILD_SHA="$current_sha" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" \
       ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+    status_phase updating verifying "Verifying the reconciled MyPaas runtime"
     verify_stack "$docker_cmd" "$current_sha" "$current_sha" || die "current MyPaas stack failed verification after STATD_SOCKET reconciliation"
   fi
 }
@@ -257,6 +270,7 @@ main() {
   if [[ "$current_sha" == "$target_sha" ]]; then
     # Host-native dependencies and ignored production env files can drift even
     # when the Git checkout is already current. Reconcile them before returning.
+    status_phase checking preflight "Reconciling host dependencies for the current revision"
     reconcile_statd
     redeploy_current_for_env_drift "$docker_cmd" "$current_sha"
     log "MyPaas is already up to date (${current_sha:0:12})"
@@ -267,6 +281,7 @@ main() {
   target_api="$API_IMAGE_REPO:$target_sha"
   target_dashboard="$DASHBOARD_IMAGE_REPO:$target_sha"
 
+  status_phase checking checking_images "Checking immutable API and dashboard images"
   log "Waiting for release images for ${target_sha:0:12}"
   if ! wait_for_image "$docker_cmd" "$target_api"; then
     log "API image is not published yet; leaving the running installation unchanged"
@@ -277,6 +292,7 @@ main() {
     return 0
   fi
 
+  status_phase checking preflight "Validating migrations and the existing runtime"
   local target_skip_migrations=false
   if git_repo diff --quiet "$current_sha" "$target_sha" -- backend/migrations; then
     target_skip_migrations=true
@@ -304,6 +320,7 @@ main() {
     rollback_ready=true
   fi
 
+  status_phase updating applying "Applying MyPaas release ${target_sha:0:12}"
   log "Updating checkout ${current_sha:0:12} -> ${target_sha:0:12}"
   git_repo reset --hard "$target_sha"
   restore_checkout_owner
@@ -315,11 +332,15 @@ main() {
     DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" \
     bash "$ROOT_DIR/scripts/deploy-to-vm.sh"; then
     deploy_ok=false
-  elif ! verify_stack "$docker_cmd" "$target_sha" "$target_sha"; then
-    deploy_ok=false
+  else
+    status_phase updating verifying "Verifying the updated MyPaas control plane"
+    if ! verify_stack "$docker_cmd" "$target_sha" "$target_sha"; then
+      deploy_ok=false
+    fi
   fi
 
   if [[ "$deploy_ok" != "true" ]]; then
+    status_phase updating rolling_back "Update failed; restoring the previous MyPaas runtime"
     log "Update failed; restoring checkout ${current_sha:0:12}"
     git_repo reset --hard "$current_sha"
     restore_checkout_owner

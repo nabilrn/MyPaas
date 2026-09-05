@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { Cpu, HardDrive, MemoryStick, Pencil, RefreshCw, Timer } from '@lucide/svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
@@ -30,7 +31,6 @@
 	type ConfirmationTarget =
 		| { kind: 'profile'; profile: ProfileSetting }
 		| { kind: 'build-timeout' }
-		| { kind: 'system-update' }
 		| null;
 
 	const defaultSettings: NumericSettings = {
@@ -58,7 +58,6 @@
 	let savingTarget = '';
 	let editingTarget = '';
 	let confirmationTarget: ConfirmationTarget = null;
-	let triggeringUpdate = false;
 	let currentBuildSha = '';
 
 	$: validationErrors = {
@@ -82,18 +81,13 @@
 		? `Save ${confirmationTarget.profile.name} defaults?`
 		: confirmationTarget?.kind === 'build-timeout'
 			? 'Save build timeout?'
-			: confirmationTarget?.kind === 'system-update'
-				? 'Update MyPaaS?'
-				: 'Confirm action';
+			: 'Confirm action';
 	$: confirmationDescription = confirmationTarget?.kind === 'profile'
 		? 'This becomes the platform default used by this resource profile. Explicit per-project overrides remain available.'
 		: confirmationTarget?.kind === 'build-timeout'
 			? 'Future deployment builds will use this timeout.'
-			: confirmationTarget?.kind === 'system-update'
-				? 'This queues the release-aware host updater. Progress and the final result are reported from the notification bell.'
-				: '';
-	$: confirmationLabel = confirmationTarget?.kind === 'system-update' ? 'Update MyPaaS' : 'Save changes';
-	$: confirmationBusy = confirmationTarget?.kind === 'system-update' ? triggeringUpdate : Boolean(savingTarget);
+			: '';
+	$: confirmationBusy = Boolean(savingTarget);
 
 	onMount(() => {
 		void loadSettings();
@@ -206,31 +200,12 @@
 		}
 	}
 
-	async function triggerUpdate() {
-		if (triggeringUpdate) return;
-		triggeringUpdate = true;
-		try {
-			await api.admin.triggerUpdate();
-			confirmationTarget = null;
-			toast.info('Update queued. Track progress from the notification bell.');
-		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to update MyPaaS');
-			console.error(error);
-		} finally {
-			triggeringUpdate = false;
-		}
-	}
-
 	async function confirmPendingAction() {
 		if (confirmationTarget?.kind === 'profile') {
 			await saveProfile(confirmationTarget.profile);
 			return;
 		}
-		if (confirmationTarget?.kind === 'build-timeout') {
-			await saveBuildTimeout();
-			return;
-		}
-		if (confirmationTarget?.kind === 'system-update') await triggerUpdate();
+		if (confirmationTarget?.kind === 'build-timeout') await saveBuildTimeout();
 	}
 
 	function numericValue(value: unknown, fallback = 0) {
@@ -400,7 +375,7 @@
 					<div class="flex items-start justify-between gap-4 px-4 py-3">
 						<div>
 							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">System update</h2>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ask the release-aware host updater to apply a newer published release when available.</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Open the dedicated updater workspace to review releases and track host update progress.</p>
 						</div>
 					</div>
 					<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3">
@@ -410,7 +385,7 @@
 								<p class="text-xs text-gray-500 dark:text-gray-400">Current build</p>
 								<p class="mt-0.5 font-mono text-sm font-semibold text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
 							</div>
-							<ActionButton variant="secondary" size="sm" on:click={() => (confirmationTarget = { kind: 'system-update' })} disabled={Boolean(savingTarget)}>Update MyPaaS</ActionButton>
+							<ActionButton variant="secondary" size="sm" on:click={() => goto('/admin/update')} disabled={Boolean(savingTarget)}>Open updater</ActionButton>
 						</div>
 					</div>
 				</section>
@@ -423,9 +398,9 @@
 	open={confirmationTarget !== null}
 	title={confirmationTitle}
 	description={confirmationDescription}
-	confirmLabel={confirmationLabel}
+	confirmLabel="Save changes"
 	busy={confirmationBusy}
-	busyLabel={confirmationTarget?.kind === 'system-update' ? 'Queuing update' : 'Saving'}
+	busyLabel="Saving"
 	on:cancel={() => !confirmationBusy && (confirmationTarget = null)}
 	on:confirm={confirmPendingAction}
 >
@@ -436,8 +411,6 @@
 		</div>
 	{:else if confirmationTarget?.kind === 'build-timeout'}
 		<p><span class="text-gray-500 dark:text-gray-400">Build timeout:</span> <span class="font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings.build_timeout_minutes} → {settings.build_timeout_minutes} minutes</span></p>
-	{:else if confirmationTarget?.kind === 'system-update'}
-		<p>The request is handed to the host-level MyPaaS updater. The dashboard or API may briefly restart; the notification bell reports the updater's actual result.</p>
 	{/if}
 </ConfirmActionDialog>
 
