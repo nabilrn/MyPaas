@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import http.cookies
 import importlib.util
+import json
 import os
 import secrets
 import sys
@@ -14,6 +15,14 @@ from http.server import HTTPServer
 from types import ModuleType
 from urllib.parse import parse_qs, urlparse
 
+from install_wizard_preflight import (
+    check_domain_dns,
+    extract_cloudflare_tunnel_token,
+    probe_cloudflare_tunnel,
+    probe_github_oauth,
+    validate_domain,
+    validate_owner_email,
+)
 from install_wizard_security import (
     BackupUploadError,
     DEFAULT_MAX_BACKUP_BYTES,
@@ -23,6 +32,7 @@ from install_wizard_security import (
 
 SESSION_COOKIE = "mypaas_wizard_session"
 DEFAULT_RESTORE_PATH = "/tmp/mypaas-restore.tar.gz"
+MAX_JSON_BODY_BYTES = 64 * 1024
 
 
 def positive_int_env(name: str, fallback: int) -> int:
@@ -45,6 +55,12 @@ def load_wizard(path: str) -> ModuleType:
     return module
 
 
+def public_result(result) -> dict:
+    data = result.to_dict()
+    data.pop("value", None)
+    return data
+
+
 def make_handler(
     wizard: ModuleType,
     *,
@@ -63,6 +79,35 @@ def make_handler(
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def send_json(self, payload: dict, status: int = 200) -> None:
+            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def read_json(self) -> dict | None:
+            raw_length = self.headers.get("Content-Length", "").strip()
+            try:
+                length = int(raw_length)
+            except ValueError:
+                self.send_json({"error": "A valid Content-Length is required."}, 400)
+                return None
+            if length <= 0 or length > MAX_JSON_BODY_BYTES:
+                self.send_json({"error": "Preflight request body is empty or too large."}, 400)
+                return None
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                self.send_json({"error": "Preflight request must be valid JSON."}, 400)
+                return None
+            if not isinstance(payload, dict):
+                self.send_json({"error": "Preflight request must be a JSON object."}, 400)
+                return None
+            return payload
 
         def send_wizard_with_session(self) -> None:
             body = wizard.form_html()
@@ -104,8 +149,60 @@ def make_handler(
                 return
             self.send_wizard_with_session()
 
+        def handle_preflight(self, path: str) -> None:
+            if not self.has_session():
+                self.send_json({"error": "Invalid or expired wizard session."}, 403)
+                return
+            payload = self.read_json()
+            if payload is None:
+                return
+
+            if path == "/preflight/domain":
+                raw_domain = str(payload.get("domain", ""))
+                format_result = validate_domain(raw_domain)
+                dns_result = check_domain_dns(raw_domain) if format_result.ok else format_result
+                self.send_json(
+                    {
+                        "format": public_result(format_result),
+                        "dns": public_result(dns_result),
+                    }
+                )
+                return
+
+            if path == "/preflight/github":
+                owner_result = validate_owner_email(str(payload.get("ownerEmail", "")))
+                oauth_result = probe_github_oauth(
+                    str(payload.get("clientId", "")),
+                    str(payload.get("clientSecret", "")),
+                    str(payload.get("callbackUrl", "")),
+                )
+                self.send_json(
+                    {
+                        "oauth": public_result(oauth_result),
+                        "ownerEmail": public_result(owner_result),
+                    }
+                )
+                return
+
+            if path == "/preflight/cloudflare":
+                raw_token = str(payload.get("token", ""))
+                parsed_token = extract_cloudflare_tunnel_token(raw_token)
+                probe_result = probe_cloudflare_tunnel(parsed_token.value) if parsed_token.ok else parsed_token
+                self.send_json(
+                    {
+                        "format": public_result(parsed_token),
+                        "connection": public_result(probe_result),
+                    }
+                )
+                return
+
+            self.send_json({"error": "Unknown preflight check."}, 404)
+
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
+            if parsed.path.startswith("/preflight/"):
+                self.handle_preflight(parsed.path)
+                return
             if parsed.path != "/upload-backup":
                 super().do_POST()
                 return
