@@ -37,6 +37,12 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         for state in ("succeeded", "failed", "rolled_back", "blocked"):
             self.assertIn(f"write_status {state}", dispatch)
 
+    def test_dispatcher_expands_shallow_history_before_ancestry_guard(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        self.assertIn('git_repo rev-parse --is-shallow-repository', dispatch)
+        self.assertIn('git_repo fetch --unshallow "$REMOTE"', dispatch)
+        self.assertIn('resolve_target\n  ensure_complete_history\n  write_status checking', dispatch)
+
     def test_dispatcher_refuses_non_descendant_release(self):
         dispatch = self.text("scripts/update-dispatch.sh")
         self.assertIn('git_repo merge-base --is-ancestor "$CURRENT_SHA" "$TARGET_SHA"', dispatch)
