@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Safely merge a MyPaas backup .env into the fresh-host installer config.
 
-The restored file is parsed as data. Values are never evaluated as shell syntax,
-and the merged output is rewritten with single-quoted literal values so later
-legacy `source .env` call sites cannot execute backup-provided substitutions.
+The restored file is parsed as data, restricted to the current MyPaas environment
+contract, and never evaluated as shell syntax. The merged file stays in the
+existing KEY=VALUE format; shell scripts consume it through scripts/load-env.sh.
 """
 
 from __future__ import annotations
@@ -73,7 +73,6 @@ def _decode_value(raw: str, *, source: str, line_number: int) -> str:
             raise RestoreEnvError(f"{source}:{line_number}: unterminated quoted value")
         value = raw[1:-1]
         if quote == '"':
-            # Decode only the escapes emitted by this helper / common dotenv files.
             value = (
                 value.replace(r"\\", "\0")
                 .replace(r'\"', '"')
@@ -119,13 +118,17 @@ def allowed_keys_from_example(example_path: pathlib.Path) -> frozenset[str]:
     return frozenset(keys)
 
 
-def literal_env_line(key: str, value: str) -> str:
-    if "'" in value:
-        # MyPaas-generated credentials never require a single quote. Rejecting
-        # it keeps the output simultaneously safe for POSIX shell sourcing and
-        # Docker Compose's dotenv parser without inventing two escaping grammars.
-        raise RestoreEnvError(f"restored setting {key} contains an unsupported single quote")
-    return f"{key}='{value}'"
+def dotenv_line(key: str, value: str) -> str:
+    # Keep the on-disk grammar compatible with existing grep/cut and Compose
+    # consumers. MyPaas-generated values are already single-line tokens/URLs;
+    # reject characters whose dotenv interpretation would be ambiguous.
+    if any(character in value for character in ("\n", "\r", "\x00", "'", '"', "#", "$")):
+        raise RestoreEnvError(
+            f"restored setting {key} contains characters that cannot be represented safely in MyPaas .env"
+        )
+    if value != value.strip() or re.search(r"\s", value):
+        raise RestoreEnvError(f"restored setting {key} contains unsupported whitespace")
+    return f"{key}={value}"
 
 
 def merge_values(
@@ -140,6 +143,8 @@ def merge_values(
             merged[key] = current[key]
         elif key in PROTECTED_DEFAULTS:
             merged[key] = PROTECTED_DEFAULTS[key]
+        else:
+            merged.pop(key, None)
     return merged
 
 
@@ -150,7 +155,7 @@ def write_env(path: pathlib.Path, values: dict[str, str]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             for key in sorted(values):
-                handle.write(literal_env_line(key, values[key]) + "\n")
+                handle.write(dotenv_line(key, values[key]) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, 0o600)
