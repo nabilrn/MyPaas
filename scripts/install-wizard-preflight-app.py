@@ -14,6 +14,7 @@ from install_wizard_preflight import (
     check_github_oauth,
     extract_cloudflare_tunnel_token,
 )
+from install_wizard_visual import apply_visual_contract
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -173,6 +174,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
   </script>
 """
     document = document.replace("</body>", preflight_script + "</body>", 1)
+    document = apply_visual_contract(document)
     return document.encode("utf-8")
 
 
