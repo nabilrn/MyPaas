@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import {
 		AlertTriangle,
-		Check,
-		Circle,
+		CheckCircle2,
 		ExternalLink,
 		LoaderCircle,
 		RefreshCw,
@@ -11,11 +11,11 @@
 	} from '@lucide/svelte';
 	import { api } from '$api';
 	import ActionButton from '$components/ActionButton.svelte';
+	import ConfirmActionDialog from '$components/ConfirmActionDialog.svelte';
 	import { toast } from '$stores/toast';
 	import {
 		isUpdateBusy,
-		phaseStepIndex,
-		updateSteps,
+		updateStage,
 		type UpdateSnapshot,
 		type UpdateStatus
 	} from '$lib/system-update';
@@ -32,11 +32,13 @@
 	let reloadScheduled = false;
 	let baselineStatusKey = statusKey(snapshot?.status ?? null);
 	let pollTimer: ReturnType<typeof setTimeout> | undefined;
+	let leaveDialogOpen = false;
+	let pendingNavigationUrl = '';
+	let allowNavigationOnce = false;
 
 	$: busy = isUpdateBusy(snapshot);
 	$: status = snapshot?.status ?? null;
 	$: release = snapshot?.release ?? null;
-	$: activeStepIndex = status ? phaseStepIndex(status.phase) : 0;
 	$: statusTargetsAvailableRelease = Boolean(
 		release?.available
 		&& status
@@ -46,6 +48,29 @@
 	$: terminalFailure = Boolean(terminalStateRelevant && (status?.state === 'failed' || status?.state === 'rolled_back' || status?.state === 'blocked'));
 	$: canUpdate = Boolean(release?.available) && !busy && !queueing && !queuedLocally;
 	$: pollingFast = busy || queuedLocally;
+	$: progress = progressState();
+	$: highlights = releaseHighlights(release?.body ?? '');
+	$: guardNavigation = busy || queuedLocally;
+
+	beforeNavigate((navigation) => {
+		if (!guardNavigation) return;
+		if (allowNavigationOnce) {
+			allowNavigationOnce = false;
+			return;
+		}
+
+		navigation.cancel();
+
+		// SvelteKit turns cancellation of an unload navigation into the browser's
+		// native leave-site confirmation. Custom dialogs are reserved for in-app
+		// navigation where we can resume safely through goto().
+		if (navigation.willUnload) return;
+
+		const target = navigation.to?.url;
+		if (!target) return;
+		pendingNavigationUrl = `${target.pathname}${target.search}${target.hash}`;
+		leaveDialogOpen = true;
+	});
 
 	onMount(() => {
 		mounted = true;
@@ -117,6 +142,19 @@
 		}
 	}
 
+	async function leaveUpdatePage() {
+		if (!pendingNavigationUrl) return;
+		const destination = pendingNavigationUrl;
+		pendingNavigationUrl = '';
+		leaveDialogOpen = false;
+		allowNavigationOnce = true;
+		try {
+			await goto(destination);
+		} finally {
+			allowNavigationOnce = false;
+		}
+	}
+
 	function shortSha(value: string | undefined) {
 		return value ? value.slice(0, 12) : 'Unknown';
 	}
@@ -131,15 +169,11 @@
 		return value.replace('T', ' ').replace(/Z$/, ' UTC');
 	}
 
-	function stepState(index: number) {
-		if (queuedLocally && index === 0) return 'active';
-		if (!status || status.state === 'idle') return 'pending';
-		if (release?.available && !busy && !statusTargetsAvailableRelease) return 'pending';
-		if (status.state === 'succeeded' && !release?.available) return 'done';
-		if (index < activeStepIndex) return 'done';
-		if (index === activeStepIndex && terminalFailure) return 'error';
-		if (index === activeStepIndex && busy) return 'active';
-		return 'pending';
+	function progressState() {
+		if (queuedLocally) return { step: 0, total: 6, percent: 5, label: 'Queued' };
+		if (!status) return updateStage('idle');
+		if (release?.available && !busy && !statusTargetsAvailableRelease) return updateStage('idle');
+		return updateStage(status.phase);
 	}
 
 	function statusTitle() {
@@ -168,6 +202,39 @@
 		if (queuedLocally) return 'The host updater has been queued and is waiting to start.';
 		if (release?.available && !busy && !terminalFailure) return `${release.tagName} is ready to install.`;
 		return status?.message || 'No updater activity.';
+	}
+
+	function cleanMarkdownInline(value: string) {
+		return value
+			.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+			.replace(/[`*_~]/g, '')
+			.trim();
+	}
+
+	function releaseHighlights(body: string) {
+		if (!body.trim()) return [] as string[];
+		const preferredHeadings = ['what\'s new', 'whats new', 'included changes', 'highlights', 'features', 'improvements', 'changes'];
+		const excludedHeadings = ['qualification', 'test plan', 'testing', 'known issues'];
+		let heading = '';
+		const preferred: string[] = [];
+		const fallback: string[] = [];
+
+		for (const line of body.split(/\r?\n/)) {
+			const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+			if (headingMatch) {
+				heading = headingMatch[1].trim().toLowerCase();
+				continue;
+			}
+			const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
+			if (!bulletMatch) continue;
+			const value = cleanMarkdownInline(bulletMatch[1]);
+			if (!value) continue;
+			if (!excludedHeadings.some((candidate) => heading.includes(candidate))) fallback.push(value);
+			if (preferredHeadings.some((candidate) => heading.includes(candidate))) preferred.push(value);
+		}
+
+		const selected = preferred.length ? preferred : fallback;
+		return selected.slice(0, 5);
 	}
 </script>
 
@@ -204,6 +271,8 @@
 							<LoaderCircle class="h-4 w-4 shrink-0 animate-spin text-gray-500" aria-hidden="true" />
 						{:else if terminalFailure}
 							{#if status?.state === 'rolled_back'}<RotateCcw class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />{:else}<AlertTriangle class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />{/if}
+						{:else if status?.state === 'succeeded' && !release?.available}
+							<CheckCircle2 class="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
 						{:else}
 							<RefreshCw class="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
 						{/if}
@@ -219,7 +288,7 @@
 					{#if release?.htmlUrl}
 						<a class="app-focus inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:border-gray-400 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-500" href={release.htmlUrl} target="_blank" rel="noreferrer">
 							<ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
-							Release
+							Release notes
 						</a>
 					{/if}
 					{#if release?.available}
@@ -231,37 +300,55 @@
 			</div>
 		</section>
 
+		{#if release && (highlights.length > 0 || release.htmlUrl)}
+			<section class="border-t border-[color:var(--workspace-divider)] px-4 py-4">
+				<div class="flex items-start justify-between gap-4">
+					<div>
+						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">What’s new in {release.tagName}</h2>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Release highlights from the published GitHub release.</p>
+					</div>
+				</div>
+				{#if highlights.length > 0}
+					<ul class="mt-3 grid gap-2 text-sm text-gray-700 dark:text-gray-300 lg:grid-cols-2">
+						{#each highlights as highlight}
+							<li class="flex min-w-0 gap-2">
+								<span class="mt-[0.55rem] h-1 w-1 shrink-0 rounded-full bg-gray-400 dark:bg-gray-600" aria-hidden="true"></span>
+								<span class="leading-5">{highlight}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		{/if}
+
 		<section class="border-t border-[color:var(--workspace-divider)] px-4 py-4">
-			<div class="mb-4">
-				<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Update progress</h2>
-				<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Progress reflects host updater phases; no synthetic percentage is shown.</p>
+			<div class="flex items-end justify-between gap-4">
+				<div>
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Update progress</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Stage-based progress from the host updater.</p>
+				</div>
+				<p class="text-xs font-medium tabular-nums text-gray-500 dark:text-gray-400">{progress.percent}%</p>
 			</div>
 
-			<div class="max-w-3xl">
-				{#each updateSteps as step, index}
-					{@const state = stepState(index)}
-					<div class="relative flex gap-3 pb-4 last:pb-0">
-						{#if index < updateSteps.length - 1}
-							<div class={`absolute left-[7px] top-4 h-[calc(100%-0.25rem)] w-px ${state === 'done' ? 'bg-gray-400 dark:bg-gray-600' : 'bg-gray-200 dark:bg-neutral-800'}`}></div>
-						{/if}
-						<div class="relative z-10 mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white dark:bg-neutral-950">
-							{#if state === 'done'}
-								<span class="flex h-4 w-4 items-center justify-center rounded-full bg-gray-950 text-white dark:bg-white dark:text-gray-950"><Check class="h-2.5 w-2.5" strokeWidth={3} aria-hidden="true" /></span>
-							{:else if state === 'active'}
-								<LoaderCircle class="h-4 w-4 animate-spin text-gray-700 dark:text-gray-300" aria-hidden="true" />
-							{:else if state === 'error'}
-								<AlertTriangle class="h-4 w-4 text-gray-700 dark:text-gray-300" aria-hidden="true" />
-							{:else}
-								<Circle class="h-4 w-4 text-gray-300 dark:text-gray-700" aria-hidden="true" />
-							{/if}
-						</div>
-						<div class="min-w-0">
-							<p class={`text-sm font-medium ${state === 'pending' ? 'text-gray-400 dark:text-gray-600' : 'text-gray-900 dark:text-gray-100'}`}>{step.label}</p>
-							<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">{step.description}</p>
-						</div>
-					</div>
-				{/each}
+			<div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800" aria-label={`Update stage progress ${progress.percent}%`} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.percent}>
+				<div class="h-full rounded-full bg-gray-950 transition-[width] duration-500 dark:bg-white" style={`width:${progress.percent}%`}></div>
 			</div>
+
+			<div class="mt-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+				<p class="text-sm font-medium text-gray-900 dark:text-gray-100">{progress.label}</p>
+				<p class="text-xs text-gray-500 dark:text-gray-400">{progress.step > 0 ? `Step ${progress.step} of ${progress.total}` : 'Not started'}</p>
+			</div>
+			<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{status?.message || 'Waiting for updater activity.'}</p>
+
+			{#if busy || queuedLocally}
+				<div class="mt-4 flex gap-2.5 border-t border-[color:var(--workspace-divider)] pt-3">
+					<AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+					<div class="min-w-0">
+						<p class="text-sm font-medium text-gray-900 dark:text-gray-100">Keep this page open while the update is running.</p>
+						<p class="mt-0.5 text-xs leading-5 text-gray-500 dark:text-gray-400">Do not refresh, close this tab, or restart MyPaaS manually. The dashboard may briefly reconnect while services are recreated.</p>
+					</div>
+				</div>
+			{/if}
 		</section>
 
 		{#if status?.updatedAt}
@@ -271,3 +358,18 @@
 		{/if}
 	</div>
 </div>
+
+<ConfirmActionDialog
+	open={leaveDialogOpen}
+	title="Update is still running"
+	description="The host updater will continue, but leaving this page hides live progress until you return."
+	confirmLabel="Leave anyway"
+	cancelLabel="Stay on page"
+	on:cancel={() => {
+		leaveDialogOpen = false;
+		pendingNavigationUrl = '';
+	}}
+	on:confirm={leaveUpdatePage}
+>
+	<p>Stay on this page if you want to see reconnect, verification, and the final update result without manually refreshing.</p>
+</ConfirmActionDialog>

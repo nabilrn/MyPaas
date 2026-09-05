@@ -11,6 +11,7 @@ type ReleaseInfo = {
 	prerelease: boolean;
 	publishedAt: string;
 	htmlUrl: string;
+	body: string;
 };
 
 type GitHubRelease = {
@@ -21,6 +22,7 @@ type GitHubRelease = {
 	target_commitish?: string;
 	published_at?: string | null;
 	html_url?: string;
+	body?: string | null;
 };
 
 type GitHubComparison = {
@@ -151,7 +153,8 @@ async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseI
 		targetSha: release.target_commitish || '',
 		prerelease: Boolean(release.prerelease),
 		publishedAt: release.published_at || '',
-		htmlUrl: release.html_url || ''
+		htmlUrl: release.html_url || '',
+		body: release.body || ''
 	} : null;
 	cachedRelease = { key: cacheKey, expiresAt: now + GITHUB_CACHE_TTL_MS, value };
 	return value;

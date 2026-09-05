@@ -36,6 +36,7 @@ export type UpdateRelease = {
 	prerelease: boolean;
 	publishedAt: string;
 	htmlUrl: string;
+	body: string;
 	available: boolean;
 };
 
@@ -44,36 +45,29 @@ export type UpdateSnapshot = {
 	release: UpdateRelease | null;
 };
 
-export const updateSteps = [
-	{ key: 'resolve', label: 'Resolve release', description: 'Resolve the published tag and target revision.' },
-	{ key: 'artifacts', label: 'Check artifacts', description: 'Confirm immutable release images are available.' },
-	{ key: 'preflight', label: 'Preflight', description: 'Validate migrations and the existing runtime.' },
-	{ key: 'apply', label: 'Apply update', description: 'Advance the managed checkout and recreate the required services.' },
-	{ key: 'verify', label: 'Verify', description: 'Verify the updated control plane before declaring success.' },
-	{ key: 'complete', label: 'Complete', description: 'The requested release is installed.' }
-] as const;
-
 export function isUpdateBusy(snapshot: UpdateSnapshot | null | undefined) {
 	return snapshot?.status.state === 'checking' || snapshot?.status.state === 'updating';
 }
 
-export function phaseStepIndex(phase: UpdatePhase) {
+export function updateStage(phase: UpdatePhase) {
 	switch (phase) {
 		case 'resolving_release':
+			return { step: 1, total: 6, percent: 10, label: 'Resolving release' };
 		case 'validating_target':
-			return 0;
+			return { step: 1, total: 6, percent: 20, label: 'Validating target' };
 		case 'checking_images':
-			return 1;
+			return { step: 2, total: 6, percent: 35, label: 'Checking artifacts' };
 		case 'preflight':
-			return 2;
+			return { step: 3, total: 6, percent: 50, label: 'Running preflight' };
 		case 'applying':
-		case 'rolling_back':
-			return 3;
+			return { step: 4, total: 6, percent: 75, label: 'Applying update' };
 		case 'verifying':
-			return 4;
+			return { step: 5, total: 6, percent: 90, label: 'Verifying update' };
+		case 'rolling_back':
+			return { step: 5, total: 6, percent: 90, label: 'Restoring previous runtime' };
 		case 'complete':
-			return 5;
+			return { step: 6, total: 6, percent: 100, label: 'Complete' };
 		default:
-			return 0;
+			return { step: 0, total: 6, percent: 0, label: 'Waiting' };
 	}
 }
