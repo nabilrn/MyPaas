@@ -86,6 +86,7 @@
 
 <style>
 	:global(.app-shell) {
+		min-height: 100dvh;
 		--technical-surface-bg: #171717;
 		--technical-surface-border: #374151;
 		--technical-surface-text: #e5e7eb;
@@ -128,12 +129,16 @@
 		}
 	}
 
-	/* Normal routes size to their content. Only the blocking loader reserves a viewport. */
+	/* The shell owns viewport fill; normal route content is free to size naturally. */
 	:global(.app-workspace[aria-busy='true']) {
 		min-height: calc(100dvh - 3.5rem);
 	}
 
 	@supports not (height: 100dvh) {
+		:global(.app-shell) {
+			min-height: 100vh;
+		}
+
 		:global(.app-workspace[aria-busy='true']) {
 			min-height: calc(100vh - 3.5rem);
 		}
