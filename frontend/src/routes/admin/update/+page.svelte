@@ -112,9 +112,13 @@
 		return 'Unknown';
 	}
 
+	function formatTimestamp(value: string) {
+		return value.replace('T', ' ').replace(/Z$/, ' UTC');
+	}
+
 	function stepState(index: number) {
 		if (queuedLocally && index === 0) return 'active';
-		if (!status) return 'pending';
+		if (!status || status.state === 'idle') return 'pending';
 		if (status.state === 'succeeded') return 'done';
 		if (index < activeStepIndex) return 'done';
 		if (index === activeStepIndex && terminalFailure) return 'error';
@@ -142,7 +146,7 @@
 </svelte:head>
 
 <div class="page-shell">
-	<div class="admin-update-workspace w-full border-y border-[color:var(--workspace-divider)]">
+	<div class="admin-update-workspace w-full border-b border-[color:var(--workspace-divider)]">
 		<section class="grid lg:grid-cols-3">
 			<div class="px-4 py-3 lg:border-r lg:border-[color:var(--workspace-divider)]">
 				<p class="text-xs text-gray-500 dark:text-gray-400">Installed revision</p>
@@ -234,7 +238,7 @@
 
 		{#if status?.updatedAt}
 			<footer class="border-t border-[color:var(--workspace-divider)] px-4 py-2.5 text-[11px] text-gray-400 dark:text-gray-500">
-				Last updater state: {new Date(status.updatedAt).toLocaleString()}
+				Last updater state: {formatTimestamp(status.updatedAt)}
 			</footer>
 		{/if}
 	</div>
