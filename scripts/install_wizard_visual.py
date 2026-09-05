@@ -199,7 +199,10 @@ VISUAL_CONTRACT_CSS = r"""
 
   .setup-main { min-width: 0; padding: 12px 14px; }
   .setup-form {
+    display: flex;
     min-width: 0;
+    min-height: calc(100vh - 80px);
+    flex-direction: column;
     overflow: hidden;
     border-top: 1px solid var(--workspace-divider);
     border-bottom: 1px solid var(--workspace-divider);
@@ -226,8 +229,10 @@ VISUAL_CONTRACT_CSS = r"""
     line-height: 1.45;
   }
   .wizard-step[hidden] { display: none; }
+  .wizard-step:not([hidden]) { display: block; flex: 1; min-height: 0; }
   .step-grid {
     display: grid;
+    min-height: 100%;
     grid-template-columns: minmax(0, 1.45fr) minmax(20rem, .75fr);
   }
   .step-primary { min-width: 0; border-right: 1px solid var(--workspace-divider); padding: 16px; }
@@ -258,17 +263,21 @@ VISUAL_CONTRACT_CSS = r"""
   .field-input[readonly], .field-input:disabled { background: var(--control-bg-disabled); color: var(--app-muted); }
   .field-input.mono { font-size: 13px; }
   .secret-wrap { position: relative; }
-  .secret-wrap .field-input { padding-right: 44px; }
+  .secret-wrap .field-input { padding-right: 52px; }
   .secret-toggle {
     position: absolute;
     top: 0;
     right: 0;
-    width: 36px;
+    width: 48px;
     height: 36px;
     border: 0;
     background: transparent;
     color: var(--app-muted);
+    font-size: 0;
+    font-weight: 600;
   }
+  .secret-toggle::after { content: "Show"; font-size: 11px; }
+  .secret-toggle[data-revealed="true"]::after { content: "Hide"; }
   .secret-toggle:hover { color: var(--app-ink); }
 
   .provider-header {
@@ -363,6 +372,7 @@ VISUAL_CONTRACT_CSS = r"""
     .step-tab { border-left: 0; border-bottom: 2px solid transparent; }
     .step-tab.active { border-bottom-color: var(--app-ink); }
     .setup-main { padding-top: 10px; }
+    .setup-form { min-height: auto; }
   }
 
   @media (max-width: 760px) {
@@ -388,7 +398,7 @@ VISUAL_CONTRACT_CSS = r"""
 
   @media (any-pointer: coarse) {
     .icon-button, .ghost-button, .secondary-button, .primary-button, .field-input { min-height: 44px; }
-    .secret-toggle { width: 44px; height: 44px; }
+    .secret-toggle { width: 52px; height: 44px; }
   }
 """
 
@@ -495,6 +505,7 @@ BASE_SCRIPT_JS = r"""
         if (!input) return;
         const reveal = input.type === 'password';
         input.type = reveal ? 'text' : 'password';
+        button.dataset.revealed = String(reveal);
         button.setAttribute('aria-label', reveal ? 'Hide secret' : 'Reveal secret');
         button.title = reveal ? 'Hide secret' : 'Reveal secret';
       });
@@ -604,7 +615,7 @@ def _secret_input(base, name: str, label: str, value: str, *, hint: str = "") ->
         <label class="field-label" for="{base.esc(name)}">{base.esc(label)}</label>
         <div class="secret-wrap">
           <input class="field-input mono" id="{base.esc(name)}" name="{base.esc(name)}" required type="password" autocomplete="new-password" value="{base.esc(value)}">
-          <button class="secret-toggle" type="button" data-secret-target="{base.esc(name)}" aria-label="Reveal secret" title="Reveal secret">⌁</button>
+          <button class="secret-toggle" type="button" data-secret-target="{base.esc(name)}" data-revealed="false" aria-label="Reveal secret" title="Reveal secret"></button>
         </div>
         {hint_html}
       </div>
@@ -739,7 +750,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <aside class="step-aside">
                 <div class="provider-header">
                   <div><strong>Public URLs</strong><p>These values are derived from the domain.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs ↗</a>
+                  <a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>Dashboard</span><span class="value mono" id="domain-dashboard">https://example.com</span></div>
@@ -787,7 +798,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <aside class="step-aside">
                 <div class="provider-header">
                   <div><strong>GitHub OAuth App</strong><p>Create one OAuth App and paste its credentials on the left.</p></div>
-                  <a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs ↗</a>
+                  <a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>App name</span><span class="value">MyPaaS</span></div>
@@ -820,7 +831,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <aside class="step-aside">
                 <div class="provider-header">
                   <div><strong>Published routes</strong><p>Create the dashboard and wildcard routes in the same tunnel.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs ↗</a>
+                  <a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>Dashboard</span><span class="value mono" id="cf-root-example">example.com</span></div>
