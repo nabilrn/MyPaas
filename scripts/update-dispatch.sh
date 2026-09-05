@@ -173,6 +173,15 @@ resolve_target() {
   TARGET_SHA="$(git_repo rev-parse 'FETCH_HEAD^{commit}')"
 }
 
+ensure_complete_history() {
+  if [[ "$(git_repo rev-parse --is-shallow-repository)" != "true" ]]; then
+    return
+  fi
+
+  log "Expanding shallow checkout history for ancestry validation"
+  git_repo fetch --unshallow "$REMOTE"
+}
+
 is_frontend_only() {
   local current_sha="$1"
   local target_sha="$2"
@@ -213,6 +222,7 @@ main() {
   write_status checking "Checking for a published MyPaas update"
 
   resolve_target
+  ensure_complete_history
   write_status checking "Resolved $TARGET_VERSION at ${TARGET_SHA:0:12}"
 
   if [[ "$CURRENT_SHA" != "$TARGET_SHA" ]] && ! git_repo merge-base --is-ancestor "$CURRENT_SHA" "$TARGET_SHA"; then
