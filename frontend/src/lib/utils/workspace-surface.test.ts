@@ -17,10 +17,12 @@ describe('authenticated workspace surface contract', () => {
 		expect(layout).toContain('background: var(--app-surface) !important;');
 	});
 
-	it('lets normal authenticated pages size to content instead of stacking viewport minimums', () => {
+	it('keeps viewport ownership on the shell while normal workspaces size to content', () => {
 		expect(layout).toContain('<main class="app-workspace relative" aria-busy={showMainLoader}>');
 		expect(layout).not.toContain('app-shell min-h-screen');
 		expect(layout).not.toContain('app-workspace relative min-h-[calc(100vh-3.5rem)]');
+		expect(layout).toContain(':global(.app-shell) {');
+		expect(layout).toContain('min-height: 100dvh;');
 		expect(layout).toContain(":global(.app-workspace[aria-busy='true'])");
 		expect(layout).toContain('min-height: calc(100dvh - 3.5rem);');
 	});
