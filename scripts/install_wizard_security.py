@@ -7,6 +7,7 @@ MyPaas application stack exists.
 
 from __future__ import annotations
 
+import argparse
 import os
 import pathlib
 import tarfile
@@ -110,3 +111,22 @@ def store_backup_upload(
         except FileNotFoundError:
             pass
         raise
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Validate a staged MyPaas restore backup")
+    parser.add_argument("archive", type=pathlib.Path)
+    parser.add_argument(
+        "--max-expanded-bytes",
+        type=int,
+        default=DEFAULT_MAX_EXPANDED_BACKUP_BYTES,
+    )
+    args = parser.parse_args()
+    try:
+        validate_backup_archive(args.archive, max_expanded_bytes=args.max_expanded_bytes)
+    except BackupUploadError as exc:
+        parser.exit(2, f"backup validation error: {exc}\n")
+
+
+if __name__ == "__main__":
+    main()
