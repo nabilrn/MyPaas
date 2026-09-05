@@ -19,6 +19,7 @@
 	$: releaseAvailable = Boolean(snapshot?.release?.available);
 	$: lastFailure = !releaseAvailable && !busy && (snapshot?.status.state === 'failed' || snapshot?.status.state === 'rolled_back' || snapshot?.status.state === 'blocked');
 	$: attention = releaseAvailable || busy || lastFailure;
+	$: bellLabel = releaseAvailable ? 'Notifications, MyPaaS update available' : busy ? 'Notifications, MyPaaS update in progress' : 'Notifications';
 
 	onMount(() => {
 		mounted = true;
@@ -91,11 +92,11 @@
 {#if enabled}
 	<div class="relative" use:dismissable={{ enabled: open, onDismiss: close }}>
 		<div class="relative">
-			<IconButton label="Notifications" variant="ghost" on:click={toggle}>
+			<IconButton label={bellLabel} variant="ghost" on:click={toggle}>
 				<Bell class="h-[18px] w-[18px]" aria-hidden="true" />
 			</IconButton>
 			{#if attention}
-				<span class="pointer-events-none absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-gray-950 ring-2 ring-white dark:bg-white dark:ring-neutral-950" aria-hidden="true"></span>
+				<span class="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-gray-950 ring-2 ring-white dark:bg-white dark:ring-neutral-950" aria-hidden="true"></span>
 			{/if}
 		</div>
 
@@ -103,7 +104,7 @@
 			<div class="overlay absolute right-0 mt-2 w-[min(23rem,calc(100vw-2rem))] overflow-hidden">
 				<div class="border-b border-gray-100 px-4 py-3 dark:border-neutral-800">
 					<p class="text-sm font-semibold text-gray-950 dark:text-white">System update</p>
-					<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Published MyPaaS releases and host updater status.</p>
+					<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Qualified MyPaaS releases and host updater status.</p>
 				</div>
 
 				{#if loading && !snapshot}
@@ -132,7 +133,7 @@
 											<p class="text-sm font-semibold text-gray-950 dark:text-white">{snapshot.release.tagName}</p>
 											{#if snapshot.release.prerelease}<span class="chip px-1.5 py-0.5 text-[10px]">RC</span>{/if}
 										</div>
-										<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">New published release available</p>
+										<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">New qualified release available</p>
 									</div>
 									{#if snapshot.release.htmlUrl}
 										<a class="app-focus inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-white" href={snapshot.release.htmlUrl} target="_blank" rel="noreferrer" aria-label="View release on GitHub">
