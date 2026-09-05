@@ -115,6 +115,31 @@ class InstallWizardVisualContractTest(unittest.TestCase):
         self.assertIn('<span class="step-title">Cloudflare</span>', html)
         self.assertIn('<span class="step-title">Review</span>', html)
 
+    def test_provider_sections_have_one_separator_owner(self) -> None:
+        visual = VISUAL.VISUAL_CONTRACT_CSS
+        provider_block = visual.split(".provider-header {", 1)[1].split("}", 1)[0]
+        restore_block = visual.split(".restore-panel {", 1)[1].split("}", 1)[0]
+
+        self.assertIn("One separator owner per section", visual)
+        self.assertNotIn("border-bottom", provider_block)
+        self.assertIn("border-top: 1px solid var(--workspace-divider)", visual.split(".value-list {", 1)[1].split("}", 1)[0])
+        self.assertNotIn("border-block", restore_block)
+
+    def test_restore_uses_tokenized_drag_and_drop_file_control(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('id="backup-dropzone" class="backup-dropzone"', html)
+        self.assertIn('class="backup-file-input" type="file"', html)
+        self.assertIn("Drop backup here or choose a file", html)
+        self.assertIn("MyPaaS .tar.gz backups only", html)
+        self.assertIn("dragenter", html)
+        self.assertIn("dragover", html)
+        self.assertIn("addEventListener('drop'", html)
+        self.assertIn("var(--control-border)", html)
+        self.assertIn("var(--app-border-strong)", html)
+        self.assertIn('id="upload-backup-btn" class="secondary-button" disabled', html)
+        self.assertNotIn('class="field-input" type="file" id="backup-file"', html)
+
     def test_installer_removes_subdomain_onboarding_slop(self) -> None:
         html = APP.form_html().decode("utf-8")
 
