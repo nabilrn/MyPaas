@@ -80,13 +80,18 @@ cd ~/MyPaas
 AUTO_UPDATE_CHANNEL=main AUTO_UPDATE_REF=main bash scripts/configure-auto-update.sh
 ```
 
-Inspect policy, status, timer, and logs:
+Inspect updater policy, status, and logs:
 
 ```bash
 cat /etc/mypaas/update.env
 cat /run/mypaas/update/status
-systemctl status mypaas-update.timer
 journalctl -u mypaas-update.service
+```
+
+When `AUTO_UPDATE_ENABLED=true`, inspect the periodic timer separately:
+
+```bash
+systemctl status mypaas-update.timer
 ```
 
 Run one release-aware update check manually:
