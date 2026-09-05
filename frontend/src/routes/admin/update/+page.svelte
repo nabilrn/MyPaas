@@ -37,7 +37,13 @@
 	$: status = snapshot?.status ?? null;
 	$: release = snapshot?.release ?? null;
 	$: activeStepIndex = status ? phaseStepIndex(status.phase) : 0;
-	$: terminalFailure = status?.state === 'failed' || status?.state === 'rolled_back' || status?.state === 'blocked';
+	$: statusTargetsAvailableRelease = Boolean(
+		release?.available
+		&& status
+		&& ((status.targetSha && status.targetSha === release.targetSha) || status.targetVersion === release.tagName)
+	);
+	$: terminalStateRelevant = !release?.available || statusTargetsAvailableRelease;
+	$: terminalFailure = Boolean(terminalStateRelevant && (status?.state === 'failed' || status?.state === 'rolled_back' || status?.state === 'blocked'));
 	$: canUpdate = Boolean(release?.available) && !busy && !queueing && !queuedLocally;
 	$: pollingFast = busy || queuedLocally;
 
@@ -128,7 +134,8 @@
 	function stepState(index: number) {
 		if (queuedLocally && index === 0) return 'active';
 		if (!status || status.state === 'idle') return 'pending';
-		if (status.state === 'succeeded') return 'done';
+		if (release?.available && !busy && !statusTargetsAvailableRelease) return 'pending';
+		if (status.state === 'succeeded' && !release?.available) return 'done';
 		if (index < activeStepIndex) return 'done';
 		if (index === activeStepIndex && terminalFailure) return 'error';
 		if (index === activeStepIndex && busy) return 'active';
@@ -138,15 +145,29 @@
 	function statusTitle() {
 		if (queuedLocally) return 'Update queued';
 		if (!status) return 'Updater status unavailable';
+		if (busy) {
+			return status.phase === 'verifying'
+				? 'Verifying update'
+				: status.phase === 'rolling_back'
+					? 'Restoring previous runtime'
+					: status.state === 'checking'
+						? 'Preparing update'
+						: 'Applying update';
+		}
+		if (release?.available && !terminalFailure) return 'Update available';
 		switch (status.state) {
-			case 'checking': return 'Preparing update';
-			case 'updating': return status.phase === 'verifying' ? 'Verifying update' : status.phase === 'rolling_back' ? 'Restoring previous runtime' : 'Applying update';
 			case 'succeeded': return 'Update completed';
 			case 'rolled_back': return 'Update rolled back';
 			case 'failed': return 'Update failed';
 			case 'blocked': return 'Update blocked';
-			default: return release?.available ? 'Update available' : 'MyPaaS is up to date';
+			default: return 'MyPaaS is up to date';
 		}
+	}
+
+	function statusMessage() {
+		if (queuedLocally) return 'The host updater has been queued and is waiting to start.';
+		if (release?.available && !busy && !terminalFailure) return `${release.tagName} is ready to install.`;
+		return status?.message || 'No updater activity.';
 	}
 </script>
 
@@ -188,9 +209,7 @@
 						{/if}
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">{statusTitle()}</h2>
 					</div>
-					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
-						{queuedLocally ? 'The host updater has been queued and is waiting to start.' : status?.message || 'No updater activity.'}
-					</p>
+					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">{statusMessage()}</p>
 					{#if connectionLost && (busy || queuedLocally)}
 						<p class="mt-1 text-xs font-medium text-gray-700 dark:text-gray-300">Dashboard restarted. Reconnecting to updater status…</p>
 					{/if}
