@@ -75,14 +75,14 @@
 	onMount(() => {
 		mounted = true;
 		if (busy) observedThisUpdate = true;
-		schedulePoll(750);
+		schedulePoll(500);
 		return () => {
 			mounted = false;
 			if (pollTimer) clearTimeout(pollTimer);
 		};
 	});
 
-	function schedulePoll(delay = pollingFast ? 1000 : 30_000) {
+	function schedulePoll(delay = pollingFast ? 500 : 30_000) {
 		if (!mounted) return;
 		if (pollTimer) clearTimeout(pollTimer);
 		pollTimer = setTimeout(async () => {
@@ -134,7 +134,7 @@
 			observedThisUpdate = false;
 			toast.info('Update queued');
 			await refreshSnapshot();
-			schedulePoll(500);
+			schedulePoll(250);
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to queue update');
 		} finally {
@@ -305,7 +305,7 @@
 				<div class="flex items-start justify-between gap-4">
 					<div>
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">What’s new in {release.tagName}</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Release highlights from the published GitHub release.</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Release highlights from the qualified GitHub release.</p>
 					</div>
 				</div>
 				{#if highlights.length > 0}
@@ -331,7 +331,11 @@
 			</div>
 
 			<div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800" aria-label={`Update stage progress ${progress.percent}%`} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.percent}>
-				<div class="h-full rounded-full bg-gray-950 transition-[width] duration-500 dark:bg-white" style={`width:${progress.percent}%`}></div>
+				<div
+					class:active={busy || queuedLocally}
+					class="update-progress-fill h-full w-full origin-left rounded-full bg-gray-950 dark:bg-white"
+					style={`transform:scaleX(${progress.percent / 100})`}
+				></div>
 			</div>
 
 			<div class="mt-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -373,3 +377,28 @@
 >
 	<p>Stay on this page if you want to see reconnect, verification, and the final update result without manually refreshing.</p>
 </ConfirmActionDialog>
+
+<style>
+	.update-progress-fill {
+		transition: transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	.update-progress-fill.active {
+		animation: update-progress-pulse 1.1s ease-in-out infinite;
+	}
+
+	@keyframes update-progress-pulse {
+		0%, 100% { opacity: 0.62; }
+		50% { opacity: 1; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.update-progress-fill {
+			transition-duration: 0ms;
+		}
+
+		.update-progress-fill.active {
+			animation: none;
+		}
+	}
+</style>
