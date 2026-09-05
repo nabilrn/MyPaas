@@ -54,6 +54,12 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn('MYPAAS_DASHBOARD_IMAGE_TAG="$TARGET_SHA"', dispatch)
         self.assertIn('bash "$ROOT_DIR/scripts/update-dashboard.sh"', dispatch)
 
+    def test_lock_contention_preserves_active_updater_status(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        lock_block = dispatch.split('if ! mkdir "$LOCK_DIR"', 1)[1].split('LOCK_HELD=true', 1)[0]
+        self.assertIn("Another MyPaas update is already running; skipping", lock_block)
+        self.assertNotIn("write_status", lock_block)
+
     def test_dashboard_can_only_read_dedicated_update_status_mount(self):
         compose = self.text("docker-compose.prod.yml")
         dashboard = compose.split("  dashboard:\n", 1)[1].split("\n  caddy:\n", 1)[0]
@@ -76,6 +82,7 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("api.github.com/repos/nabilrn/MyPaas/compare/", route)
         self.assertIn("comparison.status === 'ahead'", route)
         self.assertIn("GITHUB_CACHE_TTL_MS = 5 * 60_000", route)
+        self.assertIn("redirect: 'error'", route)
         self.assertIn("<ReleaseNotification enabled={user?.role === 'owner'} />", header)
         self.assertNotIn("startUpdatePolling", settings)
         self.assertNotIn("/api/health", settings)
