@@ -48,6 +48,14 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn('status_phase updating verifying "Verifying the updated MyPaas control plane"', full)
         self.assertIn('status_phase updating verifying "Verifying the updated MyPaas dashboard"', dashboard)
 
+    def test_dispatcher_preserves_child_phase_and_requires_checkout_advance(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        self.assertIn("latest_status_phase()", dispatch)
+        self.assertIn('actual_sha="$(git_repo rev-parse HEAD)"', dispatch)
+        self.assertIn('if [[ "$actual_sha" != "$TARGET_SHA" ]]', dispatch)
+        self.assertIn("Updater left the installation unchanged", dispatch)
+        self.assertIn('write_status failed "$(latest_status_phase)"', dispatch)
+
     def test_dispatcher_expands_shallow_history_before_ancestry_guard(self):
         dispatch = self.text("scripts/update-dispatch.sh")
         self.assertIn('git_repo rev-parse --is-shallow-repository', dispatch)
@@ -106,6 +114,10 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("connectionLost", page)
         self.assertIn("window.location.reload()", page)
         self.assertIn("pollingFast ? 1000 : 30_000", page)
+        self.assertIn("baselineStatusKey", page)
+        self.assertIn("statusAdvanced", page)
+        self.assertIn("statusTargetsAvailableRelease", page)
+        self.assertIn("release?.available && !busy && !statusTargetsAvailableRelease", page)
         self.assertIn("goto('/admin/update')", bell)
         self.assertNotIn("api.admin.triggerUpdate", bell)
 
