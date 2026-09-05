@@ -161,6 +161,7 @@ async function apiRequest(path: string, cookie: string) {
 	return fetch(`${base}${path}`, {
 		headers: { cookie, Accept: 'application/json' },
 		cache: 'no-store',
+		redirect: 'error',
 		signal: AbortSignal.timeout(5000)
 	});
 }
