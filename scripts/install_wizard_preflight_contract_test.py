@@ -21,7 +21,9 @@ class InstallWizardPreflightContractTest(unittest.TestCase):
         self.assertNotIn('print(token', app)
         self.assertNotIn('print(token', helper)
         self.assertIn('output.replace(token, "[redacted]")', helper)
-        self.assertIn('"TUNNEL_TOKEN"', helper)
+        self.assertIn('TUNNEL_TOKEN=', helper)
+        self.assertIn('"--env-file"', helper)
+        self.assertNotIn('environment["TUNNEL_TOKEN"] = token', helper)
 
 
 if __name__ == "__main__":
