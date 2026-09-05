@@ -56,4 +56,9 @@ describe('project settings workspace', () => {
 		expect(webhookSettings).toContain('ConfirmActionDialog');
 		expect(webhookSettings).toContain('No GitHub delivery has been verified');
 	});
+
+	it('keeps webhook credentials aligned and exposes GitHub as the source platform', () => {
+		expect(webhookSettings).toContain('Github');
+		expect(webhookSettings.match(/grid-cols-\[minmax\(0,1fr\)_4\.75rem\]/g)?.length).toBe(2);
+	});
 });
