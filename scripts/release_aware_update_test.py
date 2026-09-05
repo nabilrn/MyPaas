@@ -114,7 +114,7 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("queuedLocally", page)
         self.assertIn("connectionLost", page)
         self.assertIn("window.location.reload()", page)
-        self.assertIn("pollingFast ? 1000 : 30_000", page)
+        self.assertIn("pollingFast ? 500 : 30_000", page)
         self.assertIn("baselineStatusKey", page)
         self.assertIn("statusAdvanced", page)
         self.assertIn("statusTargetsAvailableRelease", page)
