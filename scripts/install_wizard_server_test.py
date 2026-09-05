@@ -193,7 +193,11 @@ class InstallWizardServerTest(unittest.TestCase):
                 with patch.object(
                     server,
                     "probe_github_oauth",
-                    return_value=PreflightResult(True, "github_oauth_valid", "GitHub OAuth configuration is valid."),
+                    return_value=PreflightResult(
+                        True,
+                        "github_credentials_valid",
+                        "GitHub accepted the OAuth app credentials. Callback matching is verified on the first sign-in.",
+                    ),
                 ):
                     conn = http.client.HTTPConnection(host, port, timeout=5)
                     body = json.dumps(
@@ -215,7 +219,7 @@ class InstallWizardServerTest(unittest.TestCase):
                     self.assertEqual(response.status, 200)
                     self.assertNotIn("never-echo-this-secret", response_body)
                     decoded = json.loads(response_body)
-                    self.assertEqual(decoded["oauth"]["code"], "github_oauth_valid")
+                    self.assertEqual(decoded["oauth"]["code"], "github_credentials_valid")
                     self.assertEqual(decoded["ownerEmail"]["code"], "owner_email_unverified")
                     conn.close()
             finally:
