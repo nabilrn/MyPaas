@@ -58,7 +58,7 @@ describe('project settings workspace', () => {
 	});
 
 	it('keeps webhook credentials aligned and exposes GitHub as the source platform', () => {
-		expect(webhookSettings).toContain('Github');
+		expect(webhookSettings.match(/data-github-platform-icon/g)?.length).toBe(2);
 		expect(webhookSettings.match(/grid-cols-\[minmax\(0,1fr\)_4\.75rem\]/g)?.length).toBe(2);
 	});
 });
