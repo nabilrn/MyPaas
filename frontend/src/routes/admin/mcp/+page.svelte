@@ -121,8 +121,8 @@
 
 			<section class="border-b border-[color:var(--workspace-divider)]">
 				<div class="px-4 py-2.5">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Supported clients</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Popular coding agents that can use an MCP-compatible local bridge.</p>
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Agent friendly</h2>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Bring your preferred coding agent. MyPaaS exposes the same local MCP bridge to compatible agent workflows.</p>
 				</div>
 				<AgentClientGrid />
 			</section>
@@ -146,7 +146,7 @@
 
 			<section class="border-b border-[color:var(--workspace-divider)]">
 				<div class="px-4 py-2.5">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Connect a client</h2>
+					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Connect an agent</h2>
 					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Run the bridge on the same machine as your coding agent.</p>
 				</div>
 				<div class="grid border-t border-[color:var(--workspace-divider)] lg:grid-cols-[18rem_minmax(0,1fr)]">
@@ -170,7 +170,7 @@
 <ConfirmActionDialog
 	open={confirmRegenerateToken}
 	title="Regenerate MCP token?"
-	description="Existing connected clients will stop authenticating until they are updated with the new token."
+	description="Existing connected agents will stop authenticating until they are updated with the new token."
 	confirmLabel="Regenerate token"
 	busyLabel="Regenerating"
 	variant="danger"
@@ -178,5 +178,5 @@
 	on:cancel={() => (confirmRegenerateToken = false)}
 	on:confirm={regenerateToken}
 >
-	<p>After regeneration, copy the new token into every client that uses this bridge.</p>
+	<p>After regeneration, copy the new token into every agent that uses this bridge.</p>
 </ConfirmActionDialog>

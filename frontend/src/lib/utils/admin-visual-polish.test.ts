@@ -4,16 +4,18 @@ import backupPage from '../../routes/admin/backup/+page.svelte?raw';
 import migrationPage from '../../routes/admin/migration/+page.svelte?raw';
 
 describe('administration visual polish', () => {
-	it('keeps supported MCP clients icon-first with brand-aware marks and hover lift', () => {
-		expect(agentClientGrid).toContain('h-14 w-14');
-		expect(agentClientGrid).toContain('sm:grid-cols-5 xl:grid-cols-10');
-		expect(agentClientGrid).toContain('@keyframes agent-hop');
-		expect(agentClientGrid).toContain("{ label: 'OpenAI Codex', id: 'codex', color: '#111111' }");
-		expect(agentClientGrid).toContain("{ label: 'GitHub Copilot', id: 'copilot', color: '#8534F3' }");
-		expect(agentClientGrid).toContain("{ label: 'Windsurf', id: 'windsurf', color: '#111111' }");
-		expect(agentClientGrid).toContain("{ label: 'Roo Code', id: 'roocode', color: '#111111' }");
-		expect(agentClientGrid).toContain('gemini-client-gradient');
-		expect(agentClientGrid).not.toContain('MCP-compatible</p>');
+	it('keeps MCP agent marks overlapping, animated, and discoverable on hover', () => {
+		expect(agentClientGrid).toContain('border-radius: 9999px');
+		expect(agentClientGrid).toContain('margin-left: -0.9rem');
+		expect(agentClientGrid).toContain('@keyframes agent-marquee');
+		expect(agentClientGrid).toContain('@keyframes agent-bounce');
+		expect(agentClientGrid).toContain('animation-play-state: paused');
+		expect(agentClientGrid).toContain('role="tooltip"');
+		expect(agentClientGrid).toContain("{ label: 'OpenAI Codex', slug: 'codex' }");
+		expect(agentClientGrid).toContain("{ label: 'GitHub Copilot', slug: 'githubcopilot' }");
+		expect(agentClientGrid).toContain("{ label: 'Windsurf', slug: 'windsurf' }");
+		expect(agentClientGrid).toContain("{ label: 'Roo Code', slug: 'roocode' }");
+		expect(agentClientGrid).toContain('prefers-reduced-motion: reduce');
 	});
 
 	it('uses the Cloudflare mark instead of a generic cloud glyph for R2', () => {

@@ -1,59 +1,187 @@
 <script lang="ts">
-	const clients = [
-		{ label: 'OpenAI Codex', id: 'codex', color: '#111111' },
-		{ label: 'Claude Code', id: 'claude', color: '#D97757' },
-		{ label: 'GitHub Copilot', id: 'copilot', color: '#8534F3' },
-		{ label: 'Cursor', id: 'cursor', color: '#111111' },
-		{ label: 'Windsurf', id: 'windsurf', color: '#111111' },
-		{ label: 'Cline', id: 'cline', color: '#111111' },
-		{ label: 'Gemini CLI', id: 'gemini', color: '#4E82EE' },
-		{ label: 'Replit Agent', id: 'replit', color: '#F26207' },
-		{ label: 'OpenCode', id: 'opencode', color: '#514F4F' },
-		{ label: 'Roo Code', id: 'roocode', color: '#111111' }
+	// LobeHub's static SVG package is the framework-neutral distribution of the same icon catalog.
+	// Pin the package version so the dashboard does not change underneath a deployed release.
+	const lobeIconBase = 'https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons';
+
+	const agents = [
+		{ label: 'OpenAI Codex', slug: 'codex' },
+		{ label: 'Claude Code', slug: 'claudecode' },
+		{ label: 'GitHub Copilot', slug: 'githubcopilot' },
+		{ label: 'Cursor', slug: 'cursor' },
+		{ label: 'Windsurf', slug: 'windsurf' },
+		{ label: 'Cline', slug: 'cline' },
+		{ label: 'Roo Code', slug: 'roocode' },
+		{ label: 'Amp', slug: 'amp' },
+		{ label: 'Junie', slug: 'junie' },
+		{ label: 'Qoder', slug: 'qoder' },
+		{ label: 'Replit', slug: 'replit' },
+		{ label: 'TRAE', slug: 'trae' },
+		{ label: 'Kilo Code', slug: 'kilocode' },
+		{ label: 'Antigravity', slug: 'antigravity' },
+		{ label: 'CodeBuddy', slug: 'codebuddy' },
+		{ label: 'Goose', slug: 'goose' }
 	] as const;
 </script>
 
-<div class="grid grid-cols-2 gap-x-4 gap-y-5 border-t border-[color:var(--workspace-divider)] px-4 py-5 sm:grid-cols-5 xl:grid-cols-10" aria-label="Supported MCP clients">
-	{#each clients as client}
-		<div class="agent-client flex min-w-0 items-center justify-center rounded-md py-1" role="img" aria-label={client.label} title={client.label}>
-			<span class="agent-client-mark inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-white" style={`color: ${client.color}`} aria-hidden="true">
-				{#if client.id === 'gemini'}
-					<svg class="h-8 w-8" viewBox="0 0 24 24" role="presentation">
-						<defs>
-							<linearGradient id="gemini-client-gradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-								<stop offset="0" stop-color="#4285F4" />
-								<stop offset="0.34" stop-color="#9B72CB" />
-								<stop offset="0.68" stop-color="#D96570" />
-								<stop offset="1" stop-color="#F9AB00" />
-							</linearGradient>
-						</defs>
-						<path fill="url(#gemini-client-gradient)" d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" />
-					</svg>
-				{:else}
-					<svg class="h-8 w-8" role="presentation"><use href={`/brands/agents/agent-logos.svg#${client.id}`}></use></svg>
-				{/if}
-			</span>
-		</div>
-	{/each}
+<div class="agent-marquee border-t border-[color:var(--workspace-divider)]" aria-label="AI agents compatible with the MyPaaS MCP bridge">
+	<div class="agent-marquee-track">
+		{#each [0, 1] as copy}
+			<div class="agent-marquee-set" aria-hidden={copy === 1 ? 'true' : undefined}>
+				{#each agents as agent, index}
+					<div
+						class:agent-client-first={index === 0}
+						class="agent-client"
+						role={copy === 0 ? 'img' : undefined}
+						aria-label={copy === 0 ? agent.label : undefined}
+					>
+						<span class="agent-tooltip" role="tooltip">{agent.label}</span>
+						<span class="agent-client-mark" aria-hidden="true">
+							<img src={`${lobeIconBase}/${agent.slug}.svg`} alt="" loading="lazy" decoding="async" />
+						</span>
+					</div>
+				{/each}
+			</div>
+		{/each}
+	</div>
 </div>
 
 <style>
-	@keyframes agent-hop {
+	.agent-marquee {
+		overflow: hidden;
+		padding: 2.35rem 0 1.15rem;
+		-webkit-mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+		mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+	}
+
+	.agent-marquee-track {
+		display: flex;
+		width: max-content;
+		will-change: transform;
+		animation: agent-marquee 38s linear infinite;
+	}
+
+	.agent-marquee-set {
+		display: flex;
+		align-items: center;
+		padding-right: 3rem;
+	}
+
+	.agent-client {
+		position: relative;
+		margin-left: -0.9rem;
+		flex: none;
+	}
+
+	.agent-client-first {
+		margin-left: 0;
+	}
+
+	.agent-client-mark {
+		display: inline-flex;
+		height: 3.65rem;
+		width: 3.65rem;
+		align-items: center;
+		justify-content: center;
+		border-radius: 9999px;
+		border: 1px solid rgb(209 213 219);
+		background: #fff;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+		transition: border-color 160ms ease, box-shadow 160ms ease;
+	}
+
+	:global(.dark) .agent-client-mark {
+		border-color: rgb(64 64 64);
+	}
+
+	.agent-client-mark img {
+		display: block;
+		height: 1.8rem;
+		width: 1.8rem;
+		object-fit: contain;
+	}
+
+	.agent-tooltip {
+		pointer-events: none;
+		position: absolute;
+		left: 50%;
+		bottom: calc(100% + 0.55rem);
+		z-index: 60;
+		width: max-content;
+		max-width: 11rem;
+		transform: translate(-50%, 0.25rem) scale(0.97);
+		border: 1px solid rgb(229 231 235);
+		border-radius: 0.375rem;
+		background: rgb(255 255 255 / 0.98);
+		padding: 0.3rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		line-height: 1rem;
+		color: rgb(17 24 39);
+		box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+		opacity: 0;
+		transition: opacity 140ms ease, transform 140ms ease;
+		white-space: nowrap;
+	}
+
+	:global(.dark) .agent-tooltip {
+		border-color: rgb(64 64 64);
+		background: rgb(23 23 23 / 0.98);
+		color: #fff;
+	}
+
+	.agent-client:hover {
+		z-index: 50;
+	}
+
+	.agent-client:hover .agent-tooltip {
+		opacity: 1;
+		transform: translate(-50%, 0) scale(1);
+	}
+
+	.agent-client:hover .agent-client-mark {
+		border-color: rgb(156 163 175);
+		box-shadow: 0 8px 18px rgb(0 0 0 / 0.14);
+	}
+
+	.agent-marquee:hover .agent-marquee-track {
+		animation-play-state: paused;
+	}
+
+	@keyframes agent-marquee {
+		from { transform: translateX(0); }
+		to { transform: translateX(-50%); }
+	}
+
+	@keyframes agent-bounce {
 		0% { transform: translateY(0); }
-		45% { transform: translateY(-9px); }
-		72% { transform: translateY(-4px); }
-		100% { transform: translateY(-6px); }
+		42% { transform: translateY(-0.7rem); }
+		68% { transform: translateY(-0.35rem); }
+		100% { transform: translateY(-0.5rem); }
 	}
 
 	@media (prefers-reduced-motion: no-preference) {
 		.agent-client:hover .agent-client-mark {
-			animation: agent-hop 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+			animation: agent-bounce 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.agent-marquee {
+			overflow-x: auto;
+			-webkit-mask-image: none;
+			mask-image: none;
+		}
+
+		.agent-marquee-track {
+			animation: none;
+		}
+
+		.agent-marquee-set[aria-hidden='true'] {
+			display: none;
+		}
+
 		.agent-client:hover .agent-client-mark {
-			transform: translateY(-4px);
+			transform: translateY(-0.25rem);
 		}
 	}
 </style>
