@@ -1,4 +1,12 @@
+import http.client
 import importlib.util
+import io
+import os
+import stat
+import sys
+import tarfile
+import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -6,11 +14,36 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 WIZARD_PATH = ROOT_DIR / "scripts" / "install-wizard.py"
 RUNNER_PATH = ROOT_DIR / "scripts" / "run-install-wizard.sh"
+SCRIPTS_DIR = str(WIZARD_PATH.parent)
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+import install_wizard_security as WIZARD_SECURITY
+
 SPEC = importlib.util.spec_from_file_location("install_wizard", WIZARD_PATH)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("unable to load install wizard")
 WIZARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(WIZARD)
+
+
+def backup_bytes(extra_member: str | None = None, symlink_member: str | None = None) -> bytes:
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, data in (("database.sql", b"select 1;\n"), (".env", b"PUBLIC_DOMAIN=example.com\n")):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        if extra_member is not None:
+            data = b"unexpected"
+            info = tarfile.TarInfo(extra_member)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        if symlink_member is not None:
+            info = tarfile.TarInfo(symlink_member)
+            info.type = tarfile.SYMTYPE
+            info.linkname = "/etc/passwd"
+            archive.addfile(info)
+    return output.getvalue()
 
 
 class InstallConfigTest(unittest.TestCase):
@@ -182,6 +215,112 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn('2. Add two public hostname routes', html)
         self.assertIn('3. Confirm DNS', html)
         self.assertNotIn('mark-dot', html)
+
+    def test_wizard_masks_secrets_and_authenticates_backup_fetch(self) -> None:
+        html = WIZARD.form_html().decode("utf-8")
+
+        self.assertRegex(html, r'name="GITHUB_CLIENT_SECRET"[^>]*type="password"')
+        self.assertRegex(html, r'name="CLOUDFLARE_TUNNEL_TOKEN"[^>]*type="password"')
+        self.assertRegex(html, r'name="POSTGRES_PASSWORD"[^>]*type="password"')
+        self.assertRegex(html, r'name="METRICS_PASSWORD"[^>]*type="password"')
+        self.assertRegex(html, r'name="JWT_SECRET"[^>]*type="password"')
+        self.assertRegex(html, r'name="ENCRYPTION_KEY"[^>]*type="password"')
+        self.assertIn("'X-Wizard-Token': wizardToken", html)
+
+    def test_backup_receiver_accepts_only_current_mypaas_backup_shape(self) -> None:
+        payload = backup_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = os.path.join(directory, "restore.tar.gz")
+            WIZARD_SECURITY.receive_backup(
+                io.BytesIO(payload),
+                str(len(payload)),
+                destination,
+                max_bytes=len(payload) + 1,
+                max_expanded_bytes=1024 * 1024,
+            )
+            self.assertTrue(os.path.isfile(destination))
+            self.assertEqual(stat.S_IMODE(os.stat(destination).st_mode), 0o600)
+            WIZARD_SECURITY.validate_backup_archive(destination, max_expanded_bytes=1024 * 1024)
+
+    def test_backup_receiver_rejects_path_traversal_and_extra_members(self) -> None:
+        for extra in ("../escape", "nested/database.sql", "other.txt"):
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as directory:
+                payload = backup_bytes(extra_member=extra)
+                destination = os.path.join(directory, "restore.tar.gz")
+                with self.assertRaises(WIZARD_SECURITY.BackupUploadError):
+                    WIZARD_SECURITY.receive_backup(
+                        io.BytesIO(payload),
+                        str(len(payload)),
+                        destination,
+                        max_bytes=len(payload) + 1,
+                        max_expanded_bytes=1024 * 1024,
+                    )
+                self.assertFalse(os.path.exists(destination))
+
+    def test_backup_receiver_rejects_links_truncation_and_size_limits(self) -> None:
+        linked = backup_bytes(symlink_member="extra-link")
+        with tempfile.TemporaryDirectory() as directory:
+            destination = os.path.join(directory, "restore.tar.gz")
+            with self.assertRaises(WIZARD_SECURITY.BackupUploadError):
+                WIZARD_SECURITY.receive_backup(
+                    io.BytesIO(linked),
+                    str(len(linked)),
+                    destination,
+                    max_bytes=len(linked) + 1,
+                    max_expanded_bytes=1024 * 1024,
+                )
+
+        valid = backup_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = os.path.join(directory, "restore.tar.gz")
+            with self.assertRaises(WIZARD_SECURITY.BackupUploadError):
+                WIZARD_SECURITY.receive_backup(
+                    io.BytesIO(valid[:-4]),
+                    str(len(valid)),
+                    destination,
+                    max_bytes=len(valid) + 1,
+                    max_expanded_bytes=1024 * 1024,
+                )
+            with self.assertRaises(WIZARD_SECURITY.BackupTooLargeError):
+                WIZARD_SECURITY.receive_backup(
+                    io.BytesIO(valid),
+                    str(len(valid)),
+                    destination,
+                    max_bytes=len(valid) - 1,
+                    max_expanded_bytes=1024 * 1024,
+                )
+
+    def test_backup_upload_endpoint_rejects_missing_wizard_token(self) -> None:
+        old_token = WIZARD.TOKEN
+        old_path = WIZARD.BACKUP_PATH
+        try:
+            WIZARD.TOKEN = "test-wizard-token"
+            with tempfile.TemporaryDirectory() as directory:
+                WIZARD.BACKUP_PATH = os.path.join(directory, "restore.tar.gz")
+                server = WIZARD.HTTPServer(("127.0.0.1", 0), WIZARD.Handler)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    payload = backup_bytes()
+                    connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+                    connection.request(
+                        "POST",
+                        "/upload-backup",
+                        body=payload,
+                        headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(payload))},
+                    )
+                    response = connection.getresponse()
+                    response.read()
+                    connection.close()
+                    self.assertEqual(response.status, 403)
+                    self.assertFalse(os.path.exists(WIZARD.BACKUP_PATH))
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
+        finally:
+            WIZARD.TOKEN = old_token
+            WIZARD.BACKUP_PATH = old_path
 
     def test_success_html_renders_auto_close_script(self) -> None:
         html = WIZARD.success_html(title="Done", message="Saved.").decode("utf-8")
