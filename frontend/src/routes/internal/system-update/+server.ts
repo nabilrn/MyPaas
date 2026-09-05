@@ -187,14 +187,19 @@ export const GET: RequestHandler = async ({ request }) => {
 
 	const [status, policy] = await Promise.all([readStatus(), readPolicy()]);
 	let currentSha = status.currentSha;
-	try {
-		const settingsResponse = await apiRequest('/settings', cookie);
-		if (settingsResponse.ok) {
-			const settingsEnvelope = await settingsResponse.json() as ApiEnvelope<{ build_sha?: string }>;
-			currentSha = settingsEnvelope.data?.build_sha || currentSha;
+	// The host updater owns the installed platform revision. Frontend-only updates
+	// intentionally leave the API image on its previous build SHA, so API build_sha
+	// is only a fallback when no valid host status revision exists yet.
+	if (!/^[0-9a-f]{40}$/.test(currentSha)) {
+		try {
+			const settingsResponse = await apiRequest('/settings', cookie);
+			if (settingsResponse.ok) {
+				const settingsEnvelope = await settingsResponse.json() as ApiEnvelope<{ build_sha?: string }>;
+				currentSha = settingsEnvelope.data?.build_sha || currentSha;
+			}
+		} catch {
+			// Status remains useful after the API returns from an update restart.
 		}
-	} catch {
-		// Status remains useful after the API returns from an update restart.
 	}
 
 	const channel = policy.channel || status.channel || 'release';
