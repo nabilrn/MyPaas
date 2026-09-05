@@ -51,7 +51,7 @@ class InstallWizardVisualContractTest(unittest.TestCase):
 
         self.assertIn("Standalone installer implementation of frontend/DESIGN.md", html)
         self.assertIn("grid-template-columns: 12rem minmax(0, 1fr)", html)
-        self.assertIn("min-height: calc(100vh - 56px)", html)
+        self.assertIn("height: calc(100dvh - 56px)", html)
         self.assertIn('class="setup-form"', html)
         self.assertIn("min-height: 36px", html)
         self.assertNotIn("1180px", html)
@@ -75,6 +75,17 @@ class InstallWizardVisualContractTest(unittest.TestCase):
             self.assertIn(selector, html)
         self.assertNotIn("background: var(--app-bg);", html)
 
+    def test_desktop_workspace_is_viewport_bound_and_scrolls_active_pane(self) -> None:
+        visual = VISUAL.VISUAL_CONTRACT_CSS
+
+        self.assertIn("Desktop installer owns exactly one viewport", visual)
+        self.assertIn("height: 100dvh;", visual)
+        self.assertIn("height: calc(100dvh - 56px);", visual)
+        self.assertIn(".setup-main {\n    min-width: 0;\n    min-height: 0;\n    display: flex;", visual)
+        self.assertIn(".setup-form {\n    flex: 1 1 auto;", visual)
+        self.assertIn(".wizard-step:not([hidden]) {\n    display: block;\n    flex: 1 1 auto;\n    min-height: 0;\n    overflow: auto;", visual)
+        self.assertNotIn("min-height: calc(100vh - 80px)", visual)
+
     def test_sidebar_matches_frontend_secondary_navigation_grammar(self) -> None:
         html = APP.form_html().decode("utf-8")
 
@@ -85,6 +96,18 @@ class InstallWizardVisualContractTest(unittest.TestCase):
         self.assertEqual(html.count('class="step-icon"'), 4)
         self.assertNotIn("step-number", html)
         self.assertNotIn("Fresh installation", html)
+
+    def test_sidebar_is_real_navigation_without_bypassing_future_gates(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertEqual(html.count('type="button" class="step-tab'), 4)
+        self.assertIn("let maxVisitedStep = 0;", html)
+        self.assertIn("item.disabled = itemIndex > maxVisitedStep;", html)
+        self.assertIn("if (!Number.isInteger(target) || target > maxVisitedStep) return;", html)
+        self.assertIn("showStep(target);", html)
+        self.assertIn('data-progress="1" disabled aria-disabled="true"', html)
+        self.assertIn('data-progress="2" disabled aria-disabled="true"', html)
+        self.assertIn('data-progress="3" disabled aria-disabled="true"', html)
 
     def test_hidden_navigation_actions_cannot_be_resurrected_by_button_display(self) -> None:
         html = APP.form_html().decode("utf-8")
