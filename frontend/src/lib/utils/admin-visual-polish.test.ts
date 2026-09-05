@@ -11,7 +11,8 @@ describe('administration visual polish', () => {
 		expect(agentClientGrid).toContain('filter: grayscale(0)');
 		expect(agentClientGrid).toContain('transform: translateY(-0.3rem)');
 		expect(agentClientGrid).toContain('role="tooltip"');
-		expect(agentClientGrid).toContain('tabindex="0"');
+		expect(agentClientGrid).toContain('<button');
+		expect(agentClientGrid).toContain('on:focus={() => (activeAgent = agent.slug)}');
 		expect(agentClientGrid).toContain("{ label: 'OpenAI Codex', slug: 'codex' }");
 		expect(agentClientGrid).toContain("{ label: 'GitHub Copilot', slug: 'githubcopilot' }");
 		expect(agentClientGrid).toContain("{ label: 'Windsurf', slug: 'windsurf' }");
