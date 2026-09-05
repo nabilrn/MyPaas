@@ -91,9 +91,9 @@ describe('administration navigation contract', () => {
 		expect(adminMigrationPage).toContain('MigrationTransferIllustration');
 		expect(adminMigrationPage).toContain('Runtime safety');
 		expect(adminMcpPage).toContain('admin-mcp-workspace w-full');
-		expect(adminMcpPage).toContain('Supported clients');
+		expect(adminMcpPage).toContain('Agent friendly');
 		expect(adminMcpPage).toContain('Agent capabilities');
-		expect(adminMcpPage).toContain('Connect a client');
+		expect(adminMcpPage).toContain('Connect an agent');
 		expect(adminMcpPage).toContain('ConfirmActionDialog');
 		expect(adminUsersPage).toContain('role="dialog"');
 		expect(adminAuditPage).toContain('Audit logs copied');
