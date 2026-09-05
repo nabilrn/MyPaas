@@ -33,7 +33,8 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
     def test_status_helper_is_atomic_and_phase_aware(self):
         helper = self.text("scripts/update-status.sh")
         dispatch = self.text("scripts/update-dispatch.sh")
-        self.assertIn('mktemp "$status_dir/.status.XXXXXX"', helper)
+        self.assertIn('status_parent="$(dirname "$status_file")"', helper)
+        self.assertIn('mktemp "$status_parent/.status.XXXXXX"', helper)
         self.assertIn('mv -f "$tmp" "$status_file"', helper)
         self.assertIn("printf 'phase=%s\\n'", helper)
         for state in ("succeeded", "failed", "rolled_back", "blocked"):
