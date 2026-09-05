@@ -17,8 +17,10 @@ describe('MCP administration workspace', () => {
 			expect(clientGrid).toContain(agent);
 		}
 		expect(clientGrid).toContain('@lobehub/icons-static-svg@1.94.0/icons');
-		expect(clientGrid).toContain('agent-marquee-track');
+		expect(clientGrid).toContain('agent-strip-row');
 		expect(clientGrid).toContain('agent-tooltip');
+		expect(clientGrid).toContain("wantsColor ? '-color' : ''");
+		expect(clientGrid).not.toContain('agent-marquee-track');
 		expect(clientGrid).not.toContain('/brands/agents/agent-logos.svg#');
 	});
 });
