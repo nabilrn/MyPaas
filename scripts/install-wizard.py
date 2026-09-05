@@ -8,11 +8,19 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from install_wizard_security import BackupTooLargeError, BackupUploadError, receive_backup, token_matches
+
 
 HOST = os.environ.get("WIZARD_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WIZARD_PORT", "8787"))
 TOKEN = os.environ.get("WIZARD_TOKEN", secrets.token_hex(16))
 ENV_FILE = os.environ.get("WIZARD_ENV_FILE", ".env")
+BACKUP_PATH = os.environ.get("WIZARD_BACKUP_PATH", "/tmp/mypaas-restore.tar.gz")
+MAX_BACKUP_BYTES = int(os.environ.get("WIZARD_MAX_BACKUP_BYTES", str(512 * 1024 * 1024)))
+MAX_EXPANDED_BACKUP_BYTES = int(
+    os.environ.get("WIZARD_MAX_EXPANDED_BACKUP_BYTES", str(2 * 1024 * 1024 * 1024))
+)
+MAX_FORM_BYTES = 64 * 1024
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BRAND_LOGO_PATH = os.path.join(ROOT_DIR, "frontend", "src", "assets", "brand", "mypaas-logo.svg")
 
@@ -512,7 +520,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             </div>
             <div class="field">
               <label for="GITHUB_CLIENT_SECRET">OAuth Client Secret</label>
-              <input id="GITHUB_CLIENT_SECRET" name="GITHUB_CLIENT_SECRET" required autocomplete="off" value="{esc(values.get("GITHUB_CLIENT_SECRET", ""))}">
+              <input id="GITHUB_CLIENT_SECRET" name="GITHUB_CLIENT_SECRET" required type="password" autocomplete="new-password" value="{esc(values.get("GITHUB_CLIENT_SECRET", ""))}">
             </div>
             <div class="field full">
               <label for="GITHUB_CALLBACK_URL">GitHub OAuth callback URL</label>
@@ -553,7 +561,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             <div class="grid">
               <div class="field full">
               <label for="CLOUDFLARE_TUNNEL_TOKEN">Cloudflare Tunnel token</label>
-              <input id="CLOUDFLARE_TUNNEL_TOKEN" name="CLOUDFLARE_TUNNEL_TOKEN" required autocomplete="off" value="{esc(values.get("CLOUDFLARE_TUNNEL_TOKEN", ""))}">
+              <input id="CLOUDFLARE_TUNNEL_TOKEN" name="CLOUDFLARE_TUNNEL_TOKEN" required type="password" autocomplete="new-password" value="{esc(values.get("CLOUDFLARE_TUNNEL_TOKEN", ""))}">
               <span class="hint">Use a Cloudflare Zero Trust tunnel token, not an API token.</span>
             </div>
           </div>
@@ -577,17 +585,17 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
               <div class="panel-body grid">
                 {advanced_field("POSTGRES_USER", "Postgres user", values)}
                 {advanced_field("POSTGRES_DB", "Postgres database", values)}
-                {advanced_field("POSTGRES_PASSWORD", "Postgres password", values)}
+                {advanced_field("POSTGRES_PASSWORD", "Postgres password", values, secret=True)}
                 {advanced_field("PROJECT_NETWORK", "Docker project network", values)}
                 {advanced_field("DOCKER_BIND_HOST", "Docker bind host", values)}
-                {advanced_field("METRICS_PASSWORD", "Metrics password", values)}
+                {advanced_field("METRICS_PASSWORD", "Metrics password", values, secret=True)}
                 <div class="field full">
                   <label for="JWT_SECRET">JWT secret</label>
-                  <input id="JWT_SECRET" name="JWT_SECRET" required autocomplete="off" value="{esc(values.get("JWT_SECRET", ""))}">
+                  <input id="JWT_SECRET" name="JWT_SECRET" required type="password" autocomplete="new-password" value="{esc(values.get("JWT_SECRET", ""))}">
                 </div>
                 <div class="field full">
                   <label for="ENCRYPTION_KEY">Env encryption key</label>
-                  <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required autocomplete="off" value="{esc(values.get("ENCRYPTION_KEY", ""))}">
+                  <input id="ENCRYPTION_KEY" name="ENCRYPTION_KEY" required type="password" autocomplete="new-password" value="{esc(values.get("ENCRYPTION_KEY", ""))}">
                 </div>
               </div>
             </details>
@@ -608,6 +616,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     const steps = Array.from(document.querySelectorAll('.wizard-step'));
     const progress = Array.from(document.querySelectorAll('[data-progress]'));
     const form = document.querySelector('form');
+    const wizardToken = form.querySelector('input[name="token"]').value;
     const heading = document.getElementById('step-heading');
     const description = document.getElementById('step-description');
     const stepPosition = document.getElementById('step-position');
@@ -700,12 +709,15 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
             uploadBackupBtn.disabled = true;
             uploadBackupBtn.textContent = 'Uploading...';
             backupStatus.textContent = '';
-            
+
             try {{
                 const res = await fetch('/upload-backup', {{
                     method: 'POST',
                     body: file,
-                    headers: {{ 'Content-Type': 'application/octet-stream' }}
+                    headers: {{
+                      'Content-Type': 'application/octet-stream',
+                      'X-Wizard-Token': wizardToken
+                    }}
                 }});
                 if (res.ok) {{
                     const html = await res.text();
@@ -713,7 +725,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
                     document.write(html);
                     document.close();
                 }} else {{
-                    backupStatus.textContent = 'Upload failed. Please try again.';
+                    backupStatus.textContent = 'Upload failed. Please verify this is a MyPaas backup and try again.';
                     backupStatus.style.color = 'var(--app-danger)';
                     uploadBackupBtn.disabled = false;
                     uploadBackupBtn.textContent = 'Upload Backup';
@@ -793,21 +805,26 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     return body.encode("utf-8")
 
 
-def advanced_field(name: str, label: str, values: dict[str, str]) -> str:
+def advanced_field(name: str, label: str, values: dict[str, str], *, secret: bool = False) -> str:
+    input_type = "password" if secret else "text"
+    autocomplete = "new-password" if secret else "off"
     return f"""<div class="field">
       <label for="{esc(name)}">{esc(label)}</label>
-      <input id="{esc(name)}" name="{esc(name)}" required autocomplete="off" value="{esc(values.get(name, ""))}">
+      <input id="{esc(name)}" name="{esc(name)}" required type="{input_type}" autocomplete="{autocomplete}" value="{esc(values.get(name, ""))}">
     </div>"""
 
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
-        print(f"{self.address_string()} - {fmt % args}")
+        # The setup token is part of the initial wizard URL. Avoid request-line logging so
+        # credentials and setup URLs never end up in installer logs.
+        return
 
     def send_html(self, body: bytes, status: int = 200) -> None:
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -835,7 +852,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_html(b"ok")
             return
         query = parse_qs(parsed.query)
-        if query.get("token", [""])[0] != TOKEN:
+        if not token_matches(query.get("token", [""])[0], TOKEN):
             self.send_html(form_html("Invalid or missing wizard token. Use the URL printed by install-vm.sh."), 403)
             return
         self.send_html(form_html())
@@ -843,31 +860,58 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/upload-backup":
-            length = int(self.headers.get("Content-Length", "0"))
-            if length > 0:
-                with open("/tmp/mypaas-restore.tar.gz", "wb") as f:
-                    f.write(self.rfile.read(length))
-                self.send_html(success_html(
-                    title="Backup uploaded",
-                    message="Database backup and config were successfully uploaded."
-                ))
-                def delayed_shutdown():
-                    import time
-                    time.sleep(3)
-                    self.server.shutdown()
-                threading.Thread(target=delayed_shutdown, daemon=True).start()
-            else:
-                self.send_error(400, "Empty payload")
+            if not token_matches(self.headers.get("X-Wizard-Token"), TOKEN):
+                self.send_html(b"Invalid wizard token.", 403)
+                return
+            try:
+                receive_backup(
+                    self.rfile,
+                    self.headers.get("Content-Length"),
+                    BACKUP_PATH,
+                    max_bytes=MAX_BACKUP_BYTES,
+                    max_expanded_bytes=MAX_EXPANDED_BACKUP_BYTES,
+                )
+            except BackupTooLargeError:
+                self.send_html(b"Backup upload is too large.", 413)
+                return
+            except BackupUploadError:
+                self.send_html(b"Backup upload is invalid.", 400)
+                return
+
+            self.send_html(success_html(
+                title="Backup uploaded",
+                message="Database backup and config were successfully uploaded."
+            ))
+
+            def delayed_shutdown():
+                import time
+                time.sleep(3)
+                self.server.shutdown()
+
+            threading.Thread(target=delayed_shutdown, daemon=True).start()
             return
 
         if parsed.path != "/save":
             self.send_error(404)
             return
-        length = int(self.headers.get("Content-Length", "0"))
+
+        raw_length = self.headers.get("Content-Length", "")
+        try:
+            length = int(raw_length)
+        except ValueError:
+            self.send_html(b"Invalid form request.", 400)
+            return
+        if length <= 0:
+            self.send_html(b"Empty form request.", 400)
+            return
+        if length > MAX_FORM_BYTES:
+            self.send_html(b"Form request is too large.", 413)
+            return
+
         raw = self.rfile.read(length).decode("utf-8")
         data = parse_qs(raw, keep_blank_values=True)
         values = {key: field(data, key) for key in DEFAULTS.keys()}
-        if field(data, "token") != TOKEN:
+        if not token_matches(field(data, "token"), TOKEN):
             self.send_html(form_html("Invalid wizard token.", values), 403)
             return
         try:
