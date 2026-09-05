@@ -66,7 +66,7 @@ export function updateStage(phase: UpdatePhase) {
 		case 'rolling_back':
 			return { step: 5, total: 6, percent: 90, label: 'Restoring previous runtime' };
 		case 'complete':
-			return { step: 6, total: 6, percent: 100, label: 'Complete' };
+			return { step: 6, total: 6, percent: 100, label: 'Update complete' };
 		default:
 			return { step: 0, total: 6, percent: 0, label: 'Waiting' };
 	}
