@@ -174,7 +174,7 @@ class InstallWizardPreflightTest(unittest.TestCase):
         self.assertFalse(os.path.exists(env_file))
         self.assertTrue(captured["terminated"])
 
-    def test_preflight_app_injects_checks_without_redesigning_wizard(self) -> None:
+    def test_preflight_app_renders_workspace_checks_directly(self) -> None:
         html = APP.form_html().decode("utf-8")
 
         self.assertIn('id="check-domain-button"', html)
@@ -183,7 +183,9 @@ class InstallWizardPreflightTest(unittest.TestCase):
         self.assertIn("postPreflight('domain'", html)
         self.assertIn("postPreflight('github'", html)
         self.assertIn("postPreflight('cloudflare'", html)
-        self.assertIn('class="panel stepper"', html)
+        self.assertIn('class="workspace"', html)
+        self.assertIn('class="setup-rail"', html)
+        self.assertNotIn('class="panel stepper"', html)
 
     def test_preflight_app_normalizes_full_cloudflare_command_before_save(self) -> None:
         token = "eyJhbGciOiJIUzI1NiJ9.eyJ0dW5uZWwiOiIxMjM0NTYifQ.signature-value"
