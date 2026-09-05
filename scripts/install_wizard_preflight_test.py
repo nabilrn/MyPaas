@@ -1,6 +1,5 @@
 import io
 import json
-import urllib.error
 import unittest
 from pathlib import Path
 
@@ -51,7 +50,7 @@ class InstallWizardPreflightTest(unittest.TestCase):
         self.assertEqual(result.value, "owner@example.com")
         self.assertIn("only after", result.message)
 
-    def test_github_oauth_bad_code_confirms_credentials_and_callback(self) -> None:
+    def test_github_oauth_bad_code_confirms_credentials_without_claiming_callback_match(self) -> None:
         captured = {}
 
         def open_request(request, timeout):
@@ -66,7 +65,8 @@ class InstallWizardPreflightTest(unittest.TestCase):
             open_request=open_request,
         )
         self.assertTrue(result.ok)
-        self.assertEqual(result.code, "github_oauth_valid")
+        self.assertEqual(result.code, "github_credentials_valid")
+        self.assertIn("first sign-in", result.message)
         body = captured["request"].data.decode("utf-8")
         self.assertIn("client_id=client-id", body)
         self.assertIn("redirect_uri=https%3A%2F%2Fexample.com%2Fapi%2Fauth%2Fgithub%2Fcallback", body)
