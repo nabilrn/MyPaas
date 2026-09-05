@@ -1,6 +1,7 @@
 export type AdministrationNavKey =
   | "general"
   | "users"
+  | "system-update"
   | "backup"
   | "migration"
   | "mcp"
@@ -42,6 +43,13 @@ export const administrationNavGroups: readonly AdministrationNavGroup[] = [
   {
     label: "Operations",
     items: [
+      {
+        key: "system-update",
+        href: "/admin/update",
+        label: "System update",
+        title: "System update",
+        description: "Install published MyPaaS releases and track updater progress.",
+      },
       {
         key: "backup",
         href: "/admin/backup",
