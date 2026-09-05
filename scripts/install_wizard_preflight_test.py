@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 import socket
 import threading
 import unittest
@@ -83,10 +84,14 @@ class InstallWizardPreflightTest(unittest.TestCase):
         )
 
         self.assertTrue(result["credentialsAccepted"])
-        self.assertTrue(result["callbackAccepted"])
+        self.assertTrue(result["callbackFormatAccepted"])
         self.assertIn("Owner identity is verified during sign-in", result["message"])
         self.assertEqual(captured["timeout"], 8)
         self.assertEqual(captured["request"].full_url, PREFLIGHT.GITHUB_TOKEN_URL)
+
+    def test_github_preflight_requires_mypaas_callback_path(self) -> None:
+        with self.assertRaisesRegex(PREFLIGHT.PreflightError, "/api/auth/github/callback"):
+            PREFLIGHT.validate_https_callback("https://example.com/wrong-callback")
 
     def test_github_preflight_rejects_bad_credentials(self) -> None:
         def opener(request, timeout):
@@ -100,7 +105,7 @@ class InstallWizardPreflightTest(unittest.TestCase):
                 opener=opener,
             )
 
-    def test_github_preflight_rejects_callback_mismatch(self) -> None:
+    def test_github_preflight_rejects_callback_mismatch_when_github_reports_it(self) -> None:
         def opener(request, timeout):
             return FakeResponse({"error": "redirect_uri_mismatch"})
 
@@ -163,9 +168,10 @@ class InstallWizardPreflightTest(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertNotIn(token, captured["command"])
-        self.assertEqual(captured["env"]["TUNNEL_TOKEN"], token)
-        self.assertIn("-e", captured["command"])
-        self.assertIn("TUNNEL_TOKEN", captured["command"])
+        self.assertNotEqual(captured["env"].get("TUNNEL_TOKEN"), token)
+        self.assertIn("--env-file", captured["command"])
+        env_file = captured["command"][captured["command"].index("--env-file") + 1]
+        self.assertFalse(os.path.exists(env_file))
         self.assertTrue(captured["terminated"])
 
     def test_preflight_app_injects_checks_without_redesigning_wizard(self) -> None:
@@ -174,9 +180,9 @@ class InstallWizardPreflightTest(unittest.TestCase):
         self.assertIn('id="check-domain-button"', html)
         self.assertIn('id="check-github-button"', html)
         self.assertIn('id="check-cloudflare-button"', html)
-        self.assertIn("/preflight/domain", html)
-        self.assertIn("/preflight/github", html)
-        self.assertIn("/preflight/cloudflare", html)
+        self.assertIn("postPreflight('domain'", html)
+        self.assertIn("postPreflight('github'", html)
+        self.assertIn("postPreflight('cloudflare'", html)
         self.assertIn('class="panel stepper"', html)
 
     def test_preflight_app_normalizes_full_cloudflare_command_before_save(self) -> None:
