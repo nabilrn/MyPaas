@@ -7,7 +7,8 @@
 	export let imageClass = '';
 
 	$: source = compact ? mark : wordmark;
-	$: sizing = compact ? 'h-[22px] w-auto' : 'h-[22px] w-auto max-w-28';
+	$: defaultSizing = compact ? 'h-[22px] w-auto' : 'h-[22px] w-auto max-w-28';
+	$: sizing = imageClass.trim() ? '' : defaultSizing;
 </script>
 
 <span class={`inline-flex min-w-0 items-center ${className}`.trim()}>
