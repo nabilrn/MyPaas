@@ -11,6 +11,36 @@ const owner = {
 	lastLoginAt: '2026-01-01T00:00:00Z'
 };
 
+const project = {
+	id: 'project-1',
+	userId: owner.id,
+	name: 'Geometry Project',
+	sourceType: 'registry',
+	repoUrl: '',
+	imageRef: 'ghcr.io/example/geometry:latest',
+	branch: 'main',
+	subdomain: 'geometry',
+	deployMode: 'dockerfile',
+	resourceProfile: 'node-python',
+	mainService: null,
+	appPort: 3000,
+	webhookSecret: 'test-secret',
+	allocatedPort: 18080,
+	memoryLimitMb: 256,
+	cpuLimit: 0.35,
+	status: 'running',
+	activeDeploymentId: null,
+	composeFilePath: null,
+	composeOverridePaths: [],
+	composeProfiles: [],
+	composeWorkdir: null,
+	serviceResources: {},
+	staticFrontendPath: null,
+	baseDirectory: null,
+	createdAt: '2026-01-01T00:00:00Z',
+	updatedAt: '2026-01-01T00:00:00Z'
+};
+
 const hostStats = {
 	host_ram_bytes: 8 * 1024 * 1024 * 1024,
 	host_cpu_cores: 4,
@@ -38,13 +68,16 @@ const settings = {
 	profile_node_python_cpu_limit: 0.35,
 	profile_compose_main_memory_mb: 256,
 	profile_compose_main_cpu_limit: 0.35,
+	cloudflare_configured: false,
 	build_sha: 'geometry-test'
 };
 
 const routes = [
-	{ name: 'projects', path: '/projects', title: /Projects · MyPaas/i },
-	{ name: 'containers', path: '/containers', title: /Containers · MyPaas/i },
-	{ name: 'administration settings', path: '/admin/settings', title: /Settings · MyPaaS/i }
+	{ name: 'projects', path: '/projects', ready: '.page-shell' },
+	{ name: 'containers', path: '/containers', ready: '.page-shell' },
+	{ name: 'administration settings', path: '/admin/settings', ready: '.page-shell' },
+	{ name: 'project overview', path: '/projects/project-1', ready: '.project-detail-content' },
+	{ name: 'project settings', path: '/projects/project-1/settings', ready: '.settings-workspace-contract' }
 ];
 
 const viewports = [
@@ -76,6 +109,18 @@ test.beforeEach(async ({ page }) => {
 			case '/api/projects':
 				data = [];
 				break;
+			case '/api/projects/project-1':
+				data = project;
+				break;
+			case '/api/projects/project-1/deployments':
+				data = [];
+				break;
+			case '/api/projects/project-1/routes':
+				data = [];
+				break;
+			case '/api/projects/project-1/stream':
+				await route.fulfill({ status: 204 });
+				return;
 			case '/api/admin/host-stats':
 				data = hostStats;
 				break;
@@ -105,8 +150,7 @@ for (const viewport of viewports) {
 
 			const workspace = page.locator('main.app-workspace');
 			await expect(workspace).toBeVisible();
-			await expect(page).toHaveTitle(route.title);
-			await expect(page.locator('.page-shell').first()).toBeVisible();
+			await expect(page.locator(route.ready).first()).toBeVisible();
 			await expect(workspace).toHaveAttribute('aria-busy', 'false');
 
 			const geometry = await page.evaluate(() => {
@@ -143,6 +187,17 @@ for (const viewport of viewports) {
 					})
 					.filter((item) => item.display !== 'none' && !['fixed', 'absolute'].includes(item.position) && item.height > 0);
 
+				const projectGrid = workspace.querySelector('.grid.lg\\:grid-cols-\\[12rem_minmax\\(0\\,1fr\\)\\]');
+				const projectMain = projectGrid?.querySelector(':scope > main');
+				const projectAside = projectGrid?.querySelector(':scope > aside');
+				const projectLayout = projectGrid && projectMain && projectAside
+					? {
+						columns: getComputedStyle(projectGrid).gridTemplateColumns,
+						mainTop: toDocumentBox(projectMain).top,
+						asideTop: toDocumentBox(projectAside).top
+					}
+					: null;
+
 				return {
 					viewport: { width: innerWidth, height: innerHeight },
 					largeLayout: matchMedia('(min-width: 1024px)').matches,
@@ -151,6 +206,7 @@ for (const viewport of viewports) {
 					shell: shellBox,
 					workspace: workspaceBox,
 					page: pageBox,
+					projectLayout,
 					flowSiblingsAfterShell
 				};
 			});
@@ -164,6 +220,10 @@ for (const viewport of viewports) {
 			expect(Math.abs(geometry.documentScrollHeight - geometry.shell.bottom)).toBeLessThanOrEqual(2);
 			expect(geometry.workspace.bottom).toBeLessThanOrEqual(geometry.shell.bottom + 1);
 			expect(geometry.page.bottom).toBeLessThanOrEqual(geometry.workspace.bottom + 1);
+			if (geometry.projectLayout) {
+				expect(geometry.projectLayout.columns).not.toBe('none');
+				expect(Math.abs(geometry.projectLayout.mainTop - geometry.projectLayout.asideTop)).toBeLessThanOrEqual(1);
+			}
 		});
 	}
 }
