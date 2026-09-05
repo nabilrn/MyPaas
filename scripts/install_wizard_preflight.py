@@ -158,22 +158,25 @@ def probe_github_oauth(
 
     error = str(result.get("error", ""))
     if error == "bad_verification_code":
+        # The deliberately invalid code proves GitHub recognized the OAuth app
+        # credentials. It does not prove that the configured callback matches the
+        # app because no real authorization code exists yet.
         return PreflightResult(
             True,
-            "github_oauth_valid",
-            "GitHub accepted the OAuth app credentials and callback URL.",
+            "github_credentials_valid",
+            "GitHub accepted the OAuth app credentials. Callback matching is verified on the first sign-in.",
         )
     if error == "incorrect_client_credentials":
         return PreflightResult(False, error, "GitHub rejected the Client ID or Client Secret.")
     if error == "redirect_uri_mismatch":
-        return PreflightResult(False, error, "The callback URL does not match the GitHub OAuth App.")
+        return PreflightResult(False, error, "GitHub reported that the callback URL does not match the OAuth App.")
     if error == "application_suspended":
         return PreflightResult(False, error, "The GitHub OAuth App is suspended.")
     if not error and result.get("access_token"):
         # A random one-use code should never produce a token. Do not expose it if
         # GitHub ever changes behavior unexpectedly.
         return PreflightResult(False, "github_unexpected_token", "GitHub returned an unexpected token response.")
-    return PreflightResult(False, "github_unexpected_response", "GitHub could not confirm the OAuth configuration.")
+    return PreflightResult(False, "github_unexpected_response", "GitHub could not confirm the OAuth credentials.")
 
 
 def extract_cloudflare_tunnel_token(value: str) -> PreflightResult:
