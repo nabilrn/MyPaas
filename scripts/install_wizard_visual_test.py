@@ -92,12 +92,13 @@ class InstallWizardVisualContractTest(unittest.TestCase):
         self.assertGreater(owner_position, github_step)
         self.assertLess(owner_position, cloudflare_step)
         self.assertIn("After binding, MyPaaS identifies the owner by GitHub numeric user ID.", html)
-        self.assertIn("GitHub docs ↗", html)
-        self.assertIn("Cloudflare Tunnel docs ↗", html)
+        self.assertIn("GitHub docs", html)
+        self.assertIn("Cloudflare Tunnel docs", html)
         self.assertIn('data-secret-target="GITHUB_CLIENT_SECRET"', html)
         self.assertIn('data-secret-target="CLOUDFLARE_TUNNEL_TOKEN"', html)
         self.assertIn('data-copy-target="github-homepage-example"', html)
         self.assertIn('data-copy-target="github-callback-example"', html)
+        self.assertNotIn("⌁", html)
 
 
 if __name__ == "__main__":
