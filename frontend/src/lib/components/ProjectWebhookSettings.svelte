@@ -120,7 +120,12 @@
 {:else if project}
 	<div class="w-full">
 		<div class="border-b border-[color:var(--workspace-divider)] px-5 pb-3 pt-4">
-			<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
+			<div class="flex items-center gap-2">
+				<svg data-github-platform-icon class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-300" viewBox="0 0 24 24" aria-hidden="true">
+					<path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+				</svg>
+				<h1 class="text-lg font-semibold text-gray-950 dark:text-white">Webhook</h1>
+			</div>
 			<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Deploy this project from signed GitHub push events.</p>
 		</div>
 
@@ -171,17 +176,19 @@
 					<div class="mt-4 space-y-4">
 						<div>
 							<p class="field-label">Payload URL</p>
-							<div class="flex min-w-0 items-center gap-2">
-								<p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-950 dark:text-white">{publicWebhookURL}</p>
-								<IconButton label={copiedTarget === 'url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyText(publicWebhookURL, 'Webhook URL copied', 'url')}>{#if copiedTarget === 'url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+							<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] items-center gap-2">
+								<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{publicWebhookURL}</p>
+								<div class="flex shrink-0 justify-end">
+									<IconButton label={copiedTarget === 'url' ? 'Payload URL copied' : 'Copy payload URL'} variant="ghost" on:click={() => copyText(publicWebhookURL, 'Webhook URL copied', 'url')}>{#if copiedTarget === 'url'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
+								</div>
 							</div>
 						</div>
 
 						<div>
 							<p class="field-label">Secret</p>
-							<div class="flex min-w-0 items-center gap-2">
-								<p class="min-w-0 flex-1 break-all font-mono text-sm text-gray-950 dark:text-white">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••'}</p>
-								<div class="flex shrink-0 items-center gap-1">
+							<div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] items-center gap-2">
+								<p class="min-w-0 break-all font-mono text-sm text-gray-950 dark:text-white">{showWebhookSecret ? project.webhookSecret : '••••••••••••••••'}</p>
+								<div class="flex shrink-0 items-center justify-end gap-1">
 									<IconButton label={showWebhookSecret ? 'Hide webhook secret' : 'Reveal webhook secret'} variant="ghost" on:click={() => (showWebhookSecret = !showWebhookSecret)}>{#if showWebhookSecret}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}</IconButton>
 									<IconButton label={copiedTarget === 'secret' ? 'Webhook secret copied' : 'Copy webhook secret'} variant="ghost" on:click={() => copyText(project?.webhookSecret ?? '', 'Webhook secret copied', 'secret')}>{#if copiedTarget === 'secret'}<Check class="h-4 w-4" />{:else}<Copy class="h-4 w-4" />{/if}</IconButton>
 								</div>
@@ -195,7 +202,12 @@
 				</section>
 
 				<section class="border-t border-[color:var(--workspace-divider)] px-4 py-4 lg:border-t-0">
-					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub setup</h2>
+					<div class="flex items-center gap-2">
+						<svg data-github-platform-icon class="h-4 w-4 shrink-0 text-gray-700 dark:text-gray-300" viewBox="0 0 24 24" aria-hidden="true">
+							<path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+						</svg>
+						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">GitHub setup</h2>
+					</div>
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Create a repository webhook with these delivery rules.</p>
 
 					<dl class="mt-4 grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-3 text-sm">
