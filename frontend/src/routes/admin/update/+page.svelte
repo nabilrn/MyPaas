@@ -333,7 +333,7 @@
 			<div class="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800" aria-label={`Update stage progress ${progress.percent}%`} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.percent}>
 				<div
 					class:active={busy || queuedLocally}
-					class="update-progress-fill h-full w-full origin-left rounded-full bg-gray-950 dark:bg-white"
+					class="update-progress-fill relative h-full w-full origin-left overflow-hidden rounded-full bg-gray-950 text-white dark:bg-white dark:text-black"
 					style={`transform:scaleX(${progress.percent / 100})`}
 				></div>
 			</div>
@@ -380,16 +380,25 @@
 
 <style>
 	.update-progress-fill {
+		opacity: 1;
 		transition: transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
-	.update-progress-fill.active {
-		animation: update-progress-pulse 1.1s ease-in-out infinite;
+	.update-progress-fill.active::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 42%;
+		transform: translateX(-140%);
+		background: linear-gradient(90deg, transparent, currentColor, transparent);
+		opacity: 0.28;
+		animation: update-progress-sheen 1.2s ease-in-out infinite;
 	}
 
-	@keyframes update-progress-pulse {
-		0%, 100% { opacity: 0.62; }
-		50% { opacity: 1; }
+	@keyframes update-progress-sheen {
+		to { transform: translateX(340%); }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -397,7 +406,8 @@
 			transition-duration: 0ms;
 		}
 
-		.update-progress-fill.active {
+		.update-progress-fill.active::after {
+			display: none;
 			animation: none;
 		}
 	}

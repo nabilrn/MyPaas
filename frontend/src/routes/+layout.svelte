@@ -68,10 +68,10 @@
 		<slot />
 	</main>
 {:else}
-	<div class="app-shell min-h-screen lg:pl-14">
+	<div class="app-shell lg:pl-14">
 		<Navbar {user} authPending={!checked} />
 		<AppHeader {user} />
-		<main class="app-workspace relative min-h-[calc(100vh-3.5rem)]" aria-busy={showMainLoader}>
+		<main class="app-workspace relative" aria-busy={showMainLoader}>
 			{#if checked && user}
 				<div class:create-project-workspace={createProjectWorkspace} class:pointer-events-none={showMainLoader}>
 					<slot />
@@ -86,6 +86,7 @@
 
 <style>
 	:global(.app-shell) {
+		min-height: 100dvh;
 		--technical-surface-bg: #171717;
 		--technical-surface-border: #374151;
 		--technical-surface-text: #e5e7eb;
@@ -125,6 +126,21 @@
 	@media (any-pointer: coarse) {
 		:global(.app-shell) {
 			--control-height: 2.75rem;
+		}
+	}
+
+	/* The shell owns viewport fill; normal route content is free to size naturally. */
+	:global(.app-workspace[aria-busy='true']) {
+		min-height: calc(100dvh - 3.5rem);
+	}
+
+	@supports not (height: 100dvh) {
+		:global(.app-shell) {
+			min-height: 100vh;
+		}
+
+		:global(.app-workspace[aria-busy='true']) {
+			min-height: calc(100vh - 3.5rem);
 		}
 	}
 

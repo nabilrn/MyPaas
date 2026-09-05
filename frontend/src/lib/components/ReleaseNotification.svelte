@@ -128,7 +128,7 @@
 		{#if showUpdateBanner && snapshot?.release}
 			<div
 				data-update-banner
-				class="fixed left-3 top-[4.25rem] z-40 flex w-[min(22rem,calc(100vw-1.5rem))] items-center gap-2.5 rounded-md border border-gray-200 bg-white px-3 py-2.5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 lg:left-[4.25rem]"
+				class="fixed right-3 top-[3.25rem] z-40 flex w-[min(22rem,calc(100vw-1.5rem))] items-center gap-2.5 rounded-md border border-gray-200 bg-white px-3 py-2.5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 sm:right-4"
 			>
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-[13px] font-semibold text-gray-950 dark:text-white">MyPaaS {snapshot.release.tagName} is available</p>

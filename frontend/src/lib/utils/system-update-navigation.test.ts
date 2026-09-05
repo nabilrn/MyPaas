@@ -21,6 +21,11 @@ describe('system update navigation contract', () => {
 		expect(releaseNotification).toContain('mypaas:update-banner-dismissed');
 	});
 
+	it('anchors the update banner at the top right under the header', () => {
+		expect(releaseNotification).toContain('fixed right-3 top-[3.25rem]');
+		expect(releaseNotification).not.toContain('fixed left-3 top-[4.25rem]');
+	});
+
 	it('keeps stable and prerelease discovery aligned with host updater semantics', () => {
 		expect(systemUpdateRoute).toContain('https://api.github.com/repos/nabilrn/MyPaas/releases/latest');
 		expect(systemUpdateRoute).toContain('https://api.github.com/repos/nabilrn/MyPaas/releases?per_page=20');
@@ -29,11 +34,13 @@ describe('system update navigation contract', () => {
 		expect(systemUpdateRoute).toContain('encodeURIComponent(release.tagName)');
 	});
 
-	it('shows real stage milestones with a visibly active progress affordance', () => {
+	it('shows real stage milestones with a high-contrast active progress affordance', () => {
 		expect(systemUpdatePage).toContain('pollingFast ? 500 : 30_000');
 		expect(systemUpdatePage).toContain('update-progress-fill');
 		expect(systemUpdatePage).toContain('transform:scaleX(${progress.percent / 100})');
-		expect(systemUpdatePage).toContain('@keyframes update-progress-pulse');
+		expect(systemUpdatePage).toContain('bg-gray-950 text-white dark:bg-white dark:text-black');
+		expect(systemUpdatePage).toContain('@keyframes update-progress-sheen');
+		expect(systemUpdatePage).not.toContain('@keyframes update-progress-pulse');
 		expect(systemUpdatePage).toContain('aria-valuenow={progress.percent}');
 	});
 });
