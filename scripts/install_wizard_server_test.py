@@ -1,6 +1,7 @@
 import http.client
 import io
 import json
+import os
 import tarfile
 import tempfile
 import threading
@@ -35,6 +36,9 @@ class InstallWizardServerTest(unittest.TestCase):
     def start_server(self, restore_path: Path, *, max_backup_bytes: int = 1024 * 1024):
         wizard = server.load_wizard(str(WIZARD_PATH))
         wizard.TOKEN = "master-token"
+        wizard.ENV_FILE = str(restore_path.parent / "wizard.env")
+        wizard.DEFAULTS["PROJECT_NETWORK"] = "fresh-project-network"
+        wizard.DEFAULTS["DOCKER_BIND_HOST"] = "172.31.0.1"
         handler = server.make_handler(
             wizard,
             session_token="session-token",
@@ -43,6 +47,7 @@ class InstallWizardServerTest(unittest.TestCase):
             shutdown_delay_seconds=0,
         )
         httpd = HTTPServer(("127.0.0.1", 0), handler)
+        httpd.wizard = wizard
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         return httpd, thread
@@ -95,6 +100,13 @@ class InstallWizardServerTest(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 conn.close()
                 self.assertEqual(destination.read_bytes(), payload)
+
+                host_env = Path(httpd.wizard.ENV_FILE)
+                self.assertTrue(host_env.is_file())
+                text = host_env.read_text(encoding="utf-8")
+                self.assertIn("PROJECT_NETWORK='fresh-project-network'", text)
+                self.assertIn("DOCKER_BIND_HOST='172.31.0.1'", text)
+                self.assertEqual(os.stat(host_env).st_mode & 0o777, 0o600)
             finally:
                 httpd.shutdown()
                 httpd.server_close()
@@ -142,6 +154,7 @@ class InstallWizardServerTest(unittest.TestCase):
                 response.read()
                 self.assertEqual(response.status, 400)
                 self.assertFalse(destination.exists())
+                self.assertFalse(Path(httpd.wizard.ENV_FILE).exists())
                 conn.close()
             finally:
                 httpd.shutdown()
