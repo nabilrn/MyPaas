@@ -1,5 +1,4 @@
 import importlib.util
-import os
 import unittest
 from pathlib import Path
 
@@ -47,33 +46,150 @@ class InstallWizardVisualContractTest(unittest.TestCase):
             self.assertIn(token, css)
             self.assertIn(token, visual)
 
-    def test_installer_uses_flat_compact_workspace_geometry(self) -> None:
+    def test_installer_is_full_workspace_not_centered_panel(self) -> None:
         html = APP.form_html().decode("utf-8")
 
-        self.assertIn("Installer visual contract mirrors", html)
+        self.assertIn("Standalone installer implementation of frontend/DESIGN.md", html)
         self.assertIn("grid-template-columns: 12rem minmax(0, 1fr)", html)
-        self.assertIn("form.panel { min-width: 0; border-left: 1px solid var(--workspace-divider); }", html)
-        self.assertIn(".panel { border: 0; border-radius: 0;", html)
+        self.assertIn("height: calc(100dvh - 56px)", html)
+        self.assertIn('class="setup-form"', html)
         self.assertIn("min-height: 36px", html)
-        self.assertIn("border-bottom: 1px solid var(--workspace-divider)", html)
-        self.assertNotIn("decorative-gradient", html)
+        self.assertNotIn("1180px", html)
+        self.assertNotIn("meta-chip", html)
+        self.assertNotIn("guide-card", html)
+        self.assertNotIn("form.panel", html)
 
-    def test_installer_copy_matches_durable_owner_identity_contract(self) -> None:
+    def test_shell_uses_one_authenticated_workspace_surface(self) -> None:
         html = APP.form_html().decode("utf-8")
 
-        self.assertIn("Set up MyPaaS", html)
-        self.assertIn("Owner verified primary GitHub email", html)
-        self.assertIn("After binding, MyPaaS identifies this account by GitHub numeric user ID.", html)
-        self.assertIn("paste the token or the full Add-a-replica command", html)
-        self.assertNotIn("Only this whitelisted email can log in as the first owner.", html)
+        self.assertIn("Authenticated shell rule: chrome and workspace use one surface.", html)
+        self.assertIn("html, body { margin: 0; min-height: 100%; background: var(--app-surface)", html)
+        for selector in (
+            ".app-shell,",
+            ".app-header,",
+            ".workspace,",
+            ".setup-rail,",
+            ".setup-main,",
+            ".setup-form,",
+        ):
+            self.assertIn(selector, html)
+        self.assertNotIn("background: var(--app-bg);", html)
 
-    def test_visual_transform_is_idempotent(self) -> None:
-        source = APP.ORIGINAL_FORM_HTML().decode("utf-8")
-        once = VISUAL.apply_visual_contract(source)
-        twice = VISUAL.apply_visual_contract(once)
+    def test_desktop_workspace_is_viewport_bound_and_scrolls_active_pane(self) -> None:
+        visual = VISUAL.VISUAL_CONTRACT_CSS
 
-        self.assertEqual(once, twice)
-        self.assertEqual(once.count("Installer visual contract mirrors"), 1)
+        self.assertIn("Desktop installer owns exactly one viewport", visual)
+        self.assertIn("height: 100dvh;", visual)
+        self.assertIn("height: calc(100dvh - 56px);", visual)
+        self.assertIn(".setup-main {\n    min-width: 0;\n    min-height: 0;\n    display: flex;", visual)
+        self.assertIn(".setup-form {\n    flex: 1 1 auto;", visual)
+        self.assertIn(".wizard-step:not([hidden]) {\n    display: block;\n    flex: 1 1 auto;\n    min-height: 0;\n    overflow: auto;", visual)
+        self.assertNotIn("min-height: calc(100vh - 80px)", visual)
+
+    def test_sidebar_matches_frontend_secondary_navigation_grammar(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('class="rail-group-label">Setup</p>', html)
+        self.assertIn("border-left: 2px solid transparent", html)
+        self.assertIn("padding: 8px 10px", html)
+        self.assertIn("font-size: 13px", html)
+        self.assertEqual(html.count('class="step-icon"'), 4)
+        self.assertNotIn("step-number", html)
+        self.assertNotIn("Fresh installation", html)
+
+    def test_sidebar_is_real_navigation_without_bypassing_future_gates(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertEqual(html.count('type="button" class="step-tab'), 4)
+        self.assertIn("let maxVisitedStep = 0;", html)
+        self.assertIn("item.disabled = itemIndex > maxVisitedStep;", html)
+        self.assertIn("if (!Number.isInteger(target) || target > maxVisitedStep) return;", html)
+        self.assertIn("showStep(target);", html)
+        self.assertIn('data-progress="1" disabled aria-disabled="true"', html)
+        self.assertIn('data-progress="2" disabled aria-disabled="true"', html)
+        self.assertIn('data-progress="3" disabled aria-disabled="true"', html)
+
+    def test_hidden_navigation_actions_cannot_be_resurrected_by_button_display(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn("[hidden] { display: none !important; }", html)
+        self.assertIn('id="back-button" hidden', html)
+        self.assertIn('id="submit-button" data-default-label="Install MyPaaS" hidden', html)
+
+    def test_theme_control_uses_lucide_style_sun_and_moon_geometry(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('id="theme-icon-sun"', html)
+        self.assertIn('<circle cx="12" cy="12" r="4"/>', html)
+        self.assertIn('id="theme-icon-moon"', html)
+        self.assertIn('M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z', html)
+        self.assertIn(".icon-button svg { display: block; width: 18px; height: 18px; }", html)
+
+    def test_fresh_install_has_four_task_steps_and_restore_is_secondary(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertEqual(html.count("data-progress="), 4)
+        self.assertIn("Step 1 of 4", html)
+        self.assertIn('id="restore-toggle"', html)
+        self.assertIn('id="restore-panel"', html)
+        self.assertNotIn('<span class="step-title">Restore</span>', html)
+        self.assertIn('<span class="step-title">Domain</span>', html)
+        self.assertIn('<span class="step-title">GitHub</span>', html)
+        self.assertIn('<span class="step-title">Cloudflare</span>', html)
+        self.assertIn('<span class="step-title">Review</span>', html)
+
+    def test_provider_sections_have_one_separator_owner(self) -> None:
+        visual = VISUAL.VISUAL_CONTRACT_CSS
+        provider_block = visual.split(".provider-header {", 1)[1].split("}", 1)[0]
+        restore_block = visual.split(".restore-panel {", 1)[1].split("}", 1)[0]
+
+        self.assertIn("One separator owner per section", visual)
+        self.assertNotIn("border-bottom", provider_block)
+        self.assertIn("border-top: 1px solid var(--workspace-divider)", visual.split(".value-list {", 1)[1].split("}", 1)[0])
+        self.assertNotIn("border-block", restore_block)
+
+    def test_restore_uses_tokenized_drag_and_drop_file_control(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('id="backup-dropzone" class="backup-dropzone"', html)
+        self.assertIn('class="backup-file-input" type="file"', html)
+        self.assertIn("Drop backup here or choose a file", html)
+        self.assertIn("MyPaaS .tar.gz backups only", html)
+        self.assertIn("dragenter", html)
+        self.assertIn("dragover", html)
+        self.assertIn("addEventListener('drop'", html)
+        self.assertIn("var(--control-border)", html)
+        self.assertIn("var(--app-border-strong)", html)
+        self.assertIn('id="upload-backup-btn" class="secondary-button" disabled', html)
+        self.assertNotIn('class="field-input" type="file" id="backup-file"', html)
+
+    def test_installer_removes_subdomain_onboarding_slop(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertNotIn("panel.example.com", html)
+        self.assertNotIn("project.panel.example.com", html)
+        self.assertNotIn("Confirm DNS", html)
+        self.assertNotIn("Fresh Linux VM", html)
+        self.assertNotIn("Environment <code>", html)
+        self.assertIn("Use the root domain.", html)
+        self.assertIn("*.example.com", html)
+
+    def test_owner_and_provider_controls_follow_admin_patterns(self) -> None:
+        html = APP.form_html().decode("utf-8")
+        github_step = html.index('data-step="1"')
+        cloudflare_step = html.index('data-step="2"')
+        owner_position = html.index('id="OWNER_EMAIL"')
+
+        self.assertGreater(owner_position, github_step)
+        self.assertLess(owner_position, cloudflare_step)
+        self.assertIn("After binding, MyPaaS identifies the owner by GitHub numeric user ID.", html)
+        self.assertIn("GitHub docs", html)
+        self.assertIn("Cloudflare Tunnel docs", html)
+        self.assertIn('data-secret-target="GITHUB_CLIENT_SECRET"', html)
+        self.assertIn('data-secret-target="CLOUDFLARE_TUNNEL_TOKEN"', html)
+        self.assertIn('data-copy-target="github-homepage-example"', html)
+        self.assertIn('data-copy-target="github-callback-example"', html)
+        self.assertNotIn("⌁", html)
 
 
 if __name__ == "__main__":

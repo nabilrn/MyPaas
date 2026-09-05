@@ -92,8 +92,10 @@ class InstallWizardPreflightGateTest(unittest.TestCase):
 
         self.assertIn("Installer preflight gate contract", html)
         self.assertIn("event.stopImmediatePropagation()", html)
-        self.assertIn("if (![1, 2, 3].includes(stepIndex)) return;", html)
-        self.assertIn("runCloudflareCheck({ verifyRouting: true })", html)
+        self.assertIn("if (![0, 1, 2].includes(stepIndex)) return;", html)
+        self.assertIn("if (stepIndex === 0) passed = await runDomainCheck();", html)
+        self.assertIn("if (stepIndex === 1) passed = await runGithubCheck();", html)
+        self.assertIn("if (stepIndex === 2) passed = await runCloudflareCheck({ verifyRouting: true });", html)
         self.assertIn("project wildcard DNS is not visible yet", html)
         self.assertIn("Checking…", html)
 
