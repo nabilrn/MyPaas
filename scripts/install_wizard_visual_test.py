@@ -59,6 +59,49 @@ class InstallWizardVisualContractTest(unittest.TestCase):
         self.assertNotIn("guide-card", html)
         self.assertNotIn("form.panel", html)
 
+    def test_shell_uses_one_authenticated_workspace_surface(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn("Authenticated shell rule: chrome and workspace use one surface.", html)
+        self.assertIn("html, body { margin: 0; min-height: 100%; background: var(--app-surface)", html)
+        for selector in (
+            ".app-shell,",
+            ".app-header,",
+            ".workspace,",
+            ".setup-rail,",
+            ".setup-main,",
+            ".setup-form,",
+        ):
+            self.assertIn(selector, html)
+        self.assertNotIn("background: var(--app-bg);", html)
+
+    def test_sidebar_matches_frontend_secondary_navigation_grammar(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('class="rail-group-label">Setup</p>', html)
+        self.assertIn("border-left: 2px solid transparent", html)
+        self.assertIn("padding: 8px 10px", html)
+        self.assertIn("font-size: 13px", html)
+        self.assertEqual(html.count('class="step-icon"'), 4)
+        self.assertNotIn("step-number", html)
+        self.assertNotIn("Fresh installation", html)
+
+    def test_hidden_navigation_actions_cannot_be_resurrected_by_button_display(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn("[hidden] { display: none !important; }", html)
+        self.assertIn('id="back-button" hidden', html)
+        self.assertIn('id="submit-button" data-default-label="Install MyPaaS" hidden', html)
+
+    def test_theme_control_uses_lucide_style_sun_and_moon_geometry(self) -> None:
+        html = APP.form_html().decode("utf-8")
+
+        self.assertIn('id="theme-icon-sun"', html)
+        self.assertIn('<circle cx="12" cy="12" r="4"/>', html)
+        self.assertIn('id="theme-icon-moon"', html)
+        self.assertIn('M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z', html)
+        self.assertIn(".icon-button svg { display: block; width: 18px; height: 18px; }", html)
+
     def test_fresh_install_has_four_task_steps_and_restore_is_secondary(self) -> None:
         html = APP.form_html().decode("utf-8")
 
