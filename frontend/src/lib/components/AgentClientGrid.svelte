@@ -40,17 +40,17 @@
 <div class="agent-strip border-t border-[color:var(--workspace-divider)]" aria-label="AI agents compatible with the MyPaaS MCP bridge">
 	<div class="agent-strip-row">
 		{#each agents as agent, index}
-			<div
+			<button
+				type="button"
 				class:agent-client-first={index === 0}
 				class="agent-client"
-				role="img"
-				tabindex="0"
 				aria-label={agent.label}
 				aria-describedby={`agent-tooltip-${agent.slug}`}
 				on:mouseenter={() => (activeAgent = agent.slug)}
 				on:mouseleave={() => (activeAgent = '')}
 				on:focus={() => (activeAgent = agent.slug)}
 				on:blur={() => (activeAgent = '')}
+				on:click={() => (activeAgent = agent.slug)}
 			>
 				<span id={`agent-tooltip-${agent.slug}`} class="agent-tooltip" role="tooltip">{agent.label}</span>
 				<span class="agent-client-mark" aria-hidden="true">
@@ -62,7 +62,7 @@
 						on:error={(event) => handleIconError(event, agent.slug)}
 					/>
 				</span>
-			</div>
+			</button>
 		{/each}
 	</div>
 </div>
@@ -85,6 +85,9 @@
 		position: relative;
 		margin-left: -0.9rem;
 		flex: none;
+		border: 0;
+		background: transparent;
+		padding: 0;
 		outline: none;
 	}
 
