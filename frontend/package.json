@@ -13,7 +13,7 @@
     "format": "prettier --plugin-search-dir . --write .",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:workspace-browsers": "playwright test --config=playwright.config.js workspace-geometry.spec.js",
+    "test:workspace-browsers": "pnpm build && playwright test --config=playwright.config.js workspace-geometry.spec.js",
     "audit:auth": "node playwright/audit/auth-bootstrap.mjs",
     "audit:create": "node playwright/audit/run-create-audit.mjs --mode=mock",
     "audit:create:prod": "node playwright/audit/run-create-audit.mjs --mode=production",
