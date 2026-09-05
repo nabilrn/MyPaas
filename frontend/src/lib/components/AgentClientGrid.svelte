@@ -21,55 +21,71 @@
 		{ label: 'CodeBuddy', slug: 'codebuddy' },
 		{ label: 'Goose', slug: 'goose' }
 	] as const;
+
+	let activeAgent = '';
+	let missingColorAssets: Record<string, boolean> = {};
+
+	function iconUrl(slug: string) {
+		const wantsColor = activeAgent === slug && !missingColorAssets[slug];
+		return `${lobeIconBase}/${slug}${wantsColor ? '-color' : ''}.svg`;
+	}
+
+	function handleIconError(event: Event, slug: string) {
+		if (activeAgent !== slug || missingColorAssets[slug]) return;
+		missingColorAssets = { ...missingColorAssets, [slug]: true };
+		(event.currentTarget as HTMLImageElement).src = `${lobeIconBase}/${slug}.svg`;
+	}
 </script>
 
-<div class="agent-marquee border-t border-[color:var(--workspace-divider)]" aria-label="AI agents compatible with the MyPaaS MCP bridge">
-	<div class="agent-marquee-track">
-		{#each [0, 1] as copy}
-			<div class="agent-marquee-set" aria-hidden={copy === 1 ? 'true' : undefined}>
-				{#each agents as agent, index}
-					<div
-						class:agent-client-first={index === 0}
-						class="agent-client"
-						role={copy === 0 ? 'img' : undefined}
-						aria-label={copy === 0 ? agent.label : undefined}
-					>
-						<span class="agent-tooltip" role="tooltip">{agent.label}</span>
-						<span class="agent-client-mark" aria-hidden="true">
-							<img src={`${lobeIconBase}/${agent.slug}.svg`} alt="" loading="lazy" decoding="async" />
-						</span>
-					</div>
-				{/each}
+<div class="agent-strip border-t border-[color:var(--workspace-divider)]" aria-label="AI agents compatible with the MyPaaS MCP bridge">
+	<div class="agent-strip-row">
+		{#each agents as agent, index}
+			<div
+				class:agent-client-first={index === 0}
+				class="agent-client"
+				role="img"
+				tabindex="0"
+				aria-label={agent.label}
+				aria-describedby={`agent-tooltip-${agent.slug}`}
+				on:mouseenter={() => (activeAgent = agent.slug)}
+				on:mouseleave={() => (activeAgent = '')}
+				on:focus={() => (activeAgent = agent.slug)}
+				on:blur={() => (activeAgent = '')}
+			>
+				<span id={`agent-tooltip-${agent.slug}`} class="agent-tooltip" role="tooltip">{agent.label}</span>
+				<span class="agent-client-mark" aria-hidden="true">
+					<img
+						src={iconUrl(agent.slug)}
+						alt=""
+						loading="lazy"
+						decoding="async"
+						on:error={(event) => handleIconError(event, agent.slug)}
+					/>
+				</span>
 			</div>
 		{/each}
 	</div>
 </div>
 
 <style>
-	.agent-marquee {
-		overflow: hidden;
-		padding: 2.35rem 0 1.15rem;
-		-webkit-mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
-		mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+	.agent-strip {
+		overflow-x: auto;
+		padding: 2.25rem 1rem 1.15rem;
+		scrollbar-width: thin;
 	}
 
-	.agent-marquee-track {
+	.agent-strip-row {
 		display: flex;
 		width: max-content;
-		will-change: transform;
-		animation: agent-marquee 38s linear infinite;
-	}
-
-	.agent-marquee-set {
-		display: flex;
+		min-width: 100%;
 		align-items: center;
-		padding-right: 3rem;
 	}
 
 	.agent-client {
 		position: relative;
 		margin-left: -0.9rem;
 		flex: none;
+		outline: none;
 	}
 
 	.agent-client-first {
@@ -86,7 +102,7 @@
 		border: 1px solid rgb(209 213 219);
 		background: #fff;
 		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
-		transition: border-color 160ms ease, box-shadow 160ms ease;
+		transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 	}
 
 	:global(.dark) .agent-client-mark {
@@ -98,6 +114,8 @@
 		height: 1.8rem;
 		width: 1.8rem;
 		object-fit: contain;
+		filter: grayscale(1);
+		transition: filter 160ms ease;
 	}
 
 	.agent-tooltip {
@@ -129,59 +147,34 @@
 		color: #fff;
 	}
 
-	.agent-client:hover {
+	.agent-client:hover,
+	.agent-client:focus-visible {
 		z-index: 50;
 	}
 
-	.agent-client:hover .agent-tooltip {
+	.agent-client:hover .agent-tooltip,
+	.agent-client:focus-visible .agent-tooltip {
 		opacity: 1;
 		transform: translate(-50%, 0) scale(1);
 	}
 
-	.agent-client:hover .agent-client-mark {
+	.agent-client:hover .agent-client-mark,
+	.agent-client:focus-visible .agent-client-mark {
+		transform: translateY(-0.3rem);
 		border-color: rgb(156 163 175);
-		box-shadow: 0 8px 18px rgb(0 0 0 / 0.14);
+		box-shadow: 0 6px 14px rgb(0 0 0 / 0.12);
 	}
 
-	.agent-marquee:hover .agent-marquee-track {
-		animation-play-state: paused;
-	}
-
-	@keyframes agent-marquee {
-		from { transform: translateX(0); }
-		to { transform: translateX(-50%); }
-	}
-
-	@keyframes agent-bounce {
-		0% { transform: translateY(0); }
-		42% { transform: translateY(-0.7rem); }
-		68% { transform: translateY(-0.35rem); }
-		100% { transform: translateY(-0.5rem); }
-	}
-
-	@media (prefers-reduced-motion: no-preference) {
-		.agent-client:hover .agent-client-mark {
-			animation: agent-bounce 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-		}
+	.agent-client:hover .agent-client-mark img,
+	.agent-client:focus-visible .agent-client-mark img {
+		filter: grayscale(0);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.agent-marquee {
-			overflow-x: auto;
-			-webkit-mask-image: none;
-			mask-image: none;
-		}
-
-		.agent-marquee-track {
-			animation: none;
-		}
-
-		.agent-marquee-set[aria-hidden='true'] {
-			display: none;
-		}
-
-		.agent-client:hover .agent-client-mark {
-			transform: translateY(-0.25rem);
+		.agent-client-mark,
+		.agent-client-mark img,
+		.agent-tooltip {
+			transition-duration: 0ms;
 		}
 	}
 </style>
