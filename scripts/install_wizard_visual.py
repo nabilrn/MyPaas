@@ -165,7 +165,9 @@ VISUAL_CONTRACT_CSS = r"""
   .secondary-button:focus-visible,
   .primary-button:focus-visible,
   .field-input:focus-visible,
-  .secret-toggle:focus-visible {
+  .secret-toggle:focus-visible,
+  .backup-dropzone:focus-visible,
+  .backup-file-clear:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--control-focus-ring);
   }
@@ -283,13 +285,12 @@ VISUAL_CONTRACT_CSS = r"""
   .secret-toggle[data-revealed="true"]::after { content: "Hide"; }
   .secret-toggle:hover { color: var(--app-ink); }
 
+  /* One separator owner per section: the value list owns the provider divider. */
   .provider-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--workspace-divider);
   }
   .provider-header strong { display: block; font-size: 14px; }
   .provider-header p { margin-top: 3px; color: var(--app-muted); font-size: 12px; line-height: 1.45; }
@@ -355,12 +356,66 @@ VISUAL_CONTRACT_CSS = r"""
   .action-hint { color: var(--app-subtle); font-size: 11px; line-height: 1.4; text-align: center; }
   .action-right { display: flex; justify-self: end; align-items: center; gap: 8px; }
 
-  .restore-panel { margin-bottom: 12px; border-block: 1px solid var(--workspace-divider); }
-  .restore-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 12px 16px; }
-  .restore-copy { grid-column: 1 / -1; }
+  .restore-panel { margin-bottom: 12px; }
+  .restore-content { padding: 4px 2px 12px; }
   .restore-copy strong { font-size: 13px; }
   .restore-copy p { margin-top: 3px; color: var(--app-muted); font-size: 12px; line-height: 1.45; }
-  .restore-status { grid-column: 1 / -1; color: var(--app-subtle); font-size: 12px; }
+  .backup-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .backup-dropzone {
+    display: flex;
+    width: 100%;
+    min-height: 112px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+    border: 1px dashed var(--control-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--app-muted);
+    padding: 18px;
+    text-align: left;
+    transition: border-color .14s ease, color .14s ease, box-shadow .14s ease;
+  }
+  .backup-dropzone:hover { border-color: var(--control-border-hover); color: var(--app-ink); }
+  .backup-dropzone[data-dragging="true"] {
+    border-color: var(--app-border-strong);
+    color: var(--app-ink);
+    box-shadow: inset 2px 0 0 var(--app-border-strong);
+  }
+  .backup-dropzone svg { width: 20px; height: 20px; flex: 0 0 20px; stroke: currentColor; }
+  .backup-dropzone-copy { display: grid; gap: 3px; min-width: 0; }
+  .backup-dropzone-copy strong { color: var(--app-ink); font-size: 13px; font-weight: 650; }
+  .backup-dropzone-copy span { color: var(--app-subtle); font-size: 12px; }
+  .backup-file-row {
+    display: flex;
+    min-width: 0;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 10px;
+    border-top: 1px solid var(--workspace-divider);
+    padding-top: 10px;
+  }
+  .backup-file-copy { display: grid; min-width: 0; gap: 2px; }
+  .backup-file-name { overflow: hidden; color: var(--app-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .backup-file-meta { color: var(--app-subtle); font-size: 11px; }
+  .backup-file-clear { min-height: 30px; border: 0; background: transparent; color: var(--app-muted); padding: 0 6px; font-size: 12px; font-weight: 600; }
+  .backup-file-clear:hover { color: var(--app-ink); }
+  .restore-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+  .restore-status { min-width: 0; color: var(--app-subtle); font-size: 12px; line-height: 1.45; }
+  .restore-status[data-state="checking"] { color: var(--app-muted); }
+  .restore-status[data-state="ok"] { color: var(--app-success); }
+  .restore-status[data-state="error"] { color: var(--app-danger); }
 
   @media (max-width: 960px) {
     .workspace { grid-template-columns: 1fr; }
@@ -391,7 +446,9 @@ VISUAL_CONTRACT_CSS = r"""
     .form-actions > .secondary-button, .action-right { width: 100%; justify-self: stretch; }
     .action-hint { grid-row: 1; }
     .action-right button { width: 100%; }
-    .restore-content { grid-template-columns: 1fr; }
+    .backup-dropzone { min-height: 124px; text-align: center; flex-direction: column; }
+    .backup-file-row, .restore-actions { align-items: stretch; flex-direction: column; }
+    .restore-actions .secondary-button { width: 100%; }
   }
 
   @media (any-pointer: coarse) {
@@ -517,18 +574,92 @@ BASE_SCRIPT_JS = r"""
 
     const uploadBackupBtn = document.getElementById('upload-backup-btn');
     const backupFile = document.getElementById('backup-file');
+    const backupDropzone = document.getElementById('backup-dropzone');
+    const backupFileRow = document.getElementById('backup-file-row');
+    const backupFileName = document.getElementById('backup-file-name');
+    const backupFileMeta = document.getElementById('backup-file-meta');
+    const backupFileClear = document.getElementById('backup-file-clear');
     const backupStatus = document.getElementById('backup-status');
-    uploadBackupBtn?.addEventListener('click', async () => {
-      if (!backupFile.files.length) {
-        backupStatus.textContent = 'Select a MyPaaS backup first.';
-        backupStatus.style.color = 'var(--app-danger)';
+    let selectedBackupFile = null;
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      const value = bytes / (1024 ** index);
+      return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+    }
+
+    function setBackupStatus(state, message) {
+      if (!backupStatus) return;
+      backupStatus.dataset.state = state;
+      backupStatus.textContent = message;
+    }
+
+    function setBackupFile(file) {
+      if (!file) {
+        selectedBackupFile = null;
+        backupFileRow.hidden = true;
+        backupFileName.textContent = '';
+        backupFileMeta.textContent = '';
+        uploadBackupBtn.disabled = true;
+        setBackupStatus('', '');
+        return true;
+      }
+      if (!file.name.toLowerCase().endsWith('.tar.gz')) {
+        setBackupStatus('error', 'Choose a MyPaaS .tar.gz backup.');
+        return false;
+      }
+      selectedBackupFile = file;
+      backupFileRow.hidden = false;
+      backupFileName.textContent = file.name;
+      backupFileMeta.textContent = formatBytes(file.size);
+      uploadBackupBtn.disabled = false;
+      setBackupStatus('', 'Ready to validate and restore.');
+      return true;
+    }
+
+    backupDropzone?.addEventListener('click', () => backupFile?.click());
+    backupFile?.addEventListener('change', () => setBackupFile(backupFile.files?.[0] || null));
+    backupFileClear?.addEventListener('click', () => {
+      if (backupFile) backupFile.value = '';
+      setBackupFile(null);
+    });
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+      backupDropzone?.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+        backupDropzone.dataset.dragging = 'true';
+      });
+    });
+    ['dragleave', 'dragend'].forEach((eventName) => {
+      backupDropzone?.addEventListener(eventName, () => {
+        delete backupDropzone.dataset.dragging;
+      });
+    });
+    backupDropzone?.addEventListener('drop', (event) => {
+      event.preventDefault();
+      delete backupDropzone.dataset.dragging;
+      const files = Array.from(event.dataTransfer?.files || []);
+      if (files.length !== 1) {
+        setBackupStatus('error', 'Drop one backup file at a time.');
         return;
       }
-      const file = backupFile.files[0];
+      setBackupFile(files[0]);
+    });
+
+    uploadBackupBtn?.addEventListener('click', async () => {
+      if (!selectedBackupFile) {
+        setBackupStatus('error', 'Choose a MyPaaS backup first.');
+        return;
+      }
+      const file = selectedBackupFile;
       uploadBackupBtn.disabled = true;
       uploadBackupBtn.textContent = 'Uploading…';
-      backupStatus.textContent = 'Validating backup…';
-      backupStatus.style.color = 'var(--app-subtle)';
+      backupDropzone.disabled = true;
+      backupFileClear.disabled = true;
+      setBackupStatus('checking', 'Validating backup…');
       try {
         const res = await fetch('/upload-backup', {
           method: 'POST',
@@ -545,14 +676,14 @@ BASE_SCRIPT_JS = r"""
           document.close();
           return;
         }
-        backupStatus.textContent = 'Backup rejected. Check that the archive was created by MyPaaS.';
-        backupStatus.style.color = 'var(--app-danger)';
+        setBackupStatus('error', 'Backup rejected. Check that the archive was created by MyPaaS.');
       } catch {
-        backupStatus.textContent = 'Upload failed. Try again.';
-        backupStatus.style.color = 'var(--app-danger)';
+        setBackupStatus('error', 'Upload failed. Try again.');
       } finally {
-        uploadBackupBtn.disabled = false;
+        uploadBackupBtn.disabled = !selectedBackupFile;
         uploadBackupBtn.textContent = 'Upload backup';
+        backupDropzone.disabled = false;
+        backupFileClear.disabled = false;
       }
     });
 
@@ -722,9 +853,25 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <strong>Restore an existing MyPaaS instance</strong>
               <p>Upload a MyPaaS <span class="mono">.tar.gz</span> backup instead of creating a fresh configuration.</p>
             </div>
-            <input class="field-input" type="file" id="backup-file" accept=".tar.gz">
-            <button type="button" id="upload-backup-btn" class="secondary-button">Upload backup</button>
-            <div id="backup-status" class="restore-status" aria-live="polite"></div>
+            <input class="backup-file-input" type="file" id="backup-file" accept=".tar.gz,application/gzip,application/x-gzip" tabindex="-1">
+            <button type="button" id="backup-dropzone" class="backup-dropzone" aria-describedby="backup-status">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+              <span class="backup-dropzone-copy">
+                <strong>Drop backup here or choose a file</strong>
+                <span>MyPaaS .tar.gz backups only</span>
+              </span>
+            </button>
+            <div id="backup-file-row" class="backup-file-row" hidden>
+              <div class="backup-file-copy">
+                <span id="backup-file-name" class="backup-file-name"></span>
+                <span id="backup-file-meta" class="backup-file-meta"></span>
+              </div>
+              <button type="button" id="backup-file-clear" class="backup-file-clear">Remove</button>
+            </div>
+            <div class="restore-actions">
+              <div id="backup-status" class="restore-status" aria-live="polite"></div>
+              <button type="button" id="upload-backup-btn" class="secondary-button" disabled>Upload backup</button>
+            </div>
           </div>
         </section>
 
