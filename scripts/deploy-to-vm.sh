@@ -32,13 +32,19 @@ RESTORED_CONTROL_PLANE_DB=false
 cd "$ROOT_DIR"
 
 if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
+  echo "Validating backup bundle..."
+  python3 "$ROOT_DIR/scripts/install_wizard_security.py" /tmp/mypaas-restore.tar.gz
+
   echo "Extracting backup bundle..."
   TMP_EXTRACT=$(mktemp -d)
   tar -xzf /tmp/mypaas-restore.tar.gz -C "$TMP_EXTRACT"
 
   if [[ -f "$TMP_EXTRACT/.env" ]]; then
-    cat "$TMP_EXTRACT/.env" >> "$ENV_FILE"
-    echo "Restored .env from backup (merged)."
+    python3 "$ROOT_DIR/scripts/install_wizard_restore_env.py" \
+      --current "$ENV_FILE" \
+      --restored "$TMP_EXTRACT/.env" \
+      --example "$ROOT_DIR/.env.example"
+    echo "Restored .env from backup through the safe merge contract."
   fi
 
   if [[ -f "$TMP_EXTRACT/database.sql" ]]; then

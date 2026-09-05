@@ -2,6 +2,7 @@
 set -euo pipefail
 
 WIZARD_SCRIPT="${WIZARD_SCRIPT:?WIZARD_SCRIPT is required}"
+WIZARD_SERVER="${WIZARD_SERVER:-$(dirname "$WIZARD_SCRIPT")/install_wizard_server.py}"
 WIZARD_HOST="${WIZARD_HOST:-127.0.0.1}"
 WIZARD_PORT="${WIZARD_PORT:-8787}"
 WIZARD_TOKEN="${WIZARD_TOKEN:?WIZARD_TOKEN is required}"
@@ -80,8 +81,16 @@ main() {
     printf 'ERROR: WIZARD_TUNNEL_TIMEOUT must be a positive integer\n' >&2
     return 1
   }
+  [[ -f "$WIZARD_SCRIPT" ]] || {
+    printf 'ERROR: install wizard script not found: %s\n' "$WIZARD_SCRIPT" >&2
+    return 1
+  }
+  [[ -f "$WIZARD_SERVER" ]] || {
+    printf 'ERROR: install wizard server not found: %s\n' "$WIZARD_SERVER" >&2
+    return 1
+  }
 
-  python3 "$WIZARD_SCRIPT" &
+  python3 "$WIZARD_SERVER" "$WIZARD_SCRIPT" &
   WIZARD_PID=$!
 
   if [[ "$WIZARD_PUBLIC_TUNNEL" == "true" ]]; then
