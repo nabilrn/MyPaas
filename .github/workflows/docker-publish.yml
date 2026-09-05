@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.release.outputs.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Verify checkout matches tested commit
@@ -110,8 +110,46 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve reusable API image
+        id: api-reuse
+        if: steps.scope.outputs.frontend_only == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha=""
+
+          while read -r candidate; do
+            [[ -n "$candidate" ]] || continue
+
+            safe=true
+            while read -r path; do
+              [[ -n "$path" ]] || continue
+              if [[ "$path" != frontend/* ]]; then
+                safe=false
+                break
+              fi
+            done < <(git diff --name-only "$candidate" HEAD)
+
+            if [[ "$safe" != "true" ]]; then
+              break
+            fi
+
+            source_image="${REGISTRY}/nabilrn/mypaas-api:$candidate"
+            if docker buildx imagetools inspect "$source_image" >/dev/null 2>&1; then
+              source_sha="$candidate"
+              break
+            fi
+          done < <(git rev-list --first-parent HEAD^)
+
+          if [[ -n "$source_sha" ]]; then
+            echo "Reusing immutable API image from $source_sha"
+          else
+            echo "No safe reusable API image found; rebuilding API"
+          fi
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
       - name: Build and push API image
-        if: steps.scope.outputs.frontend_only != 'true'
+        if: steps.scope.outputs.frontend_only != 'true' || steps.api-reuse.outputs.source_sha == ''
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -122,18 +160,12 @@ jobs:
             ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.sha }}
             ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.rollback_tag }}
 
-      - name: Alias unchanged API image for frontend-only revision
-        if: steps.scope.outputs.frontend_only == 'true'
+      - name: Alias reusable API image for frontend-only revision
+        if: steps.scope.outputs.frontend_only == 'true' && steps.api-reuse.outputs.source_sha != ''
         shell: bash
         run: |
           set -euo pipefail
-          parent_sha="${{ steps.scope.outputs.parent_sha }}"
-          if [[ ! "$parent_sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Cannot alias API image without an immutable parent SHA" >&2
-            exit 1
-          fi
-          source_image="${{ env.REGISTRY }}/nabilrn/mypaas-api:$parent_sha"
-          docker buildx imagetools inspect "$source_image" >/dev/null
+          source_image="${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.api-reuse.outputs.source_sha }}"
           docker buildx imagetools create \
             --tag "${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.sha }}" \
             --tag "${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.rollback_tag }}" \
