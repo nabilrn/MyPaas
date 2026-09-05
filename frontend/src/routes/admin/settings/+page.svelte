@@ -400,7 +400,7 @@
 					<div class="flex items-start justify-between gap-4 px-4 py-3">
 						<div>
 							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">System update</h2>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ask the release-aware host updater to apply a newer published release when available.</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Open the dedicated updater workspace to review releases and track host update progress.</p>
 						</div>
 					</div>
 					<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3">
@@ -410,7 +410,7 @@
 								<p class="text-xs text-gray-500 dark:text-gray-400">Current build</p>
 								<p class="mt-0.5 font-mono text-sm font-semibold text-gray-950 dark:text-white">{currentBuildSha ? currentBuildSha.substring(0, 12) : 'Unknown'}</p>
 							</div>
-							<ActionButton variant="secondary" size="sm" on:click={() => (confirmationTarget = { kind: 'system-update' })} disabled={Boolean(savingTarget)}>Update MyPaaS</ActionButton>
+							<ActionButton variant="secondary" size="sm" on:click={() => (window.location.href = '/admin/update')} disabled={Boolean(savingTarget)}>Open updater</ActionButton>
 						</div>
 					</div>
 				</section>
