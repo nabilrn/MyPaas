@@ -42,9 +42,9 @@ const settings = {
 };
 
 const routes = [
-	{ name: 'projects', path: '/projects', readyText: 'Projects' },
-	{ name: 'containers', path: '/containers', readyText: 'Containers' },
-	{ name: 'administration settings', path: '/admin/settings', readyText: 'Settings' }
+	{ name: 'projects', path: '/projects', title: /Projects · MyPaas/i },
+	{ name: 'containers', path: '/containers', title: /Containers · MyPaas/i },
+	{ name: 'administration settings', path: '/admin/settings', title: /Settings · MyPaaS/i }
 ];
 
 const viewports = [
@@ -105,7 +105,8 @@ for (const viewport of viewports) {
 
 			const workspace = page.locator('main.app-workspace');
 			await expect(workspace).toBeVisible();
-			await expect(page.getByText(route.readyText, { exact: true }).first()).toBeVisible();
+			await expect(page).toHaveTitle(route.title);
+			await expect(page.locator('.page-shell').first()).toBeVisible();
 			await expect(workspace).toHaveAttribute('aria-busy', 'false');
 
 			const geometry = await page.evaluate(() => {
