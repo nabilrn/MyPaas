@@ -42,31 +42,31 @@ def parse_content_length(raw_value: str | None, max_bytes: int) -> int:
 
 
 def validate_backup_archive(path: str, max_expanded_bytes: int = DEFAULT_MAX_EXPANDED_BACKUP_BYTES) -> None:
+    names: set[str] = set()
+    expanded_bytes = 0
     try:
         with tarfile.open(path, mode="r:gz") as archive:
-            members = archive.getmembers()
+            for member in archive:
+                if member.name not in REQUIRED_BACKUP_MEMBERS:
+                    raise BackupUploadError(f"Unexpected backup member: {member.name}")
+                if not member.isfile():
+                    raise BackupUploadError(f"Backup member must be a regular file: {member.name}")
+                if member.name in names:
+                    raise BackupUploadError(f"Duplicate backup member: {member.name}")
+                if member.size < 0:
+                    raise BackupUploadError(f"Backup member has invalid size: {member.name}")
+                expanded_bytes += member.size
+                if expanded_bytes > max_expanded_bytes:
+                    raise BackupTooLargeError(
+                        f"Expanded backup exceeds the {max_expanded_bytes} byte limit"
+                    )
+                names.add(member.name)
+    except BackupUploadError:
+        raise
     except (OSError, tarfile.TarError) as exc:
         raise BackupUploadError("Backup must be a valid gzip-compressed tar archive") from exc
 
-    names: list[str] = []
-    expanded_bytes = 0
-    for member in members:
-        if member.name not in REQUIRED_BACKUP_MEMBERS:
-            raise BackupUploadError(f"Unexpected backup member: {member.name}")
-        if not member.isfile():
-            raise BackupUploadError(f"Backup member must be a regular file: {member.name}")
-        if member.name in names:
-            raise BackupUploadError(f"Duplicate backup member: {member.name}")
-        if member.size < 0:
-            raise BackupUploadError(f"Backup member has invalid size: {member.name}")
-        expanded_bytes += member.size
-        if expanded_bytes > max_expanded_bytes:
-            raise BackupTooLargeError(
-                f"Expanded backup exceeds the {max_expanded_bytes} byte limit"
-            )
-        names.append(member.name)
-
-    if set(names) != REQUIRED_BACKUP_MEMBERS or len(names) != len(REQUIRED_BACKUP_MEMBERS):
+    if names != REQUIRED_BACKUP_MEMBERS:
         missing = sorted(REQUIRED_BACKUP_MEMBERS.difference(names))
         raise BackupUploadError("Backup is missing required members: " + ", ".join(missing))
 
