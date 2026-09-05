@@ -4,6 +4,7 @@
 	import { api } from '$api';
 	import { toast } from '$stores/toast';
 	import { dismissable } from '$lib/actions/dismissable';
+	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
 
 	type UpdateState = 'idle' | 'checking' | 'updating' | 'succeeded' | 'failed' | 'rolled_back' | 'blocked';
@@ -185,9 +186,9 @@
 								</div>
 
 								{#if snapshot.release.available}
-									<button type="button" class="app-focus mt-3 h-8 w-full rounded-md border border-gray-200 px-3 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:text-gray-200 dark:hover:bg-neutral-900" disabled={busy || queueing} on:click={queueUpdate}>
+									<ActionButton variant="secondary" size="xs" full className="mt-3" disabled={busy || queueing} on:click={queueUpdate}>
 										{queueing ? 'Queuing update…' : busy ? 'Update in progress' : `Update to ${snapshot.release.tagName}`}
-									</button>
+									</ActionButton>
 								{/if}
 							</div>
 						{/if}
