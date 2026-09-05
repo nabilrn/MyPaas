@@ -63,7 +63,7 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("/etc/mypaas/update.env:/etc/mypaas/update.env:ro", dashboard)
         self.assertNotIn("/etc:/etc", dashboard)
 
-    def test_release_status_route_is_owner_authenticated(self):
+    def test_release_status_route_is_owner_authenticated_and_descendant_aware(self):
         route = self.text("frontend/src/routes/internal/system-update/+server.ts")
         header = self.text("frontend/src/lib/components/AppHeader.svelte")
         settings = self.text("frontend/src/routes/admin/settings/+page.svelte")
@@ -73,6 +73,9 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn("/etc/mypaas/update.env", route)
         self.assertIn("AUTO_UPDATE_INCLUDE_PRERELEASES", route)
         self.assertIn("api.github.com/repos/nabilrn/MyPaas/releases", route)
+        self.assertIn("api.github.com/repos/nabilrn/MyPaas/compare/", route)
+        self.assertIn("comparison.status === 'ahead'", route)
+        self.assertIn("GITHUB_CACHE_TTL_MS = 5 * 60_000", route)
         self.assertIn("<ReleaseNotification enabled={user?.role === 'owner'} />", header)
         self.assertNotIn("startUpdatePolling", settings)
         self.assertNotIn("/api/health", settings)
