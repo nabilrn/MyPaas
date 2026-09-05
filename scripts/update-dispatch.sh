@@ -97,6 +97,21 @@ write_status() {
   esac
 }
 
+latest_status_phase() {
+  local phase=""
+  if [[ -r "$STATUS_FILE" ]]; then
+    phase="$(sed -n 's/^phase=//p' "$STATUS_FILE" | tail -n 1 || true)"
+  fi
+  case "$phase" in
+    idle|resolving_release|validating_target|checking_images|preflight|applying|verifying|rolling_back|complete)
+      printf '%s' "$phase"
+      ;;
+    *)
+      printf '%s' "$CURRENT_PHASE"
+      ;;
+  esac
+}
+
 cleanup_lock() {
   if [[ "$LOCK_HELD" == "true" ]]; then
     rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
@@ -108,7 +123,7 @@ on_exit() {
   local code=$?
   cleanup_lock
   if (( code != 0 )) && [[ "$TERMINAL_STATUS_WRITTEN" != "true" ]]; then
-    write_status failed "$CURRENT_PHASE" "Updater exited before completing the requested revision"
+    write_status failed "$(latest_status_phase)" "Updater exited before completing the requested revision"
   fi
   trap - EXIT
   exit "$code"
@@ -239,16 +254,22 @@ main() {
       write_status idle idle "MyPaas is already up to date"
       return 0
     fi
-    write_status failed preflight "Current revision reconciliation failed"
+    write_status failed "$(latest_status_phase)" "Current revision reconciliation failed"
     return 1
   fi
 
   if ! is_frontend_only "$CURRENT_SHA" "$TARGET_SHA"; then
-    local full_log
+    local full_log actual_sha
     full_log="$(mktemp)"
     sync_status_context
     if run_logged "$full_log" env MYPAAS_REF="$TARGET_REF" MYPAAS_INSTALL_DIR="$ROOT_DIR" ENV_FILE="$ENV_FILE" \
       bash "$ROOT_DIR/scripts/update-vm.sh"; then
+      actual_sha="$(git_repo rev-parse HEAD)"
+      if [[ "$actual_sha" != "$TARGET_SHA" ]]; then
+        rm -f "$full_log"
+        write_status blocked "$(latest_status_phase)" "Updater left the installation unchanged; inspect the host updater logs"
+        return 0
+      fi
       rm -f "$full_log"
       CURRENT_SHA="$TARGET_SHA"
       write_status succeeded complete "MyPaas updated successfully to $TARGET_VERSION"
@@ -257,7 +278,7 @@ main() {
     if grep -q 'was restored and verified' "$full_log"; then
       write_status rolled_back rolling_back "Update failed; the previous runtime was restored and verified"
     else
-      write_status failed "$CURRENT_PHASE" "Update failed; inspect the host updater logs"
+      write_status failed "$(latest_status_phase)" "Update failed; inspect the host updater logs"
     fi
     rm -f "$full_log"
     return 1
