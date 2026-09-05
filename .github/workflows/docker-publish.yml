@@ -71,24 +71,34 @@ jobs:
         run: |
           set -euo pipefail
           frontend_only=false
+          parent_sha=""
 
-          if [[ "$FORCE_FULL" != "true" ]] && git rev-parse HEAD^ >/dev/null 2>&1; then
-            mapfile -t changed_files < <(git diff --name-only HEAD^ HEAD)
-            if (( ${#changed_files[@]} > 0 )); then
-              frontend_only=true
-              for path in "${changed_files[@]}"; do
-                if [[ "$path" != frontend/* ]]; then
-                  frontend_only=false
-                  break
-                fi
-              done
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            parent_sha="$(git rev-parse HEAD^)"
+          fi
+
+          if [[ "$FORCE_FULL" != "true" ]]; then
+            if [[ -n "$parent_sha" ]]; then
+              mapfile -t changed_files < <(git diff --name-only "$parent_sha" HEAD)
+              if (( ${#changed_files[@]} > 0 )); then
+                frontend_only=true
+                for path in "${changed_files[@]}"; do
+                  if [[ "$path" != frontend/* ]]; then
+                    frontend_only=false
+                    break
+                  fi
+                done
+              fi
             fi
           fi
 
           printf 'Release files:\n'
-          git diff --name-only HEAD^ HEAD 2>/dev/null || true
+          if [[ -n "$parent_sha" ]]; then
+            git diff --name-only "$parent_sha" HEAD
+          fi
           echo "force_full=$FORCE_FULL"
           echo "frontend_only=$frontend_only" >> "$GITHUB_OUTPUT"
+          echo "parent_sha=$parent_sha" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -111,6 +121,23 @@ jobs:
             ${{ env.REGISTRY }}/nabilrn/mypaas-api:latest
             ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.sha }}
             ${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.rollback_tag }}
+
+      - name: Alias unchanged API image for frontend-only revision
+        if: steps.scope.outputs.frontend_only == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent_sha="${{ steps.scope.outputs.parent_sha }}"
+          if [[ ! "$parent_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Cannot alias API image without an immutable parent SHA" >&2
+            exit 1
+          fi
+          source_image="${{ env.REGISTRY }}/nabilrn/mypaas-api:$parent_sha"
+          docker buildx imagetools inspect "$source_image" >/dev/null
+          docker buildx imagetools create \
+            --tag "${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.sha }}" \
+            --tag "${{ env.REGISTRY }}/nabilrn/mypaas-api:${{ steps.release.outputs.rollback_tag }}" \
+            "$source_image"
 
       - name: Build and push Dashboard image
         uses: docker/build-push-action@v5

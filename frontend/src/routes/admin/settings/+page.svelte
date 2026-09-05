@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import { Cpu, HardDrive, MemoryStick, Pencil, RefreshCw, Timer } from '@lucide/svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
@@ -59,10 +59,7 @@
 	let editingTarget = '';
 	let confirmationTarget: ConfirmationTarget = null;
 	let triggeringUpdate = false;
-	let updateOverlayOpen = false;
 	let currentBuildSha = '';
-	let updatePoll: ReturnType<typeof setInterval> | undefined;
-	let updatePollTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	$: validationErrors = {
 		build_timeout_minutes: numberError(settings.build_timeout_minutes, 1, 1440, true, 'Use a whole number from 1 to 1440 minutes.'),
@@ -93,17 +90,13 @@
 		: confirmationTarget?.kind === 'build-timeout'
 			? 'Future deployment builds will use this timeout.'
 			: confirmationTarget?.kind === 'system-update'
-				? 'This queues the host updater. MyPaaS may restart while a newer published revision is applied.'
+				? 'This queues the release-aware host updater. Progress and the final result are reported from the notification bell.'
 				: '';
 	$: confirmationLabel = confirmationTarget?.kind === 'system-update' ? 'Update MyPaaS' : 'Save changes';
 	$: confirmationBusy = confirmationTarget?.kind === 'system-update' ? triggeringUpdate : Boolean(savingTarget);
 
 	onMount(() => {
 		void loadSettings();
-	});
-	onDestroy(() => {
-		if (updatePoll) clearInterval(updatePoll);
-		if (updatePollTimeout) clearTimeout(updatePollTimeout);
 	});
 
 	async function loadSettings() {
@@ -219,8 +212,7 @@
 		try {
 			await api.admin.triggerUpdate();
 			confirmationTarget = null;
-			updateOverlayOpen = true;
-			startUpdatePolling();
+			toast.info('Update queued. Track progress from the notification bell.');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to update MyPaaS');
 			console.error(error);
@@ -239,34 +231,6 @@
 			return;
 		}
 		if (confirmationTarget?.kind === 'system-update') await triggerUpdate();
-	}
-
-	function startUpdatePolling() {
-		let wasDown = false;
-		if (updatePoll) clearInterval(updatePoll);
-		if (updatePollTimeout) clearTimeout(updatePollTimeout);
-		updatePoll = setInterval(async () => {
-			try {
-				const res = await fetch('/api/health');
-				if (res.ok) {
-					if (wasDown) {
-						if (updatePoll) clearInterval(updatePoll);
-						window.location.href = '/';
-					}
-				} else {
-					wasDown = true;
-				}
-			} catch {
-				wasDown = true;
-			}
-		}, 3000);
-		updatePollTimeout = setTimeout(() => {
-			if (updatePoll) clearInterval(updatePoll);
-			updatePoll = undefined;
-			updateOverlayOpen = false;
-			toast.info('No restart detected');
-			void loadSettings();
-		}, 120_000);
 	}
 
 	function numericValue(value: unknown, fallback = 0) {
@@ -303,13 +267,6 @@
 <svelte:head>
 	<title>Settings · MyPaaS</title>
 </svelte:head>
-
-{#if updateOverlayOpen}
-	<div class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm dark:bg-gray-950/90">
-		<LoadingIndicator label="Updating MyPaaS" size="lg" />
-		<p class="mt-4 text-sm text-gray-500 dark:text-gray-400">Update request accepted. Waiting for MyPaaS to restart.</p>
-	</div>
-{/if}
 
 <div class="page-shell">
 	{#if loadingSettings}
@@ -443,7 +400,7 @@
 					<div class="flex items-start justify-between gap-4 px-4 py-3">
 						<div>
 							<h2 class="text-sm font-semibold text-gray-950 dark:text-white">System update</h2>
-							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ask the host updater to apply a newer published revision when available.</p>
+							<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Ask the release-aware host updater to apply a newer published release when available.</p>
 						</div>
 					</div>
 					<div class="border-t border-[color:var(--workspace-divider)] px-4 py-3">
@@ -480,7 +437,7 @@
 	{:else if confirmationTarget?.kind === 'build-timeout'}
 		<p><span class="text-gray-500 dark:text-gray-400">Build timeout:</span> <span class="font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings.build_timeout_minutes} → {settings.build_timeout_minutes} minutes</span></p>
 	{:else if confirmationTarget?.kind === 'system-update'}
-		<p>The request is handed to the host-level MyPaaS updater; the dashboard or API may briefly restart.</p>
+		<p>The request is handed to the host-level MyPaaS updater. The dashboard or API may briefly restart; the notification bell reports the updater's actual result.</p>
 	{/if}
 </ConfirmActionDialog>
 

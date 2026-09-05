@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { Bell, Boxes, ChevronDown, ChevronRight, Layers3, LogOut, Menu, Moon, Settings, Sun, Terminal } from '@lucide/svelte';
+	import { Boxes, ChevronDown, ChevronRight, Layers3, LogOut, Menu, Moon, Settings, Sun, Terminal } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import ActionButton from './ActionButton.svelte';
 	import IconButton from './IconButton.svelte';
+	import ReleaseNotification from './ReleaseNotification.svelte';
 	import { api } from '$api';
 	import { dismissable } from '$lib/actions/dismissable';
 	import { administrationNavItemForPath, isAdministrationPath } from '$lib/navigation/administration';
@@ -38,7 +39,6 @@
 	};
 
 	let mobileMenuOpen = false;
-	let notificationsOpen = false;
 	let accountMenuOpen = false;
 	let signingOut = false;
 
@@ -94,21 +94,11 @@
 		return (user?.githubUsername || user?.email || '?').slice(0, 1).toUpperCase();
 	}
 
-	function closeNotifications() {
-		notificationsOpen = false;
-	}
-
 	function closeAccountMenu() {
 		accountMenuOpen = false;
 	}
 
-	function toggleNotifications() {
-		accountMenuOpen = false;
-		notificationsOpen = !notificationsOpen;
-	}
-
 	function toggleAccountMenu() {
-		notificationsOpen = false;
 		accountMenuOpen = !accountMenuOpen;
 	}
 
@@ -152,24 +142,7 @@
 		</div>
 
 		<div class="flex shrink-0 items-center gap-1">
-			<div class="relative" use:dismissable={{ enabled: notificationsOpen, onDismiss: closeNotifications }}>
-				<IconButton label="Notifications" variant="ghost" on:click={toggleNotifications}>
-					<Bell class="h-[18px] w-[18px]" aria-hidden="true" />
-				</IconButton>
-				{#if notificationsOpen}
-					<div class="overlay absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden">
-						<div class="border-b border-gray-100 px-4 py-3 dark:border-neutral-800">
-							<p class="text-sm font-semibold text-gray-950 dark:text-white">Notifications</p>
-							<p class="mt-0.5 text-[13px] text-gray-500 dark:text-gray-400">Platform updates and operational events will appear here.</p>
-						</div>
-						<div class="px-4 py-8 text-center">
-							<Bell class="mx-auto h-5 w-5 text-gray-300 dark:text-gray-700" aria-hidden="true" />
-							<p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">You're all caught up</p>
-							<p class="mt-1 text-[13px] text-gray-500 dark:text-gray-400">Release updates, deployment alerts, and resource notifications can use this center later.</p>
-						</div>
-					</div>
-				{/if}
-			</div>
+			<ReleaseNotification enabled={user?.role === 'owner'} />
 
 			<IconButton label={$theme === 'dark' ? 'Use light appearance' : 'Use dark appearance'} variant="ghost" on:click={() => theme.toggle()}>
 				{#if $theme === 'dark'}<Sun class="h-[18px] w-[18px]" aria-hidden="true" />{:else}<Moon class="h-[18px] w-[18px]" aria-hidden="true" />{/if}

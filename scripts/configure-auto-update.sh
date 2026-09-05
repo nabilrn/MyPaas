@@ -9,11 +9,17 @@ SERVICE_FILE="/etc/systemd/system/mypaas-update.service"
 TIMER_FILE="/etc/systemd/system/mypaas-update.timer"
 PATH_FILE="/etc/systemd/system/mypaas-update.path"
 REQUEST_FILE="/run/mypaas/update.request"
+STATUS_DIR="/run/mypaas/update"
+STATUS_FILE="$STATUS_DIR/status"
 
 EXPLICIT_ENABLED_SET="${AUTO_UPDATE_ENABLED+x}"
 EXPLICIT_ENABLED="${AUTO_UPDATE_ENABLED-}"
 EXPLICIT_INTERVAL_SET="${AUTO_UPDATE_INTERVAL_MINUTES+x}"
 EXPLICIT_INTERVAL="${AUTO_UPDATE_INTERVAL_MINUTES-}"
+EXPLICIT_CHANNEL_SET="${AUTO_UPDATE_CHANNEL+x}"
+EXPLICIT_CHANNEL="${AUTO_UPDATE_CHANNEL-}"
+EXPLICIT_PRERELEASE_SET="${AUTO_UPDATE_INCLUDE_PRERELEASES+x}"
+EXPLICIT_PRERELEASE="${AUTO_UPDATE_INCLUDE_PRERELEASES-}"
 EXPLICIT_REF_SET="${AUTO_UPDATE_REF+x}"
 EXPLICIT_REF="${AUTO_UPDATE_REF-}"
 EXPLICIT_WAIT_SET="${AUTO_UPDATE_IMAGE_WAIT_SECONDS+x}"
@@ -102,6 +108,17 @@ validate_wait() {
   (( value <= 3600 )) || die "AUTO_UPDATE_IMAGE_WAIT_SECONDS must be between 0 and 3600"
 }
 
+normalize_bool() {
+  local name="$1"
+  local value
+  value="$(lower "$2")"
+  case "$value" in
+    true|1|yes|on) printf 'true' ;;
+    false|0|no|off) printf 'false' ;;
+    *) die "$name must be true or false" ;;
+  esac
+}
+
 quote_systemd_value() {
   local value="$1"
   value="${value//\\/\\\\}"
@@ -112,19 +129,43 @@ quote_systemd_value() {
 persist_policy() {
   local enabled="$1"
   local interval="$2"
-  local ref="$3"
-  local image_wait="$4"
+  local channel="$3"
+  local include_prereleases="$4"
+  local ref="$5"
+  local image_wait="$6"
 
   run_root install -d -m 0755 "$UPDATE_CONFIG_DIR"
-  run_root tee "$UPDATE_CONFIG_FILE" >/dev/null <<EOF
+  run_root tee "$UPDATE_CONFIG_FILE" >/dev/null <<EOF_POLICY
 # Managed by scripts/configure-auto-update.sh. No secrets are stored here.
 AUTO_UPDATE_ENABLED=$enabled
 AUTO_UPDATE_INTERVAL_MINUTES=$interval
+AUTO_UPDATE_CHANNEL=$channel
+AUTO_UPDATE_INCLUDE_PRERELEASES=$include_prereleases
 AUTO_UPDATE_REF=$ref
 MYPAAS_REF=$ref
 AUTO_UPDATE_IMAGE_WAIT_SECONDS=$image_wait
-EOF
+EOF_POLICY
   run_root chmod 0644 "$UPDATE_CONFIG_FILE"
+}
+
+ensure_status_path() {
+  run_root install -d -m 0755 "$STATUS_DIR"
+  if run_root test ! -e "$STATUS_FILE"; then
+    local current_sha=""
+    if [[ -d "$ROOT_DIR/.git" ]]; then
+      current_sha="$(git -c safe.directory="$ROOT_DIR" -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)"
+    fi
+    run_root tee "$STATUS_FILE" >/dev/null <<EOF_STATUS
+state=idle
+channel=unknown
+current_sha=$current_sha
+target_sha=
+target_version=
+message=Updater is idle
+updated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF_STATUS
+    run_root chmod 0644 "$STATUS_FILE"
+  fi
 }
 
 disable_timer() {
@@ -136,21 +177,26 @@ disable_timer() {
 }
 
 main() {
-  local enabled interval ref image_wait
-  enabled="$(lower "$(resolve_setting "$EXPLICIT_ENABLED_SET" "$EXPLICIT_ENABLED" AUTO_UPDATE_ENABLED false)")"
+  local enabled interval channel include_prereleases ref image_wait
+  enabled="$(normalize_bool AUTO_UPDATE_ENABLED "$(resolve_setting "$EXPLICIT_ENABLED_SET" "$EXPLICIT_ENABLED" AUTO_UPDATE_ENABLED false)")"
   interval="$(resolve_setting "$EXPLICIT_INTERVAL_SET" "$EXPLICIT_INTERVAL" AUTO_UPDATE_INTERVAL_MINUTES 5)"
+  channel="$(lower "$(resolve_setting "$EXPLICIT_CHANNEL_SET" "$EXPLICIT_CHANNEL" AUTO_UPDATE_CHANNEL release)")"
+  include_prereleases="$(normalize_bool AUTO_UPDATE_INCLUDE_PRERELEASES "$(resolve_setting "$EXPLICIT_PRERELEASE_SET" "$EXPLICIT_PRERELEASE" AUTO_UPDATE_INCLUDE_PRERELEASES false)")"
   ref="$(resolve_setting "$EXPLICIT_REF_SET" "$EXPLICIT_REF" AUTO_UPDATE_REF main)"
   image_wait="$(resolve_setting "$EXPLICIT_WAIT_SET" "$EXPLICIT_WAIT" AUTO_UPDATE_IMAGE_WAIT_SECONDS 300)"
 
-  case "$enabled" in
-    true|1|yes|on) enabled=true ;;
-    false|0|no|off) enabled=false ;;
-    *) die "AUTO_UPDATE_ENABLED must be true or false" ;;
+  case "$channel" in
+    release|main) ;;
+    *) die "AUTO_UPDATE_CHANNEL must be release or main" ;;
   esac
+  if [[ "$channel" != "release" && "$include_prereleases" == "true" ]]; then
+    die "AUTO_UPDATE_INCLUDE_PRERELEASES is only valid for AUTO_UPDATE_CHANNEL=release"
+  fi
   validate_interval "$interval"
   validate_ref "$ref"
   validate_wait "$image_wait"
-  persist_policy "$enabled" "$interval" "$ref" "$image_wait"
+  persist_policy "$enabled" "$interval" "$channel" "$include_prereleases" "$ref" "$image_wait"
+  ensure_status_path
 
   command_exists systemctl || die "MyPaas updates require systemd"
 
@@ -159,11 +205,11 @@ main() {
   env_q="$(quote_systemd_value "$ENV_FILE")"
   config_q="$(quote_systemd_value "$UPDATE_CONFIG_FILE")"
 
-  log "Installing host update service (ref $ref)"
+  log "Installing host update service (channel $channel)"
 
   run_root install -d -m 0755 /run/mypaas
 
-  run_root tee "$SERVICE_FILE" >/dev/null <<EOF
+  run_root tee "$SERVICE_FILE" >/dev/null <<EOF_SERVICE
 [Unit]
 Description=Update MyPaas when a published upstream revision is available
 After=network-online.target
@@ -180,9 +226,9 @@ ExecStart=/usr/bin/env bash "$root_q/scripts/update-dispatch.sh"
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_SERVICE
 
-  run_root tee "$PATH_FILE" >/dev/null <<EOF
+  run_root tee "$PATH_FILE" >/dev/null <<EOF_PATH
 [Unit]
 Description=Watch for MyPaas update requests from the control plane
 
@@ -192,12 +238,12 @@ Unit=mypaas-update.service
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_PATH
 
   if [[ "$enabled" == "true" ]]; then
     log "Installing automatic update timer (${interval} minute interval)"
 
-    run_root tee "$TIMER_FILE" >/dev/null <<EOF
+    run_root tee "$TIMER_FILE" >/dev/null <<EOF_TIMER
 [Unit]
 Description=Periodically check for MyPaas updates
 
@@ -210,7 +256,7 @@ Unit=mypaas-update.service
 
 [Install]
 WantedBy=timers.target
-EOF
+EOF_TIMER
   else
     disable_timer
   fi
@@ -232,6 +278,7 @@ EOF
   fi
 
   printf 'Policy: %s\n' "$UPDATE_CONFIG_FILE"
+  printf 'Channel: %s\n' "$channel"
   printf 'Manual trigger: systemctl status mypaas-update.path\n'
   if [[ "$enabled" == "true" ]]; then
     printf 'Check timer: systemctl status mypaas-update.timer\n'
