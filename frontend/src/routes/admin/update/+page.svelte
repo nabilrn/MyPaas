@@ -16,7 +16,8 @@
 		isUpdateBusy,
 		phaseStepIndex,
 		updateSteps,
-		type UpdateSnapshot
+		type UpdateSnapshot,
+		type UpdateStatus
 	} from '$lib/system-update';
 	import type { PageData } from './$types';
 
@@ -29,7 +30,7 @@
 	let connectionLost = false;
 	let observedThisUpdate = false;
 	let reloadScheduled = false;
-	let baselineUpdatedAt = snapshot?.status.updatedAt ?? '';
+	let baselineStatusKey = statusKey(snapshot?.status ?? null);
 	let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
 	$: busy = isUpdateBusy(snapshot);
@@ -59,6 +60,11 @@
 		}, delay);
 	}
 
+	function statusKey(value: UpdateStatus | null) {
+		if (!value) return '';
+		return [value.state, value.phase, value.currentSha, value.targetSha, value.targetVersion, value.updatedAt].join(':');
+	}
+
 	async function refreshSnapshot() {
 		try {
 			const response = await fetch('/internal/system-update', {
@@ -67,15 +73,18 @@
 			});
 			if (!response.ok) throw new Error(`status returned ${response.status}`);
 			const next = await response.json() as UpdateSnapshot;
+			const nextKey = statusKey(next.status);
+			const statusAdvanced = nextKey !== baselineStatusKey;
 			connectionLost = false;
 
-			if (queuedLocally && (isUpdateBusy(next) || next.status.updatedAt !== baselineUpdatedAt)) {
+			if (queuedLocally && (isUpdateBusy(next) || statusAdvanced)) {
 				queuedLocally = false;
+				observedThisUpdate = true;
 			}
 			if (isUpdateBusy(next)) observedThisUpdate = true;
 			snapshot = next;
 
-			if (observedThisUpdate && next.status.state === 'succeeded' && !reloadScheduled) {
+			if (observedThisUpdate && !queuedLocally && statusAdvanced && next.status.state === 'succeeded' && !reloadScheduled) {
 				reloadScheduled = true;
 				setTimeout(() => window.location.reload(), 1200);
 			}
@@ -87,11 +96,11 @@
 	async function triggerUpdate() {
 		if (!canUpdate) return;
 		queueing = true;
-		baselineUpdatedAt = status?.updatedAt ?? '';
+		baselineStatusKey = statusKey(status);
 		try {
 			await api.admin.triggerUpdate();
 			queuedLocally = true;
-			observedThisUpdate = true;
+			observedThisUpdate = false;
 			toast.info('Update queued');
 			await refreshSnapshot();
 			schedulePoll(500);
