@@ -12,14 +12,15 @@ mypaas_update_status_write() {
   local state="${1:-idle}"
   local phase="${2:-idle}"
   local message="${3:-}"
-  local status_dir status_file tmp
+  local status_dir status_file status_parent tmp
 
   mypaas_update_status_enabled || return 0
 
   status_dir="${MYPAAS_UPDATE_STATUS_DIR:-/run/mypaas/update}"
   status_file="${MYPAAS_UPDATE_STATUS_FILE:-$status_dir/status}"
-  mkdir -p "$status_dir"
-  tmp="$(mktemp "$status_dir/.status.XXXXXX")"
+  status_parent="$(dirname "$status_file")"
+  mkdir -p "$status_parent"
+  tmp="$(mktemp "$status_parent/.status.XXXXXX")"
   {
     printf 'state=%s\n' "$(mypaas_update_status_value "$state")"
     printf 'phase=%s\n' "$(mypaas_update_status_value "$phase")"
