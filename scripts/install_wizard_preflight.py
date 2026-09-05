@@ -6,6 +6,7 @@ import re
 import secrets
 import socket
 import subprocess
+import tempfile
 import time
 from typing import Callable
 from urllib.error import HTTPError, URLError
@@ -17,6 +18,7 @@ GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 CLOUDFLARE_IMAGE = "cloudflare/cloudflared:latest"
 CLOUDFLARE_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_-])(eyJ[A-Za-z0-9._=-]{20,})(?![A-Za-z0-9_-])")
 HOST_LABEL_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+GITHUB_CALLBACK_PATH = "/api/auth/github/callback"
 
 
 class PreflightError(ValueError):
@@ -60,9 +62,9 @@ def check_domain(hostname: str, resolver: Callable[..., list] = socket.getaddrin
         "addresses": addresses[:8],
         "wildcardResolved": wildcard_resolved,
         "message": (
-            "Domain and wildcard DNS resolve from this VM."
+            "Domain and project wildcard resolve from this VM."
             if wildcard_resolved
-            else "Domain resolves. Wildcard DNS is not visible yet; configure it before deploying projects."
+            else "Domain resolves. Project wildcard DNS is not visible yet."
         ),
     }
 
@@ -72,6 +74,8 @@ def validate_https_callback(value: str) -> str:
     parsed = urlparse(callback)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
         raise PreflightError("GitHub callback must be an HTTPS URL")
+    if parsed.path != GITHUB_CALLBACK_PATH or parsed.query:
+        raise PreflightError(f"GitHub callback must use {GITHUB_CALLBACK_PATH}")
     return callback
 
 
@@ -126,8 +130,8 @@ def check_github_oauth(
         return {
             "ok": True,
             "credentialsAccepted": True,
-            "callbackAccepted": True,
-            "message": "GitHub accepted the OAuth app credentials and callback. Owner identity is verified during sign-in.",
+            "callbackFormatAccepted": True,
+            "message": "GitHub accepted the OAuth app credentials. The MyPaaS callback format is valid; owner identity is verified during sign-in.",
         }
     if error == "incorrect_client_credentials":
         raise PreflightError("GitHub rejected the Client ID or Client Secret")
@@ -170,6 +174,25 @@ def _free_loopback_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def _write_tunnel_env_file(token: str) -> str:
+    fd, path = tempfile.mkstemp(prefix="mypaas-cloudflare-preflight-", suffix=".env")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(f"TUNNEL_TOKEN={token}\n")
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
+    return path
+
+
 def check_cloudflare_tunnel(
     token_or_command: str,
     *,
@@ -181,6 +204,7 @@ def check_cloudflare_tunnel(
     prefix = cli_resolver()
     metrics_port = _free_loopback_port()
     container_name = f"mypaas-wizard-tunnel-check-{os.getpid()}-{secrets.token_hex(3)}"
+    env_file = _write_tunnel_env_file(token)
     command = [
         *prefix,
         "run",
@@ -189,8 +213,8 @@ def check_cloudflare_tunnel(
         container_name,
         "--network",
         "host",
-        "-e",
-        "TUNNEL_TOKEN",
+        "--env-file",
+        env_file,
         CLOUDFLARE_IMAGE,
         "tunnel",
         "--no-autoupdate",
@@ -200,8 +224,6 @@ def check_cloudflare_tunnel(
         f"127.0.0.1:{metrics_port}",
         "run",
     ]
-    environment = os.environ.copy()
-    environment["TUNNEL_TOKEN"] = token
     process = None
     output = ""
 
@@ -211,7 +233,7 @@ def check_cloudflare_tunnel(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            env=environment,
+            env=os.environ.copy(),
         )
         deadline = time.monotonic() + timeout_seconds
         ready_url = f"http://127.0.0.1:{metrics_port}/ready"
@@ -257,4 +279,8 @@ def check_cloudflare_tunnel(
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
+            pass
+        try:
+            os.remove(env_file)
+        except FileNotFoundError:
             pass
