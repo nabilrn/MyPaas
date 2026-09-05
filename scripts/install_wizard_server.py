@@ -7,8 +7,10 @@ import http.cookies
 import importlib.util
 import json
 import os
+import pathlib
 import secrets
 import sys
+import tempfile
 import threading
 import time
 from http.server import HTTPServer
@@ -59,6 +61,40 @@ def public_result(result) -> dict:
     data = result.to_dict()
     data.pop("value", None)
     return data
+
+
+def stage_restore_host_config(wizard: ModuleType) -> None:
+    """Persist only destination-host placement before restored config is merged."""
+    env_path = pathlib.Path(wizard.ENV_FILE)
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    values = {
+        "DOCKER_SOCKET": "/var/run/docker.sock",
+        "DOCKER_HOST": "",
+        "DOCKER_BIND_HOST": str(wizard.DEFAULTS.get("DOCKER_BIND_HOST", "127.0.0.1")),
+        "PROJECT_NETWORK": str(wizard.DEFAULTS.get("PROJECT_NETWORK", "mypaas-projects")),
+        "STATIC_ROOT": "/var/lib/mypaas/static",
+        "CADDY_STATIC_ROOT": "/var/lib/mypaas/static",
+        "STATD_SOCKET": "/run/mypaas/statd.sock",
+    }
+    fd, temporary_name = tempfile.mkstemp(prefix=env_path.name + ".restore-host-", dir=str(env_path.parent))
+    temporary = pathlib.Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            for key, value in values.items():
+                if "'" in value or "\n" in value or "\r" in value or "\x00" in value:
+                    raise ValueError(f"unsafe destination-host value for {key}")
+                handle.write(f"{key}='{value}'\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, env_path)
+        os.chmod(env_path, 0o600)
+    except Exception:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def make_handler(
@@ -226,11 +262,12 @@ def make_handler(
                     max_upload_bytes=max_backup_bytes,
                     max_expanded_bytes=max_expanded_backup_bytes,
                 )
+                stage_restore_host_config(wizard)
             except BackupUploadError as exc:
                 self.send_text(str(exc), 400 if content_length <= max_backup_bytes else 413)
                 return
-            except OSError:
-                self.send_text("Could not store the backup upload.", 500)
+            except (OSError, ValueError):
+                self.send_text("Could not stage the validated backup for restore.", 500)
                 return
 
             self.send_html(
