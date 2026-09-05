@@ -114,7 +114,18 @@ VISUAL_CONTRACT_CSS = r"""
     background: var(--app-surface);
   }
 
-  .app-shell { min-height: 100vh; display: grid; grid-template-rows: 56px minmax(0, 1fr); }
+  /* Desktop installer owns exactly one viewport. Long content scrolls inside the active pane. */
+  .app-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-rows: 56px minmax(0, 1fr);
+    overflow: hidden;
+  }
+  @supports not (height: 100dvh) {
+    .app-shell { height: 100vh; min-height: 100vh; }
+  }
+
   .app-header {
     display: flex;
     min-width: 0;
@@ -167,18 +178,27 @@ VISUAL_CONTRACT_CSS = r"""
   .field-input:focus-visible,
   .secret-toggle:focus-visible,
   .backup-dropzone:focus-visible,
-  .backup-file-clear:focus-visible {
+  .backup-file-clear:focus-visible,
+  .step-tab:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--control-focus-ring);
   }
 
   .workspace {
     display: grid;
-    min-height: calc(100vh - 56px);
+    min-height: 0;
+    height: calc(100dvh - 56px);
     grid-template-columns: 12rem minmax(0, 1fr);
+    overflow: hidden;
   }
+  @supports not (height: 100dvh) {
+    .workspace { height: calc(100vh - 56px); }
+  }
+
   .setup-rail {
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
     border-right: 1px solid var(--workspace-divider);
     padding: 16px 12px;
   }
@@ -192,32 +212,49 @@ VISUAL_CONTRACT_CSS = r"""
   }
   .stepper { display: grid; gap: 4px; margin-top: 8px; }
   .step-tab {
+    appearance: none;
+    width: 100%;
     display: flex;
     min-height: 36px;
     align-items: center;
     gap: 10px;
+    border: 0;
     border-left: 2px solid transparent;
+    background: transparent;
     padding: 8px 10px;
     color: var(--app-muted);
     font-size: 13px;
     font-weight: 500;
-    transition: color .14s ease;
+    text-align: left;
+    transition: color .14s ease, border-color .14s ease;
   }
+  .step-tab:hover:not(:disabled) { color: var(--app-ink); }
   .step-tab.active { border-left-color: var(--app-ink); color: var(--app-ink); }
   .step-tab.done { color: var(--app-muted); }
+  .step-tab:disabled { opacity: .42; }
   .step-icon { display: inline-flex; width: 16px; height: 16px; flex: 0 0 16px; align-items: center; justify-content: center; }
   .step-icon svg { width: 16px; height: 16px; stroke: currentColor; }
   .step-title { display: block; line-height: 1.25; }
   .step-body { display: none; }
 
-  .setup-main { min-width: 0; padding: 12px 14px; }
+  .setup-main {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 14px;
+  }
   .setup-form {
+    flex: 1 1 auto;
     display: flex;
     min-width: 0;
-    min-height: calc(100vh - 80px);
+    min-height: 0;
     flex-direction: column;
+    overflow: hidden;
   }
   .page-heading {
+    flex: 0 0 auto;
     display: flex;
     min-height: 70px;
     align-items: flex-start;
@@ -231,6 +268,7 @@ VISUAL_CONTRACT_CSS = r"""
   .step-position { flex: 0 0 auto; color: var(--app-subtle); font-size: 12px; line-height: 1.5; }
 
   .error-banner {
+    flex: 0 0 auto;
     border-bottom: 1px solid color-mix(in oklch, var(--app-danger) 34%, var(--workspace-divider));
     padding: 10px 16px;
     color: var(--app-danger);
@@ -238,7 +276,13 @@ VISUAL_CONTRACT_CSS = r"""
     line-height: 1.45;
   }
   .wizard-step[hidden] { display: none; }
-  .wizard-step:not([hidden]) { display: block; flex: 1; min-height: 0; }
+  .wizard-step:not([hidden]) {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
   .step-grid { display: grid; min-height: 100%; grid-template-columns: minmax(0, 1.45fr) minmax(20rem, .75fr); }
   .step-primary { min-width: 0; border-right: 1px solid var(--workspace-divider); padding: 16px; }
   .step-aside { min-width: 0; padding: 16px; }
@@ -286,12 +330,7 @@ VISUAL_CONTRACT_CSS = r"""
   .secret-toggle:hover { color: var(--app-ink); }
 
   /* One separator owner per section: the value list owns the provider divider. */
-  .provider-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
+  .provider-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .provider-header strong { display: block; font-size: 14px; }
   .provider-header p { margin-top: 3px; color: var(--app-muted); font-size: 12px; line-height: 1.45; }
   .docs-link { flex: 0 0 auto; color: var(--app-muted); font-size: 12px; font-weight: 600; text-decoration: none; }
@@ -344,6 +383,7 @@ VISUAL_CONTRACT_CSS = r"""
   .advanced-body { padding: 16px; }
 
   .form-actions {
+    flex: 0 0 auto;
     display: grid;
     min-height: 58px;
     grid-template-columns: 1fr auto 1fr;
@@ -356,75 +396,54 @@ VISUAL_CONTRACT_CSS = r"""
   .action-hint { color: var(--app-subtle); font-size: 11px; line-height: 1.4; text-align: center; }
   .action-right { display: flex; justify-self: end; align-items: center; gap: 8px; }
 
-  .restore-panel { margin-bottom: 12px; }
-  .restore-content { padding: 4px 2px 12px; }
+  .restore-panel {
+    flex: 0 0 auto;
+    max-height: min(40dvh, 22rem);
+    overflow: auto;
+    margin-bottom: 12px;
+  }
+  .restore-content { display: grid; gap: 12px; padding: 0 2px 2px; }
   .restore-copy strong { font-size: 13px; }
   .restore-copy p { margin-top: 3px; color: var(--app-muted); font-size: 12px; line-height: 1.45; }
-  .backup-file-input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  .backup-file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
   .backup-dropzone {
+    min-height: 104px;
     display: flex;
-    width: 100%;
-    min-height: 112px;
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-top: 12px;
     border: 1px dashed var(--control-border);
     border-radius: 6px;
     background: transparent;
     color: var(--app-muted);
-    padding: 18px;
+    padding: 16px;
     text-align: left;
     transition: border-color .14s ease, color .14s ease, box-shadow .14s ease;
   }
-  .backup-dropzone:hover { border-color: var(--control-border-hover); color: var(--app-ink); }
-  .backup-dropzone[data-dragging="true"] {
-    border-color: var(--app-border-strong);
-    color: var(--app-ink);
-    box-shadow: inset 2px 0 0 var(--app-border-strong);
-  }
-  .backup-dropzone svg { width: 20px; height: 20px; flex: 0 0 20px; stroke: currentColor; }
-  .backup-dropzone-copy { display: grid; gap: 3px; min-width: 0; }
-  .backup-dropzone-copy strong { color: var(--app-ink); font-size: 13px; font-weight: 650; }
-  .backup-dropzone-copy span { color: var(--app-subtle); font-size: 12px; }
-  .backup-file-row {
-    display: flex;
-    min-width: 0;
-    min-height: 42px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 10px;
-    border-top: 1px solid var(--workspace-divider);
-    padding-top: 10px;
-  }
-  .backup-file-copy { display: grid; min-width: 0; gap: 2px; }
-  .backup-file-name { overflow: hidden; color: var(--app-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-  .backup-file-meta { color: var(--app-subtle); font-size: 11px; }
-  .backup-file-clear { min-height: 30px; border: 0; background: transparent; color: var(--app-muted); padding: 0 6px; font-size: 12px; font-weight: 600; }
+  .backup-dropzone:hover, .backup-dropzone[data-dragging="true"] { border-color: var(--app-border-strong); color: var(--app-ink); }
+  .backup-dropzone svg { width: 18px; height: 18px; flex: 0 0 18px; }
+  .backup-dropzone strong { display: block; color: var(--app-ink); font-size: 13px; }
+  .backup-dropzone span { display: block; margin-top: 2px; color: var(--app-subtle); font-size: 12px; }
+  .backup-file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 38px; }
+  .backup-file-meta { min-width: 0; }
+  .backup-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-ink); font-size: 12px; font-weight: 600; }
+  .backup-file-size { margin-top: 2px; color: var(--app-subtle); font-size: 11px; }
+  .backup-file-clear { border: 0; background: transparent; color: var(--app-muted); padding: 6px 8px; font-size: 12px; font-weight: 600; }
   .backup-file-clear:hover { color: var(--app-ink); }
-  .restore-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+  .backup-actions { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
   .restore-status { min-width: 0; color: var(--app-subtle); font-size: 12px; line-height: 1.45; }
-  .restore-status[data-state="checking"] { color: var(--app-muted); }
-  .restore-status[data-state="ok"] { color: var(--app-success); }
-  .restore-status[data-state="error"] { color: var(--app-danger); }
 
   @media (max-width: 960px) {
-    .workspace { grid-template-columns: 1fr; }
-    .setup-rail { border-right: 0; border-bottom: 1px solid var(--workspace-divider); padding: 8px 14px; }
+    .app-shell { height: auto; min-height: 100dvh; overflow: visible; }
+    .workspace { height: auto; min-height: calc(100dvh - 56px); grid-template-columns: 1fr; overflow: visible; }
+    .setup-rail { overflow: visible; border-right: 0; border-bottom: 1px solid var(--workspace-divider); padding: 8px 14px; }
     .rail-group-label { display: none; }
     .stepper { grid-template-columns: repeat(4, minmax(9rem, 1fr)); margin-top: 0; overflow-x: auto; }
     .step-tab { border-left: 0; border-bottom: 2px solid transparent; }
     .step-tab.active { border-bottom-color: var(--app-ink); }
-    .setup-main { padding-top: 10px; }
+    .setup-main { min-height: calc(100dvh - 104px); overflow: visible; padding-top: 10px; }
+    .setup-form { min-height: 0; overflow: visible; }
+    .wizard-step:not([hidden]) { overflow: visible; }
   }
 
   @media (max-width: 760px) {
@@ -446,9 +465,8 @@ VISUAL_CONTRACT_CSS = r"""
     .form-actions > .secondary-button, .action-right { width: 100%; justify-self: stretch; }
     .action-hint { grid-row: 1; }
     .action-right button { width: 100%; }
-    .backup-dropzone { min-height: 124px; text-align: center; flex-direction: column; }
-    .backup-file-row, .restore-actions { align-items: stretch; flex-direction: column; }
-    .restore-actions .secondary-button { width: 100%; }
+    .backup-actions { align-items: stretch; flex-direction: column; }
+    .backup-actions .secondary-button { width: 100%; }
   }
 
   @media (any-pointer: coarse) {
@@ -483,6 +501,7 @@ BASE_SCRIPT_JS = r"""
       ['Review', 'Confirm the public configuration before installation continues.']
     ];
     let currentStep = 0;
+    let maxVisitedStep = 0;
     let callbackTouched = callback.dataset.generated !== 'true' && Boolean(callback.value);
 
     function cleanDomain() {
@@ -509,15 +528,23 @@ BASE_SCRIPT_JS = r"""
       setText('review-owner', owner.value || '-');
     }
 
-    function showStep(index) {
-      currentStep = Math.max(0, Math.min(index, steps.length - 1));
-      steps.forEach((step, stepIndex) => step.hidden = stepIndex !== currentStep);
+    function syncStepNavigation() {
       progress.forEach((item, itemIndex) => {
         item.classList.toggle('active', itemIndex === currentStep);
         item.classList.toggle('done', itemIndex < currentStep);
+        item.disabled = itemIndex > maxVisitedStep;
+        item.setAttribute('aria-disabled', String(itemIndex > maxVisitedStep));
         if (itemIndex === currentStep) item.setAttribute('aria-current', 'step');
         else item.removeAttribute('aria-current');
       });
+    }
+
+    function showStep(index) {
+      const target = Math.max(0, Math.min(index, steps.length - 1));
+      currentStep = target;
+      maxVisitedStep = Math.max(maxVisitedStep, target);
+      steps.forEach((step, stepIndex) => step.hidden = stepIndex !== currentStep);
+      syncStepNavigation();
       heading.textContent = titles[currentStep][0];
       description.textContent = titles[currentStep][1];
       stepPosition.textContent = `Step ${currentStep + 1} of ${steps.length}`;
@@ -530,6 +557,14 @@ BASE_SCRIPT_JS = r"""
         : 'You can go back without losing the values entered here.';
       updateDerivedText();
     }
+
+    progress.forEach((item) => {
+      item.addEventListener('click', () => {
+        const target = Number(item.dataset.progress);
+        if (!Number.isInteger(target) || target > maxVisitedStep) return;
+        showStep(target);
+      });
+    });
 
     function validateCurrentStep() {
       form.classList.add('was-validated');
@@ -575,91 +610,83 @@ BASE_SCRIPT_JS = r"""
     const uploadBackupBtn = document.getElementById('upload-backup-btn');
     const backupFile = document.getElementById('backup-file');
     const backupDropzone = document.getElementById('backup-dropzone');
+    const backupStatus = document.getElementById('backup-status');
     const backupFileRow = document.getElementById('backup-file-row');
     const backupFileName = document.getElementById('backup-file-name');
-    const backupFileMeta = document.getElementById('backup-file-meta');
+    const backupFileSize = document.getElementById('backup-file-size');
     const backupFileClear = document.getElementById('backup-file-clear');
-    const backupStatus = document.getElementById('backup-status');
-    let selectedBackupFile = null;
+    let selectedBackup = null;
 
     function formatBytes(bytes) {
       if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB'];
       const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-      const value = bytes / (1024 ** index);
-      return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+      return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
     }
 
-    function setBackupStatus(state, message) {
-      if (!backupStatus) return;
-      backupStatus.dataset.state = state;
+    function setBackupStatus(message, state = '') {
       backupStatus.textContent = message;
+      backupStatus.style.color = state === 'error'
+        ? 'var(--app-danger)'
+        : state === 'ok'
+          ? 'var(--app-success)'
+          : 'var(--app-subtle)';
     }
 
-    function setBackupFile(file) {
-      if (!file) {
-        selectedBackupFile = null;
-        backupFileRow.hidden = true;
-        backupFileName.textContent = '';
-        backupFileMeta.textContent = '';
-        uploadBackupBtn.disabled = true;
-        setBackupStatus('', '');
-        return true;
-      }
+    function clearBackupSelection() {
+      selectedBackup = null;
+      backupFile.value = '';
+      backupFileRow.hidden = true;
+      uploadBackupBtn.disabled = true;
+      setBackupStatus('');
+    }
+
+    function chooseBackup(file) {
+      if (!file) return;
       if (!file.name.toLowerCase().endsWith('.tar.gz')) {
-        setBackupStatus('error', 'Choose a MyPaaS .tar.gz backup.');
-        return false;
-      }
-      selectedBackupFile = file;
-      backupFileRow.hidden = false;
-      backupFileName.textContent = file.name;
-      backupFileMeta.textContent = formatBytes(file.size);
-      uploadBackupBtn.disabled = false;
-      setBackupStatus('', 'Ready to validate and restore.');
-      return true;
-    }
-
-    backupDropzone?.addEventListener('click', () => backupFile?.click());
-    backupFile?.addEventListener('change', () => setBackupFile(backupFile.files?.[0] || null));
-    backupFileClear?.addEventListener('click', () => {
-      if (backupFile) backupFile.value = '';
-      setBackupFile(null);
-    });
-
-    ['dragenter', 'dragover'].forEach((eventName) => {
-      backupDropzone?.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-        backupDropzone.dataset.dragging = 'true';
-      });
-    });
-    ['dragleave', 'dragend'].forEach((eventName) => {
-      backupDropzone?.addEventListener(eventName, () => {
-        delete backupDropzone.dataset.dragging;
-      });
-    });
-    backupDropzone?.addEventListener('drop', (event) => {
-      event.preventDefault();
-      delete backupDropzone.dataset.dragging;
-      const files = Array.from(event.dataTransfer?.files || []);
-      if (files.length !== 1) {
-        setBackupStatus('error', 'Drop one backup file at a time.');
+        clearBackupSelection();
+        setBackupStatus('Choose a MyPaaS .tar.gz backup.', 'error');
         return;
       }
-      setBackupFile(files[0]);
+      selectedBackup = file;
+      backupFileName.textContent = file.name;
+      backupFileSize.textContent = formatBytes(file.size);
+      backupFileRow.hidden = false;
+      uploadBackupBtn.disabled = false;
+      setBackupStatus('Ready to upload.');
+    }
+
+    backupDropzone?.addEventListener('click', () => backupFile.click());
+    backupDropzone?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        backupFile.click();
+      }
     });
+    backupFile?.addEventListener('change', () => chooseBackup(backupFile.files?.[0]));
+    backupFileClear?.addEventListener('click', clearBackupSelection);
+
+    ['dragenter', 'dragover'].forEach((type) => backupDropzone?.addEventListener(type, (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      backupDropzone.dataset.dragging = 'true';
+    }));
+    ['dragleave', 'drop'].forEach((type) => backupDropzone?.addEventListener(type, (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      backupDropzone.dataset.dragging = 'false';
+    }));
+    backupDropzone?.addEventListener('drop', (event) => chooseBackup(event.dataTransfer?.files?.[0]));
 
     uploadBackupBtn?.addEventListener('click', async () => {
-      if (!selectedBackupFile) {
-        setBackupStatus('error', 'Choose a MyPaaS backup first.');
+      if (!selectedBackup) {
+        setBackupStatus('Choose a MyPaaS backup first.', 'error');
         return;
       }
-      const file = selectedBackupFile;
+      const file = selectedBackup;
       uploadBackupBtn.disabled = true;
       uploadBackupBtn.textContent = 'Uploading…';
-      backupDropzone.disabled = true;
-      backupFileClear.disabled = true;
-      setBackupStatus('checking', 'Validating backup…');
+      setBackupStatus('Validating backup…');
       try {
         const res = await fetch('/upload-backup', {
           method: 'POST',
@@ -676,14 +703,12 @@ BASE_SCRIPT_JS = r"""
           document.close();
           return;
         }
-        setBackupStatus('error', 'Backup rejected. Check that the archive was created by MyPaaS.');
+        setBackupStatus('Backup rejected. Check that the archive was created by MyPaaS.', 'error');
       } catch {
-        setBackupStatus('error', 'Upload failed. Try again.');
+        setBackupStatus('Upload failed. Try again.', 'error');
       } finally {
-        uploadBackupBtn.disabled = !selectedBackupFile;
+        uploadBackupBtn.disabled = !selectedBackup;
         uploadBackupBtn.textContent = 'Upload backup';
-        backupDropzone.disabled = false;
-        backupFileClear.disabled = false;
       }
     });
 
@@ -839,10 +864,10 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
       <aside class="setup-rail" aria-label="Setup steps">
         <p class="rail-group-label">Setup</p>
         <nav class="stepper" aria-label="Install progress">
-          <div class="step-tab active" data-progress="0" aria-current="step"><span class="step-icon">{_nav_icon("domain")}</span><span class="step-title">Domain</span></div>
-          <div class="step-tab" data-progress="1"><span class="step-icon">{_nav_icon("github")}</span><span class="step-title">GitHub</span></div>
-          <div class="step-tab" data-progress="2"><span class="step-icon">{_nav_icon("cloudflare")}</span><span class="step-title">Cloudflare</span></div>
-          <div class="step-tab" data-progress="3"><span class="step-icon">{_nav_icon("review")}</span><span class="step-title">Review</span></div>
+          <button type="button" class="step-tab active" data-progress="0" aria-current="step"><span class="step-icon">{_nav_icon("domain")}</span><span class="step-title">Domain</span></button>
+          <button type="button" class="step-tab" data-progress="1" disabled aria-disabled="true"><span class="step-icon">{_nav_icon("github")}</span><span class="step-title">GitHub</span></button>
+          <button type="button" class="step-tab" data-progress="2" disabled aria-disabled="true"><span class="step-icon">{_nav_icon("cloudflare")}</span><span class="step-title">Cloudflare</span></button>
+          <button type="button" class="step-tab" data-progress="3" disabled aria-disabled="true"><span class="step-icon">{_nav_icon("review")}</span><span class="step-title">Review</span></button>
         </nav>
       </aside>
 
@@ -853,22 +878,16 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <strong>Restore an existing MyPaaS instance</strong>
               <p>Upload a MyPaaS <span class="mono">.tar.gz</span> backup instead of creating a fresh configuration.</p>
             </div>
-            <input class="backup-file-input" type="file" id="backup-file" accept=".tar.gz,application/gzip,application/x-gzip" tabindex="-1">
-            <button type="button" id="backup-dropzone" class="backup-dropzone" aria-describedby="backup-status">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-              <span class="backup-dropzone-copy">
-                <strong>Drop backup here or choose a file</strong>
-                <span>MyPaaS .tar.gz backups only</span>
-              </span>
-            </button>
+            <input class="backup-file-input" type="file" id="backup-file" accept=".tar.gz,application/gzip">
+            <div id="backup-dropzone" class="backup-dropzone" role="button" tabindex="0" aria-controls="backup-file" data-dragging="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>
+              <div><strong>Drop backup here or choose a file</strong><span>MyPaaS .tar.gz backups only</span></div>
+            </div>
             <div id="backup-file-row" class="backup-file-row" hidden>
-              <div class="backup-file-copy">
-                <span id="backup-file-name" class="backup-file-name"></span>
-                <span id="backup-file-meta" class="backup-file-meta"></span>
-              </div>
+              <div class="backup-file-meta"><p id="backup-file-name" class="backup-file-name"></p><p id="backup-file-size" class="backup-file-size"></p></div>
               <button type="button" id="backup-file-clear" class="backup-file-clear">Remove</button>
             </div>
-            <div class="restore-actions">
+            <div class="backup-actions">
               <div id="backup-status" class="restore-status" aria-live="polite"></div>
               <button type="button" id="upload-backup-btn" class="secondary-button" disabled>Upload backup</button>
             </div>
@@ -889,10 +908,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
           <section class="wizard-step" data-step="0">
             <div class="step-grid">
               <div class="step-primary">
-                <div class="section-heading">
-                  <h3>Public domain</h3>
-                  <p>Use the root domain. MyPaaS creates project hostnames directly below it.</p>
-                </div>
+                <div class="section-heading"><h3>Public domain</h3><p>Use the root domain. MyPaaS creates project hostnames directly below it.</p></div>
                 <div class="field-group" style="max-width: 44rem;">
                   <label class="field-label" for="PUBLIC_DOMAIN">Domain</label>
                   <input class="field-input mono" id="PUBLIC_DOMAIN" name="PUBLIC_DOMAIN" required inputmode="url" autocomplete="off" placeholder="example.com" value="{base.esc(domain)}">
@@ -900,22 +916,12 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
                 </div>
               </div>
               <aside class="step-aside">
-                <div class="provider-header">
-                  <div><strong>Public URLs</strong><p>Derived from the domain.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs ↗</a>
-                </div>
+                <div class="provider-header"><div><strong>Public URLs</strong><p>Derived from the domain.</p></div><a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs ↗</a></div>
                 <div class="value-list">
                   <div class="value-row"><span>Dashboard</span><span class="value mono" id="domain-dashboard">https://example.com</span></div>
                   <div class="value-row"><span>Projects</span><span class="value mono" id="domain-projects">*.example.com</span></div>
                 </div>
-                <div class="validation-box">
-                  <p class="validation-title">Domain check</p>
-                  <p class="validation-copy">Resolve the domain from this machine. Wildcard routing is verified after the tunnel is configured.</p>
-                  <div class="preflight-row">
-                    <button type="button" class="secondary-button" id="check-domain-button">Check domain</button>
-                    <span class="preflight-status" id="domain-preflight-status" aria-live="polite"></span>
-                  </div>
-                </div>
+                <div class="validation-box"><p class="validation-title">Domain check</p><p class="validation-copy">Resolve the domain from this machine. Wildcard routing is verified after the tunnel is configured.</p><div class="preflight-row"><button type="button" class="secondary-button" id="check-domain-button">Check domain</button><span class="preflight-status" id="domain-preflight-status" aria-live="polite"></span></div></div>
               </aside>
             </div>
           </section>
@@ -923,124 +929,48 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
           <section class="wizard-step" data-step="1" hidden>
             <div class="step-grid">
               <div class="step-primary">
-                <div class="section-heading">
-                  <h3>Owner and OAuth credentials</h3>
-                  <p>Use the verified primary email on the GitHub account that will own this instance.</p>
-                </div>
+                <div class="section-heading"><h3>Owner and OAuth credentials</h3><p>Use the verified primary email on the GitHub account that will own this instance.</p></div>
                 <div class="field-grid" style="max-width: 52rem;">
-                  <div class="field-group">
-                    <label class="field-label" for="OWNER_EMAIL">Owner GitHub email</label>
-                    <input class="field-input" id="OWNER_EMAIL" name="OWNER_EMAIL" required type="email" autocomplete="email" placeholder="you@example.com" value="{base.esc(values.get("OWNER_EMAIL", ""))}">
-                    <p class="field-hint">Verified during the first GitHub sign-in. After binding, MyPaaS identifies the owner by GitHub numeric user ID.</p>
-                  </div>
-                  <div class="field-grid two">
-                    <div class="field-group">
-                      <label class="field-label" for="GITHUB_CLIENT_ID">OAuth Client ID</label>
-                      <input class="field-input mono" id="GITHUB_CLIENT_ID" name="GITHUB_CLIENT_ID" required autocomplete="off" spellcheck="false" value="{base.esc(values.get("GITHUB_CLIENT_ID", ""))}">
-                    </div>
-                    {_secret_input(base, "GITHUB_CLIENT_SECRET", "OAuth Client Secret", values.get("GITHUB_CLIENT_SECRET", ""))}
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label" for="GITHUB_CALLBACK_URL">Callback URL</label>
-                    <input class="field-input mono" id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required type="url" autocomplete="off" data-generated="{str(callback_is_generated).lower()}" value="{base.esc(callback)}">
-                    <p class="field-hint">Must match the GitHub OAuth App callback exactly.</p>
-                  </div>
+                  <div class="field-group"><label class="field-label" for="OWNER_EMAIL">Owner GitHub email</label><input class="field-input" id="OWNER_EMAIL" name="OWNER_EMAIL" required type="email" autocomplete="email" placeholder="you@example.com" value="{base.esc(values.get("OWNER_EMAIL", ""))}"><p class="field-hint">Verified during the first GitHub sign-in. After binding, MyPaaS identifies the owner by GitHub numeric user ID.</p></div>
+                  <div class="field-grid two"><div class="field-group"><label class="field-label" for="GITHUB_CLIENT_ID">OAuth Client ID</label><input class="field-input mono" id="GITHUB_CLIENT_ID" name="GITHUB_CLIENT_ID" required autocomplete="off" spellcheck="false" value="{base.esc(values.get("GITHUB_CLIENT_ID", ""))}"></div>{_secret_input(base, "GITHUB_CLIENT_SECRET", "OAuth Client Secret", values.get("GITHUB_CLIENT_SECRET", ""))}</div>
+                  <div class="field-group"><label class="field-label" for="GITHUB_CALLBACK_URL">Callback URL</label><input class="field-input mono" id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required type="url" autocomplete="off" data-generated="{str(callback_is_generated).lower()}" value="{base.esc(callback)}"><p class="field-hint">Must match the GitHub OAuth App callback exactly.</p></div>
                 </div>
               </div>
               <aside class="step-aside">
-                <div class="provider-header">
-                  <div><strong>GitHub OAuth App</strong><p>Create one OAuth App and paste its credentials on the left.</p></div>
-                  <a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs ↗</a>
-                </div>
+                <div class="provider-header"><div><strong>GitHub OAuth App</strong><p>Create one OAuth App and paste its credentials on the left.</p></div><a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs ↗</a></div>
                 <div class="value-list">
                   <div class="value-row"><span>App name</span><span class="value">MyPaaS</span></div>
                   <div class="value-row"><span>Homepage URL</span><span class="value mono" id="github-homepage-example">https://example.com</span><button class="copy-button" type="button" data-copy-target="github-homepage-example">Copy</button></div>
                   <div class="value-row"><span>Callback URL</span><span class="value mono" id="github-callback-example">https://example.com/api/auth/github/callback</span><button class="copy-button" type="button" data-copy-target="github-callback-example">Copy</button></div>
                 </div>
-                <div class="validation-box">
-                  <p class="validation-title">OAuth check</p>
-                  <p class="validation-copy">Checks Client ID, Client Secret, and callback format. Owner identity is verified during sign-in.</p>
-                  <div class="preflight-row">
-                    <button type="button" class="secondary-button" id="check-github-button">Test GitHub</button>
-                    <span class="preflight-status" id="github-preflight-status" aria-live="polite"></span>
-                  </div>
-                </div>
+                <div class="validation-box"><p class="validation-title">OAuth check</p><p class="validation-copy">Checks Client ID, Client Secret, and callback format. Owner identity is verified during sign-in.</p><div class="preflight-row"><button type="button" class="secondary-button" id="check-github-button">Test GitHub</button><span class="preflight-status" id="github-preflight-status" aria-live="polite"></span></div></div>
               </aside>
             </div>
           </section>
 
           <section class="wizard-step" data-step="2" hidden>
             <div class="step-grid">
-              <div class="step-primary">
-                <div class="section-heading">
-                  <h3>Cloudflare Tunnel</h3>
-                  <p>Paste the Tunnel token or the full command copied from Add a replica. MyPaaS extracts the <span class="mono">eyJ…</span> token automatically.</p>
-                </div>
-                <div style="max-width: 52rem;">
-                  {_secret_input(base, "CLOUDFLARE_TUNNEL_TOKEN", "Tunnel token or Add-a-replica command", values.get("CLOUDFLARE_TUNNEL_TOKEN", ""), hint="Use a Cloudflare Tunnel token, not a Cloudflare API token.")}
-                </div>
-              </div>
+              <div class="step-primary"><div class="section-heading"><h3>Cloudflare Tunnel</h3><p>Paste the Tunnel token or the full command copied from Add a replica. MyPaaS extracts the <span class="mono">eyJ…</span> token automatically.</p></div><div style="max-width: 52rem;">{_secret_input(base, "CLOUDFLARE_TUNNEL_TOKEN", "Tunnel token or Add-a-replica command", values.get("CLOUDFLARE_TUNNEL_TOKEN", ""), hint="Use a Cloudflare Tunnel token, not a Cloudflare API token.")}</div></div>
               <aside class="step-aside">
-                <div class="provider-header">
-                  <div><strong>Published routes</strong><p>Create the dashboard and wildcard routes in the same tunnel.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs ↗</a>
-                </div>
-                <div class="value-list">
-                  <div class="value-row"><span>Dashboard</span><span class="value mono" id="cf-root-example">example.com</span></div>
-                  <div class="value-row"><span>Projects</span><span class="value mono" id="cf-wildcard-example">*.example.com</span></div>
-                  <div class="value-row"><span>Service</span><span class="value mono">http://caddy:80</span></div>
-                </div>
-                <div class="validation-box">
-                  <p class="validation-title">Tunnel and routing check</p>
-                  <p class="validation-copy">Briefly connects with the token, then confirms project wildcard DNS from this machine.</p>
-                  <div class="preflight-row">
-                    <button type="button" class="secondary-button" id="check-cloudflare-button">Test tunnel</button>
-                    <span class="preflight-status" id="cloudflare-preflight-status" aria-live="polite"></span>
-                  </div>
-                </div>
+                <div class="provider-header"><div><strong>Published routes</strong><p>Create the dashboard and wildcard routes in the same tunnel.</p></div><a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs ↗</a></div>
+                <div class="value-list"><div class="value-row"><span>Dashboard</span><span class="value mono" id="cf-root-example">example.com</span></div><div class="value-row"><span>Projects</span><span class="value mono" id="cf-wildcard-example">*.example.com</span></div><div class="value-row"><span>Service</span><span class="value mono">http://caddy:80</span></div></div>
+                <div class="validation-box"><p class="validation-title">Tunnel and routing check</p><p class="validation-copy">Briefly connects with the token, then confirms project wildcard DNS from this machine.</p><div class="preflight-row"><button type="button" class="secondary-button" id="check-cloudflare-button">Test tunnel</button><span class="preflight-status" id="cloudflare-preflight-status" aria-live="polite"></span></div></div>
               </aside>
             </div>
           </section>
 
           <section class="wizard-step" data-step="3" hidden>
             <div class="step-grid">
-              <div class="step-primary">
-                <div class="section-heading">
-                  <h3>Installation summary</h3>
-                  <p>Secrets stay hidden. Saving writes the production configuration and continues the terminal installer.</p>
-                </div>
-                <dl class="review-list">
-                  <div class="review-row"><dt>Dashboard</dt><dd class="mono" id="review-dashboard">-</dd></div>
-                  <div class="review-row"><dt>Project URLs</dt><dd class="mono" id="review-project">-</dd></div>
-                  <div class="review-row"><dt>Owner</dt><dd id="review-owner">-</dd></div>
-                  <div class="review-row"><dt>GitHub callback</dt><dd class="mono" id="review-callback">-</dd></div>
-                  <div class="review-row"><dt>GitHub secret</dt><dd>Configured</dd></div>
-                  <div class="review-row"><dt>Cloudflare Tunnel</dt><dd>Configured</dd></div>
-                </dl>
-              </div>
-              <aside class="step-aside">
-                <div class="provider-header">
-                  <div><strong>Ready to install</strong><p>Domain, GitHub, and Cloudflare checks must match the values being saved.</p></div>
-                </div>
-                <div class="validation-box">
-                  <p class="validation-title">What happens next</p>
-                  <p class="validation-copy">MyPaaS writes the configuration, closes this wizard, then the terminal continues with startup and migrations.</p>
-                </div>
-              </aside>
+              <div class="step-primary"><div class="section-heading"><h3>Installation summary</h3><p>Secrets stay hidden. Saving writes the production configuration and continues the terminal installer.</p></div><dl class="review-list"><div class="review-row"><dt>Dashboard</dt><dd class="mono" id="review-dashboard">-</dd></div><div class="review-row"><dt>Project URLs</dt><dd class="mono" id="review-project">-</dd></div><div class="review-row"><dt>Owner</dt><dd id="review-owner">-</dd></div><div class="review-row"><dt>GitHub callback</dt><dd class="mono" id="review-callback">-</dd></div><div class="review-row"><dt>GitHub secret</dt><dd>Configured</dd></div><div class="review-row"><dt>Cloudflare Tunnel</dt><dd>Configured</dd></div></dl></div>
+              <aside class="step-aside"><div class="provider-header"><div><strong>Ready to install</strong><p>Domain, GitHub, and Cloudflare checks must match the values being saved.</p></div></div><div class="validation-box"><p class="validation-title">What happens next</p><p class="validation-copy">MyPaaS writes the configuration, closes this wizard, then the terminal continues with startup and migrations.</p></div></aside>
             </div>
-            <details class="advanced">
-              <summary>Advanced generated values</summary>
-              <div class="advanced-body field-grid two">{advanced_fields}</div>
-            </details>
+            <details class="advanced"><summary>Advanced generated values</summary><div class="advanced-body field-grid two">{advanced_fields}</div></details>
           </section>
 
           <div class="form-actions">
             <button class="secondary-button" type="button" id="back-button" hidden>Back</button>
             <span class="action-hint" id="action-hint">You can go back without losing the values entered here.</span>
-            <div class="action-right">
-              <button class="primary-button" type="button" id="next-button">Continue</button>
-              <button class="primary-button" type="submit" id="submit-button" data-default-label="Install MyPaaS" hidden>Install MyPaaS</button>
-            </div>
+            <div class="action-right"><button class="primary-button" type="button" id="next-button">Continue</button><button class="primary-button" type="submit" id="submit-button" data-default-label="Install MyPaaS" hidden>Install MyPaaS</button></div>
           </div>
         </form>
       </main>
