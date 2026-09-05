@@ -19,7 +19,7 @@ from install_wizard_preflight import (
     validate_hostname,
     validate_https_callback,
 )
-from install_wizard_visual import apply_visual_contract
+from install_wizard_visual import render_form_html
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -37,7 +37,6 @@ def _load_base_module():
 
 
 BASE = _load_base_module()
-ORIGINAL_FORM_HTML = BASE.form_html
 ORIGINAL_BUILD_ENV = BASE.build_env
 
 # The installer is intentionally a single-process, single-setup-token workflow.
@@ -113,64 +112,8 @@ def validate_save_preflights(values: dict[str, str]) -> None:
         raise ValueError("Cloudflare Tunnel settings changed after preflight. Go back and test the tunnel token again.")
 
 
-def _inject_into_step(document: str, step: int, fragment: str) -> str:
-    marker = f'<section class="wizard-step" data-step="{step}"'
-    start = document.find(marker)
-    if start < 0:
-        raise RuntimeError(f"install wizard step {step} was not found")
-    end = document.find("</section>", start)
-    if end < 0:
-        raise RuntimeError(f"install wizard step {step} is not closed")
-    return document[:end] + fragment + document[end:]
-
-
 def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
-    document = ORIGINAL_FORM_HTML(error, values).decode("utf-8")
-    preflight_css = """
-  .preflight-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
-  .preflight-row button { min-height: 36px; padding: 0 12px; }
-  .preflight-status { min-width: 0; font-size: 12px; line-height: 1.45; color: var(--app-subtle); }
-  .preflight-status[data-state="checking"] { color: var(--app-muted); }
-  .preflight-status[data-state="ok"] { color: #047857; }
-  .preflight-status[data-state="warning"] { color: var(--app-warning); }
-  .preflight-status[data-state="error"] { color: var(--app-danger); }
-  .preflight-status[data-state="stale"] { color: var(--app-subtle); }
-  :root.dark .preflight-status[data-state="ok"] { color: #34d399; }
-  @media (prefers-color-scheme: dark) { :root:not(.light) .preflight-status[data-state="ok"] { color: #34d399; } }
-"""
-    document = document.replace("  </style>\n</head>", preflight_css + "  </style>\n</head>", 1)
-
-    document = _inject_into_step(
-        document,
-        1,
-        """
-            <div class="preflight-row">
-              <button type="button" class="secondary" id="check-domain-button">Check domain</button>
-              <span class="preflight-status" id="domain-preflight-status" aria-live="polite"></span>
-            </div>
-""",
-    )
-    document = _inject_into_step(
-        document,
-        2,
-        """
-            <div class="preflight-row">
-              <button type="button" class="secondary" id="check-github-button">Test GitHub configuration</button>
-              <span class="preflight-status" id="github-preflight-status" aria-live="polite"></span>
-            </div>
-""",
-    )
-    document = _inject_into_step(
-        document,
-        3,
-        """
-            <div class="preflight-row">
-              <button type="button" class="secondary" id="check-cloudflare-button">Test tunnel and routing</button>
-              <span class="preflight-status" id="cloudflare-preflight-status" aria-live="polite"></span>
-            </div>
-""",
-    )
-
+    document = render_form_html(BASE, error, values).decode("utf-8")
     preflight_script = r"""
   <script>
     (() => {
@@ -227,19 +170,15 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       }
 
       async function runDomainCheck({ requireWildcard = false } = {}) {
-        statusNode('domain-preflight-status', 'checking', requireWildcard ? 'Rechecking domain and project wildcard…' : 'Checking domain…');
+        statusNode('domain-preflight-status', 'checking', requireWildcard ? 'Checking project wildcard…' : 'Checking domain…');
         try {
           const result = await postPreflight('domain', { hostname: domainInput?.value || '' });
           if (requireWildcard && !result.wildcardResolved) {
             statusNode('domain-preflight-status', 'warning', result.message);
-            statusNode('cloudflare-preflight-status', 'error', 'Tunnel token is valid, but project wildcard DNS is not visible yet. Add the wildcard route/DNS, then retry.');
+            statusNode('cloudflare-preflight-status', 'error', 'Tunnel token is valid, but project wildcard DNS is not visible yet. Add the wildcard route, then retry.');
             return false;
           }
-          statusNode(
-            'domain-preflight-status',
-            result.wildcardResolved ? 'ok' : 'warning',
-            result.message
-          );
+          statusNode('domain-preflight-status', result.wildcardResolved ? 'ok' : 'warning', result.message);
           return true;
         } catch (error) {
           statusNode('domain-preflight-status', 'error', error instanceof Error ? error.message : 'Domain check failed');
@@ -249,7 +188,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       }
 
       async function runGithubCheck() {
-        statusNode('github-preflight-status', 'checking', 'Checking GitHub OAuth configuration…');
+        statusNode('github-preflight-status', 'checking', 'Checking GitHub OAuth…');
         try {
           const result = await postPreflight('github', {
             clientId: githubClientId?.value || '',
@@ -271,7 +210,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       }
 
       async function runCloudflareCheck({ verifyRouting = false } = {}) {
-        statusNode('cloudflare-preflight-status', 'checking', verifyRouting ? 'Checking tunnel token and project routing…' : 'Checking tunnel token…');
+        statusNode('cloudflare-preflight-status', 'checking', verifyRouting ? 'Checking tunnel and routing…' : 'Checking tunnel token…');
         try {
           const rawValue = cloudflareInput?.value || '';
           const result = await postPreflight('cloudflare', { token: rawValue });
@@ -282,7 +221,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
 
           const domainReady = await runDomainCheck({ requireWildcard: true });
           if (!domainReady) return false;
-          statusNode('cloudflare-preflight-status', 'ok', 'Tunnel token is valid and project wildcard DNS resolves from this VM.');
+          statusNode('cloudflare-preflight-status', 'ok', 'Tunnel token and project wildcard are ready.');
           return true;
         } catch (error) {
           statusNode('cloudflare-preflight-status', 'error', error instanceof Error ? error.message : 'Cloudflare check failed');
@@ -315,9 +254,9 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       async function advanceThroughGate(stepIndex) {
         if (!currentInputsAreValid()) return;
         let passed = true;
-        if (stepIndex === 1) passed = await runDomainCheck();
-        if (stepIndex === 2) passed = await runGithubCheck();
-        if (stepIndex === 3) passed = await runCloudflareCheck({ verifyRouting: true });
+        if (stepIndex === 0) passed = await runDomainCheck();
+        if (stepIndex === 1) passed = await runGithubCheck();
+        if (stepIndex === 2) passed = await runCloudflareCheck({ verifyRouting: true });
         if (passed && typeof showStep === 'function') showStep(stepIndex + 1);
       }
 
@@ -325,11 +264,9 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
       githubButton?.addEventListener('click', () => withButton(githubButton, () => runGithubCheck()));
       cloudflareButton?.addEventListener('click', () => withButton(cloudflareButton, () => runCloudflareCheck({ verifyRouting: true })));
 
-      // Capture before the base wizard's ordinary Continue handler. Step 0 remains
-      // ungated because backup restore is optional; setup steps 1-3 are qualified.
       nextButton?.addEventListener('click', async (event) => {
         const stepIndex = currentVisibleStep();
-        if (![1, 2, 3].includes(stepIndex)) return;
+        if (![0, 1, 2].includes(stepIndex)) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         if (gateBusy) return;
@@ -348,7 +285,8 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
 
       domainInput?.addEventListener('input', () => {
         stale('domain-preflight-status', 'Domain changed. Recheck before continuing.');
-        stale('github-preflight-status', 'Callback may have changed. Recheck GitHub before continuing.');
+        stale('github-preflight-status', 'Domain changed. Recheck GitHub before continuing.');
+        stale('cloudflare-preflight-status', 'Domain changed. Recheck routing before continuing.');
       });
       githubClientId?.addEventListener('input', () => stale('github-preflight-status', 'GitHub settings changed. Recheck before continuing.'));
       githubClientSecret?.addEventListener('input', () => stale('github-preflight-status', 'GitHub settings changed. Recheck before continuing.'));
@@ -357,9 +295,7 @@ def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
     })();
   </script>
 """
-    document = document.replace("</body>", preflight_script + "</body>", 1)
-    document = apply_visual_contract(document)
-    return document.encode("utf-8")
+    return document.replace("</body>", preflight_script + "</body>", 1).encode("utf-8")
 
 
 def build_env(values: dict[str, str]) -> str:
