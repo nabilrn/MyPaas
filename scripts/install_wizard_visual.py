@@ -29,7 +29,7 @@ VISUAL_CONTRACT_CSS = r"""
     --control-border-hover: color-mix(in oklch, var(--app-border-strong) 88%, var(--app-border));
     --control-border-focus: var(--app-ink);
     --control-focus-ring: color-mix(in oklch, var(--app-accent-soft) 58%, transparent);
-    background: var(--app-bg);
+    background: var(--app-surface);
     color: var(--app-ink);
   }
 
@@ -53,7 +53,7 @@ VISUAL_CONTRACT_CSS = r"""
     --app-info: #38bdf8;
     --app-success: #34d399;
     --control-bg: transparent;
-    --control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-bg));
+    --control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-surface));
     --control-border: color-mix(in oklch, var(--app-border) 62%, transparent);
     --control-border-hover: color-mix(in oklch, var(--app-border-strong) 86%, var(--app-border));
     --control-border-focus: var(--app-ink);
@@ -81,7 +81,7 @@ VISUAL_CONTRACT_CSS = r"""
       --app-info: #38bdf8;
       --app-success: #34d399;
       --control-bg: transparent;
-      --control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-bg));
+      --control-bg-disabled: color-mix(in oklch, var(--app-surface-muted) 78%, var(--app-surface));
       --control-border: color-mix(in oklch, var(--app-border) 62%, transparent);
       --control-border-hover: color-mix(in oklch, var(--app-border-strong) 86%, var(--app-border));
       --control-border-focus: var(--app-ink);
@@ -90,14 +90,29 @@ VISUAL_CONTRACT_CSS = r"""
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; background: var(--app-bg); color: var(--app-ink); }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; background: var(--app-surface); color: var(--app-ink); }
   body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
   button, input { font: inherit; }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; opacity: .55; }
   a { color: inherit; text-underline-offset: 3px; }
-  h1, h2, h3, p { margin: 0; }
+  h1, h2, h3, p, dl, dt, dd { margin: 0; }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+  /* Authenticated shell rule: chrome and workspace use one surface. */
+  .app-shell,
+  .app-header,
+  .workspace,
+  .setup-rail,
+  .setup-main,
+  .setup-form,
+  .page-heading,
+  .step-primary,
+  .step-aside,
+  .restore-panel {
+    background: var(--app-surface);
+  }
 
   .app-shell { min-height: 100vh; display: grid; grid-template-rows: 56px minmax(0, 1fr); }
   .app-header {
@@ -106,16 +121,15 @@ VISUAL_CONTRACT_CSS = r"""
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid var(--workspace-divider);
-    background: var(--app-surface);
+    border-bottom: 1px solid var(--app-border);
     padding: 0 14px;
   }
-  .brand-lockup { display: inline-flex; min-width: 0; align-items: center; gap: 10px; }
+  .brand-lockup { display: inline-flex; min-width: 0; align-items: center; gap: 9px; }
   .brand-logo { display: block; width: 112px; height: auto; object-fit: contain; object-position: left center; }
   :root.dark .brand-logo { filter: invert(1); }
   @media (prefers-color-scheme: dark) { :root:not(.light) .brand-logo { filter: invert(1); } }
   .installer-label { color: var(--app-subtle); font-size: 12px; font-weight: 600; }
-  .header-actions { display: flex; align-items: center; gap: 4px; }
+  .header-actions { display: flex; align-items: center; gap: 2px; }
 
   .icon-button,
   .ghost-button,
@@ -139,6 +153,7 @@ VISUAL_CONTRACT_CSS = r"""
     background: transparent;
     color: var(--app-muted);
   }
+  .icon-button svg { display: block; width: 18px; height: 18px; }
   .icon-button:hover, .ghost-button:hover { background: var(--app-surface-muted); color: var(--app-ink); }
   .ghost-button { border: 1px solid transparent; background: transparent; color: var(--app-muted); }
   .secondary-button { border: 1px solid var(--control-border); background: transparent; color: var(--app-ink); }
@@ -150,7 +165,7 @@ VISUAL_CONTRACT_CSS = r"""
   .secondary-button:focus-visible,
   .primary-button:focus-visible,
   .field-input:focus-visible,
-  .restore-toggle:focus-visible {
+  .secret-toggle:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--control-focus-ring);
   }
@@ -163,39 +178,35 @@ VISUAL_CONTRACT_CSS = r"""
   .setup-rail {
     min-width: 0;
     border-right: 1px solid var(--workspace-divider);
-    background: var(--app-surface);
     padding: 16px 12px;
   }
-  .rail-heading { padding: 0 8px 12px; }
-  .rail-heading h1 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
-  .rail-heading p { margin-top: 3px; color: var(--app-subtle); font-size: 12px; line-height: 1.45; }
-  .stepper { display: grid; gap: 1px; }
-  .step-tab {
-    display: grid;
-    min-height: 46px;
-    grid-template-columns: 24px minmax(0, 1fr);
-    align-items: center;
-    gap: 9px;
-    border-left: 2px solid transparent;
-    padding: 6px 8px;
+  .rail-group-label {
+    padding: 0 8px;
     color: var(--app-subtle);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .stepper { display: grid; gap: 4px; margin-top: 8px; }
+  .step-tab {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    gap: 10px;
+    border-left: 2px solid transparent;
+    padding: 8px 10px;
+    color: var(--app-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition: color .14s ease;
   }
   .step-tab.active { border-left-color: var(--app-ink); color: var(--app-ink); }
   .step-tab.done { color: var(--app-muted); }
-  .step-number {
-    display: inline-flex;
-    width: 24px;
-    height: 24px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--workspace-divider);
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-  .step-tab.active .step-number { border-color: var(--app-ink); background: var(--app-ink); color: var(--app-surface); }
-  .step-title { display: block; font-size: 13px; font-weight: 650; color: var(--app-ink); }
-  .step-body { display: block; margin-top: 1px; font-size: 11px; line-height: 1.35; }
+  .step-icon { display: inline-flex; width: 16px; height: 16px; flex: 0 0 16px; align-items: center; justify-content: center; }
+  .step-icon svg { width: 16px; height: 16px; stroke: currentColor; }
+  .step-title { display: block; line-height: 1.25; }
+  .step-body { display: none; }
 
   .setup-main { min-width: 0; padding: 12px 14px; }
   .setup-form {
@@ -203,10 +214,6 @@ VISUAL_CONTRACT_CSS = r"""
     min-width: 0;
     min-height: calc(100vh - 80px);
     flex-direction: column;
-    overflow: hidden;
-    border-top: 1px solid var(--workspace-divider);
-    border-bottom: 1px solid var(--workspace-divider);
-    background: var(--app-surface);
   }
   .page-heading {
     display: flex;
@@ -230,11 +237,7 @@ VISUAL_CONTRACT_CSS = r"""
   }
   .wizard-step[hidden] { display: none; }
   .wizard-step:not([hidden]) { display: block; flex: 1; min-height: 0; }
-  .step-grid {
-    display: grid;
-    min-height: 100%;
-    grid-template-columns: minmax(0, 1.45fr) minmax(20rem, .75fr);
-  }
+  .step-grid { display: grid; min-height: 100%; grid-template-columns: minmax(0, 1.45fr) minmax(20rem, .75fr); }
   .step-primary { min-width: 0; border-right: 1px solid var(--workspace-divider); padding: 16px; }
   .step-aside { min-width: 0; padding: 16px; }
   .section-heading { margin-bottom: 14px; }
@@ -331,7 +334,7 @@ VISUAL_CONTRACT_CSS = r"""
     padding: 8px 0;
   }
   .review-row dt { color: var(--app-muted); font-size: 12px; }
-  .review-row dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 13px; }
+  .review-row dd { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
 
   .advanced { border-top: 1px solid var(--workspace-divider); }
   .advanced summary { cursor: pointer; list-style: none; padding: 11px 16px; color: var(--app-muted); font-size: 12px; font-weight: 600; }
@@ -340,24 +343,19 @@ VISUAL_CONTRACT_CSS = r"""
   .advanced-body { padding: 16px; }
 
   .form-actions {
-    display: flex;
+    display: grid;
     min-height: 58px;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     border-top: 1px solid var(--workspace-divider);
     padding: 10px 16px;
   }
+  .form-actions > .secondary-button { justify-self: start; }
   .action-hint { color: var(--app-subtle); font-size: 11px; line-height: 1.4; text-align: center; }
-  .action-right { display: flex; align-items: center; gap: 8px; }
+  .action-right { display: flex; justify-self: end; align-items: center; gap: 8px; }
 
-  .restore-panel {
-    margin-bottom: 12px;
-    border-top: 1px solid var(--workspace-divider);
-    border-bottom: 1px solid var(--workspace-divider);
-    background: var(--app-surface);
-  }
-  .restore-panel[hidden] { display: none; }
+  .restore-panel { margin-bottom: 12px; border-block: 1px solid var(--workspace-divider); }
   .restore-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 12px 16px; }
   .restore-copy { grid-column: 1 / -1; }
   .restore-copy strong { font-size: 13px; }
@@ -367,12 +365,11 @@ VISUAL_CONTRACT_CSS = r"""
   @media (max-width: 960px) {
     .workspace { grid-template-columns: 1fr; }
     .setup-rail { border-right: 0; border-bottom: 1px solid var(--workspace-divider); padding: 8px 14px; }
-    .rail-heading { display: none; }
-    .stepper { grid-template-columns: repeat(4, minmax(9rem, 1fr)); overflow-x: auto; }
+    .rail-group-label { display: none; }
+    .stepper { grid-template-columns: repeat(4, minmax(9rem, 1fr)); margin-top: 0; overflow-x: auto; }
     .step-tab { border-left: 0; border-bottom: 2px solid transparent; }
     .step-tab.active { border-bottom-color: var(--app-ink); }
     .setup-main { padding-top: 10px; }
-    .setup-form { min-height: auto; }
   }
 
   @media (max-width: 760px) {
@@ -387,18 +384,19 @@ VISUAL_CONTRACT_CSS = r"""
     .app-header { padding-inline: 10px; }
     .installer-label { display: none; }
     .setup-main { padding: 8px 10px; }
-    .stepper { grid-template-columns: repeat(4, minmax(8rem, 1fr)); }
+    .stepper { grid-template-columns: repeat(4, minmax(7.5rem, 1fr)); }
     .page-heading { padding-inline: 14px; }
     .step-primary, .step-aside, .advanced-body { padding: 14px; }
-    .form-actions { align-items: stretch; flex-direction: column; }
-    .action-hint { order: -1; }
-    .action-right, .action-right button, .form-actions > button { width: 100%; }
+    .form-actions { grid-template-columns: 1fr; align-items: stretch; }
+    .form-actions > .secondary-button, .action-right { width: 100%; justify-self: stretch; }
+    .action-hint { grid-row: 1; }
+    .action-right button { width: 100%; }
     .restore-content { grid-template-columns: 1fr; }
   }
 
   @media (any-pointer: coarse) {
     .icon-button, .ghost-button, .secondary-button, .primary-button, .field-input { min-height: 44px; }
-    .secret-toggle { width: 52px; height: 44px; }
+    .secret-toggle { height: 44px; }
   }
 """
 
@@ -615,7 +613,7 @@ def _secret_input(base, name: str, label: str, value: str, *, hint: str = "") ->
         <label class="field-label" for="{base.esc(name)}">{base.esc(label)}</label>
         <div class="secret-wrap">
           <input class="field-input mono" id="{base.esc(name)}" name="{base.esc(name)}" required type="password" autocomplete="new-password" value="{base.esc(value)}">
-          <button class="secret-toggle" type="button" data-secret-target="{base.esc(name)}" data-revealed="false" aria-label="Reveal secret" title="Reveal secret"></button>
+          <button class="secret-toggle" type="button" data-secret-target="{base.esc(name)}" aria-label="Reveal secret" title="Reveal secret"></button>
         </div>
         {hint_html}
       </div>
@@ -633,8 +631,18 @@ def _advanced_field(base, name: str, label: str, values: dict[str, str], *, secr
 """
 
 
+def _nav_icon(kind: str) -> str:
+    icons = {
+        "domain": '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>',
+        "github": '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6H9a6 6 0 0 0-6 6v1a6 6 0 0 0 6 6h1"/><path d="M14 19h1a6 6 0 0 0 6-6v-1a6 6 0 0 0-6-6"/><path d="M8 12h8"/></svg>',
+        "cloudflare": '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M12 2v7"/><path d="M12 15v7"/><path d="m19 5-4.5 4.5"/><path d="m9.5 14.5-4.5 4.5"/><path d="M2 12h7"/><path d="M15 12h7"/></svg>',
+        "review": '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    }
+    return icons[kind]
+
+
 def render_form_html(base, error: str = "", values: dict[str, str] | None = None) -> bytes:
-    """Render the dependency-free installer as a full MyPaaS workspace."""
+    """Render the dependency-free installer with the authenticated workspace grammar."""
     values = values or base.DEFAULTS
     domain = values.get("PUBLIC_DOMAIN", "")
     callback_is_generated = not values.get("GITHUB_CALLBACK_URL", "")
@@ -688,25 +696,22 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
         <span class="installer-label">Installer</span>
       </div>
       <div class="header-actions">
-        <button type="button" id="restore-toggle" class="ghost-button restore-toggle" aria-expanded="false" aria-controls="restore-panel">Restore backup</button>
+        <button type="button" id="restore-toggle" class="ghost-button" aria-expanded="false" aria-controls="restore-panel">Restore backup</button>
         <button type="button" id="theme-toggle" class="icon-button" aria-label="Toggle theme" title="Toggle theme">
-          <svg id="theme-icon-sun" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line></svg>
-          <svg id="theme-icon-moon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
         </button>
       </div>
     </header>
 
     <div class="workspace">
       <aside class="setup-rail" aria-label="Setup steps">
-        <div class="rail-heading">
-          <h1>Set up MyPaaS</h1>
-          <p>Fresh installation</p>
-        </div>
+        <p class="rail-group-label">Setup</p>
         <nav class="stepper" aria-label="Install progress">
-          <div class="step-tab active" data-progress="0" aria-current="step"><span class="step-number">1</span><span><span class="step-title">Domain</span><span class="step-body">Public URLs</span></span></div>
-          <div class="step-tab" data-progress="1"><span class="step-number">2</span><span><span class="step-title">GitHub</span><span class="step-body">Owner + OAuth</span></span></div>
-          <div class="step-tab" data-progress="2"><span class="step-number">3</span><span><span class="step-title">Cloudflare</span><span class="step-body">Tunnel + wildcard</span></span></div>
-          <div class="step-tab" data-progress="3"><span class="step-number">4</span><span><span class="step-title">Review</span><span class="step-body">Install</span></span></div>
+          <div class="step-tab active" data-progress="0" aria-current="step"><span class="step-icon">{_nav_icon("domain")}</span><span class="step-title">Domain</span></div>
+          <div class="step-tab" data-progress="1"><span class="step-icon">{_nav_icon("github")}</span><span class="step-title">GitHub</span></div>
+          <div class="step-tab" data-progress="2"><span class="step-icon">{_nav_icon("cloudflare")}</span><span class="step-title">Cloudflare</span></div>
+          <div class="step-tab" data-progress="3"><span class="step-icon">{_nav_icon("review")}</span><span class="step-title">Review</span></div>
         </nav>
       </aside>
 
@@ -749,8 +754,8 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               </div>
               <aside class="step-aside">
                 <div class="provider-header">
-                  <div><strong>Public URLs</strong><p>These values are derived from the domain.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs</a>
+                  <div><strong>Public URLs</strong><p>Derived from the domain.</p></div>
+                  <a class="docs-link" href="https://developers.cloudflare.com/dns/zone-setups/reference/domain-status/" target="_blank" rel="noopener noreferrer">Cloudflare DNS docs ↗</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>Dashboard</span><span class="value mono" id="domain-dashboard">https://example.com</span></div>
@@ -758,7 +763,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
                 </div>
                 <div class="validation-box">
                   <p class="validation-title">Domain check</p>
-                  <p class="validation-copy">MyPaaS resolves the domain from this machine. Project wildcard routing is verified again after the tunnel is configured.</p>
+                  <p class="validation-copy">Resolve the domain from this machine. Wildcard routing is verified after the tunnel is configured.</p>
                   <div class="preflight-row">
                     <button type="button" class="secondary-button" id="check-domain-button">Check domain</button>
                     <span class="preflight-status" id="domain-preflight-status" aria-live="polite"></span>
@@ -773,7 +778,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <div class="step-primary">
                 <div class="section-heading">
                   <h3>Owner and OAuth credentials</h3>
-                  <p>Use the verified primary email on the GitHub account that will own this MyPaaS instance.</p>
+                  <p>Use the verified primary email on the GitHub account that will own this instance.</p>
                 </div>
                 <div class="field-grid" style="max-width: 52rem;">
                   <div class="field-group">
@@ -791,14 +796,14 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
                   <div class="field-group">
                     <label class="field-label" for="GITHUB_CALLBACK_URL">Callback URL</label>
                     <input class="field-input mono" id="GITHUB_CALLBACK_URL" name="GITHUB_CALLBACK_URL" required type="url" autocomplete="off" data-generated="{str(callback_is_generated).lower()}" value="{base.esc(callback)}">
-                    <p class="field-hint">This must match the GitHub OAuth App callback exactly.</p>
+                    <p class="field-hint">Must match the GitHub OAuth App callback exactly.</p>
                   </div>
                 </div>
               </div>
               <aside class="step-aside">
                 <div class="provider-header">
                   <div><strong>GitHub OAuth App</strong><p>Create one OAuth App and paste its credentials on the left.</p></div>
-                  <a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs</a>
+                  <a class="docs-link" href="https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app" target="_blank" rel="noopener noreferrer">GitHub docs ↗</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>App name</span><span class="value">MyPaaS</span></div>
@@ -807,7 +812,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
                 </div>
                 <div class="validation-box">
                   <p class="validation-title">OAuth check</p>
-                  <p class="validation-copy">MyPaaS checks the Client ID, Client Secret, and callback format. Owner identity is verified during sign-in.</p>
+                  <p class="validation-copy">Checks Client ID, Client Secret, and callback format. Owner identity is verified during sign-in.</p>
                   <div class="preflight-row">
                     <button type="button" class="secondary-button" id="check-github-button">Test GitHub</button>
                     <span class="preflight-status" id="github-preflight-status" aria-live="polite"></span>
@@ -831,7 +836,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
               <aside class="step-aside">
                 <div class="provider-header">
                   <div><strong>Published routes</strong><p>Create the dashboard and wildcard routes in the same tunnel.</p></div>
-                  <a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs</a>
+                  <a class="docs-link" href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener noreferrer">Cloudflare Tunnel docs ↗</a>
                 </div>
                 <div class="value-list">
                   <div class="value-row"><span>Dashboard</span><span class="value mono" id="cf-root-example">example.com</span></div>
@@ -840,7 +845,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
                 </div>
                 <div class="validation-box">
                   <p class="validation-title">Tunnel and routing check</p>
-                  <p class="validation-copy">MyPaaS briefly connects with the token, then confirms that project wildcard DNS resolves from this machine.</p>
+                  <p class="validation-copy">Briefly connects with the token, then confirms project wildcard DNS from this machine.</p>
                   <div class="preflight-row">
                     <button type="button" class="secondary-button" id="check-cloudflare-button">Test tunnel</button>
                     <span class="preflight-status" id="cloudflare-preflight-status" aria-live="polite"></span>
@@ -878,9 +883,7 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
             </div>
             <details class="advanced">
               <summary>Advanced generated values</summary>
-              <div class="advanced-body field-grid two">
-                {advanced_fields}
-              </div>
+              <div class="advanced-body field-grid two">{advanced_fields}</div>
             </details>
           </section>
 
