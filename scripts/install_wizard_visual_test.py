@@ -1,5 +1,4 @@
 import importlib.util
-import os
 import unittest
 from pathlib import Path
 
@@ -47,33 +46,58 @@ class InstallWizardVisualContractTest(unittest.TestCase):
             self.assertIn(token, css)
             self.assertIn(token, visual)
 
-    def test_installer_uses_flat_compact_workspace_geometry(self) -> None:
+    def test_installer_is_full_workspace_not_centered_panel(self) -> None:
         html = APP.form_html().decode("utf-8")
 
-        self.assertIn("Installer visual contract mirrors", html)
+        self.assertIn("Standalone installer implementation of frontend/DESIGN.md", html)
         self.assertIn("grid-template-columns: 12rem minmax(0, 1fr)", html)
-        self.assertIn("form.panel { min-width: 0; border-left: 1px solid var(--workspace-divider); }", html)
-        self.assertIn(".panel { border: 0; border-radius: 0;", html)
+        self.assertIn("min-height: calc(100vh - 56px)", html)
+        self.assertIn('class="setup-form"', html)
         self.assertIn("min-height: 36px", html)
-        self.assertIn("border-bottom: 1px solid var(--workspace-divider)", html)
-        self.assertNotIn("decorative-gradient", html)
+        self.assertNotIn("1180px", html)
+        self.assertNotIn("meta-chip", html)
+        self.assertNotIn("guide-card", html)
+        self.assertNotIn("form.panel", html)
 
-    def test_installer_copy_matches_durable_owner_identity_contract(self) -> None:
+    def test_fresh_install_has_four_task_steps_and_restore_is_secondary(self) -> None:
         html = APP.form_html().decode("utf-8")
 
-        self.assertIn("Set up MyPaaS", html)
-        self.assertIn("Owner verified primary GitHub email", html)
-        self.assertIn("After binding, MyPaaS identifies this account by GitHub numeric user ID.", html)
-        self.assertIn("paste the token or the full Add-a-replica command", html)
-        self.assertNotIn("Only this whitelisted email can log in as the first owner.", html)
+        self.assertEqual(html.count("data-progress="), 4)
+        self.assertIn("Step 1 of 4", html)
+        self.assertIn('id="restore-toggle"', html)
+        self.assertIn('id="restore-panel"', html)
+        self.assertNotIn('<span class="step-title">Restore</span>', html)
+        self.assertIn('<span class="step-title">Domain</span>', html)
+        self.assertIn('<span class="step-title">GitHub</span>', html)
+        self.assertIn('<span class="step-title">Cloudflare</span>', html)
+        self.assertIn('<span class="step-title">Review</span>', html)
 
-    def test_visual_transform_is_idempotent(self) -> None:
-        source = APP.ORIGINAL_FORM_HTML().decode("utf-8")
-        once = VISUAL.apply_visual_contract(source)
-        twice = VISUAL.apply_visual_contract(once)
+    def test_installer_removes_subdomain_onboarding_slop(self) -> None:
+        html = APP.form_html().decode("utf-8")
 
-        self.assertEqual(once, twice)
-        self.assertEqual(once.count("Installer visual contract mirrors"), 1)
+        self.assertNotIn("panel.example.com", html)
+        self.assertNotIn("project.panel.example.com", html)
+        self.assertNotIn("Confirm DNS", html)
+        self.assertNotIn("Fresh Linux VM", html)
+        self.assertNotIn("Environment <code>", html)
+        self.assertIn("Use the root domain.", html)
+        self.assertIn("*.example.com", html)
+
+    def test_owner_and_provider_controls_follow_admin_patterns(self) -> None:
+        html = APP.form_html().decode("utf-8")
+        github_step = html.index('data-step="1"')
+        cloudflare_step = html.index('data-step="2"')
+        owner_position = html.index('id="OWNER_EMAIL"')
+
+        self.assertGreater(owner_position, github_step)
+        self.assertLess(owner_position, cloudflare_step)
+        self.assertIn("After binding, MyPaaS identifies the owner by GitHub numeric user ID.", html)
+        self.assertIn("GitHub docs ↗", html)
+        self.assertIn("Cloudflare Tunnel docs ↗", html)
+        self.assertIn('data-secret-target="GITHUB_CLIENT_SECRET"', html)
+        self.assertIn('data-secret-target="CLOUDFLARE_TUNNEL_TOKEN"', html)
+        self.assertIn('data-copy-target="github-homepage-example"', html)
+        self.assertIn('data-copy-target="github-callback-example"', html)
 
 
 if __name__ == "__main__":
