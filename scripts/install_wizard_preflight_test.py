@@ -85,7 +85,7 @@ class InstallWizardPreflightTest(unittest.TestCase):
 
         self.assertTrue(result["credentialsAccepted"])
         self.assertTrue(result["callbackFormatAccepted"])
-        self.assertIn("Owner identity is verified during sign-in", result["message"])
+        self.assertIn("owner identity is verified during sign-in", result["message"])
         self.assertEqual(captured["timeout"], 8)
         self.assertEqual(captured["request"].full_url, PREFLIGHT.GITHUB_TOKEN_URL)
 
