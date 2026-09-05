@@ -135,19 +135,9 @@ async function readPolicy() {
 	}
 }
 
-async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseInfo | null> {
-	const cacheKey = includePrereleases ? 'all' : 'stable';
-	const now = Date.now();
-	if (cachedRelease?.key === cacheKey && cachedRelease.expiresAt > now) return cachedRelease.value;
-
-	const response = await fetch('https://api.github.com/repos/nabilrn/MyPaas/releases?per_page=20', {
-		headers: GITHUB_HEADERS,
-		signal: AbortSignal.timeout(5000)
-	});
-	if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`);
-	const releases = await response.json() as GitHubRelease[];
-	const release = releases.find((item) => !item.draft && (includePrereleases || !item.prerelease));
-	const value = release?.tag_name ? {
+function releaseInfo(release: GitHubRelease | undefined): ReleaseInfo | null {
+	if (!release?.tag_name || release.draft) return null;
+	return {
 		tagName: release.tag_name,
 		name: release.name || release.tag_name,
 		targetSha: release.target_commitish || '',
@@ -155,7 +145,36 @@ async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseI
 		publishedAt: release.published_at || '',
 		htmlUrl: release.html_url || '',
 		body: release.body || ''
-	} : null;
+	};
+}
+
+async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseInfo | null> {
+	const cacheKey = includePrereleases ? 'all' : 'stable';
+	const now = Date.now();
+	if (cachedRelease?.key === cacheKey && cachedRelease.expiresAt > now) return cachedRelease.value;
+
+	const url = includePrereleases
+		? 'https://api.github.com/repos/nabilrn/MyPaas/releases?per_page=20'
+		: 'https://api.github.com/repos/nabilrn/MyPaas/releases/latest';
+	const response = await fetch(url, {
+		headers: GITHUB_HEADERS,
+		signal: AbortSignal.timeout(5000)
+	});
+	if (!includePrereleases && response.status === 404) {
+		cachedRelease = { key: cacheKey, expiresAt: now + GITHUB_CACHE_TTL_MS, value: null };
+		return null;
+	}
+	if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`);
+
+	let release: GitHubRelease | undefined;
+	if (includePrereleases) {
+		const releases = await response.json() as GitHubRelease[];
+		release = releases.find((item) => !item.draft);
+	} else {
+		const latest = await response.json() as GitHubRelease;
+		release = !latest.draft && !latest.prerelease ? latest : undefined;
+	}
+	const value = releaseInfo(release);
 	cachedRelease = { key: cacheKey, expiresAt: now + GITHUB_CACHE_TTL_MS, value };
 	return value;
 }
