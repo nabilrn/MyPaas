@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { AlertTriangle, Bell, CheckCircle2, ExternalLink, LoaderCircle, RotateCcw } from '@lucide/svelte';
+	import { AlertTriangle, Bell, CheckCircle2, ExternalLink, LoaderCircle, RotateCcw, X } from '@lucide/svelte';
 	import { dismissable } from '$lib/actions/dismissable';
 	import { isUpdateBusy, type UpdateSnapshot } from '$lib/system-update';
 	import ActionButton from './ActionButton.svelte';
@@ -9,10 +9,13 @@
 
 	export let enabled = false;
 
+	const UPDATE_BANNER_DISMISSED_KEY = 'mypaas:update-banner-dismissed';
+
 	let open = false;
 	let snapshot: UpdateSnapshot | null = null;
 	let loading = false;
 	let mounted = false;
+	let bannerVisible = false;
 	let poll: ReturnType<typeof setInterval> | undefined;
 
 	$: busy = isUpdateBusy(snapshot);
@@ -20,10 +23,11 @@
 	$: lastFailure = !releaseAvailable && !busy && (snapshot?.status.state === 'failed' || snapshot?.status.state === 'rolled_back' || snapshot?.status.state === 'blocked');
 	$: attention = releaseAvailable || busy || lastFailure;
 	$: bellLabel = releaseAvailable ? 'Notifications, MyPaaS update available' : busy ? 'Notifications, MyPaaS update in progress' : 'Notifications';
+	$: showUpdateBanner = bannerVisible && releaseAvailable && !busy && Boolean(snapshot?.release);
 
 	onMount(() => {
 		mounted = true;
-		syncPolling();
+		syncPolling(enabled);
 		return () => {
 			mounted = false;
 			if (poll) clearInterval(poll);
@@ -31,18 +35,21 @@
 		};
 	});
 
-	$: if (mounted) syncPolling();
+	// Keep enabled as an explicit reactive dependency. The owner role resolves
+	// after the shell mounts, so release discovery must start when it flips true.
+	$: if (mounted) syncPolling(enabled);
 
-	function syncPolling() {
-		if (enabled && !poll) {
+	function syncPolling(isEnabled: boolean) {
+		if (isEnabled && !poll) {
 			void refresh();
 			poll = setInterval(() => void refresh(false), 30_000);
 			return;
 		}
-		if (!enabled && poll) {
+		if (!isEnabled && poll) {
 			clearInterval(poll);
 			poll = undefined;
 			snapshot = null;
+			bannerVisible = false;
 			open = false;
 		}
 	}
@@ -56,13 +63,30 @@
 		if (open) void refresh();
 	}
 
+	function syncBanner(next: UpdateSnapshot) {
+		const release = next.release;
+		if (!release?.available || isUpdateBusy(next)) {
+			bannerVisible = false;
+			return;
+		}
+		bannerVisible = localStorage.getItem(UPDATE_BANNER_DISMISSED_KEY) !== release.tagName;
+	}
+
+	function dismissUpdateBanner() {
+		const tagName = snapshot?.release?.tagName;
+		if (tagName) localStorage.setItem(UPDATE_BANNER_DISMISSED_KEY, tagName);
+		bannerVisible = false;
+	}
+
 	async function refresh(showLoading = true) {
 		if (!enabled) return;
 		if (showLoading) loading = true;
 		try {
 			const response = await fetch('/internal/system-update', { cache: 'no-store', credentials: 'include' });
 			if (!response.ok) return;
-			snapshot = await response.json() as UpdateSnapshot;
+			const next = await response.json() as UpdateSnapshot;
+			snapshot = next;
+			syncBanner(next);
 		} catch {
 			// Keep the last useful snapshot while the dashboard or API restarts.
 		} finally {
@@ -72,6 +96,7 @@
 
 	async function openUpdatePage() {
 		open = false;
+		if (snapshot?.release?.available) dismissUpdateBanner();
 		await goto('/admin/update');
 	}
 
@@ -99,6 +124,26 @@
 				<span class="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-gray-950 ring-2 ring-white dark:bg-white dark:ring-neutral-950" aria-hidden="true"></span>
 			{/if}
 		</div>
+
+		{#if showUpdateBanner && snapshot?.release}
+			<div
+				data-update-banner
+				class="fixed left-3 top-[4.25rem] z-40 flex w-[min(22rem,calc(100vw-1.5rem))] items-center gap-2.5 rounded-md border border-gray-200 bg-white px-3 py-2.5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 lg:left-[4.25rem]"
+			>
+				<div class="min-w-0 flex-1">
+					<p class="truncate text-[13px] font-semibold text-gray-950 dark:text-white">MyPaaS {snapshot.release.tagName} is available</p>
+					<button type="button" class="app-focus mt-0.5 text-xs font-medium text-gray-500 hover:text-gray-950 dark:text-gray-400 dark:hover:text-white" on:click={openUpdatePage}>View update</button>
+				</div>
+				<button
+					type="button"
+					class="app-focus inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-neutral-900 dark:hover:text-white"
+					aria-label="Dismiss update notification"
+					on:click={dismissUpdateBanner}
+				>
+					<X class="h-3.5 w-3.5" aria-hidden="true" />
+				</button>
+			</div>
+		{/if}
 
 		{#if open}
 			<div class="overlay absolute right-0 mt-2 w-[min(23rem,calc(100vw-2rem))] overflow-hidden">
