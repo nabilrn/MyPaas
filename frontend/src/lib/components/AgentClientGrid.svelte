@@ -1,38 +1,42 @@
 <script lang="ts">
+	// LobeHub's static SVG package is the framework-neutral distribution of the same icon catalog.
+	// Pin the package version so the dashboard does not change underneath a deployed release.
 	const lobeIconBase = 'https://unpkg.com/@lobehub/icons-static-svg@1.94.0/icons';
 
-	const clients = [
+	const agents = [
 		{ label: 'OpenAI Codex', slug: 'codex' },
 		{ label: 'Claude Code', slug: 'claudecode' },
 		{ label: 'GitHub Copilot', slug: 'githubcopilot' },
 		{ label: 'Cursor', slug: 'cursor' },
 		{ label: 'Windsurf', slug: 'windsurf' },
 		{ label: 'Cline', slug: 'cline' },
-		{ label: 'Gemini CLI', slug: 'geminicli' },
-		{ label: 'Replit Agent', slug: 'replit' },
-		{ label: 'OpenCode', slug: 'opencode' },
 		{ label: 'Roo Code', slug: 'roocode' },
-		{ label: 'Qoder', slug: 'qoder' },
 		{ label: 'Amp', slug: 'amp' },
 		{ label: 'Junie', slug: 'junie' },
-		{ label: 'Kiro', slug: 'kiro' }
+		{ label: 'Qoder', slug: 'qoder' },
+		{ label: 'Replit', slug: 'replit' },
+		{ label: 'TRAE', slug: 'trae' },
+		{ label: 'Kilo Code', slug: 'kilocode' },
+		{ label: 'Antigravity', slug: 'antigravity' },
+		{ label: 'CodeBuddy', slug: 'codebuddy' },
+		{ label: 'Goose', slug: 'goose' }
 	] as const;
 </script>
 
-<div class="agent-marquee border-t border-[color:var(--workspace-divider)]" aria-label="Agent-friendly MCP clients">
+<div class="agent-marquee border-t border-[color:var(--workspace-divider)]" aria-label="AI agents compatible with the MyPaaS MCP bridge">
 	<div class="agent-marquee-track">
 		{#each [0, 1] as copy}
 			<div class="agent-marquee-set" aria-hidden={copy === 1 ? 'true' : undefined}>
-				{#each clients as client, index}
+				{#each agents as agent, index}
 					<div
 						class:agent-client-first={index === 0}
 						class="agent-client"
 						role={copy === 0 ? 'img' : undefined}
-						aria-label={copy === 0 ? client.label : undefined}
+						aria-label={copy === 0 ? agent.label : undefined}
 					>
-						<span class="agent-tooltip" role="tooltip">{client.label}</span>
+						<span class="agent-tooltip" role="tooltip">{agent.label}</span>
 						<span class="agent-client-mark" aria-hidden="true">
-							<img src={`${lobeIconBase}/${client.slug}.svg`} alt="" loading="lazy" decoding="async" />
+							<img src={`${lobeIconBase}/${agent.slug}.svg`} alt="" loading="lazy" decoding="async" />
 						</span>
 					</div>
 				{/each}
@@ -44,7 +48,7 @@
 <style>
 	.agent-marquee {
 		overflow: hidden;
-		padding: 2.25rem 0 1rem;
+		padding: 2.35rem 0 1.15rem;
 		-webkit-mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
 		mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
 	}
@@ -53,7 +57,7 @@
 		display: flex;
 		width: max-content;
 		will-change: transform;
-		animation: agent-marquee 34s linear infinite;
+		animation: agent-marquee 38s linear infinite;
 	}
 
 	.agent-marquee-set {
@@ -64,7 +68,7 @@
 
 	.agent-client {
 		position: relative;
-		margin-left: -0.8rem;
+		margin-left: -0.9rem;
 		flex: none;
 	}
 
@@ -74,8 +78,8 @@
 
 	.agent-client-mark {
 		display: inline-flex;
-		height: 3.5rem;
-		width: 3.5rem;
+		height: 3.65rem;
+		width: 3.65rem;
 		align-items: center;
 		justify-content: center;
 		border-radius: 9999px;
@@ -91,8 +95,8 @@
 
 	.agent-client-mark img {
 		display: block;
-		height: 1.75rem;
-		width: 1.75rem;
+		height: 1.8rem;
+		width: 1.8rem;
 		object-fit: contain;
 	}
 
@@ -103,7 +107,7 @@
 		bottom: calc(100% + 0.55rem);
 		z-index: 60;
 		width: max-content;
-		max-width: 10rem;
+		max-width: 11rem;
 		transform: translate(-50%, 0.25rem) scale(0.97);
 		border: 1px solid rgb(229 231 235);
 		border-radius: 0.375rem;
@@ -150,7 +154,7 @@
 
 	@keyframes agent-bounce {
 		0% { transform: translateY(0); }
-		42% { transform: translateY(-0.65rem); }
+		42% { transform: translateY(-0.7rem); }
 		68% { transform: translateY(-0.35rem); }
 		100% { transform: translateY(-0.5rem); }
 	}
