@@ -3,6 +3,11 @@ SELECT id, email, github_id, github_username, avatar_url, role, created_at, last
 FROM users
 WHERE email = $1;
 
+-- name: GetUserByGithubID :one
+SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+FROM users
+WHERE github_id = sqlc.arg(github_id)::text;
+
 -- name: GetUserByID :one
 SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
 FROM users
@@ -25,6 +30,7 @@ SET github_id = $2,
     avatar_url = $4,
     last_login_at = NOW()
 WHERE id = $1
+  AND (github_id IS NULL OR github_id = $2)
 RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at;
 
 -- name: ListUsers :many
