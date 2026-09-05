@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
 	oauthgithub "golang.org/x/oauth2/github"
@@ -24,10 +26,17 @@ import (
 
 const stateCookieName = "mypaas_oauth_state"
 
+type authQueries interface {
+	GetUserByEmail(context.Context, string) (db.User, error)
+	GetUserByGithubID(context.Context, string) (db.User, error)
+	GetUserByID(context.Context, uuid.UUID) (db.User, error)
+	UpdateUserGithubProfile(context.Context, db.UpdateUserGithubProfileParams) (db.User, error)
+}
+
 type Handler struct {
 	cfg     *config.Config
 	oauth   *oauth2.Config
-	queries *db.Queries
+	queries authQueries
 	tokens  *TokenService
 	github  *github.Service
 }
@@ -85,23 +94,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.queries.GetUserByEmail(r.Context(), profile.Email)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			httpx.DomainError(w, errs.ErrEmailNotWhitelisted)
-			return
-		}
-		httpx.DomainError(w, err)
-		return
-	}
-
-	githubID := strconv.FormatInt(profile.ID, 10)
-	user, err = h.queries.UpdateUserGithubProfile(r.Context(), db.UpdateUserGithubProfileParams{
-		ID:             user.ID,
-		GithubID:       &githubID,
-		GithubUsername: &profile.Login,
-		AvatarUrl:      &profile.AvatarURL,
-	})
+	user, err := h.resolveGitHubUser(r.Context(), profile)
 	if err != nil {
 		httpx.DomainError(w, err)
 		return
@@ -124,6 +117,47 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, h.cookie(AccessCookieName, tokens.AccessToken, time.Until(tokens.ExpiresAt), true))
 	http.SetCookie(w, h.cookie(RefreshCookieName, tokens.RefreshToken, time.Until(tokens.RefreshExpiresAt), true))
 	http.Redirect(w, r, mustJoinURL(h.cfg.FrontendURL, "/projects"), http.StatusFound)
+}
+
+func (h *Handler) resolveGitHubUser(ctx context.Context, profile githubProfile) (db.User, error) {
+	if profile.ID <= 0 {
+		return db.User{}, fmt.Errorf("github profile missing numeric id")
+	}
+	githubID := strconv.FormatInt(profile.ID, 10)
+
+	user, err := h.queries.GetUserByGithubID(ctx, githubID)
+	if err == nil {
+		return h.refreshGitHubProfile(ctx, user, githubID, profile)
+	}
+	if err != pgx.ErrNoRows {
+		return db.User{}, err
+	}
+
+	verifiedPrimaryEmail := strings.ToLower(strings.TrimSpace(profile.Email))
+	user, err = h.queries.GetUserByEmail(ctx, verifiedPrimaryEmail)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return db.User{}, errs.ErrEmailNotWhitelisted
+		}
+		return db.User{}, err
+	}
+	if user.GithubID != nil && *user.GithubID != githubID {
+		return db.User{}, errs.ErrForbidden
+	}
+	return h.refreshGitHubProfile(ctx, user, githubID, profile)
+}
+
+func (h *Handler) refreshGitHubProfile(ctx context.Context, user db.User, githubID string, profile githubProfile) (db.User, error) {
+	updated, err := h.queries.UpdateUserGithubProfile(ctx, db.UpdateUserGithubProfileParams{
+		ID:             user.ID,
+		GithubID:       &githubID,
+		GithubUsername: &profile.Login,
+		AvatarUrl:      &profile.AvatarURL,
+	})
+	if err == pgx.ErrNoRows {
+		return db.User{}, errs.ErrForbidden
+	}
+	return updated, err
 }
 
 func (h *Handler) Repositories(w http.ResponseWriter, r *http.Request) {
@@ -262,15 +296,12 @@ func fetchGitHubProfile(ctx context.Context, client *http.Client) (githubProfile
 	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return githubProfile{}, fmt.Errorf("decode github user: %w", err)
 	}
-	if profile.Email != "" {
-		return profile, nil
-	}
 
 	email, err := fetchPrimaryEmail(ctx, client)
 	if err != nil {
 		return githubProfile{}, err
 	}
-	profile.Email = email
+	profile.Email = strings.ToLower(strings.TrimSpace(email))
 	return profile, nil
 }
 
@@ -294,11 +325,11 @@ func fetchPrimaryEmail(ctx context.Context, client *http.Client) (string, error)
 		return "", fmt.Errorf("decode github emails: %w", err)
 	}
 	for _, item := range emails {
-		if item.Primary && item.Verified {
+		if item.Primary && item.Verified && strings.TrimSpace(item.Email) != "" {
 			return item.Email, nil
 		}
 	}
-	return "", errs.ErrEmailNotWhitelisted
+	return "", errs.ErrGitHubVerifiedPrimaryEmailRequired
 }
 
 func randomState() (string, error) {
