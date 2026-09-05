@@ -43,6 +43,11 @@
     gap: 0;
   }
 
+  /* The route header already owns the separator above General. */
+  :global(.admin-content > .page-shell > .admin-general-workspace) {
+    border-top-width: 0 !important;
+  }
+
   :global(.admin-content > .page-shell > section.rounded-lg) {
     border-left: 0 !important;
     border-right: 0 !important;
