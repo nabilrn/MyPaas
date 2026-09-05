@@ -11,10 +11,18 @@ const dashboardRoutes = import.meta.glob('../../routes/**/*.svelte', {
 
 describe('authenticated workspace surface contract', () => {
 	it('uses one shared surface for shell chrome and operational sections', () => {
-		expect(layout).toContain('class="app-shell min-h-screen lg:pl-14"');
+		expect(layout).toContain('class="app-shell lg:pl-14"');
 		expect(layout).toContain(':global(.app-workspace .workspace-section)');
 		expect(layout).toContain(':global(.app-workspace .surface-muted)');
 		expect(layout).toContain('background: var(--app-surface) !important;');
+	});
+
+	it('lets normal authenticated pages size to content instead of stacking viewport minimums', () => {
+		expect(layout).toContain('<main class="app-workspace relative" aria-busy={showMainLoader}>');
+		expect(layout).not.toContain('app-shell min-h-screen');
+		expect(layout).not.toContain('app-workspace relative min-h-[calc(100vh-3.5rem)]');
+		expect(layout).toContain(":global(.app-workspace[aria-busy='true'])");
+		expect(layout).toContain('min-height: calc(100dvh - 3.5rem);');
 	});
 
 	it('normalizes legacy neutral section fills while preserving structure as strokes', () => {
