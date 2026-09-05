@@ -48,7 +48,7 @@ export const administrationNavGroups: readonly AdministrationNavGroup[] = [
         href: "/admin/update",
         label: "System update",
         title: "System update",
-        description: "Install published MyPaaS releases and track updater progress.",
+        description: "Install qualified MyPaaS releases and track updater progress.",
       },
       {
         key: "backup",
