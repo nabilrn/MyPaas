@@ -32,6 +32,11 @@ type GitHubRelease = {
 	html_url?: string;
 };
 
+type GitHubComparison = {
+	status?: string;
+	ahead_by?: number;
+};
+
 const DEFAULT_STATUS: UpdateStatus = {
 	state: 'idle',
 	channel: 'unknown',
@@ -41,8 +46,15 @@ const DEFAULT_STATUS: UpdateStatus = {
 	message: 'Updater status is not available yet',
 	updatedAt: ''
 };
+const GITHUB_CACHE_TTL_MS = 5 * 60_000;
+const GITHUB_HEADERS = {
+	Accept: 'application/vnd.github+json',
+	'User-Agent': 'MyPaaS-dashboard',
+	'X-GitHub-Api-Version': '2022-11-28'
+};
 
 let cachedRelease: { key: string; expiresAt: number; value: ReleaseInfo | null } | null = null;
+let cachedComparison: { key: string; expiresAt: number; available: boolean } | null = null;
 
 function parseBool(value: string | undefined) {
 	return ['1', 'true', 'yes', 'on'].includes((value ?? '').trim().toLowerCase());
@@ -106,11 +118,7 @@ async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseI
 	if (cachedRelease?.key === cacheKey && cachedRelease.expiresAt > now) return cachedRelease.value;
 
 	const response = await fetch('https://api.github.com/repos/nabilrn/MyPaas/releases?per_page=20', {
-		headers: {
-			Accept: 'application/vnd.github+json',
-			'User-Agent': 'MyPaaS-dashboard',
-			'X-GitHub-Api-Version': '2022-11-28'
-		},
+		headers: GITHUB_HEADERS,
 		signal: AbortSignal.timeout(5000)
 	});
 	if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`);
@@ -124,8 +132,28 @@ async function fetchLatestRelease(includePrereleases: boolean): Promise<ReleaseI
 		publishedAt: release.published_at || '',
 		htmlUrl: release.html_url || ''
 	} : null;
-	cachedRelease = { key: cacheKey, expiresAt: now + 60_000, value };
+	cachedRelease = { key: cacheKey, expiresAt: now + GITHUB_CACHE_TTL_MS, value };
 	return value;
+}
+
+async function releaseIsAhead(currentSha: string, release: ReleaseInfo) {
+	if (!/^[0-9a-f]{40}$/.test(currentSha)) return false;
+	if (release.targetSha === currentSha) return false;
+
+	const cacheKey = `${currentSha}:${release.tagName}`;
+	const now = Date.now();
+	if (cachedComparison?.key === cacheKey && cachedComparison.expiresAt > now) return cachedComparison.available;
+
+	const compareUrl = `https://api.github.com/repos/nabilrn/MyPaas/compare/${encodeURIComponent(currentSha)}...${encodeURIComponent(release.tagName)}`;
+	const response = await fetch(compareUrl, {
+		headers: GITHUB_HEADERS,
+		signal: AbortSignal.timeout(5000)
+	});
+	if (!response.ok) throw new Error(`GitHub comparison returned ${response.status}`);
+	const comparison = await response.json() as GitHubComparison;
+	const available = comparison.status === 'ahead' && (comparison.ahead_by ?? 0) > 0;
+	cachedComparison = { key: cacheKey, expiresAt: now + GITHUB_CACHE_TTL_MS, available };
+	return available;
 }
 
 async function apiRequest(path: string, cookie: string) {
@@ -160,25 +188,24 @@ export const GET: RequestHandler = async ({ request }) => {
 			currentSha = settings.build_sha || currentSha;
 		}
 	} catch {
-		// Status remains useful while the API is restarting during an update.
+		// Status remains useful after the API returns from an update restart.
 	}
 
 	const channel = policy.channel || status.channel || 'release';
 	let release: ReleaseInfo | null = null;
+	let releaseAvailable = false;
 	if (channel === 'release') {
 		try {
 			release = await fetchLatestRelease(policy.includePrereleases);
+			if (release) releaseAvailable = await releaseIsAhead(currentSha, release);
 		} catch {
-			release = null;
+			// Fail closed: keep release actions disabled when GitHub cannot prove ancestry.
 		}
 	}
 
 	return json({
 		status: { ...status, channel, currentSha },
-		release: release ? {
-			...release,
-			available: Boolean(currentSha && /^[0-9a-f]{40}$/.test(release.targetSha) && release.targetSha !== currentSha)
-		} : null
+		release: release ? { ...release, available: releaseAvailable } : null
 	}, {
 		headers: { 'Cache-Control': 'no-store' }
 	});
