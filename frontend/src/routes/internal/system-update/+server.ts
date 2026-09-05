@@ -37,6 +37,10 @@ type GitHubComparison = {
 	ahead_by?: number;
 };
 
+type ApiEnvelope<T> = {
+	data: T;
+};
+
 const DEFAULT_STATUS: UpdateStatus = {
 	state: 'idle',
 	channel: 'unknown',
@@ -177,16 +181,17 @@ export const GET: RequestHandler = async ({ request }) => {
 		return json({ error: 'authentication service unavailable' }, { status: 503 });
 	}
 	if (!me.ok) return json({ error: 'authentication required' }, { status: me.status === 403 ? 403 : 401 });
-	const user = await me.json() as { role?: string };
-	if (user.role !== 'owner') return json({ error: 'owner access required' }, { status: 403 });
+	const meEnvelope = await me.json() as ApiEnvelope<{ role?: string }>;
+	const user = meEnvelope.data;
+	if (user?.role !== 'owner') return json({ error: 'owner access required' }, { status: 403 });
 
 	const [status, policy] = await Promise.all([readStatus(), readPolicy()]);
 	let currentSha = status.currentSha;
 	try {
 		const settingsResponse = await apiRequest('/settings', cookie);
 		if (settingsResponse.ok) {
-			const settings = await settingsResponse.json() as { build_sha?: string };
-			currentSha = settings.build_sha || currentSha;
+			const settingsEnvelope = await settingsResponse.json() as ApiEnvelope<{ build_sha?: string }>;
+			currentSha = settingsEnvelope.data?.build_sha || currentSha;
 		}
 	} catch {
 		// Status remains useful after the API returns from an update restart.
