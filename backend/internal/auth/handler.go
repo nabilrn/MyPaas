@@ -262,10 +262,10 @@ func fetchGitHubProfile(ctx context.Context, client *http.Client) (githubProfile
 	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return githubProfile{}, fmt.Errorf("decode github user: %w", err)
 	}
-	if profile.Email != "" {
-		return profile, nil
-	}
 
+	// OWNER_EMAIL is defined as the GitHub account's verified primary email.
+	// GitHub's public profile email is optional and can be a different address,
+	// so it is never authoritative for owner whitelist matching.
 	email, err := fetchPrimaryEmail(ctx, client)
 	if err != nil {
 		return githubProfile{}, err
