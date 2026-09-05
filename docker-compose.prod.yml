@@ -100,6 +100,14 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       ORIGIN: https://${PUBLIC_DOMAIN}
+      INTERNAL_API_URL: http://api:8080
+      MYPAAS_UPDATE_STATUS_FILE: /run/mypaas/update/status
+      MYPAAS_UPDATE_POLICY_FILE: /etc/mypaas/update.env
+    volumes:
+      # Dashboard may read updater state/policy only. Never expose the parent
+      # /run/mypaas directory because it also contains the Caddy admin socket.
+      - /run/mypaas/update:/run/mypaas/update:ro
+      - /etc/mypaas/update.env:/etc/mypaas/update.env:ro
     networks:
       - control
 

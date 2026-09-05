@@ -9,11 +9,15 @@ on:
 permissions:
   actions: read
   contents: write
+  packages: read
   pull-requests: read
 
 jobs:
   publish:
-    if: ${{ startsWith(github.event.pull_request.head.ref, 'release/v') && contains(github.event.pull_request.title, '[publish-release]') }}
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      startsWith(github.event.pull_request.head.ref, 'release/v') &&
+      contains(github.event.pull_request.title, '[publish-release]')
     runs-on: ubuntu-latest
     steps:
       - name: Validate release request
@@ -21,7 +25,8 @@ jobs:
         shell: bash
         env:
           RELEASE_BRANCH: ${{ github.event.pull_request.head.ref }}
-          RELEASE_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEASE_NOTES_SHA: ${{ github.event.pull_request.head.sha }}
+          RELEASE_SOURCE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           tag="${RELEASE_BRANCH#release/}"
@@ -29,13 +34,29 @@ jobs:
             echo "Invalid release tag derived from branch: $tag" >&2
             exit 1
           fi
-          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Invalid release source SHA: $RELEASE_SHA" >&2
+          for sha in "$RELEASE_NOTES_SHA" "$RELEASE_SOURCE_SHA"; do
+            if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Invalid release SHA: $sha" >&2
+              exit 1
+            fi
+          done
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$RELEASE_SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "notes_sha=$RELEASE_NOTES_SHA" >> "$GITHUB_OUTPUT"
+          echo "notes=docs/releases/${tag}.md" >> "$GITHUB_OUTPUT"
+
+      - name: Require release source to be current main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$main_sha" != "$TARGET_SHA" ]]; then
+            echo "Release source $TARGET_SHA is not current main $main_sha" >&2
             exit 1
           fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
-          echo "notes=docs/releases/${tag}.md" >> "$GITHUB_OUTPUT"
 
       - name: Verify exact release SHA passed CI
         shell: bash
@@ -46,7 +67,7 @@ jobs:
           set -euo pipefail
           gh api \
             -H "Accept: application/vnd.github+json" \
-            "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&event=pull_request&per_page=100" \
+            "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100" \
             > /tmp/runs.json
           python3 - <<'PY'
           import json
@@ -72,24 +93,48 @@ jobs:
           print(f"verified CI run {qualified.get('id')} completed/success for {target}")
           PY
 
-      - name: Checkout exact CI-tested release source
+      - name: Checkout release notes request
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release.outputs.sha }}
-          fetch-depth: 1
+          ref: ${{ steps.release.outputs.notes_sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify release notes
+      - name: Verify release notes-only request
         shell: bash
         env:
           NOTES_FILE: ${{ steps.release.outputs.notes }}
+          NOTES_SHA: ${{ steps.release.outputs.notes_sha }}
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$NOTES_SHA"
           test -f "$NOTES_FILE" || {
             echo "Missing release notes: $NOTES_FILE" >&2
             exit 1
           }
-          test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.sha }}"
+          mapfile -t changed_files < <(git diff --name-only "$TARGET_SHA" "$NOTES_SHA")
+          if (( ${#changed_files[@]} != 1 )) || [[ "${changed_files[0]:-}" != "$NOTES_FILE" ]]; then
+            printf 'Release request may only change %s. Observed:\n' "$NOTES_FILE" >&2
+            printf '  %s\n' "${changed_files[@]:-<none>}" >&2
+            exit 1
+          fi
+
+      - name: Log in to GHCR for immutable image qualification
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify immutable API and dashboard images exist
+        shell: bash
+        env:
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          docker manifest inspect "ghcr.io/nabilrn/mypaas-api:$TARGET_SHA" >/dev/null
+          docker manifest inspect "ghcr.io/nabilrn/mypaas-dashboard:$TARGET_SHA" >/dev/null
 
       - name: Publish GitHub release
         shell: bash
