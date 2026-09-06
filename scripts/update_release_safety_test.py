@@ -51,7 +51,10 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertLess(preflight, target_reset)
         self.assertIn('network disconnect -f "$network" mypaas-api', updater)
         self.assertIn('references missing network $network; refusing to update', updater)
-        self.assertIn('127.0.0.1:8080/health', updater)
+        self.assertIn('container_network_ip() {', updater)
+        self.assertIn('api_ip="$(container_network_ip "$docker_cmd" mypaas-api "$control_network")"', updater)
+        self.assertIn('"http://$api_ip:8080/health"', updater)
+        self.assertNotIn('http://127.0.0.1:8080/health', updater)
         self.assertIn('network membership is not isolated to $control_network', updater)
         self.assertIn('preflight_existing_runtime "$docker_cmd"\n    log "API runtime environment is missing', updater)
 
@@ -151,6 +154,21 @@ class UpdateReleaseSafetyContractTest(unittest.TestCase):
         self.assertIn("MYPAAS_BUILD_SHA", verify)
         self.assertIn("first_project_host", verify)
         self.assertIn("REQUIRE_PROJECT_ROUTE", verify)
+
+    def test_api_health_qualification_uses_control_network_not_host_port(self):
+        updater = self.text("scripts/update-vm.sh")
+        verify = self.text("scripts/verify-production.sh")
+
+        self.assertIn('container_network_ip() {', updater)
+        self.assertIn('container_network_ip() {', verify)
+        self.assertIn('api_control_ip="$(container_network_ip mypaas-api "$CONTROL_NETWORK")"', verify)
+        self.assertIn('api_base_url="http://${api_control_ip}:8080"', verify)
+        self.assertIn('"${api_base_url}/health"', verify)
+        self.assertIn('"${api_base_url}/ready"', verify)
+        self.assertIn('"${api_base_url}/metrics"', verify)
+        self.assertNotIn('http://127.0.0.1:8080/health', updater)
+        self.assertNotIn('http://127.0.0.1:8080/health', verify)
+        self.assertNotIn('http://127.0.0.1:8080/ready', verify)
 
     def test_owner_settings_exposes_build_sha(self):
         settings = self.text("backend/internal/settings/handler.go")
