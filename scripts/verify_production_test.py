@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 VERIFY_SCRIPT = ROOT_DIR / "scripts" / "verify-production.sh"
+COMPOSE_FILE = ROOT_DIR / "docker-compose.prod.yml"
 ASSET_EXTRACTOR = ROOT_DIR / "scripts" / "extract_dashboard_assets.py"
 CADDY_FILE = ROOT_DIR / "Caddyfile.prod"
 SVELTE_CONFIG = ROOT_DIR / "frontend" / "svelte.config.js"
@@ -43,6 +44,18 @@ class VerifyProductionTest(unittest.TestCase):
         self.assertIn('forbid_network mypaas-postgres-prod "$ROUTING_NETWORK"', content)
         self.assertIn('require_network mypaas-caddy-prod "$ROUTING_NETWORK"', content)
         self.assertIn('forbid_network mypaas-caddy-prod "$PROJECT_NETWORK"', content)
+
+    def test_control_plane_service_aliases_are_explicit_and_caddy_ingress_is_verified(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        verify = VERIFY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("      control:\n        aliases:\n          - api\n", compose)
+        self.assertIn("      control:\n        aliases:\n          - dashboard\n", compose)
+        self.assertIn("      control:\n        aliases:\n          - caddy\n", compose)
+        self.assertIn("      control:\n        aliases:\n          - cloudflared\n", compose)
+        self.assertIn("Checking API ingress through local Caddy", verify)
+        self.assertIn('-H "Host: $PUBLIC_DOMAIN" http://127.0.0.1/api/health', verify)
+        self.assertIn('-H "Host: $PUBLIC_DOMAIN" http://127.0.0.1/api/ready', verify)
 
     def test_caddy_admin_is_verified_only_through_unix_socket(self) -> None:
         content = VERIFY_SCRIPT.read_text(encoding="utf-8")
