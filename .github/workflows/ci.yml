@@ -109,6 +109,10 @@ jobs:
         run: pnpm check
       - name: Production build
         run: pnpm build
+      - name: Install browser engines
+        run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Cross-browser workspace geometry
+        run: pnpm exec playwright test --config=playwright.config.js workspace-geometry.spec.js
 
   scripts:
     name: Deployment checks
