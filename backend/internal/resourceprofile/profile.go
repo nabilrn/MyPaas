@@ -28,7 +28,7 @@ var minimumProfiles = map[string]Profile{
 		ID:       Static,
 		Label:    "Static/no-runtime",
 		MemoryMB: 64,
-		CPULimit: 0.10,
+		CPULimit: 0.01,
 	},
 	GoSmall: {
 		ID:       GoSmall,

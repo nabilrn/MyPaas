@@ -15,7 +15,7 @@ func TestConfigureDefaults(t *testing.T) {
 	})
 
 	if err := ConfigureDefaults(map[string]Profile{
-		Static: {MemoryMB: 128, CPULimit: 0.25},
+		Static: {MemoryMB: 64, CPULimit: 0.01},
 	}); err != nil {
 		t.Fatalf("ConfigureDefaults() error = %v", err)
 	}
@@ -23,14 +23,14 @@ func TestConfigureDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if memory != 128 || cpu != 0.25 {
-		t.Fatalf("Resolve() = %d MB / %.2f CPU, want 128 MB / 0.25 CPU", memory, cpu)
+	if memory != 64 || cpu != 0.01 {
+		t.Fatalf("Resolve() = %d MB / %.2f CPU, want 64 MB / 0.01 CPU", memory, cpu)
 	}
 }
 
 func TestConfigureDefaultsRejectsValuesBelowFloor(t *testing.T) {
 	if err := ConfigureDefaults(map[string]Profile{
-		Static: {MemoryMB: 32, CPULimit: 0.10},
+		Static: {MemoryMB: 64, CPULimit: 0.009},
 	}); err == nil {
 		t.Fatal("ConfigureDefaults() expected an error")
 	}

@@ -347,8 +347,8 @@ func validateSettings(values map[string]float64) error {
 				return errors.New("Node/Python and Compose memory must be a whole number between 256 and 32768 MB")
 			}
 		case "profile_static_cpu_limit":
-			if value < 0.10 || value > 32 {
-				return errors.New("static CPU must be between 0.10 and 32 cores")
+			if value < 0.01 || value > 32 {
+				return errors.New("static CPU must be between 0.01 and 32 cores")
 			}
 		case "profile_go_small_cpu_limit":
 			if value < 0.20 || value > 32 {
