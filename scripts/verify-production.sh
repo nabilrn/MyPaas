@@ -39,6 +39,13 @@ container_networks() {
   $DOCKER_BIN inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$1"
 }
 
+container_network_ip() {
+  local container="$1"
+  local network="$2"
+  $DOCKER_BIN inspect --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{printf "%s %s\n" $name $cfg.IPAddress}}{{end}}' "$container" 2>/dev/null \
+    | awk -v target="$network" '$1 == target { print $2; exit }'
+}
+
 container_env_value() {
   local container="$1"
   local key="$2"
@@ -130,6 +137,13 @@ require_network mypaas-caddy-prod "$CONTROL_NETWORK"
 require_network mypaas-caddy-prod "$ROUTING_NETWORK"
 forbid_network mypaas-caddy-prod "$PROJECT_NETWORK"
 
+api_control_ip="$(container_network_ip mypaas-api "$CONTROL_NETWORK")"
+if [[ -z "$api_control_ip" ]]; then
+  echo "mypaas-api has no address on control network $CONTROL_NETWORK." >&2
+  exit 1
+fi
+api_base_url="http://${api_control_ip}:8080"
+
 echo "Checking Cloudflare Tunnel container..."
 if [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' mypaas-cloudflared 2>/dev/null)" != "true" ]]; then
   echo "Cloudflare Tunnel container is not running." >&2
@@ -158,15 +172,15 @@ else
   echo "Skipping mypaas-statd verification because STATD_SOCKET is empty."
 fi
 
-echo "Checking API health..."
-curl -fsS http://127.0.0.1:8080/health >/dev/null
-curl -fsS http://127.0.0.1:8080/ready >/dev/null
+echo "Checking API health through $CONTROL_NETWORK ($api_control_ip)..."
+curl -fsS "${api_base_url}/health" >/dev/null
+curl -fsS "${api_base_url}/ready" >/dev/null
 if [[ "${ENABLE_METRICS:-false}" == "true" ]]; then
   if [[ -z "${METRICS_USERNAME:-}" || -z "${METRICS_PASSWORD:-}" ]]; then
     echo "ENABLE_METRICS=true requires METRICS_USERNAME and METRICS_PASSWORD." >&2
     exit 1
   fi
-  curl -fsS -u "$METRICS_USERNAME:$METRICS_PASSWORD" http://127.0.0.1:8080/metrics >/dev/null
+  curl -fsS -u "$METRICS_USERNAME:$METRICS_PASSWORD" "${api_base_url}/metrics" >/dev/null
 fi
 
 echo "Checking dashboard reachability..."

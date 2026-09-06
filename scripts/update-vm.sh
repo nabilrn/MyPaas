@@ -148,9 +148,17 @@ env_file_value() {
   grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
 }
 
+container_network_ip() {
+  local docker_cmd="$1"
+  local container="$2"
+  local network="$3"
+  $docker_cmd inspect --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{printf "%s %s\n" $name $cfg.IPAddress}}{{end}}' "$container" 2>/dev/null \
+    | awk -v target="$network" '$1 == target { print $2; exit }'
+}
+
 preflight_existing_runtime() {
   local docker_cmd="$1"
-  local control_network networks network
+  local control_network networks network api_ip
 
   # A missing API is handled by the normal deployment path. When it exists,
   # prove that it is in a safe state before any checkout reset or container
@@ -185,8 +193,12 @@ preflight_existing_runtime() {
     die "mypaas-api network membership is not isolated to $control_network after preflight"
   fi
 
-  if ! curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
-    die "existing MyPaas API is not healthy through 127.0.0.1:8080; refusing to update before host-port networking is repaired"
+  api_ip="$(container_network_ip "$docker_cmd" mypaas-api "$control_network")"
+  if [[ -z "$api_ip" ]]; then
+    die "mypaas-api has no address on control network $control_network after preflight"
+  fi
+  if ! curl -fsS --max-time 5 "http://$api_ip:8080/health" >/dev/null; then
+    die "existing MyPaas API is not healthy through control network $control_network at $api_ip:8080; refusing to update"
   fi
 }
 
@@ -306,8 +318,8 @@ main() {
   fi
 
   # From this point onward the update is actually ready to mutate runtime state.
-  # Clean any live DB Studio network attachment and prove the host-port path is
-  # healthy before tagging rollback images or resetting the checkout.
+  # Clean any live DB Studio network attachment and prove the API is healthy on
+  # the control network before tagging rollback images or resetting the checkout.
   preflight_existing_runtime "$docker_cmd"
 
   local rollback_tag api_image_id dashboard_image_id rollback_ready=false
