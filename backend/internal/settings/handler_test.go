@@ -129,7 +129,8 @@ func TestValidateSettings(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid", values: map[string]float64{"user_ram_quota_gb": 4, "user_cpu_quota": 2, "max_projects": 20, "build_timeout_minutes": 15}},
-		{name: "valid resource defaults", values: map[string]float64{"profile_static_memory_mb": 128, "profile_static_cpu_limit": 0.2, "profile_compose_main_memory_mb": 512, "profile_compose_main_cpu_limit": 0.5}},
+		{name: "valid resource defaults", values: map[string]float64{"profile_static_memory_mb": 128, "profile_static_cpu_limit": 0.01, "profile_compose_main_memory_mb": 512, "profile_compose_main_cpu_limit": 0.5}},
+		{name: "static CPU below floor", values: map[string]float64{"profile_static_cpu_limit": 0.009}, wantErr: true},
 		{name: "static memory below floor", values: map[string]float64{"profile_static_memory_mb": 32}, wantErr: true},
 		{name: "compose CPU below floor", values: map[string]float64{"profile_compose_main_cpu_limit": 0.2}, wantErr: true},
 		{name: "deployment concurrency is installation level", values: map[string]float64{"max_concurrent_deploys": 2}, wantErr: true},

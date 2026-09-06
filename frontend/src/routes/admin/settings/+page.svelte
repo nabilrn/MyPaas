@@ -36,7 +36,7 @@
 	const defaultSettings: NumericSettings = {
 		build_timeout_minutes: 0,
 		profile_static_memory_mb: 64,
-		profile_static_cpu_limit: 0.1,
+		profile_static_cpu_limit: 0.01,
 		profile_go_small_memory_mb: 128,
 		profile_go_small_cpu_limit: 0.2,
 		profile_node_python_memory_mb: 256,
@@ -45,7 +45,7 @@
 		profile_compose_main_cpu_limit: 0.35
 	};
 	const profileSettings: ProfileSetting[] = [
-		{ id: 'static', name: 'Static', description: 'Static and no-runtime projects', memoryKey: 'profile_static_memory_mb', cpuKey: 'profile_static_cpu_limit', minimumMemory: 64, minimumCPU: 0.1 },
+		{ id: 'static', name: 'Static', description: 'Static and no-runtime projects', memoryKey: 'profile_static_memory_mb', cpuKey: 'profile_static_cpu_limit', minimumMemory: 64, minimumCPU: 0.01 },
 		{ id: 'go-small', name: 'Go small', description: 'Small Go services', memoryKey: 'profile_go_small_memory_mb', cpuKey: 'profile_go_small_cpu_limit', minimumMemory: 128, minimumCPU: 0.2 },
 		{ id: 'node-python', name: 'Node / Python', description: 'Node.js and Python applications', memoryKey: 'profile_node_python_memory_mb', cpuKey: 'profile_node_python_cpu_limit', minimumMemory: 256, minimumCPU: 0.35 },
 		{ id: 'compose-main', name: 'Compose main', description: 'Primary Docker Compose service', memoryKey: 'profile_compose_main_memory_mb', cpuKey: 'profile_compose_main_cpu_limit', minimumMemory: 256, minimumCPU: 0.35 }
@@ -63,7 +63,7 @@
 	$: validationErrors = {
 		build_timeout_minutes: numberError(settings.build_timeout_minutes, 1, 1440, true, 'Use a whole number from 1 to 1440 minutes.'),
 		profile_static_memory_mb: numberError(settings.profile_static_memory_mb, 64, 32768, true, 'Use 64–32768 MB.'),
-		profile_static_cpu_limit: numberError(settings.profile_static_cpu_limit, 0.1, 32, false, 'Use 0.10–32 CPU.'),
+		profile_static_cpu_limit: numberError(settings.profile_static_cpu_limit, 0.01, 32, false, 'Use 0.01–32 CPU.'),
 		profile_go_small_memory_mb: numberError(settings.profile_go_small_memory_mb, 128, 32768, true, 'Use 128–32768 MB.'),
 		profile_go_small_cpu_limit: numberError(settings.profile_go_small_cpu_limit, 0.2, 32, false, 'Use 0.20–32 CPU.'),
 		profile_node_python_memory_mb: numberError(settings.profile_node_python_memory_mb, 256, 32768, true, 'Use 256–32768 MB.'),
@@ -103,7 +103,7 @@
 			settings = {
 				build_timeout_minutes: numericValue(data.build_timeout_minutes, defaultSettings.build_timeout_minutes),
 				profile_static_memory_mb: numericValue(data.profile_static_memory_mb, 64),
-				profile_static_cpu_limit: numericValue(data.profile_static_cpu_limit, 0.1),
+				profile_static_cpu_limit: numericValue(data.profile_static_cpu_limit, 0.01),
 				profile_go_small_memory_mb: numericValue(data.profile_go_small_memory_mb, 128),
 				profile_go_small_cpu_limit: numericValue(data.profile_go_small_cpu_limit, 0.2),
 				profile_node_python_memory_mb: numericValue(data.profile_node_python_memory_mb, 256),

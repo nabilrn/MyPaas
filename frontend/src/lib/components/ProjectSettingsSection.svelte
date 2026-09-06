@@ -136,7 +136,7 @@
 				const platformSettings = await api.admin.getSettings().catch(() => null);
 				if (platformSettings) {
 					const configured: Partial<Record<ResourceProfile, { memoryMb: number; cpuLimit: number }>> = {
-						static: { memoryMb: platformSettings.profile_static_memory_mb ?? 64, cpuLimit: platformSettings.profile_static_cpu_limit ?? 0.1 },
+						static: { memoryMb: platformSettings.profile_static_memory_mb ?? 64, cpuLimit: platformSettings.profile_static_cpu_limit ?? 0.01 },
 						'go-small': { memoryMb: platformSettings.profile_go_small_memory_mb ?? 128, cpuLimit: platformSettings.profile_go_small_cpu_limit ?? 0.2 },
 						'node-python': { memoryMb: platformSettings.profile_node_python_memory_mb ?? 256, cpuLimit: platformSettings.profile_node_python_cpu_limit ?? 0.35 },
 						'compose-main': { memoryMb: platformSettings.profile_compose_main_memory_mb ?? 256, cpuLimit: platformSettings.profile_compose_main_cpu_limit ?? 0.35 }

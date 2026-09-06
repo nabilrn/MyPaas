@@ -159,7 +159,7 @@
 		try {
 			const settings = await api.admin.getSettings();
 			const configured: Partial<Record<ResourceProfile, { memoryMb: string; cpuLimit: string }>> = {
-				static: { memoryMb: String(settings.profile_static_memory_mb ?? 64), cpuLimit: String(settings.profile_static_cpu_limit ?? 0.1) },
+				static: { memoryMb: String(settings.profile_static_memory_mb ?? 64), cpuLimit: String(settings.profile_static_cpu_limit ?? 0.01) },
 				'go-small': { memoryMb: String(settings.profile_go_small_memory_mb ?? 128), cpuLimit: String(settings.profile_go_small_cpu_limit ?? 0.2) },
 				'node-python': { memoryMb: String(settings.profile_node_python_memory_mb ?? 256), cpuLimit: String(settings.profile_node_python_cpu_limit ?? 0.35) },
 				'compose-main': { memoryMb: String(settings.profile_compose_main_memory_mb ?? 256), cpuLimit: String(settings.profile_compose_main_cpu_limit ?? 0.35) }
