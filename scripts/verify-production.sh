@@ -183,6 +183,10 @@ if [[ "${ENABLE_METRICS:-false}" == "true" ]]; then
   curl -fsS -u "$METRICS_USERNAME:$METRICS_PASSWORD" "${api_base_url}/metrics" >/dev/null
 fi
 
+echo "Checking API ingress through local Caddy..."
+curl -fsS -H "Host: $PUBLIC_DOMAIN" http://127.0.0.1/api/health >/dev/null
+curl -fsS -H "Host: $PUBLIC_DOMAIN" http://127.0.0.1/api/ready >/dev/null
+
 echo "Checking dashboard reachability..."
 curl -fsS http://127.0.0.1:3000/ >/dev/null
 

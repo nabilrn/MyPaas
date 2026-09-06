@@ -17,8 +17,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - control
-      - projects
+      control:
+        aliases:
+          - postgres
+      projects:
+        aliases:
+          - postgres
 
   api:
     image: ghcr.io/nabilrn/mypaas-api:${MYPAAS_IMAGE_TAG:-latest}
@@ -90,7 +94,9 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - control
+      control:
+        aliases:
+          - api
 
   dashboard:
     image: ghcr.io/nabilrn/mypaas-dashboard:${MYPAAS_IMAGE_TAG:-latest}
@@ -109,7 +115,9 @@ services:
       - /run/mypaas/update:/run/mypaas/update:ro
       - /etc/mypaas/update.env:/etc/mypaas/update.env:ro
     networks:
-      - control
+      control:
+        aliases:
+          - dashboard
 
   caddy:
     image: caddy:2-alpine
@@ -132,8 +140,12 @@ services:
       - api
       - dashboard
     networks:
-      - control
-      - routing
+      control:
+        aliases:
+          - caddy
+      routing:
+        aliases:
+          - caddy
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -143,7 +155,9 @@ services:
     depends_on:
       - caddy
     networks:
-      - control
+      control:
+        aliases:
+          - cloudflared
 
 volumes:
   postgres_data:
