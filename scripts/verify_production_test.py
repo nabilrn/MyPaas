@@ -12,6 +12,8 @@ CADDY_FILE = ROOT_DIR / "Caddyfile.prod"
 SVELTE_CONFIG = ROOT_DIR / "frontend" / "svelte.config.js"
 ROOT_LAYOUT = ROOT_DIR / "frontend" / "src" / "routes" / "+layout.svelte"
 
+# Keep the control-plane ingress contract coupled to production Compose aliases.
+
 
 class VerifyProductionTest(unittest.TestCase):
     def test_cloudflared_check_uses_docker_inspect_not_compose_ps_service(self) -> None:
