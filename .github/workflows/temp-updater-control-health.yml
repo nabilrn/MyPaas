@@ -1,0 +1,213 @@
+name: temp-updater-control-health
+
+on:
+  push:
+    branches:
+      - fix/updater-control-network-health
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/updater-control-network-health
+          fetch-depth: 0
+
+      - name: Patch updater health path
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}\n---OLD---\n{old}")
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'scripts/update-vm.sh',
+              '''env_file_value() {
+  local key="$1"
+  grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
+}
+
+preflight_existing_runtime() {''',
+              '''env_file_value() {
+  local key="$1"
+  grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true
+}
+
+container_network_ip() {
+  local docker_cmd="$1"
+  local container="$2"
+  local network="$3"
+  $docker_cmd inspect --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{printf "%s %s\\n" $name $cfg.IPAddress}}{{end}}' "$container" 2>/dev/null \\
+    | awk -v target="$network" '$1 == target { print $2; exit }'
+}
+
+preflight_existing_runtime() {'''
+          )
+
+          replace_once(
+              'scripts/update-vm.sh',
+              '''preflight_existing_runtime() {
+  local docker_cmd="$1"
+  local control_network networks network''',
+              '''preflight_existing_runtime() {
+  local docker_cmd="$1"
+  local control_network networks network api_ip'''
+          )
+
+          replace_once(
+              'scripts/update-vm.sh',
+              '''  if ! curl -fsS --max-time 5 http://127.0.0.1:8080/health >/dev/null; then
+    die "existing MyPaas API is not healthy through 127.0.0.1:8080; refusing to update before host-port networking is repaired"
+  fi''',
+              '''  api_ip="$(container_network_ip "$docker_cmd" mypaas-api "$control_network")"
+  if [[ -z "$api_ip" ]]; then
+    die "mypaas-api has no address on control network $control_network after preflight"
+  fi
+  if ! curl -fsS --max-time 5 "http://$api_ip:8080/health" >/dev/null; then
+    die "existing MyPaas API is not healthy through control network $control_network at $api_ip:8080; refusing to update"
+  fi'''
+          )
+
+          replace_once(
+              'scripts/verify-production.sh',
+              '''container_networks() {
+  $DOCKER_BIN inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$1"
+}
+
+container_env_value() {''',
+              '''container_networks() {
+  $DOCKER_BIN inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$1"
+}
+
+container_network_ip() {
+  local container="$1"
+  local network="$2"
+  $DOCKER_BIN inspect --format '{{range $name, $cfg := .NetworkSettings.Networks}}{{printf "%s %s\\n" $name $cfg.IPAddress}}{{end}}' "$container" 2>/dev/null \\
+    | awk -v target="$network" '$1 == target { print $2; exit }'
+}
+
+container_env_value() {'''
+          )
+
+          replace_once(
+              'scripts/verify-production.sh',
+              '''require_network mypaas-caddy-prod "$CONTROL_NETWORK"
+require_network mypaas-caddy-prod "$ROUTING_NETWORK"
+forbid_network mypaas-caddy-prod "$PROJECT_NETWORK"
+
+echo "Checking Cloudflare Tunnel container..."''',
+              '''require_network mypaas-caddy-prod "$CONTROL_NETWORK"
+require_network mypaas-caddy-prod "$ROUTING_NETWORK"
+forbid_network mypaas-caddy-prod "$PROJECT_NETWORK"
+
+api_control_ip="$(container_network_ip mypaas-api "$CONTROL_NETWORK")"
+if [[ -z "$api_control_ip" ]]; then
+  echo "mypaas-api has no address on control network $CONTROL_NETWORK." >&2
+  exit 1
+fi
+api_base_url="http://${api_control_ip}:8080"
+
+echo "Checking Cloudflare Tunnel container..."'''
+          )
+
+          replace_once(
+              'scripts/verify-production.sh',
+              '''echo "Checking API health..."
+curl -fsS http://127.0.0.1:8080/health >/dev/null
+curl -fsS http://127.0.0.1:8080/ready >/dev/null
+if [[ "${ENABLE_METRICS:-false}" == "true" ]]; then
+  if [[ -z "${METRICS_USERNAME:-}" || -z "${METRICS_PASSWORD:-}" ]]; then
+    echo "ENABLE_METRICS=true requires METRICS_USERNAME and METRICS_PASSWORD." >&2
+    exit 1
+  fi
+  curl -fsS -u "$METRICS_USERNAME:$METRICS_PASSWORD" http://127.0.0.1:8080/metrics >/dev/null
+fi''',
+              '''echo "Checking API health through $CONTROL_NETWORK ($api_control_ip)..."
+curl -fsS "${api_base_url}/health" >/dev/null
+curl -fsS "${api_base_url}/ready" >/dev/null
+if [[ "${ENABLE_METRICS:-false}" == "true" ]]; then
+  if [[ -z "${METRICS_USERNAME:-}" || -z "${METRICS_PASSWORD:-}" ]]; then
+    echo "ENABLE_METRICS=true requires METRICS_USERNAME and METRICS_PASSWORD." >&2
+    exit 1
+  fi
+  curl -fsS -u "$METRICS_USERNAME:$METRICS_PASSWORD" "${api_base_url}/metrics" >/dev/null
+fi'''
+          )
+
+          replace_once(
+              'scripts/update_release_safety_test.py',
+              '''        self.assertIn('references missing network $network; refusing to update', updater)
+        self.assertIn('127.0.0.1:8080/health', updater)
+        self.assertIn('network membership is not isolated to $control_network', updater)''',
+              '''        self.assertIn('references missing network $network; refusing to update', updater)
+        self.assertIn('container_network_ip() {', updater)
+        self.assertIn('api_ip="$(container_network_ip "$docker_cmd" mypaas-api "$control_network")"', updater)
+        self.assertIn('"http://$api_ip:8080/health"', updater)
+        self.assertNotIn('http://127.0.0.1:8080/health', updater)
+        self.assertIn('network membership is not isolated to $control_network', updater)'''
+          )
+
+          replace_once(
+              'scripts/update_release_safety_test.py',
+              '''    def test_post_update_verifier_checks_dashboard_identity_and_project_route(self):
+        verify = self.text("scripts/verify-production.sh")
+        self.assertIn("Checking dashboard reachability", verify)
+        self.assertIn("EXPECTED_BUILD_SHA", verify)
+        self.assertIn("EXPECTED_IMAGE_TAG", verify)
+        self.assertIn("MYPAAS_BUILD_SHA", verify)
+        self.assertIn("first_project_host", verify)
+        self.assertIn("REQUIRE_PROJECT_ROUTE", verify)
+''',
+              '''    def test_post_update_verifier_checks_dashboard_identity_and_project_route(self):
+        verify = self.text("scripts/verify-production.sh")
+        self.assertIn("Checking dashboard reachability", verify)
+        self.assertIn("EXPECTED_BUILD_SHA", verify)
+        self.assertIn("EXPECTED_IMAGE_TAG", verify)
+        self.assertIn("MYPAAS_BUILD_SHA", verify)
+        self.assertIn("first_project_host", verify)
+        self.assertIn("REQUIRE_PROJECT_ROUTE", verify)
+
+    def test_api_health_qualification_uses_control_network_not_host_port(self):
+        updater = self.text("scripts/update-vm.sh")
+        verify = self.text("scripts/verify-production.sh")
+
+        self.assertIn('container_network_ip() {', updater)
+        self.assertIn('container_network_ip() {', verify)
+        self.assertIn('api_control_ip="$(container_network_ip mypaas-api "$CONTROL_NETWORK")"', verify)
+        self.assertIn('api_base_url="http://${api_control_ip}:8080"', verify)
+        self.assertIn('"${api_base_url}/health"', verify)
+        self.assertIn('"${api_base_url}/ready"', verify)
+        self.assertIn('"${api_base_url}/metrics"', verify)
+        self.assertNotIn('http://127.0.0.1:8080/health', updater)
+        self.assertNotIn('http://127.0.0.1:8080/health', verify)
+        self.assertNotIn('http://127.0.0.1:8080/ready', verify)
+'''
+          )
+          PY
+
+      - name: Validate scripts and regression contract
+        run: |
+          bash -n scripts/update-vm.sh
+          bash -n scripts/verify-production.sh
+          python3 scripts/update_release_safety_test.py
+          python3 scripts/release_aware_update_test.py
+
+      - name: Commit bounded patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temp-updater-control-health.yml
+          git add scripts/update-vm.sh scripts/verify-production.sh scripts/update_release_safety_test.py
+          git commit -m "fix(updater): qualify API through control network"
+          git push origin HEAD:fix/updater-control-network-health
