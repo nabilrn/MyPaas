@@ -259,6 +259,9 @@ func (d *DockerCLI) WriteSanitizedComposeConfigMulti(ctx context.Context, dir, e
 }
 
 func (d *DockerCLI) ComposeUp(ctx context.Context, opts ComposeUpOptions, log func(string)) error {
+	if err := stripGeneratedComposeCPUHardCaps(opts); err != nil {
+		return err
+	}
 	args := composeBaseArgs(opts.EnvFile)
 	args = append(args, "-p", opts.ProjectName)
 	for _, file := range composeUpFiles(opts) {
@@ -896,6 +899,7 @@ func sanitizeComposeConfig(raw []byte) ([]byte, error) {
 		}
 		delete(service, "ports")
 		delete(service, "container_name")
+		stripComposeCPUFields(service)
 
 		if hc, ok := service["healthcheck"].(map[string]any); ok {
 			if test, ok := hc["test"].([]any); ok && len(test) > 1 {
