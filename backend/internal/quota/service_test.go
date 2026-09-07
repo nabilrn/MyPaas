@@ -43,7 +43,7 @@ func TestCheckUsage(t *testing.T) {
 			wantErr:       true,
 		},
 		{
-			name: "exceeds cpu",
+			name: "allows shared cpu caps across projects",
 			usage: Usage{
 				MemoryLimitMb: 6144,
 				CPULimit:      1,
@@ -51,17 +51,27 @@ func TestCheckUsage(t *testing.T) {
 				ProjectLimit:  20,
 			},
 			addedCPU: 0.5,
+		},
+		{
+			name: "exceeds per-project cpu cap",
+			usage: Usage{
+				MemoryLimitMb: 6144,
+				CPULimit:      1,
+				CPUUsed:       0.75,
+				ProjectLimit:  20,
+			},
+			addedCPU: 1.25,
 			wantErr:  true,
 		},
 		{
 			name: "allows cpu floating point boundary noise",
 			usage: Usage{
 				MemoryLimitMb: 6144,
-				CPULimit:      3,
-				CPUUsed:       2.0000000000000004,
+				CPULimit:      1,
+				CPUUsed:       0.75,
 				ProjectLimit:  20,
 			},
-			addedCPU: 1,
+			addedCPU: 1.0000000000000004,
 		},
 		{
 			name: "exceeds project count",
