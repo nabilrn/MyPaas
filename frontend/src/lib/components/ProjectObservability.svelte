@@ -22,7 +22,6 @@
 	$: visibleServices = services.filter((service) => !hiddenServices.has(service));
 	$: visibleItems = metricItems.filter((item) => visibleServices.includes(item.service));
 	$: resourceAllocation = projectResourceAllocation(project, visibleItems);
-	$: cpuLimit = resourceAllocation.cpuPercent ?? 0;
 	$: memoryLimit = resourceAllocation.memoryMb ?? 0;
 	$: cpuUsed = visibleItems.reduce((total, item) => total + item.cpu, 0);
 	$: memoryUsed = visibleItems.reduce((total, item) => total + item.memoryMb, 0);
@@ -176,7 +175,7 @@
 			<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
 				<div>
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Runtime</h2>
-					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Current resource usage against this project's allocation.</p>
+					<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Live CPU usage with shared host CPU, plus memory against hard allocation.</p>
 				</div>
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
@@ -218,9 +217,9 @@
 						<RuntimeUsageBar
 							label="CPU usage"
 							used={cpuUsed}
-							limit={cpuLimit}
-							valueLabel={`${formatCPU(cpuUsed)} / ${formatCPU(cpuLimit)}`}
+							valueLabel={`${formatCPU(cpuUsed)} in use`}
 							tone="cpu"
+							shared
 						/>
 					</div>
 					<RuntimeUsageBar
