@@ -140,7 +140,7 @@ func (d *DockerCLI) Run(ctx context.Context, opts RunOptions, log func(string)) 
 		"--name", opts.Name,
 		"-p", d.portMapping(opts),
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
-		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
+		"--cpus", "0",
 		"--restart", "unless-stopped",
 	}
 	if d.projectNetwork != "" {
@@ -177,11 +177,17 @@ func (d *DockerCLI) Stop(ctx context.Context, name string) error {
 }
 
 func (d *DockerCLI) Start(ctx context.Context, name string) error {
-	return runRequireContainer(ctx, "docker", "start", name)
+	if err := runRequireContainer(ctx, "docker", "start", name); err != nil {
+		return err
+	}
+	return runSimple(ctx, "docker", "update", "--cpus", "0", name)
 }
 
 func (d *DockerCLI) Restart(ctx context.Context, name string) error {
-	return runRequireContainer(ctx, "docker", "restart", name)
+	if err := runRequireContainer(ctx, "docker", "restart", name); err != nil {
+		return err
+	}
+	return runSimple(ctx, "docker", "update", "--cpus", "0", name)
 }
 
 func (d *DockerCLI) Rename(ctx context.Context, oldName, newName string) error {
@@ -272,7 +278,10 @@ func (d *DockerCLI) ComposeUp(ctx context.Context, opts ComposeUpOptions, log fu
 	if len(opts.Profiles) > 0 {
 		cmd.Env = append(cmd.Env, "COMPOSE_PROFILES="+strings.Join(opts.Profiles, ","))
 	}
-	return runLoggedCmd(ctx, cmd, log)
+	if err := runLoggedCmd(ctx, cmd, log); err != nil {
+		return err
+	}
+	return d.ensureComposeSharedCPU(ctx, opts.ProjectName)
 }
 
 // composeUpFiles returns the ordered list of -f files for a ComposeUp call:
@@ -319,7 +328,10 @@ func (d *DockerCLI) StartComposeProject(ctx context.Context, projectName string)
 	if err != nil {
 		return err
 	}
-	return runSimple(ctx, "docker", append([]string{"start"}, ids...)...)
+	if err := runSimple(ctx, "docker", append([]string{"start"}, ids...)...); err != nil {
+		return err
+	}
+	return d.ensureComposeSharedCPU(ctx, projectName)
 }
 
 func (d *DockerCLI) RestartComposeProject(ctx context.Context, projectName string) error {
@@ -327,7 +339,10 @@ func (d *DockerCLI) RestartComposeProject(ctx context.Context, projectName strin
 	if err != nil {
 		return err
 	}
-	return runSimple(ctx, "docker", append([]string{"restart"}, ids...)...)
+	if err := runSimple(ctx, "docker", append([]string{"restart"}, ids...)...); err != nil {
+		return err
+	}
+	return d.ensureComposeSharedCPU(ctx, projectName)
 }
 
 func (d *DockerCLI) RemoveComposeProject(ctx context.Context, projectName string) error {
