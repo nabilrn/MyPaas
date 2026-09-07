@@ -9,15 +9,18 @@ class ComponentFastPathTests(unittest.TestCase):
     def text(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8")
 
-    def test_frontend_only_ci_skips_heavy_jobs(self):
+    def test_frontend_only_ci_skips_backend_and_deployment_but_keeps_podman(self):
         workflow = self.text(".github/workflows/ci.yml")
         self.assertIn("name: Detect change scope", workflow)
         self.assertIn("frontend_only: ${{ steps.scope.outputs.frontend_only }}", workflow)
-        self.assertGreaterEqual(
+        self.assertEqual(
             workflow.count("if: needs.changes.outputs.frontend_only != 'true'"),
-            3,
+            2,
         )
         self.assertIn("name: Frontend checks", workflow)
+        self.assertIn("name: Podman compatibility gate", workflow)
+        podman_job = workflow.split("  podman:\n", 1)[1]
+        self.assertNotIn("frontend_only != 'true'", podman_job)
 
     def test_frontend_only_publish_skips_api_build(self):
         workflow = self.text(".github/workflows/docker-publish.yml")
