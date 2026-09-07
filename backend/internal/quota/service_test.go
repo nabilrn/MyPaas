@@ -22,8 +22,6 @@ func TestCheckUsage(t *testing.T) {
 			usage: Usage{
 				MemoryLimitMb: 6144,
 				MemoryUsedMb:  512,
-				CPULimit:      3,
-				CPUUsed:       0.5,
 				ProjectLimit:  20,
 				ProjectCount:  1,
 			},
@@ -36,38 +34,25 @@ func TestCheckUsage(t *testing.T) {
 			usage: Usage{
 				MemoryLimitMb: 1024,
 				MemoryUsedMb:  768,
-				CPULimit:      3,
 				ProjectLimit:  20,
 			},
 			addedMemoryMb: 512,
 			wantErr:       true,
 		},
 		{
-			name: "exceeds cpu",
+			name: "does not reject shared cpu usage",
 			usage: Usage{
 				MemoryLimitMb: 6144,
 				CPULimit:      1,
 				CPUUsed:       0.75,
 				ProjectLimit:  20,
 			},
-			addedCPU: 0.5,
-			wantErr:  true,
-		},
-		{
-			name: "allows cpu floating point boundary noise",
-			usage: Usage{
-				MemoryLimitMb: 6144,
-				CPULimit:      3,
-				CPUUsed:       2.0000000000000004,
-				ProjectLimit:  20,
-			},
-			addedCPU: 1,
+			addedCPU: 100,
 		},
 		{
 			name: "exceeds project count",
 			usage: Usage{
 				MemoryLimitMb: 6144,
-				CPULimit:      3,
 				ProjectLimit:  2,
 				ProjectCount:  2,
 			},
@@ -106,12 +91,12 @@ func TestDeclaredResources(t *testing.T) {
 	if memory != 3328 {
 		t.Fatalf("memory = %d, want 3328", memory)
 	}
-	if cpu != 2.75 {
-		t.Fatalf("cpu = %.2f, want 2.75", cpu)
+	if cpu != 0 {
+		t.Fatalf("cpu = %.2f, want shared CPU reservation 0", cpu)
 	}
 }
 
-func TestDeclaredResourcesUsesDeploymentDefaultsForSecondaryServices(t *testing.T) {
+func TestDeclaredResourcesUsesMemoryDefaultForSecondaryServices(t *testing.T) {
 	memory, cpu, err := DeclaredResources(512, 0.5, "app", json.RawMessage(`{"worker": {}}`))
 	if err != nil {
 		t.Fatalf("DeclaredResources returned error: %v", err)
@@ -119,8 +104,8 @@ func TestDeclaredResourcesUsesDeploymentDefaultsForSecondaryServices(t *testing.
 	if memory != 768 {
 		t.Fatalf("memory = %d, want 768", memory)
 	}
-	if cpu != 0.75 {
-		t.Fatalf("cpu = %.2f, want 0.75", cpu)
+	if cpu != 0 {
+		t.Fatalf("cpu = %.2f, want shared CPU reservation 0", cpu)
 	}
 }
 
