@@ -11,7 +11,7 @@ help:
 	@echo "  dev              Start development environment (dependencies + auto-reload)"
 	@echo "  test             Run all tests (backend + frontend)"
 	@echo "  lint             Lint code (golangci-lint + frontend checks)"
-	@echo "  build            Build backend binary + frontend"
+	@echo "  build            Build backend binaries + frontend"
 	@echo "  migrate-up       Run database migrations up"
 	@echo "  migrate-down     Roll back database migrations"
 	@echo "  sqlc             Generate sqlc code from queries"
@@ -67,11 +67,13 @@ lint-frontend:
 build: build-backend build-frontend
 
 build-backend:
-	@echo "Building backend binary..."
+	@echo "Building backend binaries..."
 	@cd $(BACKEND_DIR) && go build -o bin/mypaas-api ./cmd/api
 	@cd $(BACKEND_DIR) && go build -o bin/mypaas ./cmd/cli
+	@cd $(BACKEND_DIR) && go build -o bin/mypaas-sqlite-helper ./cmd/sqlite-helper
 	@echo "✓ Binary: $(BACKEND_DIR)/bin/mypaas-api"
 	@echo "✓ Binary: $(BACKEND_DIR)/bin/mypaas"
+	@echo "✓ Binary: $(BACKEND_DIR)/bin/mypaas-sqlite-helper"
 
 build-frontend:
 	@echo "Building frontend..."
