@@ -1,4 +1,4 @@
-.PHONY: dev test lint build migrate-up sqlc smoke-dogfood verify-prod compat-validate compat-list install-vm help clean
+.PHONY: dev test lint build migrate-up sqlc smoke-dogfood verify-prod install-vm help clean
 
 # Variables
 BACKEND_DIR := backend
@@ -17,8 +17,6 @@ help:
 	@echo "  sqlc             Generate sqlc code from queries"
 	@echo "  smoke-dogfood    Verify the 5 local dogfood routes by response content"
 	@echo "  verify-prod      Verify production containers, health, Caddy, and CLI"
-	@echo "  compat-validate  Validate OSS compatibility catalog and Compose manifests"
-	@echo "  compat-list      List real-world OSS compatibility targets"
 	@echo "  install-vm       Install and start MyPaas on a Linux VM"
 	@echo "  clean            Remove build artifacts and temporary files"
 	@echo "  help             Show this help message"
@@ -105,12 +103,6 @@ smoke-dogfood:
 
 verify-prod:
 	@bash scripts/verify-production.sh
-
-compat-validate:
-	@python3 compatibility/run.py validate --compose
-
-compat-list:
-	@python3 compatibility/run.py list
 
 install-vm:
 	@bash scripts/install-vm.sh

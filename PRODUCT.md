@@ -21,7 +21,6 @@ MyPaaS can:
 - provide project-scoped persistent storage and owned-resource cleanup;
 - provide PostgreSQL provisioning, DB Studio Lite, backups, restore, and migration tooling;
 - expose CLI, REST API, webhooks, and an optional local MCP bridge;
-- provide OSS application templates backed by a compatibility catalog;
 - use optional `mypaas-statd` telemetry with an engine-metrics fallback.
 
 Fresh supported Linux installations default to rootful Podman through the Docker-compatible command/socket contract used by the control plane. Docker Engine remains an explicit compatibility mode.
@@ -70,6 +69,7 @@ MyPaaS currently does **not** provide:
 - generic raw TCP/SSH/UDP public routing;
 - arbitrary custom domains per additional route;
 - registry proxy/cache/mirror behavior or a general multi-registry credential manager;
+- a separate one-click application template/catalog product surface;
 - supported in-place Docker-to-Podman state migration;
 - a universal application-capacity guarantee.
 

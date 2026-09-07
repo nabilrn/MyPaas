@@ -23,7 +23,6 @@ Current platform capabilities include:
 - optional shared PostgreSQL and DB Studio Lite for PostgreSQL/MySQL/MariaDB;
 - backup/restore/migration tooling;
 - CLI, REST API, webhooks, audit logs, and optional local MCP bridge;
-- OSS templates + compatibility catalog;
 - optional `mypaas-statd` telemetry;
 - rootful Podman by default on fresh supported Linux hosts, with Docker Engine as compatibility mode.
 
@@ -51,12 +50,13 @@ Do not introduce or claim these without an explicit product-direction change:
 - hostile multi-tenant isolation;
 - generic raw TCP/SSH/UDP routing;
 - arbitrary public host-port forwarding;
+- a separate one-click application template/catalog product surface;
 - universal project-count, concurrent-user, RPS, or VM-size capacity guarantees;
 - broad kernel/sysctl/NIC tuning programs;
 - repeated throughput/k6 matrices without a concrete product defect;
 - speculative framework/platform support that is not driven by a real application gap.
 
-Compatibility work answers: **can MyPaaS correctly host this declared application pattern within the documented single-host boundary?** It is not a capacity benchmark.
+Workload qualification answers: **can MyPaaS correctly host this declared application pattern within the documented single-host boundary?** It is not a capacity benchmark.
 
 ## Container runtime contract
 
@@ -190,7 +190,7 @@ Do not assume engine-managed volume state is portable between Docker and Podman;
 - Prefer small reusable platform primitives over application-specific patches.
 - Fix real defects narrowly.
 - Do not redesign unrelated UI while fixing backend/runtime behavior.
-- Do not create a second deployment engine for templates/compatibility fixtures.
+- Do not create a second deployment engine for workload fixtures or application-specific onboarding.
 - Keep functions/components consistent with existing package/component conventions.
 - Do not introduce a new dependency without a clear need.
 - Never log secrets, JWTs, OAuth tokens, registry passwords, webhook secrets, or decrypted environment values.
@@ -205,7 +205,7 @@ For source changes, use the relevant backend/frontend/script/Compose/Podman gate
 
 Do **not** repeat unrelated runtime matrices merely to preserve a historical gate count.
 
-When an OSS compatibility run fails:
+When a real OSS workload qualification fails:
 
 1. classify the failure;
 2. determine whether it is a MyPaaS defect, application/config issue, host-resource limit, or intentional boundary;
@@ -247,7 +247,7 @@ make test
 make build
 ```
 
-Use the repository's existing scripts/workflows for production Compose validation, compatibility checks, and Podman compatibility rather than inventing parallel harnesses.
+Use the repository's existing scripts/workflows for production Compose validation and Podman compatibility rather than inventing parallel harnesses.
 
 ## Documentation rule
 
@@ -258,7 +258,6 @@ When a feature changes current product behavior, update the smallest relevant se
 - `ROADMAP.md` when product direction/delivery state changes;
 - current architecture/security docs;
 - the accepted ADR;
-- compatibility docs when the capability affects workload support;
 - `CHANGELOG.md`.
 
 Do not rewrite historical PRD/release records to pretend they were always current.

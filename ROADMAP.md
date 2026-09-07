@@ -12,7 +12,7 @@ Prioritize work that is:
 - useful for real application deployment or operation;
 - reversible and understandable on one host;
 - compatible with the existing Docker/Compose/static/OCI deployment engine;
-- directly visible as better deployment, database, compatibility, or dashboard UX;
+- directly visible as better deployment, database, or dashboard UX;
 - justified by a real application onboarding problem or concrete product defect.
 
 Do not add architecture merely to create a future scaling story.
@@ -35,17 +35,9 @@ These are established product capabilities and should be maintained rather than 
 - shared PostgreSQL provisioning with generated credentials;
 - DB Studio safe row browsing/editing and schema metadata for PostgreSQL, MySQL, and MariaDB;
 - backup, restore-drill, and migration tooling within documented boundaries;
-- the real-world compatibility catalog and runner;
-- catalog-backed OSS application templates;
 - the existing dashboard information architecture.
 
 ## DELIVERED PRODUCTIZATION
-
-### OSS App Templates v1
-
-Delivered on `main`.
-
-The template catalog turns catalogued deployment patterns into a user-facing install path without creating a second deployment engine. Initial templates cover representative image, stateful, database-backed, multi-service, and multi-route applications. Live compatibility status remains evidence-specific and must not be inferred merely because a template exists.
 
 ### DB Studio schema metadata and ERD
 
@@ -60,14 +52,6 @@ Delivered on `main`.
 MyPaaS can authenticate OCI image-mode pulls to one configured registry without modifying the operator's persistent Docker credential store. Credentials are scoped by registry host and an isolated temporary Docker configuration is used for login/pull. Pull failures distinguish authentication, permission, rate-limit, and missing-image cases where registry output supports that classification.
 
 The implementation intentionally does not add a registry proxy, pull-through cache, or credential inheritance into project Compose environments. See ADR-022.
-
-### Compatibility status in product UX
-
-Delivered on `main`.
-
-Installable templates expose a stable catalog identity and deployment-pattern guidance without fabricating a live compatibility result. The dashboard can surface persistent-storage expectations, resource guidance, setup requirements, and known platform boundaries.
-
-Compatibility status is not a throughput, concurrent-user, hardware-capacity, or production-readiness claim. Live evidence remains in compatibility run artifacts, issues, or pull requests.
 
 ### Bounded Compose additional HTTP routes
 
@@ -89,15 +73,15 @@ This feature intentionally does not provide raw TCP, SSH, UDP, arbitrary route h
 
 There is no broad feature program required before the current beta can be evaluated as a product.
 
-The next work should be **compatibility-driven only**:
+The next work should be **real-workload-driven only**:
 
-- deploy representative real OSS applications from the compatibility catalog;
+- deploy representative real applications through the normal Dockerfile, Compose, static, or OCI image paths;
 - classify failures before changing MyPaaS;
 - fix only reusable platform-owned gaps or real correctness defects;
-- extend templates/env generation only when an application requires a reusable primitive;
+- extend repository/env discovery only when an application demonstrates a reusable onboarding need;
 - keep documentation and landing-page claims aligned with verified behavior.
 
-Examples of valid template/env improvements when demonstrated by a real app:
+Examples of valid onboarding improvements when demonstrated by a real app:
 
 - generated secrets;
 - generated public URL/host values;
@@ -105,7 +89,7 @@ Examples of valid template/env improvements when demonstrated by a real app:
 - explicit resource warnings;
 - documented persistent-storage requirements.
 
-Do not add template-specific application code patches.
+Do not add application-specific code patches to make one workload pass.
 
 ## DEFER
 
@@ -145,7 +129,8 @@ The following are not active MyPaaS product targets:
 - Kubernetes, Nomad, Swarm, service mesh, distributed scheduler, or multi-node orchestration plans;
 - hostile multi-tenant isolation claims;
 - generic raw TCP/SSH/UDP routing or arbitrary public port forwarding;
-- user-count, RPS, or hardware-capacity promises derived from compatibility fixtures.
+- a separate one-click application template/catalog product surface;
+- user-count, RPS, or hardware-capacity promises derived from workload fixtures.
 
 Historical experiments may remain in Git history, closed pull requests, historical PRD/release notes, or archived evidence. They must not be presented as current product direction.
 
@@ -172,10 +157,10 @@ Keep out of scope unless the product direction changes:
 - Redis administration;
 - general-purpose external database connection management.
 
-## Compatibility policy
+## Workload qualification policy
 
-The compatibility suite answers one question: **can MyPaaS correctly host this declared application pattern within its documented boundary?**
+A workload qualification answers one question: **can MyPaaS correctly host this declared application pattern within its documented boundary?**
 
-A `PASS` means the declared deployment and smoke/lifecycle checks worked on the tested host. It does not establish throughput, concurrent-user capacity, enterprise readiness, or a minimum universal hardware specification.
+A successful qualification means the declared deployment and smoke/lifecycle checks worked on the tested host. It does not establish throughput, concurrent-user capacity, enterprise readiness, or a minimum universal hardware specification.
 
-Use compatibility failures to discover product gaps. Fix a gap only when the capability is platform-owned, reusable, and appropriate for a single-host PaaS.
+Use workload failures to discover product gaps. Fix a gap only when the capability is platform-owned, reusable, and appropriate for a single-host PaaS.

@@ -38,7 +38,7 @@ A good feature request explains:
 - the smallest reusable platform capability that would solve it;
 - security/lifecycle implications.
 
-Compatibility failures should be classified before becoming feature requests. A workload-specific upstream/configuration issue or host-resource limit is not automatically a MyPaaS feature gap.
+Workload qualification failures should be classified before becoming feature requests. A workload-specific upstream/configuration issue or host-resource limit is not automatically a MyPaaS feature gap.
 
 ## Submitting pull requests
 
@@ -47,7 +47,7 @@ Compatibility failures should be classified before becoming feature requests. A 
 3. Keep the PR to one domain + one outcome.
 4. Add/update targeted regression coverage for changed behavior.
 5. Run checks proportional to the change.
-6. Update the relevant current docs/ADR/compatibility record and `CHANGELOG.md` when product behavior changes.
+6. Update the relevant current docs/ADR/qualification record and `CHANGELOG.md` when product behavior changes.
 7. Describe what changed, what was verified, and any intentional limitation in the PR.
 
 Do not mix unrelated cleanup, benchmarks, redesigns, or speculative features into a defect fix.
@@ -64,7 +64,7 @@ Detailed engineering rules live in `AGENTS.md`. Important high-level constraints
 - Caddy: project HTTP data plane + Unix-socket Admin API in production;
 - Compose input is untrusted and must continue through the existing sanitization/validation boundary.
 
-Do not add another deployment engine for templates or compatibility fixtures.
+Do not add another deployment engine for workload fixtures or application-specific onboarding.
 
 ## Testing policy
 
@@ -76,11 +76,11 @@ Examples:
 - frontend behavior -> relevant Vitest/check/build;
 - installer/runtime integration -> script regression + production Compose/Podman compatibility checks;
 - routing lifecycle change -> targeted route/lifecycle tests and, when material, the affected real-VM qualification path;
-- OSS compatibility fix -> rerun the affected application path.
+- real OSS workload fix -> rerun the affected application path.
 
 Do not repeat broad k6/performance/resource-pressure matrices after unrelated changes.
 
-A compatibility `PASS` is a correctness result for the declared workload scenario, not a throughput or server-capacity certification.
+A successful workload qualification is a correctness result for the declared scenario, not a throughput or server-capacity certification.
 
 ## Branch flow
 

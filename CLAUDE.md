@@ -23,6 +23,6 @@ Critical current boundaries:
 - no generic raw TCP/SSH/UDP routing or extra secondary host-port publication;
 - no Kubernetes/Nomad/Swarm/multi-node scheduler/autoscaling roadmap;
 - no broad performance matrices or capacity claims;
-- compatibility work should discover real reusable product gaps, not create speculative features.
+- real workload qualification should discover reusable product gaps, not create speculative features.
 
 Follow `AGENTS.md` for detailed security, routing, testing, documentation, and branching rules.

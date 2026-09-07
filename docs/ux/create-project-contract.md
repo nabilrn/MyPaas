@@ -26,13 +26,11 @@ The current product supports:
 - Git repository -> static deployment;
 - OCI registry -> image deployment.
 
-Installable OSS templates feed these same deployment primitives. Templates must not become a second deployment engine.
-
 ## Required behavior
 
 - Git repository input starts/feeds repository inspection.
 - Runtime/deployment type is detected or resolved from the selected source rather than hidden behind framework marketing labels.
-- Project name may be suggested from repository/image/template context until the user edits it.
+- Project name may be suggested from repository/image context until the user edits it.
 - Deployment type remains visible in the normal flow.
 - Environment detection remains visible when relevant.
 - Required configuration appears before optional configuration.
@@ -56,7 +54,7 @@ Create Project must not present this as arbitrary per-project/multi-registry cre
 
 ADR-023 provides up to four bounded additional HTTP routes for Compose projects.
 
-When a template/application uses this primitive, the UI may surface the derived endpoints/setup requirements, but backend validation remains authoritative:
+When an application uses this primitive, the UI may surface the derived endpoints/setup requirements, but backend validation remains authoritative:
 
 - target must be an existing Compose service;
 - target port must be declared by `ports` or `expose`;
@@ -75,7 +73,7 @@ A mocked audit answers: "Does a difficult/unsafe state behave correctly?"
 
 Production audits should be non-destructive by default. Mocked audits may simulate failures/timeouts/stale analysis, missing env/ports, Compose blockers, static detection, source-mode differences, and project-creation failure.
 
-Do not repeat broad audit matrices after unrelated runtime, routing, observability, compatibility, or documentation changes.
+Do not repeat broad audit matrices after unrelated runtime, routing, observability, workload-qualification, or documentation changes.
 
 ## Evidence checkpoints
 
