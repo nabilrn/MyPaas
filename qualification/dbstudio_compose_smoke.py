@@ -18,9 +18,9 @@ from typing import Any
 from fixture_ref import FixtureRefError, resolve_fixture_ref
 
 ENGINES = (
-    ("postgres", "postgres", "benchmarks/fixtures/dbstudio/postgres"),
-    ("mysql", "mysql", "benchmarks/fixtures/dbstudio/mysql"),
-    ("mariadb", "mariadb", "benchmarks/fixtures/dbstudio/mariadb"),
+    ("postgres", "postgres", "qualification/fixtures/dbstudio/postgres"),
+    ("mysql", "mysql", "qualification/fixtures/dbstudio/mysql"),
+    ("mariadb", "mariadb", "qualification/fixtures/dbstudio/mariadb"),
 )
 TERMINAL = {"running", "failed", "stopped", "rolled_back"}
 

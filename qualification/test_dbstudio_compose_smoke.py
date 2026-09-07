@@ -7,7 +7,7 @@ class DBStudioComposeSmokeTest(unittest.TestCase):
     def test_fixture_payload_uses_compose_app_contract(self):
         payload = dbstudio_compose_smoke.fixture_payload(
             "postgres",
-            "benchmarks/fixtures/dbstudio/postgres",
+            "qualification/fixtures/dbstudio/postgres",
             "beta-db",
             "https://github.com/example/repo",
             "main",
