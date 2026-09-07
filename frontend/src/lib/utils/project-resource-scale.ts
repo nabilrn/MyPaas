@@ -1,10 +1,11 @@
 import type { ContainerMetrics, Project } from '$types';
 
 const DEFAULT_COMPOSE_SERVICE_MEMORY_MB = 256;
-const DEFAULT_COMPOSE_SERVICE_CPU = 0.25;
 
 export type ProjectResourceScale = {
 	memoryMb: number | null;
+	// CPU is host-shared and therefore has no project allocation ceiling.
+	// Keep the field for callers that still consume the existing shape.
 	cpuPercent: number | null;
 };
 
@@ -12,22 +13,19 @@ function mainService(project: Project) {
 	return project.mainService?.trim() || 'app';
 }
 
-function configuredServiceLimit(project: Project, service: string) {
+function configuredMemoryLimit(project: Project, service: string) {
 	if (project.deployMode !== 'compose' || service === mainService(project)) {
-		return { memoryMb: project.memoryLimitMb, cpu: project.cpuLimit };
+		return project.memoryLimitMb;
 	}
 
 	const override = project.serviceResources?.[service];
-	return {
-		memoryMb: override?.memoryLimitMb > 0 ? override.memoryLimitMb : DEFAULT_COMPOSE_SERVICE_MEMORY_MB,
-		cpu: override?.cpuLimit > 0 ? override.cpuLimit : DEFAULT_COMPOSE_SERVICE_CPU
-	};
+	return override?.memoryLimitMb > 0 ? override.memoryLimitMb : DEFAULT_COMPOSE_SERVICE_MEMORY_MB;
 }
 
 /**
- * Build a shared chart ceiling from the resources assigned to the visible
- * runtime services. Docker stats reports CPU as percent-of-one-core, so a
- * 0.35 CPU allocation maps to a 35% chart ceiling.
+ * Build the memory chart ceiling from the resources assigned to the visible
+ * runtime services. CPU intentionally has no allocation scale because project
+ * runtimes share available host CPU instead of receiving a hard per-project cap.
  */
 export function projectResourceScale(project: Project, metrics: ContainerMetrics[]): ProjectResourceScale {
 	if (project.deployMode === 'static' || metrics.length === 0) {
@@ -35,26 +33,23 @@ export function projectResourceScale(project: Project, metrics: ContainerMetrics
 	}
 
 	let memoryMb = 0;
-	let cpuPercent = 0;
 	for (const metric of metrics) {
-		const configured = configuredServiceLimit(project, metric.service);
+		const configuredMemory = configuredMemoryLimit(project, metric.service);
 		const runtimeMemoryLimit = Number.isFinite(metric.memoryLimitMb) && metric.memoryLimitMb > 0
 			? metric.memoryLimitMb
-			: configured.memoryMb;
+			: configuredMemory;
 		memoryMb = Math.max(memoryMb, runtimeMemoryLimit);
-		cpuPercent = Math.max(cpuPercent, configured.cpu * 100);
 	}
 
 	return {
 		memoryMb: memoryMb > 0 ? memoryMb : null,
-		cpuPercent: cpuPercent > 0 ? cpuPercent : null
+		cpuPercent: null
 	};
 }
 
 /**
- * Aggregate the allocation represented by the visible runtime services.
- * Usage bars show total current consumption against this total allocation,
- * so Compose services add together rather than sharing one chart ceiling.
+ * Aggregate the hard memory allocation represented by the visible runtime
+ * services. CPU remains observable live but is not an allocation.
  */
 export function projectResourceAllocation(project: Project, metrics: ContainerMetrics[]): ProjectResourceScale {
 	if (project.deployMode === 'static' || metrics.length === 0) {
@@ -62,18 +57,16 @@ export function projectResourceAllocation(project: Project, metrics: ContainerMe
 	}
 
 	let memoryMb = 0;
-	let cpuPercent = 0;
 	for (const metric of metrics) {
-		const configured = configuredServiceLimit(project, metric.service);
+		const configuredMemory = configuredMemoryLimit(project, metric.service);
 		const runtimeMemoryLimit = Number.isFinite(metric.memoryLimitMb) && metric.memoryLimitMb > 0
 			? metric.memoryLimitMb
-			: configured.memoryMb;
+			: configuredMemory;
 		memoryMb += runtimeMemoryLimit;
-		cpuPercent += configured.cpu * 100;
 	}
 
 	return {
 		memoryMb: memoryMb > 0 ? memoryMb : null,
-		cpuPercent: cpuPercent > 0 ? cpuPercent : null
+		cpuPercent: null
 	};
 }
