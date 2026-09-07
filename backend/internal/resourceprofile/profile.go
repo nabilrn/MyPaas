@@ -20,6 +20,9 @@ type Profile struct {
 	ID       string
 	Label    string
 	MemoryMB int32
+	// CPULimit is retained for settings/API compatibility with older clients.
+	// Runtime CPU is shared across the host and Resolve always returns 0,
+	// which is the Docker/Podman no-limit value.
 	CPULimit float64
 }
 
@@ -69,16 +72,16 @@ func Resolve(id, deployMode string, memoryMB int32, cpuLimit float64) (string, i
 	if memoryMB <= 0 {
 		memoryMB = profile.MemoryMB
 	}
-	if cpuLimit <= 0 {
-		cpuLimit = profile.CPULimit
-	}
 	if memoryMB <= 0 {
 		return "", 0, 0, fmt.Errorf("%w: memory limit must be greater than 0", errs.ErrValidation)
 	}
-	if cpuLimit <= 0 {
-		return "", 0, 0, fmt.Errorf("%w: CPU limit must be greater than 0", errs.ErrValidation)
-	}
-	return profile.ID, memoryMB, cpuLimit, nil
+
+	// CPU is intentionally not reserved per project. Docker and Podman both
+	// define --cpus=0 as unlimited, so 0 is the persisted/runtime contract for
+	// shared CPU. Keep accepting the legacy argument so older API clients remain
+	// source-compatible while the platform stops enforcing it.
+	_ = cpuLimit
+	return profile.ID, memoryMB, 0, nil
 }
 
 func Get(id string) (Profile, error) {
@@ -92,8 +95,9 @@ func Get(id string) (Profile, error) {
 	return profile, nil
 }
 
-// ConfigureDefaults changes the platform defaults used when a project does not
-// provide explicit resource limits. Built-in floors cannot be lowered.
+// ConfigureDefaults changes the platform memory defaults used when a project
+// does not provide an explicit memory limit. CPU values are retained only for
+// compatibility with existing settings payloads and are not runtime limits.
 func ConfigureDefaults(configured map[string]Profile) error {
 	for id, profile := range configured {
 		minimum, ok := minimumProfiles[id]
@@ -104,7 +108,7 @@ func ConfigureDefaults(configured map[string]Profile) error {
 			return fmt.Errorf("%w: %s memory must be between %d and 32768 MB", errs.ErrValidation, minimum.Label, minimum.MemoryMB)
 		}
 		if profile.CPULimit < minimum.CPULimit || profile.CPULimit > 32 {
-			return fmt.Errorf("%w: %s CPU must be between %.2f and 32 cores", errs.ErrValidation, minimum.Label, minimum.CPULimit)
+			return fmt.Errorf("%w: %s legacy CPU value must be between %.2f and 32", errs.ErrValidation, minimum.Label, minimum.CPULimit)
 		}
 	}
 
@@ -131,7 +135,7 @@ func DefaultForDeployMode(deployMode string) string {
 }
 
 func ComposeSideLimits() (int32, float64) {
-	return 256, 0.25
+	return 256, 0
 }
 
 func defaultID(id, deployMode string) string {
