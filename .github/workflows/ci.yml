@@ -121,6 +121,17 @@ jobs:
         run: bash -n scripts/*.sh
       - name: Python syntax
         run: python3 -m py_compile scripts/*.py qualification/*.py
+      - name: SQLC generated state
+        run: |
+          set -euo pipefail
+          bash scripts/sqlc.sh generate
+          status="$(git status --short --untracked-files=all -- backend/internal/db)"
+          if [[ -n "$status" ]]; then
+            echo "sqlc generated files are stale; run 'make sqlc' and commit the result"
+            printf '%s\n' "$status"
+            git diff -- backend/internal/db
+            exit 1
+          fi
       - name: Script regression tests
         run: python3 -m unittest discover -s scripts -p '*_test.py'
       - name: Qualification harness unit tests

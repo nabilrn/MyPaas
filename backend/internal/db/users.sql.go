@@ -11,10 +11,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearGithubAccessToken = `-- name: ClearGithubAccessToken :exec
+UPDATE users
+SET github_access_token_encrypted = NULL,
+    github_access_token_nonce = NULL
+WHERE id = $1
+`
+
+func (q *Queries) ClearGithubAccessToken(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearGithubAccessToken, id)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, github_id, github_username, avatar_url, role)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 `
 
 type CreateUserParams struct {
@@ -43,6 +55,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.GithubAccessTokenEncrypted,
+		&i.GithubAccessTokenNonce,
 	)
 	return i, err
 }
@@ -55,6 +69,24 @@ WHERE id = $1
 func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
+}
+
+const getGithubAccessToken = `-- name: GetGithubAccessToken :one
+SELECT github_access_token_encrypted, github_access_token_nonce
+FROM users
+WHERE id = $1
+`
+
+type GetGithubAccessTokenRow struct {
+	GithubAccessTokenEncrypted *string `json:"github_access_token_encrypted"`
+	GithubAccessTokenNonce     *string `json:"github_access_token_nonce"`
+}
+
+func (q *Queries) GetGithubAccessToken(ctx context.Context, id uuid.UUID) (GetGithubAccessTokenRow, error) {
+	row := q.db.QueryRow(ctx, getGithubAccessToken, id)
+	var i GetGithubAccessTokenRow
+	err := row.Scan(&i.GithubAccessTokenEncrypted, &i.GithubAccessTokenNonce)
+	return i, err
 }
 
 const getMasterUserID = `-- name: GetMasterUserID :one
@@ -72,7 +104,7 @@ func (q *Queries) GetMasterUserID(ctx context.Context) (uuid.UUID, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 FROM users
 WHERE email = $1
 `
@@ -89,12 +121,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Role,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.GithubAccessTokenEncrypted,
+		&i.GithubAccessTokenNonce,
 	)
 	return i, err
 }
 
 const getUserByGithubID = `-- name: GetUserByGithubID :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 FROM users
 WHERE github_id = $1::text
 `
@@ -111,12 +145,14 @@ func (q *Queries) GetUserByGithubID(ctx context.Context, githubID string) (User,
 		&i.Role,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.GithubAccessTokenEncrypted,
+		&i.GithubAccessTokenNonce,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 FROM users
 WHERE id = $1
 `
@@ -133,12 +169,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Role,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.GithubAccessTokenEncrypted,
+		&i.GithubAccessTokenNonce,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 FROM users
 ORDER BY created_at DESC
 `
@@ -161,6 +199,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.GithubAccessTokenEncrypted,
+			&i.GithubAccessTokenNonce,
 		); err != nil {
 			return nil, err
 		}
@@ -170,6 +210,24 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setGithubAccessToken = `-- name: SetGithubAccessToken :exec
+UPDATE users
+SET github_access_token_encrypted = $2,
+    github_access_token_nonce = $3
+WHERE id = $1
+`
+
+type SetGithubAccessTokenParams struct {
+	ID                         uuid.UUID `json:"id"`
+	GithubAccessTokenEncrypted *string   `json:"github_access_token_encrypted"`
+	GithubAccessTokenNonce     *string   `json:"github_access_token_nonce"`
+}
+
+func (q *Queries) SetGithubAccessToken(ctx context.Context, arg SetGithubAccessTokenParams) error {
+	_, err := q.db.Exec(ctx, setGithubAccessToken, arg.ID, arg.GithubAccessTokenEncrypted, arg.GithubAccessTokenNonce)
+	return err
 }
 
 const updateLastLogin = `-- name: UpdateLastLogin :exec
@@ -191,7 +249,7 @@ SET github_id = $2,
     last_login_at = NOW()
 WHERE id = $1
   AND (github_id IS NULL OR github_id = $2)
-RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at, github_access_token_encrypted, github_access_token_nonce
 `
 
 type UpdateUserGithubProfileParams struct {
@@ -218,61 +276,8 @@ func (q *Queries) UpdateUserGithubProfile(ctx context.Context, arg UpdateUserGit
 		&i.Role,
 		&i.CreatedAt,
 		&i.LastLoginAt,
-	)
-	return i, err
-}
-
-const getGithubAccessToken = `-- name: GetGithubAccessToken :one
-SELECT github_access_token_encrypted, github_access_token_nonce
-FROM users
-WHERE id = $1
-`
-
-type GetGithubAccessTokenRow struct {
-	GithubAccessTokenEncrypted *string `json:"github_access_token_encrypted"`
-	GithubAccessTokenNonce     *string `json:"github_access_token_nonce"`
-}
-
-func (q *Queries) GetGithubAccessToken(ctx context.Context, id uuid.UUID) (GetGithubAccessTokenRow, error) {
-	row := q.db.QueryRow(ctx, getGithubAccessToken, id)
-	var i GetGithubAccessTokenRow
-	err := row.Scan(
 		&i.GithubAccessTokenEncrypted,
 		&i.GithubAccessTokenNonce,
 	)
 	return i, err
-}
-
-const setGithubAccessToken = `-- name: SetGithubAccessToken :exec
-UPDATE users
-SET github_access_token_encrypted = $2,
-    github_access_token_nonce = $3
-WHERE id = $1
-`
-
-type SetGithubAccessTokenParams struct {
-	ID                         uuid.UUID `json:"id"`
-	GithubAccessTokenEncrypted *string   `json:"github_access_token_encrypted"`
-	GithubAccessTokenNonce     *string   `json:"github_access_token_nonce"`
-}
-
-func (q *Queries) SetGithubAccessToken(ctx context.Context, arg SetGithubAccessTokenParams) error {
-	_, err := q.db.Exec(ctx, setGithubAccessToken,
-		arg.ID,
-		arg.GithubAccessTokenEncrypted,
-		arg.GithubAccessTokenNonce,
-	)
-	return err
-}
-
-const clearGithubAccessToken = `-- name: ClearGithubAccessToken :exec
-UPDATE users
-SET github_access_token_encrypted = NULL,
-    github_access_token_nonce = NULL
-WHERE id = $1
-`
-
-func (q *Queries) ClearGithubAccessToken(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, clearGithubAccessToken, id)
-	return err
 }

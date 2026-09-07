@@ -61,17 +61,18 @@ func (q *Queries) CreateWebhookDelivery(ctx context.Context, arg CreateWebhookDe
 	return i, err
 }
 
-const getLatestWebhookDelivery = `-- name: GetLatestWebhookDelivery :one
+const getLatestVerifiedWebhookDelivery = `-- name: GetLatestVerifiedWebhookDelivery :one
 SELECT id, project_id, github_delivery_id, signature_valid, event_type,
        branch, processed, deployment_id, received_at
 FROM webhook_deliveries
 WHERE project_id = $1
+  AND signature_valid = TRUE
 ORDER BY received_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestWebhookDelivery(ctx context.Context, projectID uuid.UUID) (WebhookDelivery, error) {
-	row := q.db.QueryRow(ctx, getLatestWebhookDelivery, projectID)
+func (q *Queries) GetLatestVerifiedWebhookDelivery(ctx context.Context, projectID uuid.UUID) (WebhookDelivery, error) {
+	row := q.db.QueryRow(ctx, getLatestVerifiedWebhookDelivery, projectID)
 	var i WebhookDelivery
 	err := row.Scan(
 		&i.ID,
@@ -87,18 +88,17 @@ func (q *Queries) GetLatestWebhookDelivery(ctx context.Context, projectID uuid.U
 	return i, err
 }
 
-const getLatestVerifiedWebhookDelivery = `-- name: GetLatestVerifiedWebhookDelivery :one
+const getLatestWebhookDelivery = `-- name: GetLatestWebhookDelivery :one
 SELECT id, project_id, github_delivery_id, signature_valid, event_type,
        branch, processed, deployment_id, received_at
 FROM webhook_deliveries
 WHERE project_id = $1
-  AND signature_valid = TRUE
 ORDER BY received_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetLatestVerifiedWebhookDelivery(ctx context.Context, projectID uuid.UUID) (WebhookDelivery, error) {
-	row := q.db.QueryRow(ctx, getLatestVerifiedWebhookDelivery, projectID)
+func (q *Queries) GetLatestWebhookDelivery(ctx context.Context, projectID uuid.UUID) (WebhookDelivery, error) {
+	row := q.db.QueryRow(ctx, getLatestWebhookDelivery, projectID)
 	var i WebhookDelivery
 	err := row.Scan(
 		&i.ID,
