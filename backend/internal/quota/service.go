@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"mypaas/internal/config"
 	"mypaas/internal/container"
@@ -21,11 +19,7 @@ import (
 
 const runtimeUsageTimeout = 10000 * time.Millisecond
 
-const (
-	defaultSecondaryMemoryMB = int32(256)
-	defaultSecondaryCPU      = 0.25
-	cpuQuotaEpsilon          = 1e-9
-)
+const defaultSecondaryMemoryMB = int32(256)
 
 type Service struct {
 	queries *db.Queries
@@ -37,16 +31,17 @@ type Usage struct {
 	MemoryLimitMb   int32   `json:"memoryLimitMb"`
 	MemoryUsedMb    int32   `json:"memoryUsedMb"`
 	MemoryRuntimeMb int32   `json:"memoryRuntimeMb"`
-	CPULimit        float64 `json:"cpuLimit"`
-	CPUUsed         float64 `json:"cpuUsed"`
-	CPURuntime      float64 `json:"cpuRuntime"`
-	ProjectLimit    int32   `json:"projectLimit"`
-	ProjectCount    int32   `json:"projectCount"`
+	// CPULimit and CPUUsed are retained in the API shape for compatibility.
+	// A zero CPU limit means host-shared CPU with no declared reservation.
+	CPULimit   float64 `json:"cpuLimit"`
+	CPUUsed    float64 `json:"cpuUsed"`
+	CPURuntime float64 `json:"cpuRuntime"`
+	ProjectLimit int32 `json:"projectLimit"`
+	ProjectCount int32 `json:"projectCount"`
 }
 
 type serviceResourceLimit struct {
-	MemoryLimitMb int32   `json:"memoryLimitMb"`
-	CPULimit      float64 `json:"cpuLimit"`
+	MemoryLimitMb int32 `json:"memoryLimitMb"`
 }
 
 func NewService(queries *db.Queries, cfg *config.Config, dockerClient ...*container.DockerCLI) *Service {
@@ -57,21 +52,21 @@ func NewService(queries *db.Queries, cfg *config.Config, dockerClient ...*contai
 	return &Service{queries: queries, cfg: cfg, docker: docker}
 }
 
-// DeclaredResources returns the total resource reservation represented by a
-// project: the main runtime plus every non-main Compose service override.
-// Defaults intentionally match deployment.writeComposeOverride so quota
-// accounting cannot undercount a secondary service that omitted a limit.
+// DeclaredResources returns the hard resource reservation represented by a
+// project. Memory remains bounded per runtime. CPU is host-shared, so the
+// declared CPU reservation is always zero. The cpu argument and cpuLimit JSON
+// fields are accepted for backwards compatibility with existing clients/data.
 func DeclaredResources(memoryMb int32, cpu float64, main string, raw json.RawMessage) (int32, float64, error) {
+	_ = cpu
 	main = strings.TrimSpace(main)
 	if main == "" {
 		main = "app"
 	}
 
 	totalMemory := int64(memoryMb)
-	totalCPU := cpu
 	trimmed := strings.TrimSpace(string(raw))
 	if trimmed == "" || trimmed == "null" || trimmed == "{}" {
-		return memoryMb, cpu, nil
+		return memoryMb, 0, nil
 	}
 
 	var resources map[string]serviceResourceLimit
@@ -86,17 +81,12 @@ func DeclaredResources(memoryMb int32, cpu float64, main string, raw json.RawMes
 		if memory <= 0 {
 			memory = defaultSecondaryMemoryMB
 		}
-		serviceCPU := resource.CPULimit
-		if serviceCPU <= 0 {
-			serviceCPU = defaultSecondaryCPU
-		}
 		totalMemory += int64(memory)
-		totalCPU += serviceCPU
 	}
 	if totalMemory > math.MaxInt32 {
 		return 0, 0, fmt.Errorf("declared project memory exceeds supported range")
 	}
-	return int32(totalMemory), totalCPU, nil
+	return int32(totalMemory), 0, nil
 }
 
 func (s *Service) Usage(ctx context.Context, userID uuid.UUID) (Usage, error) {
@@ -112,7 +102,7 @@ func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bo
 	if err != nil {
 		return Usage{}, err
 	}
-	declaredMemoryMb, declaredCPU, err := declaredUsage(projects, uuid.Nil)
+	declaredMemoryMb, _, err := declaredUsage(projects, uuid.Nil)
 	if err != nil {
 		return Usage{}, err
 	}
@@ -128,8 +118,8 @@ func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bo
 		MemoryLimitMb:   s.cfg.UserRAMQuotaMB,
 		MemoryUsedMb:    declaredMemoryMb,
 		MemoryRuntimeMb: runtimeMemoryMb,
-		CPULimit:        s.cfg.UserCPUQuota,
-		CPUUsed:         declaredCPU,
+		CPULimit:        0,
+		CPUUsed:         0,
 		CPURuntime:      runtimeCPU,
 		ProjectLimit:    s.cfg.MaxProjects,
 		ProjectCount:    int32(len(projects)),
@@ -137,43 +127,44 @@ func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bo
 }
 
 func (s *Service) CheckCreate(ctx context.Context, userID uuid.UUID, memoryMb int32, cpu float64) error {
+	_ = cpu
 	usage, err := s.Usage(ctx, userID)
 	if err != nil {
 		return err
 	}
-	return checkUsage(usage, memoryMb, cpu, 1)
+	return checkUsage(usage, memoryMb, 0, 1)
 }
 
 func (s *Service) CheckUpdate(ctx context.Context, project db.Project, memoryMb int32, cpu float64) error {
+	_ = cpu
 	projects, err := s.queries.ListProjectsByUser(ctx, project.UserID)
 	if err != nil {
 		return err
 	}
-	declaredMemoryMb, declaredCPU, err := declaredUsage(projects, project.ID)
+	declaredMemoryMb, _, err := declaredUsage(projects, project.ID)
 	if err != nil {
 		return err
 	}
 	usage := Usage{
 		MemoryLimitMb: s.cfg.UserRAMQuotaMB,
 		MemoryUsedMb:  declaredMemoryMb,
-		CPULimit:      s.cfg.UserCPUQuota,
-		CPUUsed:       declaredCPU,
+		CPULimit:      0,
+		CPUUsed:       0,
 		ProjectLimit:  s.cfg.MaxProjects,
 		ProjectCount:  int32(len(projects)),
 	}
-	return checkUsage(usage, memoryMb, cpu, 0)
+	return checkUsage(usage, memoryMb, 0, 0)
 }
 
 func declaredUsage(projects []db.Project, excludeID uuid.UUID) (int32, float64, error) {
 	var totalMemory int64
-	var totalCPU float64
 	for _, project := range projects {
 		if excludeID != uuid.Nil && project.ID == excludeID {
 			continue
 		}
-		memory, cpu, err := DeclaredResources(
+		memory, _, err := DeclaredResources(
 			project.MemoryLimitMb,
-			numericToFloat(project.CpuLimit),
+			0,
 			mainService(project),
 			project.ServiceResources,
 		)
@@ -181,33 +172,22 @@ func declaredUsage(projects []db.Project, excludeID uuid.UUID) (int32, float64, 
 			return 0, 0, err
 		}
 		totalMemory += int64(memory)
-		totalCPU += cpu
 	}
 	if totalMemory > math.MaxInt32 {
 		return 0, 0, fmt.Errorf("declared user memory exceeds supported range")
 	}
-	return int32(totalMemory), totalCPU, nil
+	return int32(totalMemory), 0, nil
 }
 
 func checkUsage(usage Usage, addedMemoryMb int32, addedCPU float64, addedProjects int32) error {
+	_ = addedCPU
 	if usage.ProjectLimit > 0 && usage.ProjectCount+addedProjects > usage.ProjectLimit {
 		return fmt.Errorf("%w: project count %d would exceed limit %d", errs.ErrQuotaExceeded, usage.ProjectCount+addedProjects, usage.ProjectLimit)
 	}
 	if usage.MemoryLimitMb > 0 && usage.MemoryUsedMb+addedMemoryMb > usage.MemoryLimitMb {
 		return fmt.Errorf("%w: memory %dMB would exceed limit %dMB", errs.ErrQuotaExceeded, usage.MemoryUsedMb+addedMemoryMb, usage.MemoryLimitMb)
 	}
-	if usage.CPULimit > 0 && usage.CPUUsed+addedCPU > usage.CPULimit+cpuQuotaEpsilon {
-		return fmt.Errorf("%w: CPU %.2f would exceed limit %.2f", errs.ErrQuotaExceeded, usage.CPUUsed+addedCPU, usage.CPULimit)
-	}
 	return nil
-}
-
-func numericToFloat(value pgtype.Numeric) float64 {
-	if !value.Valid || value.Int == nil {
-		return 0
-	}
-	f, _ := new(big.Rat).SetFrac(value.Int, big.NewInt(1)).Float64()
-	return f * math.Pow10(int(value.Exp))
 }
 
 func (s *Service) runtimeUsage(ctx context.Context, userID uuid.UUID) (int32, float64) {
