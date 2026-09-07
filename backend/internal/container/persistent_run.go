@@ -16,7 +16,7 @@ func (d *DockerCLI) runArgsWithVolumes(opts RunOptions, volumes []VolumeMount) (
 		"--name", opts.Name,
 		"-p", d.portMapping(opts),
 		"--memory", fmt.Sprintf("%dm", opts.MemoryMB),
-		"--cpus", fmt.Sprintf("%.2f", opts.CPULimit),
+		"--cpus", "0",
 		"--restart", "unless-stopped",
 	}
 	if d.projectNetwork != "" {
