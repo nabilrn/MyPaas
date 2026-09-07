@@ -28,6 +28,14 @@ func TestComposePullArgsRefreshesImageOnlyServices(t *testing.T) {
 	}
 }
 
+func TestSharedCPUUpdateArgsRemovesHardCapForAllContainers(t *testing.T) {
+	got := sharedCPUUpdateArgs([]string{"container-a", "container-b"})
+	want := []string{"update", "--cpus", "0", "container-a", "container-b"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("sharedCPUUpdateArgs() = %v, want %v", got, want)
+	}
+}
+
 func TestComposeExecutionEnvUsesIsolatedDockerConfigWithoutLeakingRegistrySecrets(t *testing.T) {
 	t.Setenv(registryHostEnv, "docker.io")
 	t.Setenv(registryUsernameEnv, "mypaas-ci")
