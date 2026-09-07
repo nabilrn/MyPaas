@@ -1186,7 +1186,7 @@
 				mainService,
 				appPort,
 				memoryLimitMb: Number(form.memoryMb),
-				cpuLimit: Number(form.cpuLimit),
+				cpuLimit: 0,
 				sharedPostgres: form.sharedPostgres,
 				envVars,
 				composeFilePath,
@@ -1745,11 +1745,11 @@
 						{/if}
 
 						<div>
-							<div class="mb-3 flex items-center gap-1"><h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Resources</h3><InfoDisclosure id="resource-limits-info" label="About resource limits">MyPaas selects a conservative starting profile. Change it only when the workload needs different limits.</InfoDisclosure></div>
+							<div class="mb-3 flex items-center gap-1"><h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Resources</h3><InfoDisclosure id="resource-limits-info" label="About resource limits">MyPaas selects a conservative memory profile. CPU is shared across the host and is not capped per project.</InfoDisclosure></div>
 							<div class="grid gap-3 sm:grid-cols-3">
 								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="profile">Profile</label><select id="profile" bind:value={form.resourceProfile} on:change={() => applyResourceProfile(form.resourceProfile)} class="field w-full">{#each resourceProfiles as profile}<option value={profile.id}>{profile.title}</option>{/each}</select></div>
 								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="memory">Memory (MB)</label><input id="memory" type="number" min="64" max="32768" step="1" bind:value={form.memoryMb} on:input={markCustomProfile} class="field w-full" /></div>
-								<div><label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300" for="cpu">CPU cores</label><input id="cpu" type="number" min="0.01" max="32" step="0.01" bind:value={form.cpuLimit} on:input={markCustomProfile} class="field w-full" /></div>
+								<div><p class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">CPU</p><p class="text-sm font-semibold text-gray-950 dark:text-white">Shared</p><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uses available host CPU; no per-project hard cap.</p></div>
 							</div>
 						</div>
 
