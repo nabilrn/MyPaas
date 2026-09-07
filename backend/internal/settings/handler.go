@@ -416,9 +416,10 @@ func isSettingKey(key string) bool {
 }
 
 type hostStatsResponse struct {
-	HostRAMBytes       int64                      `json:"host_ram_bytes"`
-	HostCPUCores       int                        `json:"host_cpu_cores"`
-	AllocatedRAMMB     int32                      `json:"allocated_ram_mb"`
+	HostRAMBytes   int64 `json:"host_ram_bytes"`
+	HostCPUCores   int   `json:"host_cpu_cores"`
+	AllocatedRAMMB int32 `json:"allocated_ram_mb"`
+	// AllocatedCPU is retained for API compatibility; it reports the highest non-static project CPU cap, not aggregate allocation.
 	AllocatedCPU       float64                    `json:"allocated_cpu"`
 	TelemetryStatus    string                     `json:"telemetry_status"`
 	TelemetryErrorCode string                     `json:"telemetry_error_code,omitempty"`
@@ -446,7 +447,7 @@ func hostTelemetryErrorCode(err error) string {
 }
 
 // HostStats returns host capacity plus optional host telemetry from mypaas-statd.
-// Capacity/allocation data remains usable when host telemetry is disabled or unavailable.
+// Capacity and non-static runtime-limit data remain usable when host telemetry is disabled or unavailable.
 // telemetry_status and telemetry_error_code make the fail-open path observable without
 // exposing raw socket or filesystem errors to the dashboard.
 func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
@@ -454,12 +455,12 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 
 	usage, err := h.queries.GetGlobalResourceUsage(r.Context())
 	var allocatedRAM int32
-	var allocatedCPU float64
+	var highestProjectCPUCap float64
 	if err == nil {
 		allocatedRAM = usage.TotalMemoryMb
 		if usage.TotalCpu.Valid && usage.TotalCpu.Int != nil {
 			cpuVal, _ := usage.TotalCpu.Float64Value()
-			allocatedCPU = cpuVal.Float64
+			highestProjectCPUCap = cpuVal.Float64
 		}
 	}
 
@@ -491,7 +492,7 @@ func (h *Handler) HostStats(w http.ResponseWriter, r *http.Request) {
 		HostRAMBytes:       cap.TotalRAMBytes,
 		HostCPUCores:       cap.TotalCPUCores,
 		AllocatedRAMMB:     allocatedRAM,
-		AllocatedCPU:       allocatedCPU,
+		AllocatedCPU:       highestProjectCPUCap,
 		TelemetryStatus:    telemetryStatus,
 		TelemetryErrorCode: telemetryErrorCode,
 		Memory:             memory,

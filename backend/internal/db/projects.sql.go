@@ -122,8 +122,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 
 const getGlobalResourceUsage = `-- name: GetGlobalResourceUsage :one
 SELECT
-    COALESCE(SUM(memory_limit_mb), 0)::INT      AS total_memory_mb,
-    COALESCE(SUM(cpu_limit), 0.0)::NUMERIC(6,2) AS total_cpu
+    COALESCE(SUM(memory_limit_mb) FILTER (WHERE deploy_mode <> 'static'), 0)::INT      AS total_memory_mb,
+    COALESCE(MAX(cpu_limit) FILTER (WHERE deploy_mode <> 'static'), 0.0)::NUMERIC(6,2) AS total_cpu
 FROM projects
 WHERE deleted_at IS NULL
 `
