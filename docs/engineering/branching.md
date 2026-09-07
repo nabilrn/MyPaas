@@ -8,9 +8,9 @@ Use one of these prefixes:
 
 - `core/` — product-critical platform behavior: deployment, runtime, routing, persistence, DB Studio, auth, migrations, recovery.
 - `infra/` — VM/runtime integration, GHCR, Caddy, Cloudflare, statd, host cleanup, installer, systemd.
-- `ux/` — dashboard, Create Project, project detail, settings, templates, accessibility.
-- `test/` — targeted regression, compatibility, resilience, or e2e work tied to a concrete behavior.
-- `docs/` — ADRs, architecture, compatibility records, runbooks, operational documentation.
+- `ux/` — dashboard, Create Project, project detail, settings, accessibility.
+- `test/` — targeted regression, workload qualification, resilience, or e2e work tied to a concrete behavior.
+- `docs/` — ADRs, architecture, qualification records, runbooks, operational documentation.
 - `chore/` — repository hygiene, dependency maintenance, mechanical cleanup.
 - `fix/` — narrow urgent bugfixes when the domain is intentionally cross-cutting or unclear.
 
@@ -28,7 +28,7 @@ Examples:
 core/compose-http-routes
 core/backup-restore-safety
 infra/podman-socket-recovery
-ux/template-env-guidance
+ux/create-project-env-guidance
 test/minio-route-regression
 docs/sync-post-pr157
 chore/repo-branch-cleanup
@@ -43,7 +43,7 @@ Use the same domain language in PR titles:
 ```text
 core: harden Compose route lifecycle
 infra: fix Podman socket resolution
-ux: clarify template environment setup
+ux: clarify Create Project environment setup
 test: cover MinIO route reconciliation
 docs: sync current product documentation
 ```
@@ -63,7 +63,7 @@ A `test/` branch must answer a concrete product question or protect a known beha
 
 Good examples:
 
-- compatibility qualification for a real OSS workload;
+- qualification for a real OSS workload;
 - regression coverage for a confirmed defect;
 - targeted lifecycle/recovery verification after a runtime change;
 - e2e coverage for a user-visible workflow.
@@ -78,6 +78,5 @@ For current product direction and qualification policy, use:
 - [`PRODUCT.md`](../../PRODUCT.md)
 - [`ROADMAP.md`](../../ROADMAP.md)
 - [`beta-readiness-gates.md`](beta-readiness-gates.md)
-- [`../../compatibility/CATALOG.md`](../../compatibility/CATALOG.md)
 
 Historical planning documents are not current branching programs.

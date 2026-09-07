@@ -15,7 +15,6 @@ Technical documentation for the current single-host MyPaaS beta.
 | [Networking](architecture/networking.md) | Routing, runtime aliases, and trust boundaries |
 | [Observability](architecture/observability.md) | Logs and metrics |
 | [Security boundaries](SECURITY_BOUNDARIES.md) | Security and trust model |
-| [Real-world compatibility](../compatibility/CATALOG.md) | OSS workload classes and compatibility-result rules |
 | [Runtime verification](engineering/beta-readiness-gates.md) | Retained reliability and qualification record |
 | [mypaas-statd](STATD.md) | Optional native telemetry integration |
 | [Architecture decisions](adr/) | Accepted design decisions |
@@ -44,7 +43,8 @@ When documentation disagrees, use this order:
 - Compose can expose one primary route plus up to four bounded additional HTTP routes using platform-derived hostnames and internal service ports.
 - Additional Compose HTTP routes do not imply generic host-port, raw TCP, SSH, UDP, or arbitrary-domain routing support.
 - Project-scoped persistence, cleanup, backup/restore, shared PostgreSQL, and DB Studio remain bounded by their documented contracts.
-- Compatibility `PASS` means the declared deployment and smoke/lifecycle checks succeeded on the tested host; it is not a capacity certification.
+- MyPaaS does not currently expose a separate one-click application template/catalog product surface.
+- A successful workload qualification means the declared deployment and smoke/lifecycle checks succeeded on the tested host; it is not a capacity certification.
 
 ## Claim rules
 
