@@ -151,6 +151,28 @@ func effectiveComposeReadinessTimeout(timeout time.Duration) time.Duration {
 	return timeout
 }
 
+func sharedCPUUpdateArgs(containerIDs []string) []string {
+	args := []string{"update", "--cpus", "0"}
+	return append(args, containerIDs...)
+}
+
+// ensureComposeSharedCPU normalizes every Compose service to the platform's
+// shared-CPU contract. Older projects and generated overrides may still carry
+// historical cpus values, but they must not remain a runtime hard cap.
+func (d *DockerCLI) ensureComposeSharedCPU(ctx context.Context, projectName string) error {
+	ids, err := d.composeContainerIDs(ctx, projectName, "")
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return ErrNoContainer
+	}
+	if err := runSimple(ctx, "docker", sharedCPUUpdateArgs(ids)...); err != nil {
+		return fmt.Errorf("set shared CPU for compose project %q: %w", projectName, err)
+	}
+	return nil
+}
+
 func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, service string) (composeContainerState, error) {
 	id, err := d.composeServiceContainer(ctx, projectName, service)
 	if err != nil {
@@ -173,9 +195,15 @@ func (d *DockerCLI) composeServiceState(ctx context.Context, projectName, servic
 }
 
 // WaitComposeServiceReady blocks route activation until the selected public
-// service is actually usable. Containers without a healthcheck are ready once
-// Docker reports them running; containers with a healthcheck must be healthy.
+// service is actually usable. It also removes any historical/generated CPU
+// hard caps before readiness is evaluated, so Compose services share host CPU.
+// Containers without a healthcheck are ready once Docker reports them running;
+// containers with a healthcheck must be healthy.
 func (d *DockerCLI) WaitComposeServiceReady(ctx context.Context, projectName, service string, timeout time.Duration) error {
+	if err := d.ensureComposeSharedCPU(ctx, projectName); err != nil {
+		return err
+	}
+
 	timeout = effectiveComposeReadinessTimeout(timeout)
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
