@@ -57,10 +57,20 @@ func NewService(queries *db.Queries, cfg *config.Config, dockerClient ...*contai
 	return &Service{queries: queries, cfg: cfg, docker: docker}
 }
 
+// ProjectDeclaredResources returns zero declared runtime resources for static
+// projects because they are served directly by Caddy and have no app runtime.
+// Container-backed projects delegate to DeclaredResources.
+func ProjectDeclaredResources(deployMode string, memoryMb int32, cpu float64, main string, raw json.RawMessage) (int32, float64, error) {
+	if strings.TrimSpace(deployMode) == "static" {
+		return 0, 0, nil
+	}
+	return DeclaredResources(memoryMb, cpu, main, raw)
+}
+
 // DeclaredResources returns the total resource reservation represented by a
-// project: the main runtime plus every non-main Compose service override.
-// Defaults intentionally match deployment.writeComposeOverride so quota
-// accounting cannot undercount a secondary service that omitted a limit.
+// container-backed project: the main runtime plus every non-main Compose
+// service override. Defaults intentionally match deployment.writeComposeOverride
+// so quota accounting cannot undercount a secondary service that omitted a limit.
 func DeclaredResources(memoryMb int32, cpu float64, main string, raw json.RawMessage) (int32, float64, error) {
 	main = strings.TrimSpace(main)
 	if main == "" {
@@ -171,7 +181,8 @@ func declaredUsage(projects []db.Project, excludeID uuid.UUID) (int32, float64, 
 		if excludeID != uuid.Nil && project.ID == excludeID {
 			continue
 		}
-		memory, cpu, err := DeclaredResources(
+		memory, cpu, err := ProjectDeclaredResources(
+			project.DeployMode,
 			project.MemoryLimitMb,
 			numericToFloat(project.CpuLimit),
 			mainService(project),

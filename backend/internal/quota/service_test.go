@@ -92,6 +92,44 @@ func TestCheckUsage(t *testing.T) {
 	}
 }
 
+func TestProjectDeclaredResourcesStaticUsesNoRuntimeQuota(t *testing.T) {
+	memory, cpu, err := ProjectDeclaredResources(
+		"static",
+		64,
+		0.01,
+		"app",
+		json.RawMessage(`{"worker":{"memoryLimitMb":512,"cpuLimit":1}}`),
+	)
+	if err != nil {
+		t.Fatalf("ProjectDeclaredResources returned error: %v", err)
+	}
+	if memory != 0 {
+		t.Fatalf("memory = %d, want 0", memory)
+	}
+	if cpu != 0 {
+		t.Fatalf("cpu = %.2f, want 0", cpu)
+	}
+}
+
+func TestProjectDeclaredResourcesContainerBackedDelegates(t *testing.T) {
+	memory, cpu, err := ProjectDeclaredResources(
+		"compose",
+		512,
+		0.5,
+		"app",
+		json.RawMessage(`{"worker": {}}`),
+	)
+	if err != nil {
+		t.Fatalf("ProjectDeclaredResources returned error: %v", err)
+	}
+	if memory != 768 {
+		t.Fatalf("memory = %d, want 768", memory)
+	}
+	if cpu != 0.75 {
+		t.Fatalf("cpu = %.2f, want 0.75", cpu)
+	}
+}
+
 func TestDeclaredResources(t *testing.T) {
 	raw := json.RawMessage(`{
 		"app": {"memoryLimitMb": 9999, "cpuLimit": 9},

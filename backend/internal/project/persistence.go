@@ -62,7 +62,8 @@ func (s *Service) createProjectRecord(ctx context.Context, input CreateInput, na
 		return create(s.queries)
 	}
 
-	declaredMemory, declaredCPU, err := quota.DeclaredResources(
+	declaredMemory, declaredCPU, err := quota.ProjectDeclaredResources(
+		input.DeployMode,
 		input.MemoryLimitMb,
 		input.CPULimit,
 		valueOrEmpty(input.MainService),
@@ -104,7 +105,8 @@ func (s *Service) updateProjectRecord(
 	if s.quota == nil {
 		err = update(s.queries)
 	} else {
-		declaredMemory, declaredCPU, resourceErr := quota.DeclaredResources(
+		declaredMemory, declaredCPU, resourceErr := quota.ProjectDeclaredResources(
+			existing.DeployMode,
 			input.MemoryLimitMb,
 			input.CPULimit,
 			valueOrEmpty(params.MainService),
