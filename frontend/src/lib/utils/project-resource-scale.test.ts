@@ -19,7 +19,7 @@ function project(overrides: Partial<Project> = {}): Project {
 		webhookSecret: 'secret',
 		allocatedPort: 18080,
 		memoryLimitMb: 255,
-		cpuLimit: 0.35,
+		cpuLimit: 0,
 		status: 'running',
 		activeDeploymentId: 'deployment-1',
 		composeFilePath: null,
@@ -47,19 +47,18 @@ function metric(overrides: Partial<ContainerMetrics> = {}): ContainerMetrics {
 }
 
 describe('projectResourceScale', () => {
-	it('maps project CPU cores to Docker stats percent and uses the runtime memory limit', () => {
+	it('uses the runtime memory limit and leaves CPU unbounded', () => {
 		expect(projectResourceScale(project(), [metric()])).toEqual({
 			memoryMb: 255,
-			cpuPercent: 35
+			cpuPercent: null
 		});
 	});
 
-	it('uses the largest visible Compose service allocation for a shared chart scale', () => {
+	it('uses the largest visible Compose service memory allocation', () => {
 		const compose = project({
 			deployMode: 'compose',
 			mainService: 'web',
 			memoryLimitMb: 256,
-			cpuLimit: 0.35,
 			serviceResources: { worker: { memoryLimitMb: 768, cpuLimit: 0.8 } }
 		});
 		const metrics = [
@@ -67,21 +66,20 @@ describe('projectResourceScale', () => {
 			metric({ service: 'worker', memoryLimitMb: 768 })
 		];
 
-		expect(projectResourceScale(compose, metrics)).toEqual({ memoryMb: 768, cpuPercent: 80 });
+		expect(projectResourceScale(compose, metrics)).toEqual({ memoryMb: 768, cpuPercent: null });
 	});
 
-	it('matches backend defaults for Compose secondary services without explicit limits', () => {
+	it('matches backend memory defaults for Compose secondary services without explicit limits', () => {
 		const compose = project({
 			deployMode: 'compose',
 			mainService: 'web',
 			memoryLimitMb: 128,
-			cpuLimit: 0.2,
 			serviceResources: {}
 		});
 
 		expect(projectResourceScale(compose, [metric({ service: 'worker', memoryLimitMb: 0 })])).toEqual({
 			memoryMb: 256,
-			cpuPercent: 25
+			cpuPercent: null
 		});
 	});
 
@@ -94,19 +92,18 @@ describe('projectResourceScale', () => {
 });
 
 describe('projectResourceAllocation', () => {
-	it('keeps a single-service allocation equal to the project limit', () => {
+	it('keeps a single-service memory allocation equal to the project limit', () => {
 		expect(projectResourceAllocation(project(), [metric()])).toEqual({
 			memoryMb: 255,
-			cpuPercent: 35
+			cpuPercent: null
 		});
 	});
 
-	it('adds visible Compose service allocations for aggregate usage bars', () => {
+	it('adds visible Compose service memory allocations while CPU remains shared', () => {
 		const compose = project({
 			deployMode: 'compose',
 			mainService: 'web',
 			memoryLimitMb: 256,
-			cpuLimit: 0.35,
 			serviceResources: { worker: { memoryLimitMb: 768, cpuLimit: 0.8 } }
 		});
 		const metrics = [
@@ -114,15 +111,14 @@ describe('projectResourceAllocation', () => {
 			metric({ service: 'worker', memoryLimitMb: 768 })
 		];
 
-		expect(projectResourceAllocation(compose, metrics)).toEqual({ memoryMb: 1024, cpuPercent: 115 });
+		expect(projectResourceAllocation(compose, metrics)).toEqual({ memoryMb: 1024, cpuPercent: null });
 	});
 
-	it('uses backend-compatible defaults when a secondary service has no override', () => {
+	it('uses backend-compatible memory defaults when a secondary service has no override', () => {
 		const compose = project({
 			deployMode: 'compose',
 			mainService: 'web',
 			memoryLimitMb: 128,
-			cpuLimit: 0.2,
 			serviceResources: {}
 		});
 		const metrics = [
@@ -130,6 +126,6 @@ describe('projectResourceAllocation', () => {
 			metric({ service: 'worker', memoryLimitMb: 0 })
 		];
 
-		expect(projectResourceAllocation(compose, metrics)).toEqual({ memoryMb: 384, cpuPercent: 45 });
+		expect(projectResourceAllocation(compose, metrics)).toEqual({ memoryMb: 384, cpuPercent: null });
 	});
 });
