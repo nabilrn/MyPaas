@@ -76,6 +76,9 @@ func TestRunArgsWithVolumesIncludesStableVolume(t *testing.T) {
 	if !strings.Contains(joined, "--mount type=volume,source=mypaas-project-data-123,target=/app/data") {
 		t.Fatalf("run args missing persistent named volume: %v", got)
 	}
+	if !strings.Contains(joined, "--cpus 0") {
+		t.Fatalf("run args must use shared CPU: %v", got)
+	}
 	if got[len(got)-1] != opts.Image {
 		t.Fatalf("last run arg = %q, want image %q", got[len(got)-1], opts.Image)
 	}
