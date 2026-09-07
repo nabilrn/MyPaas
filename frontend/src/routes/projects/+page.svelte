@@ -60,14 +60,12 @@
 		: projects;
 	$: hostRamMb = hostStats ? hostStats.host_ram_bytes / (1024 * 1024) : 0;
 	$: ramAllocationPercent = hostStats ? boundedPercent(hostStats.allocated_ram_mb, hostRamMb) : 0;
-	$: cpuAllocationRawPercent = hostStats && hostStats.host_cpu_cores > 0 ? (hostStats.allocated_cpu / hostStats.host_cpu_cores) * 100 : 0;
 	$: liveMemoryAvailable = Boolean(hostStats?.memory && hostStats.memory.total_bytes > 0);
 	$: hostMemoryUsedBytes = hostStats?.memory ? Math.max(0, hostStats.memory.total_bytes - hostStats.memory.available_bytes) : 0;
 	$: hostMemoryUsagePercent = hostStats?.memory ? boundedPercent(hostMemoryUsedBytes, hostStats.memory.total_bytes) : 0;
 	$: storageUsedBytes = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
 	$: storagePercent = hostStats?.storage ? boundedPercent(storageUsedBytes, hostStats.storage.total_bytes) : 0;
 	$: hostRamWarning = ramAllocationPercent >= 85 || (liveMemoryAvailable && hostMemoryUsagePercent >= 90);
-	$: cpuAllocationWarning = Boolean(hostStats && hostStats.host_cpu_cores > 0 && hostStats.allocated_cpu > hostStats.host_cpu_cores);
 	$: storageWarning = Boolean(hostStats?.storage && storagePercent >= 85);
 	$: maxPage = Math.max(0, Math.ceil(filteredProjects.length / pageSize) - 1);
 	$: if (currentPage > maxPage) currentPage = maxPage;
@@ -339,10 +337,10 @@
 <svelte:head><title>Projects · MyPaas</title></svelte:head>
 
 <div class="page-shell">
-	{#if hostRamWarning || cpuAllocationWarning || storageWarning}
+	{#if hostRamWarning || storageWarning}
 		<div class="flex gap-3 border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200" role="alert">
 			<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-			<div><p class="font-semibold">Host capacity needs attention</p><p class="mt-1">{#if liveMemoryAvailable && hostMemoryUsagePercent >= 90}RAM usage is {hostMemoryUsagePercent.toFixed(0)}%.{:else if ramAllocationPercent >= 85}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}{#if cpuAllocationWarning} CPU allocation is {cpuAllocationRawPercent.toFixed(0)}%.{/if}{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if} Keep enough headroom for builds, runtime spikes, and platform services.</p></div>
+			<div><p class="font-semibold">Host capacity needs attention</p><p class="mt-1">{#if liveMemoryAvailable && hostMemoryUsagePercent >= 90}RAM usage is {hostMemoryUsagePercent.toFixed(0)}%.{:else if ramAllocationPercent >= 85}RAM allocation is {ramAllocationPercent.toFixed(0)}%.{/if}{#if storageWarning} Storage usage is {storagePercent.toFixed(0)}%.{/if} Keep enough headroom for builds, runtime spikes, and platform services.</p></div>
 		</div>
 	{/if}
 
@@ -355,7 +353,7 @@
 		{#if hostStats}
 			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-3">
 				<CapacityMetricChart label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'} value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`} indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`} detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'} series={hostStats.memory ? ramSeries : []} resource="memory" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label={hostStats.cpu ? 'CPU usage' : 'CPU allocation'} value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores`} indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : !hostStats.cpu ? `${cpuAllocationRawPercent.toFixed(0)}%` : ''} detail={hostStats.cpu ? `${hostStats.allocated_cpu.toFixed(2)} / ${hostStats.host_cpu_cores.toFixed(2)} cores allocated` : 'Live host usage unavailable'} series={hostStats.cpu ? cpuSeries : []} resource="cpu" className="bg-white dark:bg-neutral-900" />
+				<CapacityMetricChart label="CPU usage" value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : 'Unavailable'} indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : ''} detail={hostStats.cpu ? 'CPU is shared across projects; project limits are scheduler ceilings.' : 'Live host usage unavailable'} series={hostStats.cpu ? cpuSeries : []} resource="cpu" className="bg-white dark:bg-neutral-900" />
 				<CapacityMetricChart label="Network" value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'} indicator={hostStats.network?.interface ?? ''} detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'} series={networkSeries} resource="network" maxValue={null} rangeLabel="auto scale" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-1" />
 				<CapacityMetricChart label="Storage" value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'} indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''} detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'} percent={storagePercent} resource="storage" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-3" />
 			</div>
