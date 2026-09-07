@@ -120,11 +120,11 @@ jobs:
       - name: Bash syntax
         run: bash -n scripts/*.sh
       - name: Python syntax
-        run: python3 -m py_compile scripts/*.py benchmarks/*.py
+        run: python3 -m py_compile scripts/*.py qualification/*.py
       - name: Script regression tests
         run: python3 -m unittest discover -s scripts -p '*_test.py'
       - name: Qualification harness unit tests
-        run: PYTHONPATH=benchmarks python3 -m unittest test_beta_resilience test_dbstudio_compose_smoke test_fixture_ref
+        run: PYTHONPATH=qualification python3 -m unittest test_beta_resilience test_dbstudio_compose_smoke test_fixture_ref
       - name: Production Compose config
         run: docker compose -f docker-compose.prod.yml --env-file .env.example config >/dev/null
 
