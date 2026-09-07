@@ -19,6 +19,16 @@
 http://{$PUBLIC_DOMAIN} {
 	encode gzip
 
+	# Remote MCP endpoint. The bearer credential is validated by the MCP process
+	# and again at the REST API boundary for every tool call.
+	handle /mcp {
+		reverse_proxy mcp:8081 {
+			header_up -User-Agent
+			header_down Cache-Control "no-store"
+			header_down Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		}
+	}
+
 	# API routes. Frontend calls /api/*, backend routes are mounted at /.
 	handle_path /api/* {
 		reverse_proxy api:8080 {

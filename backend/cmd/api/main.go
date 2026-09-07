@@ -367,6 +367,7 @@ func registerRoutes(
 		})
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(auth.RequireOwner)
+			registerAPITokenRoutes(r, pool)
 			r.Get("/users", userHandler.List)
 			r.Post("/users", userHandler.Add)
 			r.Delete("/users/{id}", userHandler.Remove)

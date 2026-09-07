@@ -4,8 +4,8 @@
 
 **Status:** Current  
 **Applies to:** `main`  
-**Last verified:** 2026-08-28  
-**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
+**Last verified:** 2026-09-07  
+**Verified against commit:** `975532ac46ae4c06aee3c30c11464cc057b7a8bc`
 
 ---
 
@@ -15,13 +15,16 @@
 flowchart LR
     Operator["Trusted owner operators"] --> Browser["Browser"]
     GitHub["GitHub"] --> Webhook["Webhook"]
-    Automation["CLI / MCP"] --> API["Go API"]
+    LocalAutomation["CLI / local STDIO MCP"] --> API["Go API"]
+    RemoteAgent["Remote MCP client"] --> Edge["Configured public delivery path"]
 
-    Browser --> Edge["Configured public delivery path"]
+    Browser --> Edge
     Webhook --> Edge
     Edge --> Caddy["Caddy"]
     Caddy --> Dashboard["SvelteKit dashboard"]
     Caddy --> API
+    Caddy --> RemoteMCP["Remote MCP service"]
+    RemoteMCP --> API
 
     API --> DB[("PostgreSQL")]
     API --> HostShell["Owner-only short-lived host shell"]
@@ -34,7 +37,7 @@ flowchart LR
     Caddy --> Static["Static releases"]
 ```
 
-Caddy is the front door for dashboard/API/webhook traffic, static projects, primary project routes, and bounded additional Compose HTTP routes.
+Caddy is the front door for dashboard/API/webhook traffic, the remote MCP endpoint, static projects, primary project routes, and bounded additional Compose HTTP routes.
 
 ## Control-plane responsibilities
 
@@ -54,10 +57,21 @@ The API is the orchestration authority. Its responsibilities include:
 - project-scoped persistent-storage management;
 - backups and VM migration;
 - DB Studio and optional shared PostgreSQL provisioning;
-- CLI/MCP endpoints;
+- REST endpoints consumed by the CLI and MCP integrations;
+- scoped machine-token authentication and authorization;
 - runtime metrics integration and host telemetry.
 
 Because orchestration requires the Docker-compatible engine socket, compromise of the API must be treated as compromise of the host boundary.
+
+### Remote MCP service
+
+The remote MCP process is a stateless Streamable HTTP adapter on the control network. Caddy exposes it at `/mcp`; the service itself has no Docker-compatible engine socket, Caddy Admin socket, PostgreSQL connection, or project-network membership.
+
+Remote MCP authenticates `myp_*` bearer credentials through the Go API before MCP initialization. Each tool call then calls the normal REST API with the same scoped bearer token, so REST authorization remains the single enforcement boundary. Machine-token routes are explicitly allowlisted and new routes fail closed until mapped.
+
+Scoped keys are stored hash-only and may expire or be revoked. Remote tools intentionally exclude the host shell, DB Studio, environment-value reveal, raw SQL, project deletion, route mutation, webhook-secret operations, backup/update, and other owner-only host authority. MCP calls include bounded audit metadata such as token identity and tool name without logging the bearer secret or environment values.
+
+The existing local STDIO bridge remains available for compatible clients and continues to call the Go API rather than orchestrating the engine directly.
 
 ### Dashboard
 
@@ -71,7 +85,7 @@ PostgreSQL stores control-plane state. It is also optionally used to provision p
 
 Caddy has two distinct roles:
 
-1. stable ingress for dashboard/API/webhook traffic;
+1. stable ingress for dashboard/API/webhook/remote-MCP traffic;
 2. data-plane routing and static-file serving for projects.
 
 Project routing includes the primary project hostname and, for eligible Compose projects, up to four additional platform-derived HTTP hostnames. Additional routes never grant access to the Caddy Admin socket.
@@ -112,6 +126,29 @@ sequenceDiagram
     Caddy-->>Edge: Response
     Edge-->>User: HTTPS response
 ```
+
+### Remote MCP
+
+```mermaid
+sequenceDiagram
+    actor Agent as MCP client
+    participant Edge as Public delivery path
+    participant Caddy
+    participant MCP as Remote MCP service
+    participant API as Go API
+
+    Agent->>Edge: HTTPS /mcp + scoped bearer token
+    Edge->>Caddy: Request
+    Caddy->>MCP: Proxy /mcp
+    MCP->>API: Validate token via /auth/me
+    API-->>MCP: Authorized identity / scope result
+    Agent->>MCP: MCP tool call
+    MCP->>API: Normal REST request + same bearer token
+    API-->>MCP: Scoped result
+    MCP-->>Agent: MCP tool result
+```
+
+The MCP service does not bypass the API for reads or mutations. Revoked or expired machine keys fail at the REST boundary, and mutation/request limits are applied per token by the MCP service.
 
 ### Container-backed project
 

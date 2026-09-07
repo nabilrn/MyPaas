@@ -93,13 +93,9 @@ func Middleware(service *Service) func(http.Handler) http.Handler {
 				Action:       action,
 				ResourceType: resourceType,
 				ResourceID:   resourceID,
-				Metadata: map[string]any{
-					"method": r.Method,
-					"path":   r.URL.Path,
-					"status": recorder.status,
-				},
-				IPAddress: remoteIP(r),
-				UserAgent: stringPtr(r.UserAgent()),
+				Metadata:     auditMetadata(r, recorder.status),
+				IPAddress:    remoteIP(r),
+				UserAgent:    stringPtr(r.UserAgent()),
 			}); err != nil {
 				slog.Warn("write audit log", "error", err, "action", action)
 			}
@@ -112,6 +108,10 @@ func shouldAudit(r *http.Request) bool {
 		// Shell input is intentionally not persisted because command lines may contain secrets.
 		return false
 	}
+	if isMCPRequest(r) {
+		// Every MCP tool invocation is auditable, including read-only tools.
+		return true
+	}
 	switch r.Method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		return true
@@ -120,9 +120,46 @@ func shouldAudit(r *http.Request) bool {
 	}
 }
 
+func auditMetadata(r *http.Request, status int) map[string]any {
+	metadata := map[string]any{
+		"method": r.Method,
+		"path":   r.URL.Path,
+		"status": status,
+	}
+	if machineToken, ok := auth.MachineTokenFromRequest(r); ok {
+		metadata["tokenId"] = machineToken.ID.String()
+		metadata["tokenName"] = machineToken.Name
+		metadata["tokenPrefix"] = machineToken.Prefix
+	}
+	if isMCPRequest(r) {
+		metadata["source"] = "mcp"
+		metadata["mcpTool"] = mcpToolName(r)
+	}
+	return metadata
+}
+
+func isMCPRequest(r *http.Request) bool {
+	if _, ok := auth.MachineTokenFromRequest(r); !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-MyPaaS-Source")), "mcp") && mcpToolName(r) != ""
+}
+
+func mcpToolName(r *http.Request) string {
+	tool := strings.TrimSpace(r.Header.Get("X-MyPaaS-MCP-Tool"))
+	if len(tool) > 100 {
+		tool = tool[:100]
+	}
+	return tool
+}
+
 func classify(r *http.Request) (string, *string, uuid.UUID) {
 	path := r.URL.Path
 	id := firstUUID(chi.URLParam(r, "id"), chi.URLParam(r, "projectId"))
+
+	if isMCPRequest(r) {
+		return "mcp." + mcpToolName(r), stringPtr("mcp_tool"), id
+	}
 
 	switch {
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/deploy"):
@@ -143,6 +180,10 @@ func classify(r *http.Request) (string, *string, uuid.UUID) {
 		return "project.updated", stringPtr("project"), id
 	case r.Method == http.MethodDelete && strings.Contains(path, "/projects/"):
 		return "project.deleted", stringPtr("project"), id
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/admin/api-tokens"):
+		return "api_token.created", stringPtr("api_token"), uuid.Nil
+	case r.Method == http.MethodDelete && strings.Contains(path, "/admin/api-tokens/"):
+		return "api_token.revoked", stringPtr("api_token"), id
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/admin/shell/sessions"):
 		return "shell.session_started", stringPtr("shell"), uuid.Nil
 	case r.Method == http.MethodDelete && strings.Contains(path, "/admin/shell/sessions/"):

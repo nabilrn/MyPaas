@@ -19,7 +19,7 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
 - provide project-scoped persistent storage and safe owned-resource cleanup;
 - provide optional shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
-- provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and an optional local MCP bridge;
+- provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and scoped remote or local MCP access;
 - use rootful Podman by default on fresh supported hosts, with Docker Engine as a compatibility mode.
 
 Static projects are served directly by Caddy. Container-backed projects run through the configured Docker-compatible engine contract.
@@ -50,6 +50,14 @@ The host-wide inventory is intentionally read-only. Application lifecycle stays 
 ## Host shell
 
 The Shell page is available only to whitelisted owners. It opens a short-lived shell on the MyPaaS host for trusted operators; it is not public SSH, TCP forwarding, or a project workload terminal. Session input is not written to audit logs, while session start and stop actions are auditable.
+
+## Remote MCP
+
+Each installation can expose a Streamable HTTP MCP endpoint at `https://<PUBLIC_DOMAIN>/mcp`. Owners create scoped `myp_*` access keys from Administration → MCP; the raw key is shown only at creation, while MyPaaS stores only its hash plus its display prefix, scopes, expiry, last-used timestamp, and revocation state.
+
+Remote MCP is an automation layer over the existing REST API, not a second control plane. Every MCP tool call is authorized again by the API using the key scopes and is written to the audit log. Machine-token access is explicitly allowlisted and fails closed for new routes. Host shell, DB Studio, secret reveal, project deletion, route mutation, webhook-secret management, backup/update, and other owner-only host authority are not exposed to remote MCP.
+
+The existing local STDIO MCP bridge remains available for clients that prefer to spawn the bridge on the agent machine.
 
 ## Compose additional HTTP routes
 
@@ -97,6 +105,8 @@ flowchart TB
     Internet["Internet"] --> Delivery["Configured public delivery path"] --> Caddy["Caddy"]
     Caddy --> Dashboard["SvelteKit dashboard"]
     Caddy --> API["Go API"]
+    Caddy --> MCP["Remote MCP service"]
+    MCP --> API
     Caddy --> Static["Static releases"]
     Caddy --> Runtime["Project runtimes"]
     API --> Postgres[("PostgreSQL")]

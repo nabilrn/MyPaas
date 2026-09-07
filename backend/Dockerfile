@@ -11,6 +11,7 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-mcp ./cmd/mcp-http
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas ./cmd/cli
 RUN CGO_ENABLED=0 GOOS=linux go build -o bin/mypaas-sqlite-helper ./cmd/sqlite-helper
 
@@ -22,9 +23,10 @@ RUN apk add --no-cache ca-certificates docker-cli docker-cli-compose git postgre
 WORKDIR /app
 
 COPY --from=builder /build/bin/mypaas-api /app/mypaas-api
+COPY --from=builder /build/bin/mypaas-mcp /app/mypaas-mcp
 COPY --from=builder /build/bin/mypaas /app/mypaas
 COPY --from=builder /build/bin/mypaas-sqlite-helper /app/mypaas-sqlite-helper
 
-EXPOSE 8080
+EXPOSE 8080 8081
 
 ENTRYPOINT ["/app/mypaas-api"]

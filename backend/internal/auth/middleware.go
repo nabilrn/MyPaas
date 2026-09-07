@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	"mypaas/internal/apitoken"
 	"mypaas/internal/config"
 	"mypaas/internal/db"
 	"mypaas/internal/errs"
@@ -14,6 +16,7 @@ import (
 )
 
 func Middleware(tokens *TokenService, queries *db.Queries, cfg *config.Config) func(http.Handler) http.Handler {
+	apiTokens := apitoken.NewRepository(queries)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw := bearerToken(r)
@@ -27,8 +30,40 @@ func Middleware(tokens *TokenService, queries *db.Queries, cfg *config.Config) f
 				return
 			}
 
+			if strings.HasPrefix(raw, "myp_") {
+				machineToken, err := apiTokens.Authenticate(r.Context(), raw)
+				if err != nil {
+					if errors.Is(err, apitoken.ErrInvalidToken) {
+						httpx.DomainError(w, errs.ErrUnauthorized)
+						return
+					}
+					httpx.DomainError(w, err)
+					return
+				}
+				if !machineTokenAllows(r, machineToken.Scopes) {
+					httpx.DomainError(w, errs.ErrForbidden)
+					return
+				}
+				user, err := queries.GetUserByID(r.Context(), machineToken.UserID)
+				if err != nil {
+					if err == pgx.ErrNoRows {
+						httpx.DomainError(w, errs.ErrUnauthorized)
+						return
+					}
+					httpx.DomainError(w, err)
+					return
+				}
+				r = r.WithContext(withMachineToken(r.Context(), machineToken))
+				serveAuthenticated(w, r, next, queries, User{
+					ID:    user.ID,
+					Email: user.Email,
+					Role:  user.Role,
+				})
+				return
+			}
+
 			if cfg != nil && cfg.ApiToken != "" && raw == cfg.ApiToken {
-				// Bypass JWT validation and impersonate the owner.
+				// Legacy owner-equivalent token retained for local CLI/stdio MCP compatibility.
 				if cfg.OwnerEmail == "" {
 					httpx.DomainError(w, errs.ErrUnauthorized)
 					return
