@@ -67,10 +67,12 @@ func ProjectDeclaredResources(deployMode string, memoryMb int32, cpu float64, ma
 	return DeclaredResources(memoryMb, cpu, main, raw)
 }
 
-// DeclaredResources returns the total resource reservation represented by a
-// container-backed project: the main runtime plus every non-main Compose
-// service override. Defaults intentionally match deployment.writeComposeOverride
-// so quota accounting cannot undercount a secondary service that omitted a limit.
+// DeclaredResources returns the total configured runtime limits represented by
+// a container-backed project: the main runtime plus every non-main Compose
+// service override. CPU values are hard ceilings, not reservations; callers
+// must not add caps from separate projects together as if CPU were preallocated.
+// Defaults intentionally match deployment.writeComposeOverride so accounting
+// cannot undercount a secondary service that omitted a limit.
 func DeclaredResources(memoryMb int32, cpu float64, main string, raw json.RawMessage) (int32, float64, error) {
 	main = strings.TrimSpace(main)
 	if main == "" {
@@ -122,7 +124,7 @@ func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bo
 	if err != nil {
 		return Usage{}, err
 	}
-	declaredMemoryMb, declaredCPU, err := declaredUsage(projects, uuid.Nil)
+	declaredMemoryMb, largestDeclaredCPU, err := declaredUsage(projects, uuid.Nil)
 	if err != nil {
 		return Usage{}, err
 	}
@@ -139,7 +141,7 @@ func (s *Service) usage(ctx context.Context, userID uuid.UUID, includeRuntime bo
 		MemoryUsedMb:    declaredMemoryMb,
 		MemoryRuntimeMb: runtimeMemoryMb,
 		CPULimit:        s.cfg.UserCPUQuota,
-		CPUUsed:         declaredCPU,
+		CPUUsed:         largestDeclaredCPU,
 		CPURuntime:      runtimeCPU,
 		ProjectLimit:    s.cfg.MaxProjects,
 		ProjectCount:    int32(len(projects)),
@@ -159,7 +161,7 @@ func (s *Service) CheckUpdate(ctx context.Context, project db.Project, memoryMb 
 	if err != nil {
 		return err
 	}
-	declaredMemoryMb, declaredCPU, err := declaredUsage(projects, project.ID)
+	declaredMemoryMb, largestDeclaredCPU, err := declaredUsage(projects, project.ID)
 	if err != nil {
 		return err
 	}
@@ -167,16 +169,19 @@ func (s *Service) CheckUpdate(ctx context.Context, project db.Project, memoryMb 
 		MemoryLimitMb: s.cfg.UserRAMQuotaMB,
 		MemoryUsedMb:  declaredMemoryMb,
 		CPULimit:      s.cfg.UserCPUQuota,
-		CPUUsed:       declaredCPU,
+		CPUUsed:       largestDeclaredCPU,
 		ProjectLimit:  s.cfg.MaxProjects,
 		ProjectCount:  int32(len(projects)),
 	}
 	return checkUsage(usage, memoryMb, cpu, 0)
 }
 
+// declaredUsage sums RAM limits because RAM quota remains aggregate, while CPU
+// quota is a per-project ceiling. The CPU usage field therefore reports the
+// largest configured project cap instead of a meaningless sum of shared caps.
 func declaredUsage(projects []db.Project, excludeID uuid.UUID) (int32, float64, error) {
 	var totalMemory int64
-	var totalCPU float64
+	var largestCPU float64
 	for _, project := range projects {
 		if excludeID != uuid.Nil && project.ID == excludeID {
 			continue
@@ -192,12 +197,14 @@ func declaredUsage(projects []db.Project, excludeID uuid.UUID) (int32, float64, 
 			return 0, 0, err
 		}
 		totalMemory += int64(memory)
-		totalCPU += cpu
+		if cpu > largestCPU {
+			largestCPU = cpu
+		}
 	}
 	if totalMemory > math.MaxInt32 {
 		return 0, 0, fmt.Errorf("declared user memory exceeds supported range")
 	}
-	return int32(totalMemory), totalCPU, nil
+	return int32(totalMemory), largestCPU, nil
 }
 
 func checkUsage(usage Usage, addedMemoryMb int32, addedCPU float64, addedProjects int32) error {
@@ -207,8 +214,11 @@ func checkUsage(usage Usage, addedMemoryMb int32, addedCPU float64, addedProject
 	if usage.MemoryLimitMb > 0 && usage.MemoryUsedMb+addedMemoryMb > usage.MemoryLimitMb {
 		return fmt.Errorf("%w: memory %dMB would exceed limit %dMB", errs.ErrQuotaExceeded, usage.MemoryUsedMb+addedMemoryMb, usage.MemoryLimitMb)
 	}
-	if usage.CPULimit > 0 && usage.CPUUsed+addedCPU > usage.CPULimit+cpuQuotaEpsilon {
-		return fmt.Errorf("%w: CPU %.2f would exceed limit %.2f", errs.ErrQuotaExceeded, usage.CPUUsed+addedCPU, usage.CPULimit)
+	// CPU caps are per-project ceilings. Docker and Podman share idle CPU across
+	// containers; adding caps from unrelated projects would incorrectly model
+	// those ceilings as reserved cores and reject otherwise valid projects.
+	if usage.CPULimit > 0 && addedCPU > usage.CPULimit+cpuQuotaEpsilon {
+		return fmt.Errorf("%w: project CPU %.2f would exceed per-project limit %.2f", errs.ErrQuotaExceeded, addedCPU, usage.CPULimit)
 	}
 	return nil
 }
