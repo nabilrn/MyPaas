@@ -1,37 +1,21 @@
 -- name: GetProjectByID :one
-SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
-       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
-       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile,
-       compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
-       service_resources, static_frontend_path, base_directory, image_ref
+SELECT *
 FROM projects
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetProjectByName :one
-SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
-       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
-       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile,
-       compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
-       service_resources, static_frontend_path, base_directory, image_ref
+SELECT *
 FROM projects
 WHERE name = $1 AND deleted_at IS NULL;
 
 -- name: ListProjectsByUser :many
-SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
-       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
-       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile,
-       compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
-       service_resources, static_frontend_path, base_directory, image_ref
+SELECT *
 FROM projects
 WHERE user_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC;
 
 -- name: ListRoutableProjects :many
-SELECT id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
-       app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
-       status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile,
-       compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
-       service_resources, static_frontend_path, base_directory, image_ref
+SELECT *
 FROM projects
 WHERE status = 'running'
   AND deleted_at IS NULL
@@ -50,11 +34,7 @@ INSERT INTO projects (
     compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
     service_resources, static_frontend_path, base_directory, image_ref
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-RETURNING id, user_id, name, repo_url, branch, subdomain, deploy_mode, main_service,
-          app_port, webhook_secret, allocated_port, memory_limit_mb, cpu_limit,
-          status, active_deployment_id, created_at, updated_at, deleted_at, resource_profile,
-          compose_file_path, compose_override_paths, compose_profiles, compose_workdir,
-          service_resources, static_frontend_path, base_directory, image_ref;
+RETURNING *;
 
 -- name: UpdateProject :exec
 UPDATE projects

@@ -1,22 +1,22 @@
 -- name: GetUserByEmail :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT *
 FROM users
 WHERE email = $1;
 
 -- name: GetUserByGithubID :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT *
 FROM users
 WHERE github_id = sqlc.arg(github_id)::text;
 
 -- name: GetUserByID :one
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT *
 FROM users
 WHERE id = $1;
 
 -- name: CreateUser :one
 INSERT INTO users (email, github_id, github_username, avatar_url, role)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at;
+RETURNING *;
 
 -- name: UpdateLastLogin :exec
 UPDATE users
@@ -31,10 +31,10 @@ SET github_id = $2,
     last_login_at = NOW()
 WHERE id = $1
   AND (github_id IS NULL OR github_id = $2)
-RETURNING id, email, github_id, github_username, avatar_url, role, created_at, last_login_at;
+RETURNING *;
 
 -- name: ListUsers :many
-SELECT id, email, github_id, github_username, avatar_url, role, created_at, last_login_at
+SELECT *
 FROM users
 ORDER BY created_at DESC;
 

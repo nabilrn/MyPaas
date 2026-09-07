@@ -95,8 +95,8 @@ migrate-new:
 
 # Code generation
 sqlc:
-	@echo "Generating sqlc code..."
-	@cd $(BACKEND_DIR) && sqlc generate
+	@echo "Generating sqlc code with pinned toolchain..."
+	@bash scripts/sqlc.sh generate
 	@echo "✓ Generated: $(BACKEND_DIR)/internal/db"
 
 # Verification
@@ -127,4 +127,3 @@ docker-down:
 
 docker-reset:
 	$(DOCKER_COMPOSE) down -v
-	@echo "✓ Database reset"
