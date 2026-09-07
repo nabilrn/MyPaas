@@ -74,7 +74,6 @@
 	$: hostMemoryTotal = hostStats?.memory?.total_bytes ?? hostStats?.host_ram_bytes ?? 0;
 	$: hostMemoryUsed = hostStats?.memory ? Math.max(0, hostStats.memory.total_bytes - hostStats.memory.available_bytes) : 0;
 	$: hostStorageUsed = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
-	$: hostCPUAllocatedPercent = hostStats ? percentage(hostStats.allocated_cpu, hostStats.host_cpu_cores) : 0;
 	$: hostMemoryUsedPercent = percentage(hostMemoryUsed, hostMemoryTotal);
 	$: hostStorageUsedPercent = hostStats?.storage ? percentage(hostStorageUsed, hostStats.storage.total_bytes) : 0;
 	$: confirmationTitle = confirmationTarget?.kind === 'profile'
@@ -252,7 +251,7 @@
 				<div class="flex items-start justify-between gap-4 px-4 py-3">
 					<div>
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Host capacity</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Current host capacity and project allocations.</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Current host capacity and runtime resource state.</p>
 					</div>
 				</div>
 				<div class="grid border-t border-[color:var(--workspace-divider)] sm:grid-cols-3">
@@ -273,10 +272,9 @@
 							<div class="min-w-0 flex-1">
 								<p class="text-xs text-gray-500 dark:text-gray-400">CPU</p>
 								<p class="mt-0.5 text-base font-semibold tabular-nums text-gray-950 dark:text-white">{hostStats ? `${hostStats.host_cpu_cores} core${hostStats.host_cpu_cores === 1 ? '' : 's'}` : 'Unavailable'}</p>
-								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>{/if}
+								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Shared across projects · per-project caps remain enforced</p>{/if}
 							</div>
 						</div>
-						<div class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800"><div class="h-full rounded-full" style={`width:${hostCPUAllocatedPercent}%; background:var(--chart-cpu);`}></div></div>
 					</div>
 					<div class="min-w-0 border-t border-[color:var(--workspace-divider)] px-4 py-3 sm:border-t-0">
 						<div class="flex items-start gap-2.5">
