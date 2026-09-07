@@ -28,7 +28,7 @@
 	let mainService = '';
 	let resourceProfile: ResourceProfile = 'custom';
 	let memoryMb = 512;
-	let cpuLimit = 0.5;
+	let cpuLimit = 0;
 	let composeFilePath = '';
 	let composeOverridePaths = '';
 	let composeProfiles = '';
@@ -42,11 +42,11 @@
 	let loadingComposeResources = false;
 
 	let resourceProfiles: Array<{ id: ResourceProfile; title: string; memoryMb: number; cpuLimit: number }> = [
-		{ id: 'node-python', title: 'Node/Python', memoryMb: 256, cpuLimit: 0.35 },
-		{ id: 'go-small', title: 'Go small', memoryMb: 128, cpuLimit: 0.2 },
-		{ id: 'compose-main', title: 'Compose main', memoryMb: 256, cpuLimit: 0.35 },
-		{ id: 'static', title: 'Static/no-runtime', memoryMb: 64, cpuLimit: 0.1 },
-		{ id: 'custom', title: 'Custom', memoryMb: 512, cpuLimit: 0.5 }
+		{ id: 'node-python', title: 'Node/Python', memoryMb: 256, cpuLimit: 0 },
+		{ id: 'go-small', title: 'Go small', memoryMb: 128, cpuLimit: 0 },
+		{ id: 'compose-main', title: 'Compose main', memoryMb: 256, cpuLimit: 0 },
+		{ id: 'static', title: 'Static/no-runtime', memoryMb: 64, cpuLimit: 0 },
+		{ id: 'custom', title: 'Custom', memoryMb: 512, cpuLimit: 0 }
 	];
 
 	$: sourceChanged = Boolean(project && (
@@ -64,8 +64,7 @@
 	$: resourcesChanged = Boolean(project && (
 		serviceResourcesStr !== originalServiceResourcesStr ||
 		resourceProfile !== project.resourceProfile ||
-		memoryMb !== project.memoryLimitMb ||
-		cpuLimit !== project.cpuLimit
+		memoryMb !== project.memoryLimitMb
 	));
 	$: gitSourceChanged = Boolean(project?.sourceType === 'git' && (branch !== project.branch || baseDirectory !== (project.baseDirectory || '')));
 	$: branchOptions = Array.from(new Set([branch, ...repoBranches].filter(Boolean))).map((item) => ({ value: item, label: item }));
@@ -77,7 +76,7 @@
 	$: resourceProfileOptions = resourceProfiles.map((profile) => ({
 		value: profile.id,
 		label: profile.title,
-		description: `${profile.memoryMb} MB · ${formatCpu(profile.cpuLimit)} CPU`
+		description: `${profile.memoryMb} MB · Shared CPU`
 	}));
 
 	onMount(() => {
@@ -95,7 +94,7 @@
 			mainService = project.mainService ?? '';
 			resourceProfile = project.resourceProfile;
 			memoryMb = project.memoryLimitMb;
-			cpuLimit = project.cpuLimit;
+			cpuLimit = 0;
 			composeFilePath = project.composeFilePath ?? '';
 			composeOverridePaths = (project.composeOverridePaths ?? []).join(', ');
 			composeProfiles = (project.composeProfiles ?? []).join(', ');
@@ -107,11 +106,11 @@
 
 			const platformSettings = await api.admin.getSettings().catch(() => null);
 			if (platformSettings) {
-				const configured: Partial<Record<ResourceProfile, { memoryMb: number; cpuLimit: number }>> = {
-					static: { memoryMb: platformSettings.profile_static_memory_mb ?? 64, cpuLimit: platformSettings.profile_static_cpu_limit ?? 0.01 },
-					'go-small': { memoryMb: platformSettings.profile_go_small_memory_mb ?? 128, cpuLimit: platformSettings.profile_go_small_cpu_limit ?? 0.2 },
-					'node-python': { memoryMb: platformSettings.profile_node_python_memory_mb ?? 256, cpuLimit: platformSettings.profile_node_python_cpu_limit ?? 0.35 },
-					'compose-main': { memoryMb: platformSettings.profile_compose_main_memory_mb ?? 256, cpuLimit: platformSettings.profile_compose_main_cpu_limit ?? 0.35 }
+				const configured: Partial<Record<ResourceProfile, { memoryMb: number }>> = {
+					static: { memoryMb: platformSettings.profile_static_memory_mb ?? 64 },
+					'go-small': { memoryMb: platformSettings.profile_go_small_memory_mb ?? 128 },
+					'node-python': { memoryMb: platformSettings.profile_node_python_memory_mb ?? 256 },
+					'compose-main': { memoryMb: platformSettings.profile_compose_main_memory_mb ?? 256 }
 				};
 				resourceProfiles = resourceProfiles.map((profile) => ({ ...profile, ...(configured[profile.id] ?? {}) }));
 			}
@@ -143,15 +142,11 @@
 		if (!profile) return;
 		resourceProfile = profile.id;
 		memoryMb = profile.memoryMb;
-		cpuLimit = profile.cpuLimit;
+		cpuLimit = 0;
 	}
 
 	function markCustomProfile() {
 		resourceProfile = 'custom';
-	}
-
-	function formatCpu(value: number) {
-		return Number(value.toFixed(2)).toString();
 	}
 
 	function repositoryInspectionKey() {
@@ -266,9 +261,10 @@
 			project = await api.projects.update(project.id, {
 				resourceProfile,
 				memoryLimitMb: Number(memoryMb),
-				cpuLimit: Number(cpuLimit),
+				cpuLimit: 0,
 				serviceResources: parsedResources
 			});
+			cpuLimit = 0;
 			originalServiceResourcesStr = serviceResourcesStr;
 			toast.success('Resource settings saved');
 		} catch (error) {
@@ -352,7 +348,7 @@
 			<section class="flex min-w-0 flex-col border-t border-[color:var(--workspace-divider)] px-4 py-4 lg:border-t-0">
 				<div class="min-h-11">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resources</h2>
-					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">CPU and memory allocation for this project.</p>
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Memory is bounded per project; CPU is shared across the host.</p>
 				</div>
 
 				<div class="mt-3 space-y-3">
@@ -364,12 +360,12 @@
 					{#if resourceProfile === 'custom'}
 						<div class="grid gap-3 sm:grid-cols-2">
 							<div><label class="field-label" for="mem">Memory (MB)</label><input id="mem" type="number" min="64" max="32768" step="1" bind:value={memoryMb} on:input={markCustomProfile} class="field w-full" /></div>
-							<div><label class="field-label" for="cpu">CPU</label><input id="cpu" type="number" min="0.1" max="32" step="0.05" bind:value={cpuLimit} on:input={markCustomProfile} class="field w-full" /></div>
+							<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">Shared</p><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uses available host CPU; no per-project hard cap.</p></div>
 						</div>
 					{:else}
 						<div class="grid grid-cols-2 gap-3">
 							<div><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">{memoryMb} MB</p></div>
-							<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">{formatCpu(cpuLimit)} CPU</p></div>
+							<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">Shared</p></div>
 						</div>
 					{/if}
 
@@ -384,18 +380,18 @@
 						{#if composeResourceError}<div class="alert-danger">{composeResourceError}</div>{/if}
 						<details>
 							<summary class="app-focus cursor-pointer select-none text-sm font-medium text-gray-700 dark:text-gray-300">Advanced resource limits</summary>
-							<div class="mt-3"><label class="field-label" for="service_resources">Other services (JSON)</label><textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full font-mono text-sm"></textarea></div>
+							<div class="mt-3"><label class="field-label" for="service_resources">Other services (JSON)</label><textarea id="service_resources" bind:value={serviceResourcesStr} rows="5" class="field w-full font-mono text-sm"></textarea><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Memory limits are enforced; legacy CPU values are ignored because CPU is shared.</p></div>
 						</details>
 					{:else}
 						<div class="pt-0.5">
 							<p class="text-sm font-medium text-gray-950 dark:text-white">Single runtime</p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The selected profile controls this project's container allocation.</p>
+							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The selected profile controls memory allocation. CPU remains shared.</p>
 						</div>
 					{/if}
 				</div>
 
 				<div class="mt-4 flex min-h-9 flex-wrap items-center justify-between gap-3">
-					<p class="text-xs text-gray-500 dark:text-gray-400">New limits apply after the next deployment.</p>
+					<p class="text-xs text-gray-500 dark:text-gray-400">New memory limits apply after the next deployment.</p>
 					{#if resourcesChanged}<ActionButton variant="primary" size="sm" on:click={saveResources} loading={savingResources} loadingLabel="Saving">Save resources</ActionButton>{/if}
 				</div>
 			</section>
