@@ -74,7 +74,6 @@
 	$: hostMemoryTotal = hostStats?.memory?.total_bytes ?? hostStats?.host_ram_bytes ?? 0;
 	$: hostMemoryUsed = hostStats?.memory ? Math.max(0, hostStats.memory.total_bytes - hostStats.memory.available_bytes) : 0;
 	$: hostStorageUsed = hostStats?.storage ? Math.max(0, hostStats.storage.total_bytes - hostStats.storage.available_bytes) : 0;
-	$: hostCPUAllocatedPercent = hostStats ? percentage(hostStats.allocated_cpu, hostStats.host_cpu_cores) : 0;
 	$: hostMemoryUsedPercent = percentage(hostMemoryUsed, hostMemoryTotal);
 	$: hostStorageUsedPercent = hostStats?.storage ? percentage(hostStorageUsed, hostStats.storage.total_bytes) : 0;
 	$: confirmationTitle = confirmationTarget?.kind === 'profile'
@@ -83,7 +82,7 @@
 			? 'Save build timeout?'
 			: 'Confirm action';
 	$: confirmationDescription = confirmationTarget?.kind === 'profile'
-		? 'This becomes the platform default used by this resource profile. Explicit per-project overrides remain available.'
+		? 'This becomes the platform memory default used by this resource profile. CPU remains shared across project runtimes.'
 		: confirmationTarget?.kind === 'build-timeout'
 			? 'Future deployment builds will use this timeout.'
 			: '';
@@ -139,12 +138,11 @@
 	}
 
 	function profileChanged(profile: ProfileSetting) {
-		return settings[profile.memoryKey] !== savedSettings[profile.memoryKey]
-			|| settings[profile.cpuKey] !== savedSettings[profile.cpuKey];
+		return settings[profile.memoryKey] !== savedSettings[profile.memoryKey];
 	}
 
 	function profileInvalid(profile: ProfileSetting) {
-		return Boolean(validationErrors[profile.memoryKey] || validationErrors[profile.cpuKey]);
+		return Boolean(validationErrors[profile.memoryKey]);
 	}
 
 	function requestProfileSave(profile: ProfileSetting) {
@@ -163,16 +161,14 @@
 		savingTarget = target;
 		try {
 			const updated = await api.admin.updateSettings({
-				[profile.memoryKey]: settings[profile.memoryKey],
-				[profile.cpuKey]: settings[profile.cpuKey]
+				[profile.memoryKey]: settings[profile.memoryKey]
 			});
 			const memory = numericValue(updated[profile.memoryKey], settings[profile.memoryKey]);
-			const cpu = numericValue(updated[profile.cpuKey], settings[profile.cpuKey]);
-			settings = { ...settings, [profile.memoryKey]: memory, [profile.cpuKey]: cpu };
-			savedSettings = { ...savedSettings, [profile.memoryKey]: memory, [profile.cpuKey]: cpu };
+			settings = { ...settings, [profile.memoryKey]: memory };
+			savedSettings = { ...savedSettings, [profile.memoryKey]: memory };
 			editingTarget = '';
 			confirmationTarget = null;
-			toast.success(`${profile.name} defaults saved`);
+			toast.success(`${profile.name} memory default saved`);
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to save resource defaults');
 			console.error(error);
@@ -222,10 +218,6 @@
 		return Math.min(100, Math.max(0, (value / total) * 100));
 	}
 
-	function formatCPU(value: number) {
-		return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-	}
-
 	function formatBytes(value: number) {
 		if (!Number.isFinite(value) || value <= 0) return 'Unavailable';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -273,10 +265,9 @@
 							<div class="min-w-0 flex-1">
 								<p class="text-xs text-gray-500 dark:text-gray-400">CPU</p>
 								<p class="mt-0.5 text-base font-semibold tabular-nums text-gray-950 dark:text-white">{hostStats ? `${hostStats.host_cpu_cores} core${hostStats.host_cpu_cores === 1 ? '' : 's'}` : 'Unavailable'}</p>
-								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{hostStats.allocated_cpu.toFixed(2)} allocated</p>{/if}
+								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Shared across project runtimes</p>{/if}
 							</div>
 						</div>
-						<div class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800"><div class="h-full rounded-full" style={`width:${hostCPUAllocatedPercent}%; background:var(--chart-cpu);`}></div></div>
 					</div>
 					<div class="min-w-0 border-t border-[color:var(--workspace-divider)] px-4 py-3 sm:border-t-0">
 						<div class="flex items-start gap-2.5">
@@ -296,7 +287,7 @@
 				<div class="flex items-start justify-between gap-4 px-4 py-3">
 					<div>
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resource defaults</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Defaults used by new projects. Built-in profile floors cannot be lowered.</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Memory defaults used by new projects. CPU is shared across the host.</p>
 					</div>
 				</div>
 				<div class="grid border-t border-[color:var(--workspace-divider)] lg:grid-cols-2">
@@ -319,11 +310,11 @@
 										<div class="relative"><input type="number" id={profile.memoryKey} min={profile.minimumMemory} max="32768" step="1" bind:value={settings[profile.memoryKey]} class="field compact-number-input w-full pr-11" aria-invalid={validationErrors[profile.memoryKey] ? 'true' : undefined} /><span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">MB</span></div>
 										{#if validationErrors[profile.memoryKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.memoryKey]}</p>{/if}
 									</label>
-									<label class="block" for={profile.cpuKey}>
-										<span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">CPU</span>
-										<div class="relative"><input type="number" id={profile.cpuKey} min={profile.minimumCPU} max="32" step="0.05" bind:value={settings[profile.cpuKey]} class="field compact-number-input w-full pr-12" aria-invalid={validationErrors[profile.cpuKey] ? 'true' : undefined} /><span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">CPU</span></div>
-										{#if validationErrors[profile.cpuKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.cpuKey]}</p>{/if}
-									</label>
+									<div>
+										<p class="mb-1 text-xs text-gray-500 dark:text-gray-400">CPU</p>
+										<p class="text-sm font-semibold text-gray-950 dark:text-white">Shared</p>
+										<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">No profile-specific hard cap.</p>
+									</div>
 								</div>
 								<div class="mt-3 flex justify-end gap-2">
 									<ActionButton variant="ghost" size="xs" on:click={cancelEdit} disabled={Boolean(savingTarget)}>Cancel</ActionButton>
@@ -332,7 +323,7 @@
 							{:else}
 								<div class="mt-3 grid grid-cols-2 divide-x divide-[color:var(--workspace-divider)] border-t border-[color:var(--workspace-divider)] pt-2.5">
 									<div class="pr-4"><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings[profile.memoryKey]} MB</p></div>
-									<div class="pl-4"><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[profile.cpuKey])} CPU</p></div>
+									<div class="pl-4"><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold text-gray-950 dark:text-white">Shared</p></div>
 								</div>
 							{/if}
 						</div>
@@ -407,7 +398,7 @@
 	{#if confirmationTarget?.kind === 'profile'}
 		<div class="grid grid-cols-2 gap-4">
 			<div><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings[confirmationTarget.profile.memoryKey]} → {settings[confirmationTarget.profile.memoryKey]} MB</p></div>
-			<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[confirmationTarget.profile.cpuKey])} → {formatCPU(settings[confirmationTarget.profile.cpuKey])} CPU</p></div>
+			<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 font-semibold text-gray-950 dark:text-white">Shared</p></div>
 		</div>
 	{:else if confirmationTarget?.kind === 'build-timeout'}
 		<p><span class="text-gray-500 dark:text-gray-400">Build timeout:</span> <span class="font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings.build_timeout_minutes} → {settings.build_timeout_minutes} minutes</span></p>
