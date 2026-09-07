@@ -1,8 +1,12 @@
-# ADR-021: Persistent Image Storage
+# ADR-025: Persistent Image Storage
 
 ## Status
 
 Accepted
+
+## Numbering note
+
+Renumbered from the duplicate ADR-021 identifier on 2026-09-07. The decision and acceptance state are unchanged.
 
 ## Context
 

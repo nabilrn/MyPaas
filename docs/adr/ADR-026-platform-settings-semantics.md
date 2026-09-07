@@ -1,8 +1,12 @@
-# ADR-020: Platform settings must have one authoritative runtime consumer
+# ADR-026: Platform settings must have one authoritative runtime consumer
 
 ## Status
 
 Accepted
+
+## Numbering note
+
+Renumbered from the duplicate ADR-020 identifier on 2026-09-07. The decision and acceptance state are unchanged.
 
 ## Context
 
