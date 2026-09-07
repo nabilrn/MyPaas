@@ -3,8 +3,13 @@ package quota
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"mypaas/internal/db"
 	"mypaas/internal/errs"
 )
 
@@ -43,25 +48,35 @@ func TestCheckUsage(t *testing.T) {
 			wantErr:       true,
 		},
 		{
-			name: "exceeds cpu",
+			name: "allows aggregate cpu caps above quota",
 			usage: Usage{
 				MemoryLimitMb: 6144,
 				CPULimit:      1,
-				CPUUsed:       0.75,
+				CPUUsed:       4.75,
 				ProjectLimit:  20,
 			},
 			addedCPU: 0.5,
+		},
+		{
+			name: "rejects one project cpu cap above ceiling",
+			usage: Usage{
+				MemoryLimitMb: 6144,
+				CPULimit:      1,
+				CPUUsed:       0.25,
+				ProjectLimit:  20,
+			},
+			addedCPU: 1.25,
 			wantErr:  true,
 		},
 		{
 			name: "allows cpu floating point boundary noise",
 			usage: Usage{
 				MemoryLimitMb: 6144,
-				CPULimit:      3,
-				CPUUsed:       2.0000000000000004,
+				CPULimit:      1,
+				CPUUsed:       9,
 				ProjectLimit:  20,
 			},
-			addedCPU: 1,
+			addedCPU: 1.0000000000000002,
 		},
 		{
 			name: "exceeds project count",
@@ -89,6 +104,42 @@ func TestCheckUsage(t *testing.T) {
 				t.Fatalf("expected nil error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestDeclaredUsageSumsMemoryAndReportsLargestCPUCap(t *testing.T) {
+	projects := []db.Project{
+		{
+			ID:            uuid.New(),
+			DeployMode:    "dockerfile",
+			MemoryLimitMb: 512,
+			CpuLimit: pgtype.Numeric{
+				Int:   big.NewInt(50),
+				Exp:   -2,
+				Valid: true,
+			},
+		},
+		{
+			ID:            uuid.New(),
+			DeployMode:    "dockerfile",
+			MemoryLimitMb: 768,
+			CpuLimit: pgtype.Numeric{
+				Int:   big.NewInt(125),
+				Exp:   -2,
+				Valid: true,
+			},
+		},
+	}
+
+	memory, cpu, err := declaredUsage(projects, uuid.Nil)
+	if err != nil {
+		t.Fatalf("declaredUsage returned error: %v", err)
+	}
+	if memory != 1280 {
+		t.Fatalf("memory = %d, want 1280", memory)
+	}
+	if cpu != 1.25 {
+		t.Fatalf("cpu = %.2f, want 1.25", cpu)
 	}
 }
 
