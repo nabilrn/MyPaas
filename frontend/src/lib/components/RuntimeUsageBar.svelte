@@ -6,6 +6,7 @@
 	export let limit = 0;
 	export let valueLabel = '';
 	export let tone: Tone = 'neutral';
+	export let shared = false;
 
 	$: safeLimit = Math.max(limit, 0);
 	$: ratio = safeLimit > 0 ? Math.max(0, Math.min(1, used / safeLimit)) : 0;
@@ -20,22 +21,30 @@
 			<p class="text-[13px] font-medium text-gray-700 dark:text-gray-300">{label}</p>
 			<p class="mt-1 truncate text-sm font-semibold text-gray-950 dark:text-white">{valueLabel}</p>
 		</div>
-		<span class="shrink-0 font-mono text-[11px] text-gray-400 dark:text-gray-500">{percentage}%</span>
+		{#if shared}
+			<span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-500 dark:bg-neutral-900 dark:text-gray-400">Shared</span>
+		{:else}
+			<span class="shrink-0 font-mono text-[11px] text-gray-400 dark:text-gray-500">{percentage}%</span>
+		{/if}
 	</div>
 
-	<div
-		class={`mt-3 h-3 overflow-hidden border ${trackClass}`}
-		role="progressbar"
-		aria-label={label}
-		aria-valuemin="0"
-		aria-valuemax={safeLimit}
-		aria-valuenow={Math.max(0, used)}
-	>
+	{#if shared}
+		<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">No per-project CPU hard cap. Usage can burst into available host CPU.</p>
+	{:else}
 		<div
-			class={`h-full border-r ${fillClass}`}
-			style={`width: ${ratio * 100}%`}
-		></div>
-	</div>
+			class={`mt-3 h-3 overflow-hidden border ${trackClass}`}
+			role="progressbar"
+			aria-label={label}
+			aria-valuemin="0"
+			aria-valuemax={safeLimit}
+			aria-valuenow={Math.max(0, used)}
+		>
+			<div
+				class={`h-full border-r ${fillClass}`}
+				style={`width: ${ratio * 100}%`}
+			></div>
+		</div>
+	{/if}
 </article>
 
 <style>
