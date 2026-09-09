@@ -82,8 +82,7 @@ body:
     id: logs
     attributes:
       label: Relevant logs or screenshots
-      description: Include only the minimum secret-safe evidence needed to diagnose the issue.
-      render: shell
+      description: Include only the minimum secret-safe evidence needed to diagnose the issue. You can paste logs, images, or links here.
 
   - type: checkboxes
     id: safety
