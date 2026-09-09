@@ -1,7 +1,7 @@
 # Beta Create Project runtime-contract audit
 
 **Status:** Historical qualification procedure; retained for regression provenance.  
-**Current source of truth:** current frontend/backend implementation, tests, and [`../engineering/beta-readiness-gates.md`](../engineering/beta-readiness-gates.md).
+**Current source of truth:** current frontend/backend implementation, tests, and [`../engineering/runtime-verification.md`](../engineering/runtime-verification.md).
 
 This document records the intent of the Create Project beta audit that has already been completed. It is not an active instruction to repeat a broad UI/runtime audit after unrelated changes.
 
@@ -32,7 +32,7 @@ Create Project currently supports the product's four deployment paths:
 - Git + static output;
 - OCI image source.
 
-Compose configuration can include base-directory/monorepo layout, Compose file selection, main-service selection, environment discovery, resource settings, and the bounded additional HTTP-route contract when a template/application requires it.
+Compose configuration can include base-directory/monorepo layout, Compose file selection, main-service selection, environment discovery, resource settings, and the bounded additional HTTP-route contract when an application requires it.
 
 Image-mode deployment may use the installation-level bounded registry credential defined by ADR-022; this is not a project-level registry credential manager.
 
