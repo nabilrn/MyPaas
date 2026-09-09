@@ -30,7 +30,7 @@ core/backup-restore-safety
 infra/podman-socket-recovery
 ux/create-project-env-guidance
 test/minio-route-regression
-docs/sync-post-pr157
+docs/sync-product-contract
 chore/repo-branch-cleanup
 ```
 
@@ -77,6 +77,6 @@ For current product direction and qualification policy, use:
 - [`AGENTS.md`](../../AGENTS.md)
 - [`PRODUCT.md`](../../PRODUCT.md)
 - [`ROADMAP.md`](../../ROADMAP.md)
-- [`beta-readiness-gates.md`](beta-readiness-gates.md)
+- [`runtime-verification.md`](runtime-verification.md)
 
 Historical planning documents are not current branching programs.
