@@ -98,6 +98,26 @@ services:
         aliases:
           - api
 
+  mcp:
+    image: ghcr.io/nabilrn/mypaas-api:${MYPAAS_IMAGE_TAG:-latest}
+    container_name: mypaas-mcp
+    restart: always
+    entrypoint: ["/app/mypaas-mcp"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      MYPAAS_INTERNAL_API_URL: http://api:8080/api
+      MYPAAS_MCP_LISTEN_ADDR: :8081
+      LOG_LEVEL: info
+    depends_on:
+      - api
+    networks:
+      control:
+        aliases:
+          - mcp
+
   dashboard:
     image: ghcr.io/nabilrn/mypaas-dashboard:${MYPAAS_IMAGE_TAG:-latest}
     container_name: mypaas-dashboard
@@ -138,6 +158,7 @@ services:
       CADDY_ADMIN: "unix//run/mypaas/caddy-admin.sock"
     depends_on:
       - api
+      - mcp
       - dashboard
     networks:
       control:

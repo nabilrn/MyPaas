@@ -12,6 +12,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiToken struct {
+	ID          uuid.UUID        `json:"id"`
+	UserID      uuid.UUID        `json:"user_id"`
+	Name        string           `json:"name"`
+	TokenHash   []byte           `json:"token_hash"`
+	TokenPrefix string           `json:"token_prefix"`
+	Scopes      []string         `json:"scopes"`
+	ExpiresAt   pgtype.Timestamp `json:"expires_at"`
+	LastUsedAt  pgtype.Timestamp `json:"last_used_at"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	RevokedAt   pgtype.Timestamp `json:"revoked_at"`
+}
+
 type AuditLog struct {
 	ID           uuid.UUID        `json:"id"`
 	UserID       pgtype.UUID      `json:"user_id"`
