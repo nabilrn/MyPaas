@@ -3,9 +3,8 @@
 > Current trust model for the single-host production architecture.
 
 **Status:** Current  
-**Applies to:** `main`  
-**Last verified:** 2026-08-28  
-**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
+**Applies to:** current stable product contract  
+**Last reviewed:** 2026-09-09
 
 ---
 
@@ -27,7 +26,7 @@ flowchart TB
 
     subgraph Host["HOST AUTHORITY"]
         EngineSocket["Docker-compatible engine socket"]
-        Engine["Docker Engine / rootful Podman"]
+        Engine["rootful Podman / Docker Engine compatibility"]
         CaddyAdmin["Caddy Admin Unix socket"]
         HostShell["Owner-only short-lived host shell"]
         Statd["mypaas-statd Unix socket"]
@@ -206,6 +205,14 @@ The repository access token:
 
 The current OAuth integration requests GitHub's `repo` scope so trusted administrators can use private repositories. This grants broader repository permission than a read-only GitHub App token; narrowing that permission is a future authentication-boundary improvement.
 
+## DB Studio boundary
+
+DB Studio Lite supports PostgreSQL, MySQL, MariaDB, and eligible persistent SQLite, but it does not create a general database-administration trust boundary.
+
+Stable writes require an explicit temporary write session and are limited to validated primary-key row updates. Insert/delete and raw SQL are disabled. Persistent SQLite is accepted only when the resolved database file is inside an eligible persistent mount of a container-backed project; SQLite access runs through a short-lived network-disabled helper sharing the project's existing mounts rather than mounting engine storage into the control-plane API.
+
+See ADR-015 for the detailed data-editing and SQLite constraints.
+
 ## Native telemetry daemon
 
 `mypaas-statd` is host-native by design. It reads bounded cgroup/host telemetry and exposes it over `/run/mypaas/statd.sock`.
@@ -252,7 +259,7 @@ The PR #157 qualification on VM `172.104.61.180` proved the bounded additional-r
 
 That qualification confirms the declared routing contract in the tested scenario. It does not change the trust assumptions above or establish VM-grade tenant isolation.
 
-See `docs/engineering/beta-readiness-gates.md` and ADR-023 for qualification provenance.
+See [`docs/engineering/runtime-verification.md`](engineering/runtime-verification.md) and ADR-023 for qualification provenance.
 
 ## Related documents
 
@@ -261,6 +268,7 @@ See `docs/engineering/beta-readiness-gates.md` and ADR-023 for qualification pro
 - [Deployment architecture](architecture/deployment.md)
 - [Observability architecture](architecture/observability.md)
 - [mypaas-statd integration](STATD.md)
+- [ADR-015: DB Studio Lite](adr/ADR-015-db-studio-lite.md)
 - [ADR-022: bounded private-registry authentication](adr/ADR-022-private-registry-auth.md)
 - [ADR-023: bounded additional Compose HTTP routes](adr/ADR-023-compose-additional-http-routes.md)
 - [ADR-024: GitHub repository picker and private-source access](adr/ADR-024-github-repository-access.md)
