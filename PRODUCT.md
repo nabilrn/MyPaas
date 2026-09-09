@@ -19,8 +19,10 @@ MyPaaS can:
 - provide a short-lived owner-only host shell for trusted VM operators;
 - support rollback for compatible container-backed deployments;
 - provide project-scoped persistent storage and owned-resource cleanup;
-- provide PostgreSQL provisioning, DB Studio Lite, backups, restore, and migration tooling;
-- expose CLI, REST API, webhooks, and an optional local MCP bridge;
+- provide shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, MariaDB, and persistent SQLite;
+- keep the stable DB Studio write boundary update-only: temporary write mode plus primary-key row updates are supported, while insert/delete and raw SQL are disabled;
+- provide backups, restore, and migration tooling within documented boundaries;
+- expose CLI, REST API, webhooks, audit logs, and an optional local MCP bridge;
 - use optional `mypaas-statd` telemetry with an engine-metrics fallback.
 
 Fresh supported Linux installations default to rootful Podman through the Docker-compatible command/socket contract used by the control plane. Docker Engine remains an explicit compatibility mode.
@@ -57,6 +59,21 @@ Each route:
 The first version is deliberately HTTP-only, Compose-only, and immutable after first deployment. Raw TCP, SSH, UDP, arbitrary hostnames, and arbitrary public port exposure are not part of this capability.
 
 MinIO's S3 API + Console path is the first real-VM-qualified use of this primitive. See [`docs/adr/ADR-023-compose-additional-http-routes.md`](docs/adr/ADR-023-compose-additional-http-routes.md).
+
+## DB Studio boundary
+
+DB Studio Lite is a project-data inspection and cautious correction tool, not a general database IDE.
+
+Supported databases:
+
+- PostgreSQL;
+- MySQL;
+- MariaDB;
+- persistent SQLite files that resolve inside an eligible project runtime mount.
+
+Stable DB Studio behavior includes schema/table inspection, paginated row browsing, table-scoped string search, schema metadata/ERD, and temporary write sessions for safe primary-key row updates. Insert, delete, raw SQL, schema migration design, and general external database administration remain outside the stable contract.
+
+See [`docs/adr/ADR-015-db-studio-lite.md`](docs/adr/ADR-015-db-studio-lite.md).
 
 ## Boundaries
 
