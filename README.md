@@ -1,10 +1,22 @@
+<p align="center">
+  <img src="frontend/src/assets/brand/mypaas-logo.svg" width="260" alt="MyPaaS">
+</p>
+
+<p align="center">
+  Self-hosted single-host PaaS for deploying and operating applications on a Linux server you control.
+</p>
+
+<p align="center">
+  <a href="https://github.com/nabilrn/MyPaas/releases"><img alt="Release" src="https://img.shields.io/github/v/release/nabilrn/MyPaas?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/nabilrn/MyPaas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nabilrn/MyPaas/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/nabilrn/MyPaas"></a>
+</p>
+
 # MyPaaS
 
-MyPaaS is a self-hosted **single-host PaaS** for deploying and operating applications on a Linux server you control.
+**Status:** Stable
 
-**Status:** Beta
-
-It is built for an owner developer or a small trusted team. MyPaaS manages deployment, routing, lifecycle, persistence, and common operations without pretending one server has unlimited capacity or multi-tenant isolation.
+MyPaaS is built for an owner developer or a small trusted team. It manages deployment, routing, lifecycle, persistence, and common operations without pretending one server has unlimited capacity or multi-tenant isolation.
 
 ## Current capabilities
 
@@ -13,12 +25,13 @@ It is built for an owner developer or a small trusted team. MyPaaS manages deplo
 - deploy OCI images with anonymous pulls or one bounded installation-level credential for a configured registry;
 - inspect repositories and support base-directory / monorepo deployments;
 - manage encrypted environment variables, editable per-source resource defaults with fixed safety floors, deployment history, logs, metrics, restart, redeploy, and rollback;
-- monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, filters, pagination, and live runtime metrics;
+- monitor the host-wide Docker-compatible container inventory, including MyPaaS control-plane and application containers, with search, pagination, and metadata-first loading;
 - provide an owner-only short-lived host shell for trusted VM operators;
 - route applications through Caddy with derived project hostnames;
 - provide bounded additional HTTP routes for Compose applications that expose more than one HTTP surface;
 - provide project-scoped persistent storage and safe owned-resource cleanup;
-- provide optional shared PostgreSQL provisioning and DB Studio Lite for PostgreSQL, MySQL, and MariaDB;
+- provide optional shared PostgreSQL provisioning and **DB Studio Lite for PostgreSQL, MySQL, MariaDB, and persistent SQLite**;
+- keep DB Studio stable writes intentionally narrow: row updates require temporary write mode and a primary key, while insert/delete and raw SQL remain disabled;
 - provide backups, restore/migration tooling, image/cache retention, audit logs, CLI, REST API, webhooks, and an optional local MCP bridge;
 - use rootful Podman by default on fresh supported hosts, with Docker Engine as a compatibility mode.
 
@@ -43,7 +56,7 @@ Dockerfile and Compose are the explicit escape hatches for applications with cus
 
 ## Container monitoring
 
-The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Running containers include periodically refreshed CPU and memory samples. Metadata is loaded independently from telemetry so larger hosts remain responsive without adding a second observability stack.
+The Containers page lists every container visible through the configured Docker-compatible host runtime, including MyPaaS system/control-plane containers, application containers, sidecars, and stopped containers. Host inventory metadata is loaded independently from project telemetry so the page does not depend on collecting CPU/RAM stats for every container before rendering.
 
 The host-wide inventory is intentionally read-only. Application lifecycle stays project-scoped so stopping a project preserves the runtime state required by later Start, Restart, and redeploy operations.
 
@@ -88,7 +101,7 @@ On a single-host installation, builds, the MyPaaS control plane, databases, and 
 
 Repository CI covers source-level behavior such as backend tests, race detection, frontend checks/build, deployment-script syntax, production Compose rendering, and the Docker-compatible Podman contract. Real deployment and host-operation behavior is qualified directly on a VM when a feature requires it.
 
-See [`docs/engineering/beta-readiness-gates.md`](docs/engineering/beta-readiness-gates.md).
+See [`docs/engineering/runtime-verification.md`](docs/engineering/runtime-verification.md).
 
 ## Architecture
 
@@ -114,6 +127,15 @@ flowchart TB
 - [`docs/SECURITY_BOUNDARIES.md`](docs/SECURITY_BOUNDARIES.md) — trust and isolation boundaries
 - [`docs/STATD.md`](docs/STATD.md) — optional native telemetry integration
 
+## Feedback and support
+
+Public feedback is handled through GitHub Issues:
+
+- [Report a bug](https://github.com/nabilrn/MyPaas/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/nabilrn/MyPaas/issues/new?template=feature_request.yml)
+
+MyPaaS currently uses an **Issues-only public contribution workflow**. Unsolicited pull requests are not part of the supported contribution path; see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Development
 
 ```bash
@@ -122,8 +144,8 @@ make test
 make build
 ```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`AGENTS.md`](AGENTS.md) for repository conventions.
+Repository engineering conventions are documented in [`AGENTS.md`](AGENTS.md).
 
 ## License
 
-See [`LICENSE`](LICENSE).
+MyPaaS is licensed under the [MIT License](LICENSE).
