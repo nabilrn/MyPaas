@@ -272,7 +272,7 @@
 							<div class="min-w-0 flex-1">
 								<p class="text-xs text-gray-500 dark:text-gray-400">CPU</p>
 								<p class="mt-0.5 text-base font-semibold tabular-nums text-gray-950 dark:text-white">{hostStats ? `${hostStats.host_cpu_cores} core${hostStats.host_cpu_cores === 1 ? '' : 's'}` : 'Unavailable'}</p>
-								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Shared across projects · per-project caps remain enforced</p>{/if}
+								{#if hostStats}<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Shared across projects · per-project CPU limits remain enforced</p>{/if}
 							</div>
 						</div>
 					</div>
@@ -294,7 +294,7 @@
 				<div class="flex items-start justify-between gap-4 px-4 py-3">
 					<div>
 						<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Resource defaults</h2>
-						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Defaults used by new projects. Built-in profile floors cannot be lowered.</p>
+						<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Defaults used by new projects. CPU values are per-project limits, not reserved CPU. Built-in profile floors cannot be lowered.</p>
 					</div>
 				</div>
 				<div class="grid border-t border-[color:var(--workspace-divider)] lg:grid-cols-2">
@@ -318,7 +318,7 @@
 										{#if validationErrors[profile.memoryKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.memoryKey]}</p>{/if}
 									</label>
 									<label class="block" for={profile.cpuKey}>
-										<span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">CPU</span>
+										<span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">CPU Limit</span>
 										<div class="relative"><input type="number" id={profile.cpuKey} min={profile.minimumCPU} max="32" step="0.05" bind:value={settings[profile.cpuKey]} class="field compact-number-input w-full pr-12" aria-invalid={validationErrors[profile.cpuKey] ? 'true' : undefined} /><span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400">CPU</span></div>
 										{#if validationErrors[profile.cpuKey]}<p class="mt-1 text-xs text-red-600 dark:text-red-300">{validationErrors[profile.cpuKey]}</p>{/if}
 									</label>
@@ -330,7 +330,7 @@
 							{:else}
 								<div class="mt-3 grid grid-cols-2 divide-x divide-[color:var(--workspace-divider)] border-t border-[color:var(--workspace-divider)] pt-2.5">
 									<div class="pr-4"><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings[profile.memoryKey]} MB</p></div>
-									<div class="pl-4"><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[profile.cpuKey])} CPU</p></div>
+									<div class="pl-4"><p class="text-xs text-gray-500 dark:text-gray-400">CPU Limit</p><p class="mt-0.5 text-sm font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[profile.cpuKey])} CPU</p></div>
 								</div>
 							{/if}
 						</div>
@@ -405,7 +405,7 @@
 	{#if confirmationTarget?.kind === 'profile'}
 		<div class="grid grid-cols-2 gap-4">
 			<div><p class="text-xs text-gray-500 dark:text-gray-400">Memory</p><p class="mt-0.5 font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings[confirmationTarget.profile.memoryKey]} → {settings[confirmationTarget.profile.memoryKey]} MB</p></div>
-			<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU</p><p class="mt-0.5 font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[confirmationTarget.profile.cpuKey])} → {formatCPU(settings[confirmationTarget.profile.cpuKey])} CPU</p></div>
+			<div><p class="text-xs text-gray-500 dark:text-gray-400">CPU Limit</p><p class="mt-0.5 font-semibold tabular-nums text-gray-950 dark:text-white">{formatCPU(savedSettings[confirmationTarget.profile.cpuKey])} → {formatCPU(settings[confirmationTarget.profile.cpuKey])} CPU</p></div>
 		</div>
 	{:else if confirmationTarget?.kind === 'build-timeout'}
 		<p><span class="text-gray-500 dark:text-gray-400">Build timeout:</span> <span class="font-semibold tabular-nums text-gray-950 dark:text-white">{savedSettings.build_timeout_minutes} → {settings.build_timeout_minutes} minutes</span></p>
