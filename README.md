@@ -1,6 +1,11 @@
 <p align="center">
-  <img src="frontend/src/assets/brand/mypaas-logo.svg" width="260" alt="MyPaaS">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/src/assets/brand/mypaas-favicon.svg">
+    <img src="frontend/src/assets/brand/mypaas-icon.svg" width="96" alt="MyPaaS logo">
+  </picture>
 </p>
+
+<h1 align="center">MyPaaS</h1>
 
 <p align="center">
   Self-hosted single-host PaaS for deploying and operating applications on a Linux server you control.
@@ -11,8 +16,6 @@
   <a href="https://github.com/nabilrn/MyPaas/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nabilrn/MyPaas/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/nabilrn/MyPaas"></a>
 </p>
-
-# MyPaaS
 
 **Status:** Stable
 
