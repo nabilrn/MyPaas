@@ -1,105 +1,64 @@
 # Contributing to MyPaaS
 
-Thanks for contributing to MyPaaS.
+Thanks for helping improve MyPaaS.
 
-## Ground rules
+## Public contribution model
 
-- Be respectful and constructive.
-- Check existing issues/PRs before opening duplicate work.
-- MyPaaS is intentionally a **single-host self-hosted PaaS** for an owner developer or small trusted team.
-- Read `AGENTS.md`, `PRODUCT.md`, `ROADMAP.md`, and current architecture/security docs before proposing major platform changes.
-- `docs/PRD.md` is historical and must not be treated as current product requirements.
+MyPaaS currently uses an **Issues-only public contribution workflow**.
 
-Proposals for Kubernetes/Nomad/Swarm, distributed scheduling, automatic horizontal scaling, hostile multi-tenant isolation, or broad performance programs do not match the current product direction unless the direction is explicitly changed first.
+Please use GitHub Issues for:
 
-## Opening issues
+- reproducible bug reports;
+- feature requests grounded in a real deployment or operator problem.
 
-### Bug reports
+Unsolicited pull requests are not part of the supported public contribution path at this time. Implementation work is maintained through the repository owner's normal branch/PR workflow after an issue or internal task is accepted.
 
-Include:
+Before opening an issue, check existing issues to avoid duplicates.
+
+## Bug reports
+
+Use the Bug report issue form and include enough information to reproduce the problem:
 
 - what failed;
 - minimal reproduction steps;
-- server OS/runtime (Podman or Docker compatibility mode);
-- MyPaaS version/Git SHA when known;
-- relevant secret-safe logs;
-- expected vs observed behavior.
+- expected behavior;
+- observed behavior;
+- server OS;
+- container runtime (rootful Podman or Docker compatibility mode);
+- MyPaaS version or Git SHA when known;
+- deployment mode involved (Dockerfile, Compose, Static, or OCI Image);
+- relevant secret-safe logs or screenshots.
 
-Never include tokens, cookies, passwords, registry credentials, decrypted environment values, or production `.env` contents.
+Never include tokens, cookies, passwords, registry credentials, OAuth credentials, decrypted environment values, production `.env` contents, or backup material containing secrets.
 
-### Feature requests
+## Feature requests
 
-Describe the real application/operator problem first.
+Use the Feature request issue form and describe the **real application/operator problem first**.
 
-A good feature request explains:
+A useful request explains:
 
 - the workload or workflow that is blocked;
-- why the existing Dockerfile/Compose/static/OCI primitives cannot handle it cleanly;
+- which existing MyPaaS primitive was tried;
+- why Dockerfile, Compose, Static, or OCI Image deployment cannot handle the requirement cleanly;
 - the smallest reusable platform capability that would solve it;
-- security/lifecycle implications.
+- relevant security, persistence, routing, lifecycle, or recovery implications.
 
-Workload qualification failures should be classified before becoming feature requests. A workload-specific upstream/configuration issue or host-resource limit is not automatically a MyPaaS feature gap.
+A workload-specific upstream/configuration issue or host-resource limit is not automatically a MyPaaS feature gap.
 
-## Submitting pull requests
+## Product boundaries
 
-1. Create a narrow branch from current `main` using the domain naming rules in `docs/engineering/branching.md`.
-2. Read the existing implementation before editing architecture.
-3. Keep the PR to one domain + one outcome.
-4. Add/update targeted regression coverage for changed behavior.
-5. Run checks proportional to the change.
-6. Update the relevant current docs/ADR/qualification record and `CHANGELOG.md` when product behavior changes.
-7. Describe what changed, what was verified, and any intentional limitation in the PR.
+MyPaaS is intentionally a **single-host self-hosted PaaS** for an owner developer or small trusted team.
 
-Do not mix unrelated cleanup, benchmarks, redesigns, or speculative features into a defect fix.
+Requests for Kubernetes/Nomad/Swarm, distributed scheduling, automatic horizontal scaling, hostile multi-tenant isolation, arbitrary raw TCP/SSH/UDP exposure, generic host-port forwarding, or broad performance programs are outside the current product direction unless that direction changes explicitly.
 
-## Current technical conventions
+Current product scope and engineering rules are documented in:
 
-Detailed engineering rules live in `AGENTS.md`. Important high-level constraints include:
+- [`README.md`](README.md)
+- [`PRODUCT.md`](PRODUCT.md)
+- [`ROADMAP.md`](ROADMAP.md)
+- [`docs/README.md`](docs/README.md)
+- [`AGENTS.md`](AGENTS.md)
 
-- backend: Go + Chi + pgx/sqlc;
-- frontend: SvelteKit + TypeScript + pnpm;
-- container orchestration: Docker-compatible CLI/socket contract;
-- fresh supported Linux hosts: rootful Podman default, Docker Engine compatibility mode;
-- streaming: existing SSE model;
-- Caddy: project HTTP data plane + Unix-socket Admin API in production;
-- Compose input is untrusted and must continue through the existing sanitization/validation boundary.
+## Security reports
 
-Do not add another deployment engine for workload fixtures or application-specific onboarding.
-
-## Testing policy
-
-Run tests that cover the behavior you changed.
-
-Examples:
-
-- Go/source behavior -> relevant Go tests, race checks when concurrency-sensitive;
-- frontend behavior -> relevant Vitest/check/build;
-- installer/runtime integration -> script regression + production Compose/Podman compatibility checks;
-- routing lifecycle change -> targeted route/lifecycle tests and, when material, the affected real-VM qualification path;
-- real OSS workload fix -> rerun the affected application path.
-
-Do not repeat broad k6/performance/resource-pressure matrices after unrelated changes.
-
-A successful workload qualification is a correctness result for the declared scenario, not a throughput or server-capacity certification.
-
-## Branch flow
-
-- `main` is the accepted current product state.
-- Normal work happens on a narrow branch and is reviewed through a PR to `main`.
-- Use a disposable/temporary integration branch only when a specific validation genuinely requires it; there is no permanent staging-first requirement.
-- Delete merged branches when practical.
-- Start new work from updated `main`, not from an old experiment/qualification branch.
-
-See `docs/engineering/branching.md` for branch prefixes and examples.
-
-## Documentation source of truth
-
-When documentation disagrees:
-
-1. current code/schema/tests/installers/production config;
-2. current architecture/security docs;
-3. accepted ADRs;
-4. `PRODUCT.md` / `ROADMAP.md`;
-5. historical requirements/release notes.
-
-Do not rewrite historical release records to pretend they describe current `main`.
+Do not publish secrets or sensitive production material in an issue. If a security problem can be described safely without exposing credentials or private data, open a bug report with the minimum reproducible information and clearly identify the security impact.
