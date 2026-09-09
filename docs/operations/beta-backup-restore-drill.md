@@ -1,13 +1,13 @@
 # Beta backup and restore drill
 
 **Status:** Historical qualification procedure; retained for recovery provenance.  
-**Current source of truth:** `scripts/backup-restore.py`, current production configuration, and [`../engineering/beta-readiness-gates.md`](../engineering/beta-readiness-gates.md).
+**Current source of truth:** `scripts/backup-restore.py`, current production configuration, and [`../engineering/runtime-verification.md`](../engineering/runtime-verification.md).
 
 This document records the intent of the beta backup/restore qualification that has already been completed. It is **not** an instruction to repeat the full drill after unrelated changes.
 
 ## What the qualification established
 
-The retained beta runtime verification records fresh-host recovery of relevant MyPaaS state, including:
+The retained historical runtime verification records fresh-host recovery of relevant MyPaaS state, including:
 
 - control-plane PostgreSQL state;
 - production configuration required to decrypt/use persisted project environment values;
@@ -66,7 +66,7 @@ Repeat a fresh-host backup/restore qualification only when a change materially t
 - migration portability rules;
 - route/runtime reconstruction after restore.
 
-Do not repeat this drill merely because an unrelated deployment, UI, template, compatibility, or documentation change landed.
+Do not repeat this drill merely because an unrelated deployment, UI, compatibility, or documentation change landed.
 
 ## Historical failure rule
 
