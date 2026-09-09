@@ -2,7 +2,7 @@
 
 MyPaaS is a simple single-host PaaS for an owner developer or small trusted team. The roadmap optimizes for real application deployment and operation, not benchmark breadth or distributed orchestration.
 
-Current code, tests, accepted ADRs, and real-VM qualification remain the source of truth for implemented behavior. This file defines product direction only.
+Current code, tests, accepted ADRs, and controlled qualification remain the source of truth for implemented behavior. This file defines product direction only.
 
 ## Product rule
 
@@ -19,7 +19,7 @@ Do not add architecture merely to create a future scaling story.
 
 ## KEEP
 
-These are established product capabilities and should be maintained rather than redesigned without a concrete defect:
+These are established stable product capabilities and should be maintained rather than redesigned without a concrete defect:
 
 - project create, update, delete, redeploy, start, stop, restart, and rollback boundaries;
 - Dockerfile deployment;
@@ -33,17 +33,17 @@ These are established product capabilities and should be maintained rather than 
 - deployment status, history, logs, metrics, and bounded deployment concurrency;
 - project/user resource guardrails;
 - shared PostgreSQL provisioning with generated credentials;
-- DB Studio safe row browsing/editing and schema metadata for PostgreSQL, MySQL, and MariaDB;
-- backup, restore-drill, and migration tooling within documented boundaries;
+- DB Studio schema/table browsing, table-scoped string search, schema metadata/ERD, and update-only temporary write mode for PostgreSQL, MySQL, MariaDB, and eligible persistent SQLite;
+- backup, restore, and migration tooling within documented boundaries;
 - the existing dashboard information architecture.
 
 ## DELIVERED PRODUCTIZATION
 
-### DB Studio schema metadata and ERD
+### DB Studio stable boundary
 
 Delivered on `main`.
 
-DB Studio extends beyond row browsing with schema metadata useful for understanding relationships while remaining intentionally smaller and safer than a full SQL IDE.
+DB Studio is intentionally smaller and safer than a full SQL IDE. It supports PostgreSQL, MySQL, MariaDB, and persistent SQLite, with schema/table browsing, paginated rows, table-scoped string search, schema metadata/ERD, and temporary write sessions for primary-key row updates. Insert, delete, and raw SQL remain disabled in the stable contract. See ADR-015.
 
 ### Bounded private-registry authentication
 
@@ -71,7 +71,7 @@ This feature intentionally does not provide raw TCP, SSH, UDP, arbitrary route h
 
 ## IMPLEMENT NEXT
 
-There is no broad feature program required before the current beta can be evaluated as a product.
+There is no broad feature program required for the stable product line.
 
 The next work should be **real-workload-driven only**:
 
@@ -113,7 +113,7 @@ The destructive recovery path should remain operator-oriented until the existing
 
 ### Multi-database DB Studio selector
 
-Useful for Compose projects that intentionally contain multiple SQL databases. Keep any future implementation project-local and bounded to PostgreSQL/MySQL/MariaDB; do not turn it into a global DBA connection manager.
+Useful for Compose projects that intentionally contain multiple SQL databases. Keep any future implementation project-local and bounded to the currently supported DB Studio engines; do not turn it into a global DBA connection manager.
 
 ## OUT OF TARGET FEATURE SCOPE
 
@@ -144,11 +144,12 @@ Keep improving only when a real project requires it:
 - foreign-key relationships;
 - indexes and constraints;
 - ERD/schema graph;
-- safe row editing;
-- project-local database selection when multiple supported SQL services are present.
+- safe primary-key row updates;
+- project-local database selection when multiple supported database services are present.
 
 Keep out of scope unless the product direction changes:
 
+- row insertion/deletion in the stable UI;
 - full SQL IDE/query workbench;
 - schema migration designer;
 - database user/grant administration;
