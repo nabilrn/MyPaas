@@ -246,9 +246,9 @@
 			{/if}
 		</div>
 
-		<div class="mt-2 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
-			<p class="truncate">{detail}</p>
-			<span class="shrink-0 font-mono">{effectiveRangeLabel}</span>
+		<div class="mt-2 flex items-start justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
+			<p class="min-w-0 leading-4">{detail}</p>
+			<span class="shrink-0 pt-0.5 font-mono">{effectiveRangeLabel}</span>
 		</div>
 	</article>
 {/if}
