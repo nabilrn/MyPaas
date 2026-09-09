@@ -1,191 +1,82 @@
 # Changelog
 
-All notable changes to MyPaas will be documented in this file.
+All notable changes to MyPaaS are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
-- Container inventory now serves metadata with a cached bulk telemetry snapshot refreshed in the background, keeping request latency independent of the number of containers.
-- DB Studio SQLite discovery now tolerates Podman-style missing-object errors and Compose-labeled runtime containers for projects whose stable container name is absent; the project database shortcut also labels SQLite explicitly.
-- DB Studio SQLite helper execution now keeps stdin attached so runtime schema requests are delivered correctly through Docker-compatible Podman.
-- DB Studio SQLite helper access now resolves the project's numeric runtime UID/GID and uses it for shared-volume reads and writes, including named users such as `node`.
+No user-facing changes have been queued after the `v0.7.0` stable baseline yet.
 
-### Removed
-- Removed the owner-facing Ports/firewall management feature, including its dashboard route, REST endpoints, WebMCP tool, and host firewall helper installation.
+## [0.7.0] - 2026-09-09
+
+First stable release line after the `v0.5.x` beta and `v0.6.0-rc.x` hardening series.
 
 ### Added
-- Deployment history readiness diagnostics with an explicit queued, source, build, and service-readiness timeline plus the last captured deployment event.
-- Owner-only short-lived host shell for trusted VM operators, with owner/master whitelist invariants, session timeout/idle cleanup, and audit-safe command handling.
-- Bounded additional HTTP routes for Docker Compose projects, with platform-derived hostnames, service/port validation against the resolved Compose contract, route ownership checks, a four-route maximum, lifecycle reconciliation, and no additional host-port publication. MinIO is the first real-VM-qualified multi-route template. See ADR-023 and PR #157.
-- Bounded private-registry authentication for OCI image-mode deployments using one configured registry credential, isolated temporary Docker configuration, registry-host scoping, and actionable pull diagnostics. See ADR-022.
-- Real-world OSS compatibility catalog/runner and installable application templates for representative image, Dockerfile, stateful, database-backed, multi-service, and multi-route workloads.
-- DB Studio schema metadata and ERD support while retaining the bounded PostgreSQL/MySQL/MariaDB project-data-tool scope.
-- Opt-in host-side automatic MyPaas updates with a systemd timer, revision-pinned GHCR artifacts, health verification, best-effort runtime rollback, and force-push-safe bootstrap checkout synchronization. See ADR-018.
-- Public container registry deployment source for pre-built OCI images (Docker Hub, GHCR, and compatible public registries), including source-aware project UI, image pull/digest tracking, normal env/resource/Caddy runtime controls, and rollback by recorded image reference. See ADR-017.
-- Cloudflare Analytics integration in Project Metrics with global setup form, GraphQL API backend, and automatic subdomain-level filtering (Total Requests, Bandwidth, Edge Errors).
-- Microservice env support: per-service `.env.example` templates are auto-discovered in subdirectories. At deploy time, MyPaas generates a `.env` file next to each template by substituting the user's env var values. Existing `.env` files are never overwritten. Build log shows "Generated apps/api/.env from .env.example" for each file.
-- Env var service attribution: compose `environment:` references are matched to discovered env vars so the UI shows which compose service needs each var (badge per service).
-- Env var conflict detection: when the same key has different default values across service `.env.example` files, a warning shows the conflicting values and which services declare them.
-- Flexible Compose configuration: compose files anywhere in the repository (subdirectory, monorepo package, `infra/`, etc.), user-chained override files (`-f` ordering), `COMPOSE_PROFILES` support, and an explicit working-directory override. Persisted as `compose_file_path`, `compose_override_paths`, `compose_profiles`, `compose_workdir` on `projects` (migration `000009`). New `POST /projects/detect-compose` endpoint returns ranked compose file candidates. Create form and settings page expose the new fields. See ADR-016.
-- `UpdateProject` API and settings page can now change `mainService` for compose projects (previously create-only).
-- Ephemeral HTTPS access for the install wizard through an automatically cleaned-up Cloudflare Quick Tunnel, with SSH port forwarding retained as a fallback.
-- Public one-line VM bootstrap installer that installs Git when needed, safely checks out or updates MyPaas, and launches the browser setup wizard without a manual clone.
-- Initial project structure and setup
-- Rollback endpoint and dashboard action for Dockerfile deployments
-- Webhook secret regeneration endpoint and settings UI action
-- Project app port can be edited from settings and through the update API
-- GitHub webhook endpoint with HMAC signature verification, branch filtering, rate limiting, delivery logging, and Dockerfile deployment trigger
-- Deployment startup recovery that marks interrupted queued/building deployments as failed and resets stuck project build states
-- Per-user quota endpoint and enforcement for project count, configured memory, and configured CPU limits
-- Dockerfile container metrics endpoint and dashboard chart for CPU, memory, and uptime
-- Strict CORS middleware for configured dashboard origins
-- Prometheus-compatible `/metrics` endpoint with optional Basic Auth credentials
-- Authenticated project SSE stream endpoint at `/projects/{id}/stream` for status, metrics, logs, and deployment events
-- Project Logs tab that loads recent history, streams new lines over SSE, filters by text/service, and exports visible logs
-- MVP Compose deployment support for project creation, deploy, lifecycle actions, logs, metrics, cleanup, and main-service port routing
-- Deploy mode detection endpoint and New Project form wiring that prefers Compose files over Dockerfile for `auto` projects
-- Active webhook secret display/copy flow in project settings
-- Refresh token cookie flow with 30-day refresh lifetime and frontend automatic refresh retry
-- Audit log sqlc queries, authenticated mutation middleware, owner-only audit log API, and dashboard viewer
-- Daily PostgreSQL backup scheduler with weekly snapshots, retention cleanup, and scoped unused MyPaas image pruning
-- Dependency-free `mypaas` CLI with config, admin user, project list/deploy/logs, and manual backup commands
-- MVP dogfooding sample projects for Node.js, Python FastAPI, and Go Dockerfile deployments
-- Static no-container deployment mode that publishes `dist`, `build`, `public`, or root `index.html` output through Caddy file serving
-- Opt-in shared PostgreSQL provisioning for new projects, creating a per-project database/user and injecting encrypted `DATABASE_URL`
-- Seed owner GitHub email into the user whitelist during migration
-- Env discovery for `.env.example`, `.env.sample`, `.env.template`, `.env.local.example`, and Compose `${VAR}` interpolation in the detect-mode API
-- New Project Environment step for discovered/manual env vars, sensitive key masking, managed shared `DATABASE_URL`, and encrypted env persistence during create
-- Compose resource audit/reset API and settings UI for clearing stale project containers, volumes, networks, routes, and allocated ports before deploy
-- Per-service Compose log and metrics collection, including multi-service log filters and metrics service selection in the dashboard
-- Realtime deployment build-log SSE events surfaced in the Logs tab before runtime container logs are available
-- Compose rollback path for the main service using per-commit immutable image tags for buildable services and target-commit Compose config for image-only services
-- Periodic Caddy route reconciliation from DB-running projects so API/Caddy restarts restore project routes automatically
-- Dogfood and production verification scripts for routed sample projects, production health, Caddy Admin API, CLI presence, and optional manual backup
-- VM deploy helper script that creates MyPaas host directories, runs migrations, and starts the production Compose stack
-- VM install script that checks Docker/Compose, generates production secrets, prepares host storage, and runs the production deploy helper
-- Detect-mode app port inference from Dockerfile `EXPOSE`/port env, Compose service ports/expose/env, and static mode defaults
-- Sidebar dashboard shell with mobile navigation fallback
-- Reusable dashboard pagination control for deployment history and admin tables
-- Shared dashboard `TableShell` and `ErrorState` components for consistent table loading, empty, retry, and footer states
-- Shared dashboard `SecretField` component for consistent environment variable hidden, revealed, dirty, copy, discard, reveal, and delete states
-- Shared dashboard `DeployControlPanel` component for project status, deploy/restart/stop actions, logs access, and route/runtime metadata
-- Project-local Impeccable design workflow context and live-mode config for future UI polish passes
-- Environment variable `.env` paste/upload importer with preview, duplicate/invalid detection, and overwrite confirmation
-- GitHub webhook setup help dialog in project settings with payload URL, secret, and event configuration guidance
-- VM install browser wizard for first-time production credentials, including GitHub OAuth, Cloudflare DNS, and Tunnel route setup guidance
-- New Project repository inspection with branch dropdown selection and repository structure preview before runtime detection
-- Compose Doctor preflight in detect-mode with public service/port recommendation, required env detection, build context checks, host-port warnings, and unsafe Compose config flags
-- Detect-mode env discovery now scans nested env example files for monorepo-style repositories without turning Dockerfile build/image defaults into project env vars
-- DB Studio Lite for project databases, with PostgreSQL/MySQL/MariaDB connection discovery, schema/table browsing, paginated rows, temporary write mode, and guarded insert/update/delete by primary key
-- DB Studio row browsing now supports SQL-level search and enum dropdown filters without loading full tables into API memory
+
+- Git deployment through Dockerfile, Docker Compose, and static output modes.
+- OCI image deployment with anonymous pulls and one bounded installation-level registry credential.
+- GitHub repository picker and private-repository deployment through the authenticated administrator connection.
+- Repository inspection, base-directory/monorepo support, Compose discovery, Compose Doctor, environment discovery, and required configuration checks.
+- Encrypted project environment variables and source-aware resource settings.
+- Deployment history, logs, metrics, lifecycle actions, rollback, route reconciliation, and bounded deployment concurrency.
+- Caddy project routing with one primary route and up to four bounded additional Compose HTTP routes using platform-derived hostnames.
+- Project-scoped persistent storage and owned-resource cleanup.
+- Optional shared PostgreSQL provisioning.
+- DB Studio Lite for PostgreSQL, MySQL, MariaDB, and eligible persistent SQLite databases.
+- DB Studio schema/table browsing, paginated rows, table-scoped string search, schema metadata/ERD, and temporary write sessions for validated primary-key row updates.
+- Owner-only short-lived host shell with audit-safe session handling.
+- Host-wide read-only container inventory with metadata-first loading.
+- Backup, restore, migration, image/cache retention, audit log, CLI, REST API, webhook, and optional local MCP bridge surfaces.
+- Optional `mypaas-statd` host telemetry integration with Docker-compatible engine fallback.
+- Guarded release workflow that requires current-main identity, exact-SHA successful CI, and immutable API/dashboard images before publishing a release.
 
 ### Changed
-- Production deployment now resolves a live configured/Podman/Docker engine socket on the host and maps it into the API at the stable in-container `/var/run/docker.sock` path.
-- Initial Compose deployment now reconciles declared additional HTTP routes synchronously before the deployment is marked running; lifecycle and periodic reconciliation remain recovery/maintenance paths.
-- Compose repository deployments now inject MyPaas project env vars into the public service, refresh remote image-only services before normal deploys, and wait for the main service to be running/healthy before routing traffic or marking the deployment running. Rollbacks keep their recorded image behavior.
-- Compose file discovery moved to a shared `internal/compose/` package. `project/` and `deployment/` no longer duplicate candidate lists; both use `compose.Discover` / `compose.ResolveLayout`. Compose Doctor now resolves `build.context` against the compose file's directory (matching docker compose semantics) instead of the repository root, so subdirectory compose files get accurate build-context existence checks.
-- `container.ComposeUpOptions` adds `ComposeFiles []string` and `Profiles []string`. The sanitized compose JSON is now rendered from all user `-f` files merged via `docker compose config --format json`, so user overrides are baked in and the MyPaas port-binding override always wins.
-- Dashboard action, navigation, status, and utility icons now use the official `@lucide/svelte` library for consistent geometry, sizing, and stroke rendering; chart and GitHub brand SVGs remain purpose-specific.
-- Deploy actions now open deployment history with the queued deployment focused, its build output expanded immediately, and non-overlapping polling that fills the viewer as logs arrive.
-- Compact dashboard actions now use consistent accessible icon controls, coarse-pointer touch targets, and guarded loading and disabled states across deployments, environment variables, database rows, audit logs, projects, and admin users.
-- Production installs now route Caddy to the same Docker network gateway used to bind deployed project ports, preventing fresh-VM `502 Bad Gateway` errors when `host.docker.internal` resolves to a different bridge.
-- Limit concurrent deployment workers using `MAX_CONCURRENT_DEPLOYS`
-- Settings now shows the routable `/api/webhook/{projectId}` GitHub webhook URL and clearer webhook secret copy behavior
-- Caddy dev/prod config now proxies `/webhook/*` directly to the API for GitHub webhook delivery
-- Project rename now updates the active Caddy route when a deployed project has an allocated port
-- Project Overview now reads live metrics snapshots instead of hardcoded CPU, memory, and uptime values
-- Include `git` and Docker CLI in the backend production runtime image
-- Dockerfile deploy and rollback now start a replacement container on a fresh port before switching Caddy and removing the previous stable container
-- Manual and webhook deploy triggers now reuse an active deployment for the same project instead of creating duplicate concurrent work
-- Dashboard project list now shows quota usage bars for memory, CPU, and project count
-- PRD and timeline now include dashboard UX goals for async button spinners, double-submit prevention, and SPA-like project tab navigation
-- Dashboard async actions now use a shared spinner button with per-action pending state and double-submit prevention
-- Frontend dashboard received a PaaS-style polish pass with denser project inventory, project command surface, refined tabs, compact status badges, neutral action system, and redesigned project settings/env/metrics/admin views
-- Environment variable keys are normalized to uppercase in create/edit flows and persisted uppercase by the API
-- Deployment history, audit logs, and admin users now share table shell state handling and accessible pagination controls
-- Project inventory now uses the shared table shell with pagination, and environment rows use the shared secret field pattern
-- Project detail pages now use the shared deploy control panel instead of page-local duplicated command and metadata markup
-- New Project no longer pre-fills app port `3000`; the field now distinguishes detected, manual, static, and fallback port states
-- Metrics now fetch before the chart library loads, avoid overlapping refreshes, preserve stale data on refresh failure, and show chart-specific loading/error states
-- Project overview now loads project/deployment data independently from Docker metrics so slow stats collection does not block the overview
-- Logs now expose separate history retry and live-stream reconnect states with stable terminal loading placeholders
-- Risky dashboard actions now use inline confirmation states for rollback, webhook secret regeneration, Compose reset, and whitelist user removal
-- Settings now has explicit load failure retry and inline Compose resource check errors instead of a permanent skeleton or toast-only recovery
-- Dashboard visual system now uses semantic app surface tokens, a native system font stack, softer sidebar active states, consistent brand focus rings, and quieter top-level headers for a more refined PaaS control-plane feel
-- New Project now fills non-sensitive discovered env defaults while keeping sensitive values blank for `.env` import or manual entry
-- PRD and timeline now require a pre-VM-deploy resource efficiency gate with resource profiles, separate configured-vs-real memory reporting, shared PostgreSQL provisioning, and static no-container hosting
-- PRD now groups goals into pre-deploy, after-deploy, and explicitly out-of-MVP work to keep Kubernetes/autoscaling out of the first VM deploy scope
-- New Project auto detection now validates the selected branch only, auto-applies Compose Doctor recommendations, and blocks create when required Compose env values or blocking Compose issues remain unresolved
-- PRD and timeline now include New Project env discovery from `.env.example`/Compose variables plus Compose stale volume warnings and explicit reset actions as pre-deploy goals
-- Dashboard quota now separates configured memory/CPU allocation from best-effort live Docker Stats runtime usage
-- After-deploy ADRs for idle sleep/wake-on-request, autosizing recommendations, and optional single-host replicas
-- README now documents the paste-ready Linux VM installer flow from Quick Start
-- VM install wizard now uses a polished MyPaas control-plane layout with clearer progress, validation, responsive states, and save feedback
-- Timeline now includes an HTTP `QUERY` adoption session that starts with RFC/IANA research, audits read-only routes with codebase-memory-mcp, and targets DB Studio row browsing as the first candidate endpoint with GET fallback.
 
-### Deprecated
-
-### Removed
-
-### Fixed
-- Rootful Podman production deployment no longer depends on a stale `/var/run/docker.sock` host configuration; the deploy path resolves the live engine socket and normalizes the API mount.
-- A successful initial Compose deployment no longer completes before declared secondary HTTP routes are synchronously reconciled into Caddy.
-- Install wizard success-page JavaScript is escaped correctly inside the Python f-string, with regression coverage for rendered auto-close behavior.
-- GHCR API/dashboard images are published only after the exact `main` commit passes the consolidated CI gate, including Python syntax and Podman compatibility checks.
-- Image-mode persistence now recognizes the optional `io.mypaas.persistent-volumes` image label and reuses the existing deterministic Docker-managed volume identity without requiring Docker `VOLUME` semantics.
-- Project log consoles now remain scrollable inside the shared terminal surface and show a visible highlight when log text is selected.
-- Stop/start/restart lifecycle actions now keep Caddy routes aligned with container state, and project SSE metrics no longer overwrite a stopped project back to running.
-- Ignore the Linux Docker socket `DOCKER_HOST` value for local Windows Docker CLI calls and use the non-deprecated `docker stop --timeout` flag
-- Treat missing Docker containers as empty log output instead of logging an internal server error while a project has not deployed successfully yet
-- Bind Caddy Admin API inside dev/prod containers on `0.0.0.0:2019` so the API can manage routes through the published local port or Docker network
-- Avoid Caddy wildcard route conflicts during dynamic project route updates and proxy deployed containers through configurable `CADDY_UPSTREAM_HOST`
-- Serve static projects correctly from Dockerized Caddy when the API runs on Windows by using container path separators and Caddy Admin route operations that match live API behavior
-- Replace Caddy route arrays with `PATCH` instead of `PUT` to avoid Admin API `key already exists: routes` conflicts
-- Make Docker project port binding configurable with `DOCKER_BIND_HOST` so containerized Caddy can reach local project upstreams
-- Use HTTP local project URLs in development instead of hardcoded production HTTPS domains
-- Clear `allocated_port` when projects are soft-deleted so reused ports do not violate `projects_allocated_port_key`
-- Return a conflict for duplicate admin whitelist users and render users without GitHub avatars cleanly
-- Route Caddy `/api/*` and `/webhook/*` with explicit `handle` blocks so dashboard fallback cannot intercept backend requests
-- Backend runtime image now includes `pg_dump`, and production compose mounts `/var/lib/mypaas/backups` into the API container
-- Backend build target now emits both `mypaas-api` and the `mypaas` CLI binary
-- Backend production image now includes the `mypaas` CLI binary for in-container backup and verification commands
-- Compose deployment override now replaces the main service `ports` list so app-local ports like `8080:8080` do not conflict with the MyPaas API
-- Compose commands now use the generated project `.env` and filter MyPaas internal env vars so values like the platform `DATABASE_URL` cannot leak into deployed apps
-- Project soft-delete now releases name/subdomain uniqueness via active-only unique indexes so deleted projects can be recreated with the same name
-- New Project now uses a single-screen create flow instead of the four-step wizard, with detect, runtime, resources, env, and plan visible together
-- Pass `PUBLIC_DOMAIN` into the production Caddy container so `Caddyfile.prod` can adapt successfully
-- Added a no-op `/firebase-messaging-sw.js` static worker to quiet stale Firebase Messaging service worker probes on reused browser origins
-- Project create/update now persists `resource_profile`, returns it in API responses, and the dashboard resource forms apply profile defaults instead of a flat 512MB default
-- DB Studio now connects the API container to the actual Compose service network and targets the database container IP, fixing custom network database hosts like `db`
-- DB Studio now tolerates nullable MariaDB/MySQL generated-column metadata so column browsing does not crash on `information_schema.columns`
-- Static projects bypass Docker lifecycle/log collection while still supporting route start/stop/restart and zero-runtime metrics snapshots
-- Dockerfile containers and Compose main services can join `PROJECT_NETWORK` so shared platform services remain private on the Docker network
-- Compose deploys now warn in build logs when Docker resources exist before the first tracked active deployment
-- Production API Docker build now uses Go 1.23 to match the current module dependency floor
-- Backend and frontend Docker builds now ignore local artifacts such as `node_modules`, Svelte build output, and host binaries so containers can be recreated cleanly
-- Encrypted environment variables can be revealed through an authenticated decrypt endpoint, with 404 handling for missing keys
-- Sidebar navigation now keeps the active menu item highlighted across nested project and admin routes
-- Dashboard P0 UX states now handle deployment load failures, env var load failures/empty state, admin user load failures/empty state, env overwrite drafts, and New Project env-key Enter behavior
-- Project detail header status now follows the project SSE stream so deployment completion appears without polling or manual reload
+- Fresh supported Linux installations are rootful Podman-first while retaining Docker Engine as an explicit compatibility mode through the existing Docker-compatible command/socket contract.
+- Production routing uses explicit control/project/routing network boundaries and managed runtime aliases rather than treating published host ports as the normal Caddy data path.
+- Project CPU values are shared scheduler ceilings rather than dedicated CPU reservations; host/admin copy and resource accounting reflect that model.
+- Static projects are served directly by Caddy and do not consume container-runtime CPU/RAM quota accounting.
+- Container inventory metadata is independent from per-project telemetry so host inventory does not block on collecting runtime CPU/RAM samples.
+- SQLC generation is pinned and reproducible, with CI checking committed generated state.
+- Repository qualification is framed around correctness contracts and targeted regression evidence instead of universal throughput/capacity claims.
+- Current documentation defines MyPaaS as a stable single-host platform for an owner developer or small trusted team and keeps historical beta/RC material explicitly historical.
 
 ### Security
 
----
+- Repository Compose input is rendered, sanitized, and validated before execution; known host-escape features remain rejected.
+- Production Caddy administration uses a Unix socket instead of a published TCP admin endpoint.
+- GitHub and registry credentials remain control-plane scoped and are not passed to project workloads.
+- DB Studio stable writes are intentionally update-only. Row insertion, row deletion, and raw SQL are disabled; persistent SQLite must resolve inside an eligible persistent mount and uses an isolated helper path.
+- Host shell access remains owner-only and is treated as host authority rather than a project terminal.
 
-## [0.1.0] - 2026-04-23
+### Removed
 
-### Added
-- Initial project setup
-- Directory structure
-- Makefile with development targets
-- Docker Compose configurations (dev & prod)
-- Caddyfile for reverse proxy
-- Environment configuration templates
-- GitHub Actions workflows placeholder
-- Project documentation structure
+- Owner-facing generic Ports/firewall management and arbitrary public port mutation.
+- Obsolete benchmark-only framing and harness residue that did not represent product correctness.
+- Public product claims for one-click application templates/catalogs, universal RPS/user capacity, automatic horizontal scaling, or multi-node orchestration.
 
-[Unreleased]: https://github.com/nabilrizkinavisa/mypaas/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/nabilrizkinavisa/mypaas/releases/tag/v0.1.0
+### Fixed
+
+The stable line includes the accumulated RC hardening for:
+
+- rootful Podman socket resolution and explicit production network aliases;
+- Caddy-to-API routing after control-plane recreation;
+- static-project `0.01` CPU profile handling;
+- shared-CPU host/quota semantics;
+- Compose service readiness and route activation ordering;
+- deployment failure-state preservation and lifecycle route consistency;
+- persistent SQLite DB Studio discovery/helper execution across Docker-compatible Podman behavior;
+- container-inventory responsiveness and metadata loading;
+- reproducible backend database code generation and stale generated-state detection.
+
+## Pre-stable history
+
+The beta and release-candidate history is intentionally preserved as historical evidence rather than duplicated into the current stable contract:
+
+- named release notes under [`docs/releases/`](docs/releases/);
+- published GitHub releases under the repository's Releases page;
+- merged pull requests and Git history;
+- historical qualification/runbook documents that are explicitly marked historical.
+
+Those records describe the product at their named point in time and do not override the current implementation, accepted ADRs, or stable product documentation.
