@@ -3,9 +3,8 @@
 > Canonical architecture entry point for the current single-host implementation.
 
 **Status:** Current  
-**Applies to:** `main`  
-**Last verified:** 2026-08-28  
-**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
+**Applies to:** current stable product contract  
+**Last reviewed:** 2026-09-09
 
 ---
 
@@ -61,6 +60,8 @@ Fresh supported Ubuntu/Debian installations are Podman-first. Docker Engine rema
 | `cloudflared` | Outbound Cloudflare Tunnel client | Control network only |
 
 `mypaas-statd` is host-native and is not a sixth Compose service. It runs under systemd and communicates with the API through `/run/mypaas/statd.sock`.
+
+The backend image also carries the `mypaas` CLI and the isolated `mypaas-sqlite-helper` used by the persistent-SQLite DB Studio path.
 
 ## Runtime abstraction
 
@@ -126,6 +127,16 @@ MinIO is the first real-VM-qualified application using this primitive: S3 API on
 
 See [Deployment architecture](architecture/deployment.md) and [ADR-023](adr/ADR-023-compose-additional-http-routes.md).
 
+## DB Studio model
+
+DB Studio Lite is project-scoped and currently supports PostgreSQL, MySQL, MariaDB, and eligible persistent SQLite.
+
+Server databases are discovered from project configuration and reached through the existing project database/network contract. Persistent SQLite has a different path: the database file must resolve inside an eligible persistent runtime mount, and operations run through a short-lived network-disabled helper that shares the project's existing mounts. The API does not mount engine storage directly.
+
+The stable write surface is intentionally update-only. Browsing, table-scoped string search, schema metadata/ERD, and temporary primary-key row updates are supported; insert/delete and raw SQL are disabled.
+
+See [ADR-015](adr/ADR-015-db-studio-lite.md).
+
 ## Security posture
 
 The container-engine socket is host-level authority. Dropping capabilities and enabling `no-new-privileges` reduces ambient Linux privilege but does not make engine access low privilege.
@@ -142,7 +153,7 @@ See [Security boundaries](SECURITY_BOUNDARIES.md).
 
 Runtime metrics can use optional `mypaas-statd` over its local Unix socket. If statd is disabled or unavailable, runtime metrics fall back to the Docker-compatible engine path.
 
-Host telemetry is optional. Project logs remain on the Docker-compatible CLI path.
+Host-wide container inventory uses a metadata-first path so the Containers page does not need to block on per-container telemetry collection. Project logs remain on the Docker-compatible CLI path.
 
 See [Observability architecture](architecture/observability.md) and [mypaas-statd integration](STATD.md).
 
@@ -169,7 +180,11 @@ Controlled runtime qualification verifies behavior such as deployment/recovery s
 
 PR #157's bounded Compose HTTP-route primitive was qualified on VM `172.104.61.180` at exact head `b35176fd0156c8128e988a2ce3a46693a150c61d` before merge. The qualification proved primary and Console routing, no extra `9001` host publication, restart/redeploy persistence, reconciliation after deliberate route removal, and stop/delete cleanup.
 
+The 2026-09-09 browser-surface qualification is retained separately and explicitly marked as supplemental because that run did not record exact deployed SHA/browser/runtime identity.
+
 These checks establish correctness for the tested scenario. They do not establish universal throughput, concurrent-user capacity, project count, or hardware requirements.
+
+See [Runtime verification](engineering/runtime-verification.md).
 
 ## Detailed architecture
 
@@ -178,6 +193,7 @@ These checks establish correctness for the tested scenario. They do not establis
 - [Deployment architecture](architecture/deployment.md)
 - [Observability architecture](architecture/observability.md)
 - [Security boundaries](SECURITY_BOUNDARIES.md)
+- [Runtime verification](engineering/runtime-verification.md)
 - [mypaas-statd integration](STATD.md)
 - [Architecture decisions](adr/)
 - [Documentation index](README.md)
