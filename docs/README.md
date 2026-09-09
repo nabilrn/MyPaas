@@ -19,10 +19,6 @@ Technical documentation for the current stable single-host MyPaaS product line.
 | [mypaas-statd](STATD.md) | Optional native telemetry integration |
 | [Architecture decisions](adr/) | Accepted design decisions |
 
-## UX planning
-
-- [Control-plane UI reliability and refinement plan](ux/control-plane-ui-refactor-plan.md) — proposed, implementation-grounded work packages for operational state, high-trust actions, telemetry, responsive tables, and theme parity.
-
 ## Source of truth
 
 When documentation disagrees, use this order:
@@ -34,6 +30,8 @@ When documentation disagrees, use this order:
 5. historical requirements and release notes.
 
 `PRD.md` is explicitly historical and is not authoritative for the current runtime. Files under `docs/releases/` describe the named historical release and should not be rewritten to pretend they represent current `main`.
+
+Old investigations and implementation plans that no longer describe current code belong in Git history, closed issues/PRs, or explicitly historical records rather than this current documentation index.
 
 ## Current product facts that must remain consistent
 
