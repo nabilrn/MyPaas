@@ -20,7 +20,8 @@ Current platform capabilities include:
 - lifecycle actions, deployment history, logs, metrics, rollback, and cleanup;
 - Caddy routing and route reconciliation;
 - project-scoped persistent storage;
-- optional shared PostgreSQL and DB Studio Lite for PostgreSQL/MySQL/MariaDB;
+- optional shared PostgreSQL and DB Studio Lite for PostgreSQL/MySQL/MariaDB/persistent SQLite;
+- DB Studio schema/table browsing, table-scoped string search, schema metadata/ERD, and temporary update-only write sessions;
 - backup/restore/migration tooling;
 - CLI, REST API, webhooks, audit logs, and optional local MCP bridge;
 - optional `mypaas-statd` telemetry;
@@ -140,6 +141,22 @@ Do not claim or silently implement:
 - general per-project/per-registry credential management;
 - credential inheritance into Compose services;
 - registry proxy/cache/mirror behavior.
+
+## DB Studio contract
+
+DB Studio Lite supports PostgreSQL, MySQL, MariaDB, and persistent SQLite under the constraints in ADR-015.
+
+Stable mutation rules:
+
+- default is read-only;
+- write access requires an explicit temporary write session;
+- only primary-key row updates are supported;
+- primary-key and generated columns remain immutable;
+- insert and delete are disabled;
+- raw SQL is out of scope;
+- persistent SQLite must resolve inside an eligible persistent runtime mount and is accessed through the isolated helper path.
+
+Do not broaden the stable write surface without an explicit product-direction change and targeted qualification.
 
 ## Compose trust boundary
 
@@ -264,6 +281,6 @@ Do not rewrite historical PRD/release records to pretend they were always curren
 
 ## Current direction
 
-The core beta feature target is implemented. New work should primarily come from real OSS application qualification, actual user/operator friction, or reproducible defects.
+The stable core feature set is implemented. New work should primarily come from real OSS application qualification, actual user/operator friction, or reproducible defects.
 
 Do not create new roadmap work just to keep development active.
