@@ -1,0 +1,72 @@
+name: Feature request
+description: Propose a reusable MyPaaS capability for a real deployment or operator problem
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        MyPaaS feature work is workload-driven. Describe the real problem first rather than starting from a preferred implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Deployment or operator problem
+      description: What real workload or workflow is blocked?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: current_primitive
+    attributes:
+      label: Existing MyPaaS primitive tried
+      options:
+        - Dockerfile
+        - Docker Compose
+        - Static
+        - OCI Image
+        - Database / DB Studio
+        - Routing / persistence / lifecycle
+        - Administration / recovery
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: gap
+    attributes:
+      label: Why the existing primitive is insufficient
+      description: Explain why current Dockerfile, Compose, Static, OCI Image, or operational behavior cannot handle the requirement cleanly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: capability
+    attributes:
+      label: Smallest reusable capability that would solve it
+      description: Prefer a platform primitive that can help more than one application or operator workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implications
+    attributes:
+      label: Security and lifecycle implications
+      description: Note any routing, persistence, credentials, cleanup, backup, recovery, or host-authority implications you can identify.
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Concrete workload or example
+      description: Link a public application/configuration example when available.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Request checks
+      options:
+        - label: I checked existing issues for duplicates.
+          required: true
+        - label: This request is not just a workload-specific upstream/configuration problem or a host-capacity issue.
+          required: true

@@ -4,8 +4,8 @@
       "command": "go",
       "args": ["run", "./backend/cmd/mcp"],
       "env": {
-        "MYPAAS_URL": "https://mypaas.nabilrizkinavisa.me/api",
-        "MYPAAS_API_TOKEN": "<GANTI_DENGAN_TOKEN_ANDA>"
+        "MYPAAS_URL": "https://<your-domain>/api",
+        "MYPAAS_API_TOKEN": "<your-token>"
       }
     }
   }

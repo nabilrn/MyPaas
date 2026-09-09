@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a reproducible MyPaaS defect
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a MyPaaS bug. Please keep logs and screenshots free of secrets.
+
+  - type: input
+    id: version
+    attributes:
+      label: MyPaaS version or Git SHA
+      description: Use the release tag or exact Git SHA when known.
+      placeholder: v0.7.0 or 0123456789abcdef...
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Server OS
+      placeholder: Ubuntu 24.04, Debian 13, etc.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Container runtime
+      options:
+        - Rootful Podman
+        - Docker Engine compatibility mode
+        - Not sure / not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment_mode
+    attributes:
+      label: Deployment mode involved
+      options:
+        - Dockerfile
+        - Docker Compose
+        - Static
+        - OCI Image
+        - Control-plane / Administration
+        - Installer / Update / Recovery
+        - Not sure / not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed failure clearly.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction steps
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Include only the minimum secret-safe evidence needed to diagnose the issue. You can paste logs, images, or links here.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed tokens, cookies, passwords, registry credentials, decrypted environment values, production `.env` contents, and other secrets from this report.
+          required: true
+        - label: I checked existing issues for duplicates.
+          required: true

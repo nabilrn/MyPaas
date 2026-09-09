@@ -1,6 +1,6 @@
 # MyPaaS Documentation
 
-Technical documentation for the current single-host MyPaaS beta.
+Technical documentation for the current stable single-host MyPaaS product line.
 
 ## Start here
 
@@ -15,13 +15,9 @@ Technical documentation for the current single-host MyPaaS beta.
 | [Networking](architecture/networking.md) | Routing, runtime aliases, and trust boundaries |
 | [Observability](architecture/observability.md) | Logs and metrics |
 | [Security boundaries](SECURITY_BOUNDARIES.md) | Security and trust model |
-| [Runtime verification](engineering/beta-readiness-gates.md) | Retained reliability and qualification record |
+| [Runtime verification](engineering/runtime-verification.md) | Retained reliability and qualification record |
 | [mypaas-statd](STATD.md) | Optional native telemetry integration |
 | [Architecture decisions](adr/) | Accepted design decisions |
-
-## UX planning
-
-- [Control-plane UI reliability and refinement plan](ux/control-plane-ui-refactor-plan.md) — proposed, implementation-grounded work packages for operational state, high-trust actions, telemetry, responsive tables, and theme parity.
 
 ## Source of truth
 
@@ -35,6 +31,8 @@ When documentation disagrees, use this order:
 
 `PRD.md` is explicitly historical and is not authoritative for the current runtime. Files under `docs/releases/` describe the named historical release and should not be rewritten to pretend they represent current `main`.
 
+Old investigations and implementation plans that no longer describe current code belong in Git history, closed issues/PRs, or explicitly historical records rather than this current documentation index.
+
 ## Current product facts that must remain consistent
 
 - MyPaaS is a single-host platform for an owner developer or small trusted team.
@@ -42,7 +40,9 @@ When documentation disagrees, use this order:
 - OCI image-mode deployment supports anonymous pulls and one bounded configured private-registry credential.
 - Compose can expose one primary route plus up to four bounded additional HTTP routes using platform-derived hostnames and internal service ports.
 - Additional Compose HTTP routes do not imply generic host-port, raw TCP, SSH, UDP, or arbitrary-domain routing support.
-- Project-scoped persistence, cleanup, backup/restore, shared PostgreSQL, and DB Studio remain bounded by their documented contracts.
+- Project-scoped persistence, cleanup, backup/restore, and shared PostgreSQL remain bounded by their documented contracts.
+- DB Studio Lite supports PostgreSQL, MySQL, MariaDB, and eligible persistent SQLite; stable writes are temporary-session, primary-key row updates only.
+- DB Studio insert/delete and raw SQL are not part of the stable user-visible contract.
 - MyPaaS does not currently expose a separate one-click application template/catalog product surface.
 - A successful workload qualification means the declared deployment and smoke/lifecycle checks succeeded on the tested host; it is not a capacity certification.
 
@@ -52,6 +52,7 @@ When documentation disagrees, use this order:
 - Do not claim generic private-registry management beyond the one configured image-mode credential in ADR-022.
 - Do not reinterpret ADR-023 as permission for arbitrary port forwarding or non-HTTP protocol exposure.
 - Treat GitHub OAuth repository access as a control-plane credential boundary; do not pass the token to workloads or logs.
+- Do not broaden ADR-015's stable DB Studio write boundary beyond qualified primary-key row updates.
 - Do not turn a test fixture count, VM shape, RPS result, or concurrent-user run into a product-capacity promise.
 - Application capacity depends on the application and on available CPU, memory, storage, network, database behavior, and build requirements.
 - Generated test artifacts belong outside the source tree unless a specific review requires them.

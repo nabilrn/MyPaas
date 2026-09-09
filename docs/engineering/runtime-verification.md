@@ -1,6 +1,6 @@
-# Beta Runtime Verification
+# Runtime Verification
 
-This document records controlled checks used while hardening the MyPaaS beta. It is a reliability and qualification record for platform behavior, not a capacity benchmark.
+This document records controlled checks retained from MyPaaS hardening and stable qualification. It is a reliability and qualification record for platform behavior, not a capacity benchmark.
 
 ## What these checks mean
 
@@ -17,13 +17,21 @@ Application capacity depends on the application itself and on available CPU, mem
 | Concurrent deployment reliability | Concurrent create/deploy/redeploy, intentional failure, protected routes, webhook activity, and final runtime/port consistency. |
 | Image and cache retention | Cleanup scope, protection of running/rollback images and persistent volumes, dry-run/apply behavior, and post-cleanup deployment/rollback. |
 | Create Project contract | Static, Dockerfile, Compose, subdirectory, registry image, required environment, missing-port, stale-analysis, timeout, and invalid-repository behavior. |
-| DB Studio | PostgreSQL, MySQL, and MariaDB Compose connectivity, project-network resolution, read-only default, and expiring write sessions. |
+| DB Studio | PostgreSQL/MySQL/MariaDB project connectivity and stable read/update-session behavior; persistent SQLite uses the separately implemented isolated helper/runtime-discovery contract. |
 | Docker/Podman runtime contract | Production Compose rendering, explicit routing-network aliases, rootful Podman compatibility, and stable Docker-compatible API socket behavior. |
 | Compose additional HTTP routes | Primary + secondary route activation, no extra secondary host-port publication, lifecycle persistence, reconciliation recovery, and cleanup. |
 
 These checks remain useful regression targets only when their corresponding runtime paths change materially.
 
-## Final PR #157 qualification
+## Stable browser-surface qualification — 2026-09-09
+
+[`../../qualification/E2E_RUN_2026-09-09.md`](../../qualification/E2E_RUN_2026-09-09.md) records a browser-surface qualification performed on 2026-09-09.
+
+All workflows actually exercised in that run passed, including dashboard navigation, disposable Compose project lifecycle, deployment history/logs, Database Studio inspection/write-session enable/revoke, public Static/Compose routes, project deletion, and Administration surfaces.
+
+The run did **not** record the exact deployed Git SHA, browser/version, or host/runtime shape. It is therefore supplemental product-surface evidence only and must not be treated as commit-specific release qualification. The report also separates browser/accessibility/recovery exclusions from integration/operational exclusions.
+
+## PR #157 additional-route qualification
 
 PR #157 added bounded additional HTTP routes for Compose projects and used MinIO as the concrete product qualification path.
 
@@ -39,7 +47,7 @@ Exact qualified head:
 b35176fd0156c8128e988a2ce3a46693a150c61d
 ```
 
-Source-side gates on that head included backend tests, Go race detection, frontend checks/build, script regressions, compatibility runner/catalog checks, production Compose rendering, Docker routing-alias checks, and rootful Podman compatibility.
+Source-side gates on that head included backend tests, Go race detection, frontend checks/build, script regressions, the then-current compatibility qualification checks, production Compose rendering, Docker routing-alias checks, and rootful Podman compatibility.
 
 The final real-VM qualification passed all required behavior:
 
@@ -92,6 +100,8 @@ For a controlled runtime check, record only what is needed to reproduce and inte
 - scenario and expected behavior;
 - pass/fail result;
 - failure details when applicable.
+
+If required identity was not captured, record that limitation explicitly rather than inferring it later.
 
 Never store credentials, decrypted environment values, cookies, or other secrets in evidence.
 
