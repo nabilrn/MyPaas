@@ -17,15 +17,17 @@ MYPAAS_URL=https://<your-domain>/api
 MYPAAS_API_TOKEN=<your-token>
 ```
 
-The example [`mcp_config.json`](mcp_config.json) shows the repository command shape. Adapt it to the MCP client you use.
+The example [`mcp_config.json`](mcp_config.json) is a template. Replace `<path-to-MyPaas>` with the absolute checkout path for the agent machine.
 
-The bridge itself can be started directly for testing:
+The bridge itself can be started directly from the repository root for testing:
 
 ```bash
 MYPAAS_URL=https://<your-domain>/api \
 MYPAAS_API_TOKEN=<your-token> \
-go run ./backend/cmd/mcp
+go -C backend run ./cmd/mcp
 ```
+
+The Go module lives in `backend/`; keep that working directory when configuring a client.
 
 Start with a read action such as listing projects before allowing state-changing operations.
 

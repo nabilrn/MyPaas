@@ -43,17 +43,19 @@ Do **not** add an arbitrary `MYPAAS_API_TOKEN` to the production `.env` and rest
 
 ## Run the bridge
 
-On the machine running your agent, clone MyPaaS and run the Go bridge over stdio:
+On the machine running your agent, clone MyPaaS. For reproducible stable use, check out the release/source revision you intend to run.
+
+From the repository root:
 
 ```bash
-git clone https://github.com/nabilrn/MyPaas.git
+git clone --branch v0.7.0 --depth 1 https://github.com/nabilrn/MyPaas.git
 cd MyPaas
 MYPAAS_URL=https://<your-domain>/api \
 MYPAAS_API_TOKEN=<your-token> \
-go run ./backend/cmd/mcp
+go -C backend run ./cmd/mcp
 ```
 
-For reproducible use, check out the release/source revision you intend to run rather than assuming the repository default branch is immutable.
+The Go module lives under `backend/`; `go -C backend ...` makes that working-directory requirement explicit.
 
 A repository example configuration is available at:
 
@@ -61,7 +63,7 @@ A repository example configuration is available at:
 .agents/mcp/mypaas/mcp_config.json
 ```
 
-Adapt its command format to the MCP client you use.
+That file is a template. Replace its backend path, installation URL, and token for the MCP client you use.
 
 ## Verify safely
 
