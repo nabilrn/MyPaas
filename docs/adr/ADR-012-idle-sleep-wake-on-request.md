@@ -2,7 +2,9 @@
 
 Date: 2026-07-03
 
-Status: Proposed for after-deploy
+Status: Deferred
+
+Resolution: Deferred from the current stable product contract. This document records an earlier design direction; MyPaaS does not currently implement idle sleep or wake-on-request. Revisit only if a concrete workload or operator problem justifies the additional routing and lifecycle complexity.
 
 ## Context
 
@@ -10,9 +12,9 @@ MyPaas runs on a single VM with limited RAM. Some personal projects will be acce
 
 ## Decision
 
-Idle sleep and wake-on-request will be implemented after MyPaas is live and stable.
+Idle sleep and wake-on-request was proposed as a possible post-deploy capability.
 
-The first design should:
+If reconsidered, the design should:
 
 - Mark sleep state explicitly in `projects.status` or a dedicated lifecycle field.
 - Stop eligible project containers after an inactivity window.
@@ -22,8 +24,8 @@ The first design should:
 
 ## Consequences
 
-This keeps the pre-deploy scope focused on stable deploy, routing, logs, metrics, backup, and quota. It also avoids introducing request buffering, race handling, and user-facing cold-start semantics before dogfooding proves the baseline.
+Deferring this keeps the stable product focused on explicit deploy, routing, logs, metrics, backup, quota, and lifecycle behavior. It also avoids adding request buffering, race handling, and user-facing cold-start semantics without a measured need.
 
 ## Follow-up
 
-Before implementation, define the lifecycle state machine and Caddy wake route shape in a dedicated technical design.
+No implementation is committed. If a concrete need reopens this decision, define the lifecycle state machine and Caddy wake route shape in a new/current technical design before implementation.

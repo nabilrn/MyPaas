@@ -1,5 +1,7 @@
 # Create Project Production UX Audit - 2026-08-13
 
+> **Historical record (2026-08-13).** This file records the production UI observed during that audit and is not authoritative for current MyPaaS behavior. For current behavior use [`create-project-contract.md`](create-project-contract.md), current code/tests, and [`../engineering/runtime-verification.md`](../engineering/runtime-verification.md).
+
 Production audit target: `https://nabilrn.space/projects/new`
 
 Primary browser: Firefox via Playwright `1.62.1`

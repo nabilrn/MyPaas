@@ -1,25 +1,44 @@
-# MyPaas MCP Server
+# MyPaaS MCP Bridge
 
-This MCP server allows Antigravity/Cursor IDE to interact with your MyPaas installation directly via the MyPaas API. The AI can list, deploy, start, and stop your projects automatically.
+This directory contains an example client configuration for the current **local stdio MCP bridge**.
 
-## Setup Instructions
+Use the canonical setup guide in [`docs/mcp.md`](../../../docs/mcp.md).
 
-1. **Backend VM Configuration:**
-   - Log into your MyPaas VM.
-   - Edit the `.env` file and add a secure secret string:
-     ```
-     MYPAAS_API_TOKEN=super_secret_token_123
-     ```
-   - Restart the backend to apply changes:
-     ```
-     cd mypaas/backend && docker compose -f ../docker-compose.prod.yml restart mypaas-api
-     ```
+## Supported setup
 
-2. **Local Machine (Laptop) Configuration:**
-   - Edit `.agents/mcp/mypaas/mcp_config.json` locally on your laptop.
-   - Replace `<GANTI_DENGAN_TOKEN_ANDA>` with the exact token you set on the VM.
-   - If your API URL is different, update `MYPAAS_URL`.
+1. Sign in to the MyPaaS owner dashboard.
+2. Open **Administration → MCP**.
+3. Copy the bridge target and current MCP token, or regenerate the token when rotation is intended.
+4. On the machine running the agent, use a MyPaaS checkout containing `backend/cmd/mcp`.
+5. Configure the agent to run the bridge over stdio with:
 
-3. **Restart Antigravity / Cursor:**
-   - The IDE will automatically read `mcp_config.json`, compile the Go MCP server dynamically using `go run`, and launch it.
-   - Try asking your AI: "List all my projects on MyPaas" or "Deploy mypaas project".
+```text
+MYPAAS_URL=https://<your-domain>/api
+MYPAAS_API_TOKEN=<your-token>
+```
+
+The example [`mcp_config.json`](mcp_config.json) shows the repository command shape. Adapt it to the MCP client you use.
+
+The bridge itself can be started directly for testing:
+
+```bash
+MYPAAS_URL=https://<your-domain>/api \
+MYPAAS_API_TOKEN=<your-token> \
+go run ./backend/cmd/mcp
+```
+
+Start with a read action such as listing projects before allowing state-changing operations.
+
+## Token lifecycle
+
+`MYPAAS_API_TOKEN` is managed through the current Administration → MCP settings flow. **Do not** use the old procedure of adding an arbitrary token to the production `.env` and restarting a container.
+
+Regenerating the MCP token invalidates the previous credential. Update every connected agent after rotation.
+
+Keep the token secret and never commit a real value to this directory.
+
+## Current boundary
+
+The supported headless MCP integration is a local stdio bridge that calls the configured MyPaaS REST API. It is not a remotely hosted `/mcp` endpoint.
+
+For the experimental browser adapter, see [`docs/WEBMCP.md`](../../../docs/WEBMCP.md).
