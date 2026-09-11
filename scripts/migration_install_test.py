@@ -96,7 +96,15 @@ class MigrationInstallTest(unittest.TestCase):
         self.assertNotIn("downloadToken", command_block)
         self.assertNotIn("--migrate-url", command_block)
         self.assertIn("Copy migration URL", page)
-        self.assertIn("Current build identity is unavailable", page)
+        self.assertIn("Current installed revision is unavailable", page)
+
+    def test_dashboard_uses_host_installed_revision_not_api_build_directly(self) -> None:
+        page = MIGRATION_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("fetch('/internal/system-update', { cache: 'no-store' })", page)
+        self.assertIn("snapshot.status.currentSha", page)
+        self.assertIn("type { UpdateSnapshot }", page)
+        self.assertNotIn("api.admin.getSettings()", page)
 
 
 if __name__ == "__main__":
