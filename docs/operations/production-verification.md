@@ -6,18 +6,16 @@ Run it after installation, a manual recovery, or a host/runtime change that coul
 
 ## Run the verifier
 
-From the installer-managed checkout:
+Bootstrap installs into `$HOME/MyPaas` by default. If you used a custom checkout, set `MYPAAS_INSTALL_DIR` to that exact path. Default rootful Podman/Docker installations require host privileges for the engine and privileged socket checks:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
-The Makefile wrapper is also available when the default paths apply:
-
-```bash
-make verify-prod
-```
+The Makefile wrapper is suitable only when its environment/runtime access already has the required host privileges and default paths apply. For production operator verification, prefer the explicit command above.
 
 A successful run ends with:
 
@@ -52,9 +50,12 @@ By default, an unavailable existing project route is reported but does not fail 
 To require an existing project route to be healthy:
 
 ```bash
-REQUIRE_PROJECT_ROUTE=true \
-ENV_FILE=.env \
-bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env \
+  REQUIRE_PROJECT_ROUTE=true \
+  ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 Use this only when the verification scenario intentionally requires a healthy project workload.
@@ -70,9 +71,12 @@ Do not call an installation “exact-SHA qualified” merely because `/health` r
 The verifier does not trigger a backup by default. To include the bundled CLI backup operation:
 
 ```bash
-RUN_BACKUP=true \
-ENV_FILE=.env \
-bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env \
+  RUN_BACKUP=true \
+  ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 This creates backup output and therefore is not a purely read-only verification run.
@@ -94,10 +98,10 @@ Capacity and application behavior remain workload-specific.
 
 ## Troubleshooting
 
-If verification fails, keep the first failing invariant and its surrounding logs. Useful host evidence can include:
+If verification fails, keep the first failing invariant and its surrounding logs. On a default rootful installation, inspect runtime state with the same host privileges used by verification:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env ps
+sudo docker compose -f docker-compose.prod.yml --env-file .env ps
 journalctl -u mypaas-update.service
 systemctl status mypaas-statd
 ```
