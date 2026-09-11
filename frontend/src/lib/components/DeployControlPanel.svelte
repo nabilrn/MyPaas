@@ -26,6 +26,9 @@
 		: operationalState.primaryAction === 'view_deployment'
 			? `/projects/${project.id}/deployments${latestDeployment ? `?focus=${encodeURIComponent(latestDeployment.id)}` : ''}`
 			: '';
+	$: reviewFailureHref = operationalState.primaryAction === 'retry' && latestDeployment?.status === 'failed'
+		? `/projects/${project.id}/deployments?focus=${encodeURIComponent(latestDeployment.id)}`
+		: '';
 	$: primaryIcon = operationalState.primaryAction === 'view_logs'
 		? FileText
 		: operationalState.primaryAction === 'view_deployment'
@@ -83,6 +86,12 @@
 		</div>
 
 		<div class="flex shrink-0 items-center gap-2">
+			{#if reviewFailureHref}
+				<ActionLink href={reviewFailureHref} variant="secondary">
+					<History slot="icon" class="h-4 w-4" />
+					Review failure
+				</ActionLink>
+			{/if}
 			{#if primaryHref}
 				<ActionLink href={primaryHref} variant="primary">
 					<svelte:component this={primaryIcon} slot="icon" class="h-4 w-4" />
