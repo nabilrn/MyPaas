@@ -664,6 +664,8 @@ def classify_volume(info: dict[str, Any], project_names: set[str]) -> str | None
     compose_project = str(labels.get("com.docker.compose.project") or "")
     if compose_project and compose_project in project_names:
         return "mypaas-compose"
+    # Older Compose-created volumes can survive label changes. The exact active
+    # project-name prefix is still constrained by the control-plane project list.
     if any(name.startswith(project + "_") for project in project_names):
         return "mypaas-compose-legacy"
     return None
