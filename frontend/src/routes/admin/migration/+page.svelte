@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { AlertTriangle, Check, Copy, Download, LoaderCircle, Package } from '@lucide/svelte';
 	import { api, type MigrationStatus } from '$api';
+	import type { UpdateSnapshot } from '$lib/system-update';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
@@ -38,12 +39,13 @@ bash scripts/install-migration.sh`
 
 	onMount(async () => {
 		try {
-			const settings = await api.admin.getSettings();
-			const raw = settings as unknown as Record<string, unknown>;
-			const candidate = typeof raw.build_sha === 'string' ? raw.build_sha.trim().toLowerCase() : '';
+			const response = await fetch('/internal/system-update', { cache: 'no-store' });
+			if (!response.ok) throw new Error(`system update status returned ${response.status}`);
+			const snapshot = await response.json() as UpdateSnapshot;
+			const candidate = (snapshot.status.currentSha || '').trim().toLowerCase();
 			if (/^[0-9a-f]{40}$/.test(candidate)) sourceBuildSha = candidate;
 		} catch (error) {
-			console.error('Failed to resolve current MyPaaS build identity:', error);
+			console.error('Failed to resolve current installed MyPaaS revision:', error);
 		}
 	});
 
@@ -233,7 +235,7 @@ bash scripts/install-migration.sh`
 			<div class="grid lg:grid-cols-[18rem_minmax(0,1fr)]">
 				<div class="px-4 py-3 lg:border-r lg:border-[color:var(--workspace-divider)]">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Restore on the new server</h2>
-					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">The destination command is pinned to this running MyPaaS build and does not contain the migration token. Run it, then paste the copied migration URL only into the hidden installer prompt.</p>
+					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">The destination command is pinned to this installed MyPaaS revision and does not contain the migration token. Run it, then paste the copied migration URL only into the hidden installer prompt.</p>
 				</div>
 				<div class="min-w-0 px-4 py-3">
 					{#if migrationCommand}
@@ -244,7 +246,7 @@ bash scripts/install-migration.sh`
 						</div>
 						<p class="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">The migration URL can download secret-bearing state until it expires. Treat the clipboard value as a credential and clear it after use.</p>
 					{:else}
-						<div class="alert-danger"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>Current build identity is unavailable. Migration restore is blocked until MyPaaS reports a concrete 40-character build SHA.</p></div>
+						<div class="alert-danger"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>Current installed revision is unavailable. Migration restore is blocked until MyPaaS reports a concrete 40-character platform SHA.</p></div>
 					{/if}
 				</div>
 			</div>
