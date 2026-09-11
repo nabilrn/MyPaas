@@ -42,15 +42,19 @@ type Handler struct {
 }
 
 func NewHandler(cfg *config.Config, queries *db.Queries, tokens *TokenService, githubService *github.Service) *Handler {
+	oauthConfig := &oauth2.Config{
+		ClientID:     cfg.GitHubClientID,
+		ClientSecret: cfg.GitHubClientSecret,
+		RedirectURL:  cfg.GitHubCallbackURL,
+		Scopes:       []string{"read:user", "user:email", "repo", "offline_access"},
+		Endpoint:     oauthgithub.Endpoint,
+	}
+	if githubService != nil {
+		githubService.ConfigureOAuth(oauthConfig)
+	}
 	return &Handler{
-		cfg: cfg,
-		oauth: &oauth2.Config{
-			ClientID:     cfg.GitHubClientID,
-			ClientSecret: cfg.GitHubClientSecret,
-			RedirectURL:  cfg.GitHubCallbackURL,
-			Scopes:       []string{"read:user", "user:email", "repo"},
-			Endpoint:     oauthgithub.Endpoint,
-		},
+		cfg:     cfg,
+		oauth:   oauthConfig,
 		queries: queries,
 		tokens:  tokens,
 		github:  githubService,
@@ -103,7 +107,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		httpx.DomainError(w, fmt.Errorf("GitHub repository access is not configured"))
 		return
 	}
-	if err := h.github.SaveAccessToken(r.Context(), user.ID, token.AccessToken); err != nil {
+	if err := h.github.SaveOAuthToken(r.Context(), user.ID, token); err != nil {
 		httpx.DomainError(w, err)
 		return
 	}

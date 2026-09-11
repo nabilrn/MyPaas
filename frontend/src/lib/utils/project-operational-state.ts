@@ -79,6 +79,52 @@ export function deriveProjectOperationalState({
 		});
 	}
 
+	// A terminal failed deployment is more specific than the coarse project
+	// runtime status. Keep the project durable and make retry the recovery path;
+	// deleting and recreating the project must never be required to deploy again.
+	if (latestFailed) {
+		if (serving === 'live') {
+			return state({
+				serving,
+				release,
+				desired,
+				headline: 'Live; latest deploy failed',
+				detail: 'The previous release is still serving traffic. Review the failed attempt, then retry when ready.',
+				primaryAction: 'retry',
+				primaryActionLabel: 'Retry deploy',
+				attention: 'warning',
+				statusLabel: 'Live · deploy failed',
+				statusTone: 'warning'
+			});
+		}
+		if (serving === 'unknown' && hasActiveRelease) {
+			return state({
+				serving,
+				release,
+				desired,
+				headline: 'Latest deploy failed; serving status unknown',
+				detail: 'A previous release is selected, but current runtime evidence is unavailable. Review the failure before retrying.',
+				primaryAction: 'retry',
+				primaryActionLabel: 'Retry deploy',
+				attention: 'warning',
+				statusLabel: 'Unknown · deploy failed',
+				statusTone: 'warning'
+			});
+		}
+		return state({
+			serving: 'offline',
+			release,
+			desired,
+			headline: 'Deployment failed',
+			detail: 'The latest deployment failed and no release is serving traffic. Review the failure, fix source or configuration if needed, then retry.',
+			primaryAction: 'retry',
+			primaryActionLabel: 'Retry deploy',
+			attention: 'danger',
+			statusLabel: 'Deploy failed',
+			statusTone: 'danger'
+		});
+	}
+
 	if (project.status === 'crashed') {
 		return state({
 			serving: 'offline',
@@ -134,49 +180,6 @@ export function deriveProjectOperationalState({
 			attention: 'info',
 			statusLabel: 'Deploying',
 			statusTone: 'warning'
-		});
-	}
-
-	if (latestFailed) {
-		if (serving === 'live') {
-			return state({
-				serving,
-				release,
-				desired,
-				headline: 'Live; latest deploy failed',
-				detail: 'The previous release is still serving traffic. Review the failed attempt before retrying.',
-				primaryAction: 'view_deployment',
-				primaryActionLabel: 'Review failure',
-				attention: 'warning',
-				statusLabel: 'Live · deploy failed',
-				statusTone: 'warning'
-			});
-		}
-		if (serving === 'unknown' && hasActiveRelease) {
-			return state({
-				serving,
-				release,
-				desired,
-				headline: 'Latest deploy failed; serving status unknown',
-				detail: 'A previous release is selected, but current runtime evidence is unavailable.',
-				primaryAction: 'view_deployment',
-				primaryActionLabel: 'Review failure',
-				attention: 'warning',
-				statusLabel: 'Unknown · deploy failed',
-				statusTone: 'warning'
-			});
-		}
-		return state({
-			serving: 'offline',
-			release,
-			desired,
-			headline: 'Deployment failed',
-			detail: 'The latest deployment failed and no release is serving traffic.',
-			primaryAction: 'retry',
-			primaryActionLabel: 'Retry',
-			attention: 'danger',
-			statusLabel: 'Deploy failed',
-			statusTone: 'danger'
 		});
 	}
 
