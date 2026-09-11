@@ -16,15 +16,17 @@ The server also registers the same application route set at its internal root fo
 
 ## Health and metrics
 
-Core health surfaces are:
+Public control-plane health surfaces are:
 
 ```text
 GET /api/health
 GET /api/ready
-GET /metrics
+GET /api/metrics
 ```
 
-`/health` reports process liveness. `/ready` checks control-plane PostgreSQL reachability. Production `/metrics` is Prometheus-compatible and requires configured Basic Auth when metrics are enabled.
+`/api/health` reports process liveness. `/api/ready` checks control-plane PostgreSQL reachability. Public `/api/metrics` is Prometheus-compatible and requires configured Basic Auth when metrics are enabled.
+
+Inside the API/control-network address space the same handlers are also registered at `/health`, `/ready`, and `/metrics`. External clients should not depend on those internal-root paths because production Caddy exposes the API through `/api/*`.
 
 The production verifier checks these surfaces through the intended control-plane paths; see [Production verification](operations/production-verification.md).
 
@@ -35,7 +37,7 @@ MyPaaS uses different credential paths for different clients:
 - the dashboard authenticates through GitHub OAuth and the normal browser session;
 - API automation endpoints protected by the auth middleware accept the platform's authenticated session/Bearer JWT contract;
 - the local stdio MCP bridge uses its dedicated `MYPAAS_API_TOKEN` configured through Administration → MCP;
-- `/metrics` uses its own Basic Auth credential when configured.
+- `/api/metrics` uses its own Basic Auth credential when configured.
 
 These credential types are not interchangeable.
 
