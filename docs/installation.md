@@ -26,14 +26,20 @@ The default `mypaas-statd` release artifact currently supports `linux-amd64`. So
 
 ## Install the stable release
 
-Pin both the bootstrap script and checkout ref to the same stable release. For `v0.7.0`:
+Use the current published stable release identifier consistently for the bootstrap download and checkout request. For `v0.7.0`:
 
 ```bash
+umask 077
+bootstrap_script="$(mktemp /tmp/mypaas-bootstrap.XXXXXX)"
+trap 'rm -f -- "$bootstrap_script"' EXIT
 curl -fL \
   https://raw.githubusercontent.com/nabilrn/MyPaas/v0.7.0/scripts/bootstrap.sh \
-  -o /tmp/mypaas-bootstrap.sh
-MYPAAS_REF=v0.7.0 bash /tmp/mypaas-bootstrap.sh
+  -o "$bootstrap_script"
+[[ -f "$bootstrap_script" && -O "$bootstrap_script" ]] || exit 1
+MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
 ```
+
+This is the current release-tag bootstrap contract. A Git tag is a release identifier, not a cryptographic integrity proof; immutable release-identity verification requires a runtime/bootstrap change and is handled separately from this documentation-only update.
 
 The bootstrap process:
 
@@ -64,10 +70,10 @@ Secrets such as the PostgreSQL password, JWT secret, encryption key, and metrics
 
 ## Docker Engine compatibility mode
 
-To choose Docker Engine for a **fresh** installation:
+To choose Docker Engine for a **fresh** installation, use the same private bootstrap file from the stable-install block:
 
 ```bash
-USE_PODMAN=false MYPAAS_REF=v0.7.0 bash /tmp/mypaas-bootstrap.sh
+USE_PODMAN=false MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
 ```
 
 Do not use `USE_PODMAN` to switch an existing installation between Docker and Podman in place. The bootstrap intentionally refuses an engine mismatch when it detects existing MyPaaS runtime state. Engine changes belong to the VM migration boundary; see [VM migration](operations/migration.md) and [ADR-019](adr/ADR-019-migration-safety-boundaries.md).
@@ -79,7 +85,7 @@ The bootstrap forwards supported `install-vm.sh` environment settings. Common co
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `MYPAAS_INSTALL_DIR` | `$HOME/MyPaas` | Installer-managed checkout |
-| `MYPAAS_REF` | `main` | Branch/tag/commit to install; pin a stable tag for production |
+| `MYPAAS_REF` | `main` | Branch/tag/ref to install; production currently uses the published stable release tag |
 | `INSTALL_WIZARD` | `true` in bootstrap | Start browser setup wizard |
 | `USE_PODMAN` | `true` | Fresh-install runtime choice |
 | `INSTALL_STATD` | `true` | Install optional host telemetry daemon |
@@ -87,6 +93,17 @@ The bootstrap forwards supported `install-vm.sh` environment settings. Common co
 | `AUTO_UPDATE_ENABLED` | `false` | Enable periodic update timer during configuration |
 
 For non-interactive installation, all required production values must be supplied through environment variables because the installer cannot prompt without a TTY.
+
+## Checkout path
+
+For later operator commands, initialize the checkout path explicitly. This prevents documentation examples from silently operating on `$HOME/MyPaas` when the installation was created elsewhere:
+
+```bash
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+```
+
+If you installed to a custom path, set `MYPAAS_INSTALL_DIR` to that exact path before using the runbooks.
 
 ## Host state created by MyPaaS
 
@@ -112,14 +129,16 @@ See [Architecture](ARCHITECTURE.md) for the network and trust model.
 
 ## Verify the installation
 
-After installation:
+After installation, use the actual checkout path and host privileges required by the default rootful runtime:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
-The verifier checks control-plane containers, network boundaries, API readiness, Caddy ingress/admin socket behavior, dashboard release assets, release identity, optional statd, and the bundled CLI. See [Production verification](operations/production-verification.md) for the complete boundary.
+The verifier checks control-plane containers, network boundaries, API readiness, Caddy ingress/admin socket behavior, dashboard release assets, running build identity, optional statd, and the bundled CLI. See [Production verification](operations/production-verification.md) for the complete boundary.
 
 Then open:
 
