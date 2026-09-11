@@ -85,6 +85,14 @@ class MigrationInstallTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("does not accept the migration URL as an argument", result.stderr)
 
+    def test_helper_can_bootstrap_curl_on_supported_apt_host(self) -> None:
+        content = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("ensure_curl()", content)
+        self.assertIn("command -v apt-get", content)
+        self.assertIn("apt-get install -y ca-certificates curl", content)
+        self.assertIn("sudo is required to install curl", content)
+
     def test_dashboard_separates_secret_url_from_generated_command(self) -> None:
         page = MIGRATION_PAGE.read_text(encoding="utf-8")
         command_block = page.split("$: migrationCommand =", 1)[1].split("\n\t\t: '';", 1)[0]
@@ -105,6 +113,17 @@ class MigrationInstallTest(unittest.TestCase):
         self.assertIn("snapshot.status.currentSha", page)
         self.assertIn("type { UpdateSnapshot }", page)
         self.assertNotIn("api.admin.getSettings()", page)
+
+    def test_dashboard_refreshes_revision_for_prepare_and_ready_state(self) -> None:
+        page = MIGRATION_PAGE.read_text(encoding="utf-8")
+
+        self.assertIn("async function refreshInstalledRevision()", page)
+        start_block = page.split("async function startMigration()", 1)[1].split("\n\tfunction startPolling()", 1)[0]
+        poll_block = page.split("function startPolling()", 1)[1].split("\n\tasync function copyToClipboard", 1)[0]
+        self.assertIn("await refreshInstalledRevision()", start_block)
+        self.assertIn("status === 'ready'", start_block)
+        self.assertIn("await refreshInstalledRevision()", poll_block)
+        self.assertIn("status.status === 'ready'", poll_block)
 
 
 if __name__ == "__main__":
