@@ -25,25 +25,34 @@ Production can also schedule backups through the platform backup settings. This 
 
 Because the bundle contains the production `.env`, it contains **secrets**. Store and transfer it as sensitive operational data.
 
-## Inspect the full-backup contract
+The script still contains some historical qualification-oriented command labels (`source-preflight` and `validate-fixture-manifest`). The ordinary `backup`, `verify`, and `restore` procedures below are the operator-facing DR path; fixture-oriented commands remain historical/qualification helpers.
 
-From the installer-managed checkout:
+## Checkout path
+
+Bootstrap installs into `$HOME/MyPaas` by default. For a custom installation, use the same checkout path that bootstrap used:
 
 ```bash
-cd ~/MyPaas
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+```
+
+## Inspect the full-backup contract
+
+```bash
 python3 scripts/backup-restore.py plan
 ```
 
-This command is non-mutating.
+This command is non-mutating and does not require engine-volume access.
 
 ## Create a full bundle
 
-The DR tool has an internal default install path used by controlled tooling. Bootstrap installations normally live in `~/MyPaas`, so pass the actual checkout explicitly:
+Full backup needs host privileges on the default rootful runtime because it writes below `/var/lib/mypaas/backups`, talks to the rootful engine, and reads managed volume mountpoints.
 
 ```bash
-cd ~/MyPaas
-python3 scripts/backup-restore.py backup \
-  --install-dir "$PWD"
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo python3 scripts/backup-restore.py backup \
+  --install-dir "$MYPAAS_INSTALL_DIR"
 ```
 
 By default the output is written below:
@@ -59,9 +68,10 @@ If managed project volumes are mounted by running containers, the tool refuses t
 For a controlled snapshot that may stop and restart affected application containers during backup:
 
 ```bash
-cd ~/MyPaas
-python3 scripts/backup-restore.py backup \
-  --install-dir "$PWD" \
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo python3 scripts/backup-restore.py backup \
+  --install-dir "$MYPAAS_INSTALL_DIR" \
   --quiesce-managed-containers
 ```
 
@@ -69,10 +79,10 @@ Plan an application maintenance window before using this option on stateful work
 
 ## Verify a bundle before restore
 
-Verification is non-mutating and checks the manifest plus file checksums:
+Verification is non-mutating and checks the manifest plus file checksums. Bundles created under the default root-owned backup directory may require `sudo` to read:
 
 ```bash
-python3 scripts/backup-restore.py verify \
+sudo python3 scripts/backup-restore.py verify \
   --bundle /var/lib/mypaas/backups/full-<timestamp>-<source-sha>
 ```
 
@@ -80,13 +90,14 @@ A copied/exported bundle should be verified again on the destination before rest
 
 ## Restore
 
-Restore is destructive and requires explicit confirmation:
+Restore is destructive and requires explicit confirmation. The default rootful installation requires host privileges for engine/database/volume access:
 
 ```bash
-cd ~/MyPaas
-python3 scripts/backup-restore.py restore \
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo python3 scripts/backup-restore.py restore \
   --bundle /path/to/full-backup \
-  --install-dir "$PWD" \
+  --install-dir "$MYPAAS_INSTALL_DIR" \
   --confirm-restore
 ```
 
@@ -105,8 +116,10 @@ The restore path:
 After a restore, redeploy/reconcile the production stack as required and run the production verifier before declaring recovery complete.
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 ## Recovery boundaries
