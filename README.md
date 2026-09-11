@@ -28,11 +28,17 @@ The supported production path targets a Linux VM. Fresh supported installs are P
 For the current stable release (`v0.7.0`):
 
 ```bash
+umask 077
+bootstrap_script="$(mktemp /tmp/mypaas-bootstrap.XXXXXX)"
+trap 'rm -f -- "$bootstrap_script"' EXIT
 curl -fL \
   https://raw.githubusercontent.com/nabilrn/MyPaas/v0.7.0/scripts/bootstrap.sh \
-  -o /tmp/mypaas-bootstrap.sh
-MYPAAS_REF=v0.7.0 bash /tmp/mypaas-bootstrap.sh
+  -o "$bootstrap_script"
+[[ -f "$bootstrap_script" && -O "$bootstrap_script" ]] || exit 1
+MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
 ```
+
+`v0.7.0` is the published stable release identifier used by the current bootstrap path. This command does not claim cryptographic verification of a mutable Git tag; release-identity hardening is tracked separately from this documentation-only change.
 
 Prepare the public domain, GitHub OAuth application credentials, the owner's GitHub primary email, and a Cloudflare Tunnel token before completing setup. See [Installation](docs/installation.md) for prerequisites, Docker compatibility mode, non-interactive settings, and post-install verification.
 
@@ -123,11 +129,13 @@ On a single-host installation, builds, the MyPaaS control plane, databases, and 
 
 Repository CI covers source-level behavior such as backend tests, race detection, frontend checks/build, deployment-script syntax, production Compose rendering, and the Docker-compatible Podman contract. Real deployment and host-operation behavior is qualified directly on a VM when a feature requires it.
 
-For an installed VM, run the production verifier after installation or a manual recovery operation:
+For an installed VM, run the production verifier after installation or a manual recovery operation. Default rootful installations require host privileges for the engine/socket checks:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 See [Production verification](docs/operations/production-verification.md) and [`docs/engineering/runtime-verification.md`](docs/engineering/runtime-verification.md).
