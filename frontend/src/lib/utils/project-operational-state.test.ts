@@ -49,6 +49,7 @@ describe('project operational state matrix', () => {
 			desired: 'running',
 			headline: 'Deployment failed',
 			primaryAction: 'retry',
+			primaryActionLabel: 'Retry deploy',
 			attention: 'danger',
 			statusLabel: 'Deploy failed'
 		});
@@ -56,7 +57,7 @@ describe('project operational state matrix', () => {
 		expect(result.headline).not.toContain('waiting');
 	});
 
-	it('keeps the previous release live when a newer deployment fails', () => {
+	it('keeps the previous release live and makes a failed update retryable', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
 			latestDeployment: deployment('dep-failed', 'failed'),
@@ -68,11 +69,28 @@ describe('project operational state matrix', () => {
 			release: 'failed',
 			desired: 'running',
 			headline: 'Live; latest deploy failed',
-			primaryAction: 'view_deployment',
+			primaryAction: 'retry',
+			primaryActionLabel: 'Retry deploy',
 			attention: 'warning',
 			statusLabel: 'Live · deploy failed'
 		});
 		expect(result.detail).toContain('previous release is still serving traffic');
+	});
+
+	it('prefers failed deployment recovery over a coarse crashed project status', () => {
+		const result = deriveProjectOperationalState({
+			project: project({ status: 'crashed' }),
+			latestDeployment: deployment('dep-failed', 'failed')
+		});
+
+		expect(result).toMatchObject({
+			serving: 'offline',
+			release: 'failed',
+			headline: 'Deployment failed',
+			primaryAction: 'retry',
+			primaryActionLabel: 'Retry deploy',
+			attention: 'danger'
+		});
 	});
 
 	it('shows an active first deployment pipeline as deploying and offline until a release exists', () => {
@@ -107,7 +125,7 @@ describe('project operational state matrix', () => {
 		});
 	});
 
-	it('derives a crashed runtime as offline and directs the operator to logs', () => {
+	it('derives a crashed runtime with a successful release as offline and directs the operator to logs', () => {
 		const result = deriveProjectOperationalState({
 			project: project({ status: 'crashed', activeDeploymentId: 'dep-live' }),
 			latestDeployment: deployment('dep-live', 'running')
@@ -201,13 +219,13 @@ describe('project operational state matrix', () => {
 		expect(deriveProjectInventoryAction(notDeployed, 'dockerfile')).toEqual({ action: 'deploy', label: 'Deploy' });
 	});
 
-	it('preserves warning and diagnostic actions in inventory', () => {
+	it('keeps retry available in inventory after a failed update', () => {
 		const failed = deriveProjectOperationalState({
 			project: project({ status: 'running', activeDeploymentId: 'dep-live' }),
 			latestDeployment: deployment('dep-failed', 'failed'),
 			runtimeEvidence: 'available'
 		});
-		expect(deriveProjectInventoryAction(failed, 'dockerfile')).toEqual({ action: 'view_deployment', label: 'Review failure' });
+		expect(deriveProjectInventoryAction(failed, 'dockerfile')).toEqual({ action: 'retry', label: 'Retry deploy' });
 	});
 
 	it('does not reinterpret unavailable runtime evidence as a crash', () => {
