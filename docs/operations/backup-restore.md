@@ -25,7 +25,7 @@ Production can also schedule backups through the platform backup settings. This 
 
 Because the bundle contains the production `.env`, it contains **secrets**. Store and transfer it as sensitive operational data.
 
-The script still contains some historical qualification-oriented command labels (`source-preflight` and `validate-fixture-manifest`). The ordinary `backup`, `verify`, and `restore` procedures below are the operator-facing DR path; fixture-oriented commands remain historical/qualification helpers.
+The ordinary `backup`, `verify`, and `restore` commands are the operator-facing disaster-recovery path. The fixture-oriented `source-preflight` and `validate-fixture-manifest` commands remain optional qualification helpers and are not required for routine backup/restore.
 
 ## Checkout path
 
@@ -135,9 +135,9 @@ Do not publish:
 - database dumps containing private data;
 - restore reports if your surrounding workflow has added sensitive material.
 
-## Historical qualification helpers
+## Qualification helpers
 
-The DR tool also contains fixture-oriented `source-preflight` and `validate-fixture-manifest` commands retained for controlled qualification workflows. They are not required for ordinary operator backup/restore and should not be presented as the normal stable procedure.
+The DR tool also contains fixture-oriented `source-preflight` and `validate-fixture-manifest` commands for controlled qualification workflows. They are not required for ordinary operator backup/restore and should not be presented as the normal stable procedure.
 
 The older [`beta-backup-restore-drill.md`](beta-backup-restore-drill.md) is retained as historical qualification evidence, not as the current operator runbook.
 
