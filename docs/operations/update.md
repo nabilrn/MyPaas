@@ -1,6 +1,6 @@
 # Updating MyPaaS
 
-Production VM updates are host-side, release-aware, and revision-pinned. The supported stable channel follows published GitHub releases rather than every new commit on `main`.
+Production VM updates are host-side and release-aware. The supported stable channel follows published GitHub releases rather than every new commit on `main`. After resolving a release, the updater applies source and immutable API/dashboard images at the resolved Git SHA; the release tag itself is not presented here as a cryptographic trust anchor.
 
 ## Stable update policy
 
@@ -11,9 +11,18 @@ AUTO_UPDATE_CHANNEL=release
 AUTO_UPDATE_INCLUDE_PRERELEASES=false
 ```
 
-The updater resolves the latest stable release, validates ancestry, waits for immutable API/dashboard images for the target Git SHA, applies the matching source revision, and verifies the resulting control plane.
+The updater resolves the latest stable release, validates ancestry, waits for immutable API/dashboard images for the resolved target Git SHA, applies the matching source revision, and verifies the resulting control plane.
 
 `AUTO_UPDATE_CHANNEL=main` is an explicit development-host option. Do not use it as the normal production stable policy.
+
+## Checkout path
+
+Bootstrap installs into `$HOME/MyPaas` by default. For a custom installation, set `MYPAAS_INSTALL_DIR` to the same path that was used during bootstrap:
+
+```bash
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+```
 
 ## Check current updater policy
 
@@ -25,14 +34,21 @@ The policy file is managed by `scripts/configure-auto-update.sh`; do not edit ge
 
 ## Run one update check manually
 
-From the installer-managed checkout:
+Use the installed systemd service so `/etc/mypaas/update.env`, host privileges, locking, and status-file behavior match dashboard/scheduled updates:
 
 ```bash
-cd ~/MyPaas
-bash scripts/update-dispatch.sh
+sudo systemctl start mypaas-update.service
+sudo systemctl status mypaas-update.service --no-pager
 ```
 
-Use `update-dispatch.sh`, not a manual `git pull` followed by arbitrary Compose commands. The dispatcher resolves the configured channel before delegating to the full updater or the dashboard-only fast path.
+Inspect the result with:
+
+```bash
+cat /run/mypaas/update/status
+journalctl -u mypaas-update.service
+```
+
+Do not replace this with a manual `git pull` followed by arbitrary Compose commands. `scripts/update-dispatch.sh` is the service implementation detail; direct interactive execution can bypass the policy environment loaded by systemd.
 
 If the installed revision is already current, the updater still reconciles host dependencies such as `mypaas-statd` and relevant runtime environment drift.
 
@@ -41,7 +57,8 @@ If the installed revision is already current, the updater still reconciles host 
 Periodic polling is opt-in:
 
 ```bash
-cd ~/MyPaas
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
 AUTO_UPDATE_ENABLED=true \
 AUTO_UPDATE_INTERVAL_MINUTES=30 \
 AUTO_UPDATE_CHANNEL=release \
@@ -58,7 +75,8 @@ The update path trigger is installed even when periodic polling is disabled so t
 Keep dashboard-triggered/manual update support while disabling the timer:
 
 ```bash
-cd ~/MyPaas
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
 AUTO_UPDATE_ENABLED=false \
 AUTO_UPDATE_CHANNEL=release \
 bash scripts/configure-auto-update.sh
@@ -89,7 +107,7 @@ The current updater intentionally:
 - preserves the existing Docker/Podman engine contract;
 - reconciles `mypaas-statd`;
 - tags currently running API/dashboard images locally before a full update when possible;
-- deploys the target source and images at one Git identity;
+- deploys the resolved source and images at one Git identity;
 - runs production verification after deployment;
 - attempts a best-effort runtime/checkout rollback if deployment or verification fails.
 
@@ -99,14 +117,15 @@ Automatic rollback cannot make an arbitrary forward database migration inherentl
 
 When the resolved target changes only `frontend/`, the dispatcher can update the dashboard without restarting unchanged API dependencies. The target dashboard image is still required and rollback is verified independently.
 
-This is an updater implementation detail; operators should continue to invoke `scripts/update-dispatch.sh` rather than selecting the fast path manually.
+This is an updater implementation detail; operators should invoke the configured update service rather than selecting the fast path manually.
 
 ## Qualifying a prerelease
 
 Only use this on a test/qualification host:
 
 ```bash
-cd ~/MyPaas
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
 AUTO_UPDATE_CHANNEL=release \
 AUTO_UPDATE_INCLUDE_PRERELEASES=true \
 bash scripts/configure-auto-update.sh
@@ -119,7 +138,8 @@ Do not enable prereleases on a stable production installation unless that risk i
 For a host intentionally following a development ref:
 
 ```bash
-cd ~/MyPaas
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
 AUTO_UPDATE_CHANNEL=main \
 AUTO_UPDATE_REF=main \
 bash scripts/configure-auto-update.sh
@@ -132,8 +152,10 @@ This is not the normal stable operator path.
 Run production verification when you have manually repaired/reconciled runtime state:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 ## Related documents
