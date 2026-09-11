@@ -140,50 +140,62 @@ normalize_bool() {
   esac
 }
 
-resolve_stable_release_tag() {
-  local latest_url effective tag
-  latest_url="https://github.com/$RELEASE_REPOSITORY/releases/latest"
-  effective="$(curl -fsSL -o /dev/null -w '%{url_effective}' "$latest_url")"
-  tag="${effective##*/}"
-  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "could not resolve a valid stable release tag"
-  printf '%s' "$tag"
-}
+resolve_release_metadata() {
+  command_exists python3 || die "python3 is required for release discovery"
+  if [[ "$INCLUDE_PRERELEASES" == "true" ]]; then
+    curl -fsSL \
+      -H 'Accept: application/vnd.github+json' \
+      -H 'X-GitHub-Api-Version: 2022-11-28' \
+      "https://api.github.com/repos/$RELEASE_REPOSITORY/releases?per_page=20" \
+      | python3 -c 'import json,sys; releases=json.load(sys.stdin); r=next((x for x in releases if not x.get("draft")), None); print((r.get("tag_name", "") + "\t" + r.get("target_commitish", "")) if r else "\t")'
+    return
+  fi
 
-resolve_latest_published_tag() {
-  command_exists python3 || die "python3 is required when AUTO_UPDATE_INCLUDE_PRERELEASES=true"
   curl -fsSL \
     -H 'Accept: application/vnd.github+json' \
     -H 'X-GitHub-Api-Version: 2022-11-28' \
-    "https://api.github.com/repos/$RELEASE_REPOSITORY/releases?per_page=20" \
-    | python3 -c 'import json,sys; releases=json.load(sys.stdin); release=next((r for r in releases if not r.get("draft")), None); print(release.get("tag_name", "") if release else "")'
+    "https://api.github.com/repos/$RELEASE_REPOSITORY/releases/latest" \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r.get("tag_name", "") + "\t" + r.get("target_commitish", ""))'
+}
+
+remote_release_tag_commit() {
+  local tag="$1"
+  git_repo ls-remote "$REMOTE" "refs/tags/$tag" "refs/tags/$tag^{}" \
+    | awk '$2 ~ /\^\{\}$/ { peeled=$1; next } { direct=$1 } END { if (peeled != "") print peeled; else print direct }'
 }
 
 resolve_target() {
-  local tag
+  local tag release_sha fetched_sha tag_sha
   case "$CHANNEL" in
     release)
-      if [[ "$INCLUDE_PRERELEASES" == "true" ]]; then
-        tag="$(resolve_latest_published_tag)"
-      else
-        tag="$(resolve_stable_release_tag)"
-      fi
+      IFS=$'\t' read -r tag release_sha < <(resolve_release_metadata)
       [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "release channel returned an invalid tag"
+      [[ "$release_sha" =~ ^[0-9a-fA-F]{40}$ ]] || die "published release $tag does not target a full immutable Git SHA"
+      release_sha="${release_sha,,}"
+
+      tag_sha="$(remote_release_tag_commit "$tag")"
+      [[ "$tag_sha" =~ ^[0-9a-fA-F]{40}$ ]] || die "published release tag $tag is missing from the configured Git remote"
+      [[ "${tag_sha,,}" == "$release_sha" ]] || die "release metadata/tag mismatch for $tag: metadata=$release_sha tag=${tag_sha,,}"
+
       TARGET_VERSION="$tag"
-      TARGET_REF="refs/tags/$tag"
-      log "Checking published release $tag"
-      git_repo fetch --force "$REMOTE" "$TARGET_REF"
+      TARGET_SHA="$release_sha"
+      TARGET_REF="$release_sha"
+      log "Checking published release $tag at ${release_sha:0:12}"
+      git_repo fetch --depth 1 "$REMOTE" "$release_sha"
+      fetched_sha="$(git_repo rev-parse 'FETCH_HEAD^{commit}')"
+      [[ "${fetched_sha,,}" == "$release_sha" ]] || die "fetched release commit does not match published release target"
       ;;
     main)
       TARGET_VERSION="main"
       TARGET_REF="$REF"
       log "Checking development ref $REMOTE/$REF"
       git_repo fetch "$REMOTE" "$REF"
+      TARGET_SHA="$(git_repo rev-parse 'FETCH_HEAD^{commit}')"
       ;;
     *)
       die "AUTO_UPDATE_CHANNEL must be release or main"
       ;;
   esac
-  TARGET_SHA="$(git_repo rev-parse 'FETCH_HEAD^{commit}')"
 }
 
 ensure_complete_history() {

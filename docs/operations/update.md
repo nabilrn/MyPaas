@@ -1,6 +1,8 @@
 # Updating MyPaaS
 
-Production VM updates are host-side and release-aware. The supported stable channel follows published GitHub releases rather than every new commit on `main`. After resolving a release, the updater applies source and immutable API/dashboard images at the resolved Git SHA; the release tag itself is not presented here as a cryptographic trust anchor.
+Production VM updates are host-side and release-aware. The supported stable channel follows published GitHub releases rather than every new commit on `main`.
+
+For a published release, the dispatcher reads the release's full Git target SHA, cross-checks the corresponding remote tag resolves to the same commit, fetches that exact SHA, and then uses the same SHA for source plus immutable API/dashboard image selection. This closes the mutable-tag race inside the normal GitHub release/repository trust boundary; it is not a separate signed-source attestation system.
 
 ## Stable update policy
 
@@ -11,7 +13,7 @@ AUTO_UPDATE_CHANNEL=release
 AUTO_UPDATE_INCLUDE_PRERELEASES=false
 ```
 
-The updater resolves the latest stable release, validates ancestry, waits for immutable API/dashboard images for the resolved target Git SHA, applies the matching source revision, and verifies the resulting control plane.
+The updater resolves the latest stable release, requires a full 40-character release target SHA, verifies the remote release tag resolves to that same SHA, fetches the exact commit, validates ancestry, waits for immutable API/dashboard images for that SHA, applies the matching source revision, and verifies the resulting control plane.
 
 `AUTO_UPDATE_CHANNEL=main` is an explicit development-host option. Do not use it as the normal production stable policy.
 
@@ -100,7 +102,9 @@ If periodic updates are disabled, the timer may not exist/be enabled; the path t
 The current updater intentionally:
 
 - refuses a dirty installer-managed checkout;
-- resolves the configured release/ref before mutation;
+- resolves release metadata to a full target SHA before mutation;
+- cross-checks the release tag against that same target SHA;
+- fetches and verifies the exact release SHA rather than using a fetched tag as runtime authority;
 - refuses an implicit downgrade or unrelated history on the stable release path;
 - waits for immutable target API and dashboard images;
 - preflights migrations and existing runtime/network state;
@@ -145,7 +149,7 @@ AUTO_UPDATE_REF=main \
 bash scripts/configure-auto-update.sh
 ```
 
-This is not the normal stable operator path.
+This is not the normal stable operator path. The `main` channel intentionally follows the configured development ref rather than release metadata.
 
 ## After a manual recovery or policy change
 

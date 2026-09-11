@@ -23,6 +23,7 @@ class BootstrapTest(unittest.TestCase):
 
         self.assertIn("MYPAAS_REPO_URL", result.stdout)
         self.assertIn("MYPAAS_REF", result.stdout)
+        self.assertIn("full 40-character commit SHA", result.stdout)
         self.assertIn("MYPAAS_INSTALL_DIR", result.stdout)
         self.assertIn("INSTALL_WIZARD", result.stdout)
         self.assertIn("USE_PODMAN", result.stdout)
@@ -47,9 +48,19 @@ class BootstrapTest(unittest.TestCase):
 
         self.assertIn("status --porcelain", content)
         self.assertIn("remote get-url origin", content)
-        self.assertIn("fetch --depth 1 origin", content)
+        self.assertIn('fetch --depth 1 origin "$REF"', content)
         self.assertIn("reset --hard FETCH_HEAD", content)
         self.assertNotIn("merge --ff-only FETCH_HEAD", content)
+
+    def test_full_sha_is_verified_and_fresh_checkout_is_detached(self) -> None:
+        content = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('[[ "$1" =~ ^[0-9a-fA-F]{40}$ ]]', content)
+        self.assertIn('fetched commit $fetched does not match requested immutable SHA $REF', content)
+        self.assertIn('git -C "$INSTALL_DIR" init', content)
+        self.assertIn('git -C "$INSTALL_DIR" remote add origin "$REPO_URL"', content)
+        self.assertIn('git -C "$INSTALL_DIR" checkout --detach FETCH_HEAD', content)
+        self.assertIn('detached checkout does not match requested immutable SHA $REF', content)
 
     def test_existing_install_preserves_detected_container_engine(self) -> None:
         content = BOOTSTRAP_PATH.read_text(encoding="utf-8")

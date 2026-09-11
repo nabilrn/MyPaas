@@ -6,7 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## [Unreleased]
 
-No user-facing changes have been queued after the `v0.7.0` stable baseline yet.
+### Changed
+
+- Stable release updates now resolve the published release to a full Git SHA, cross-check the corresponding remote tag resolves to the same commit, fetch that exact SHA, and keep source plus immutable API/dashboard images on one release identity.
+- Bootstrap accepts a full 40-character Git SHA and uses a verified detached checkout for exact-revision installs.
+- VM migration destination instructions are pinned to the source control plane's concrete build SHA instead of cloning the repository default branch.
+
+### Security
+
+- Migration restore no longer embeds the temporary migration download token in the generated destination command or installer argv. `scripts/install-migration.sh` reads the sensitive URL from a hidden prompt/stdin, passes it to `curl` through protected input, downloads to a private temporary directory, and gives the existing installer only a local archive path.
+- Release/update identity checks fail closed when published release metadata, the remote release tag, or the fetched exact commit disagree. This is consistency hardening within the GitHub release/repository trust boundary; it does not add a separate signing authority.
 
 ## [0.7.0] - 2026-09-09
 

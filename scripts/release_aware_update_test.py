@@ -22,13 +22,25 @@ class ReleaseAwareUpdateContractTests(unittest.TestCase):
         self.assertIn('STATUS_DIR="/run/mypaas/update"', configure)
         self.assertIn('install -d -m 0755 "$STATUS_DIR"', configure)
 
-    def test_dispatcher_resolves_release_tags_but_keeps_main_as_dev_channel(self):
+    def test_dispatcher_resolves_release_to_exact_sha_but_keeps_main_as_dev_channel(self):
         dispatch = self.text("scripts/update-dispatch.sh")
         self.assertIn('CHANNEL="${AUTO_UPDATE_CHANNEL:-release}"', dispatch)
-        self.assertIn('https://github.com/$RELEASE_REPOSITORY/releases/latest', dispatch)
-        self.assertIn('TARGET_REF="refs/tags/$tag"', dispatch)
+        self.assertIn('https://api.github.com/repos/$RELEASE_REPOSITORY/releases/latest', dispatch)
+        self.assertIn('target_commitish', dispatch)
+        self.assertIn('published release $tag does not target a full immutable Git SHA', dispatch)
+        self.assertIn('release metadata/tag mismatch for $tag', dispatch)
+        self.assertIn('TARGET_SHA="$release_sha"', dispatch)
+        self.assertIn('TARGET_REF="$release_sha"', dispatch)
+        self.assertIn('git_repo fetch --depth 1 "$REMOTE" "$release_sha"', dispatch)
+        self.assertIn('fetched release commit does not match published release target', dispatch)
         self.assertIn('main)', dispatch)
         self.assertIn('TARGET_REF="$REF"', dispatch)
+
+    def test_release_resolution_cross_checks_remote_tag(self):
+        dispatch = self.text("scripts/update-dispatch.sh")
+        self.assertIn("remote_release_tag_commit()", dispatch)
+        self.assertIn('refs/tags/$tag^{}', dispatch)
+        self.assertIn('[[ "${tag_sha,,}" == "$release_sha" ]]', dispatch)
 
     def test_status_helper_is_atomic_and_phase_aware(self):
         helper = self.text("scripts/update-status.sh")
