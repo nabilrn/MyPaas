@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 - Stable release updates now resolve the published release to a full Git SHA, cross-check the corresponding remote tag resolves to the same commit, fetch that exact SHA, and keep source plus immutable API/dashboard images on one release identity.
 - Bootstrap accepts a full 40-character Git SHA and uses a verified detached checkout for exact-revision installs.
-- VM migration destination instructions are pinned to the source control plane's concrete build SHA instead of cloning the repository default branch.
+- VM migration destination instructions are pinned to the installed platform revision from host updater status, with API build SHA used only as a fallback, instead of cloning the repository default branch.
 
 ### Security
 
