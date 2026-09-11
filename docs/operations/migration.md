@@ -38,10 +38,10 @@ For running Dockerfile, image, and Compose projects, the exporter preserves desi
 
 When the package is ready, Administration shows two separate copy actions:
 
-1. **Copy command** — contains no migration token and pins the destination checkout to the concrete 40-character `MYPAAS_BUILD_SHA` reported by the running source control plane.
+1. **Copy command** — contains no migration token and pins the destination checkout to the concrete 40-character installed platform revision reported by the owner-authenticated system-update snapshot. That snapshot prioritizes the host updater `current_sha` and only falls back to the API build SHA when no valid host revision is available.
 2. **Copy migration URL** — contains the temporary download credential and must be treated as a secret.
 
-Run the generated command on the destination VM. It initializes a new checkout, fetches only the source build SHA, verifies `FETCH_HEAD` matches that SHA, checks out detached, and starts:
+Run the generated command on the destination VM. It initializes a new checkout, fetches only the installed platform SHA, verifies `FETCH_HEAD` matches that SHA, checks out detached, and starts:
 
 ```bash
 bash scripts/install-migration.sh
@@ -65,7 +65,9 @@ The generated command defaults to `$HOME/MyPaas` and honors `MYPAAS_INSTALL_DIR`
 
 ### Release identity
 
-Migration restore is pinned to the exact source build SHA, not the repository default branch or a mutable release tag. If the source API does not expose a concrete 40-character build SHA, the dashboard blocks generation of the destination restore command rather than guessing a revision.
+Migration restore is pinned to the exact installed platform revision, not the repository default branch, a mutable release tag, or blindly to the currently running API image SHA. This distinction matters for frontend-only updates: the API image can legitimately remain on its previous build SHA while the host updater has already advanced the installed platform checkout.
+
+The dashboard therefore uses the same owner-authenticated system-update snapshot that treats host updater `current_sha` as authoritative and API `build_sha` only as a fallback. If no concrete 40-character platform SHA is available, the dashboard blocks generation of the destination restore command rather than guessing a revision.
 
 This is an identity-consistency guard within the configured GitHub repository trust boundary; it is not a separate signed-source attestation system.
 
