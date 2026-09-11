@@ -53,20 +53,27 @@ Confirm the socket exists:
 test -S /run/mypaas/statd.sock && echo "statd socket ready"
 ```
 
+For checkout-backed operations, initialize the actual installation path first. Bootstrap defaults to `$HOME/MyPaas`; custom installations must set `MYPAAS_INSTALL_DIR` explicitly:
+
+```bash
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+```
+
 Reconcile the host daemon against the current MyPaaS checkout/configuration:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/reconcile-statd.sh
+ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/reconcile-statd.sh"
 ```
 
 The platform updater performs this reconciliation automatically as part of its normal host dependency path.
 
-After installing, repairing, or reconciling statd, verify the complete production boundary:
+After installing, repairing, or reconciling statd, verify the complete production boundary. Default rootful installs require host privileges for the engine/socket checks:
 
 ```bash
-cd ~/MyPaas
-ENV_FILE=.env bash scripts/verify-production.sh
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
 ```
 
 If `STATD_SOCKET` is configured, production verification requires the service to be active, the host socket to exist, and the socket to be visible inside the API container.
