@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_VM_SCRIPT="${MYPAAS_INSTALL_VM_SCRIPT:-$ROOT_DIR/scripts/install-vm.sh}"
+MIGRATION_TMPDIR=""
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -11,6 +12,12 @@ log() {
 die() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+cleanup() {
+  if [[ -n "$MIGRATION_TMPDIR" ]]; then
+    rm -rf -- "$MIGRATION_TMPDIR"
+  fi
 }
 
 read_migration_url() {
@@ -42,12 +49,12 @@ main() {
   command -v curl >/dev/null 2>&1 || die "curl is required"
   [[ -f "$INSTALL_VM_SCRIPT" ]] || die "install-vm script not found: $INSTALL_VM_SCRIPT"
 
-  local migration_url tmpdir archive
+  local migration_url archive
   migration_url="$(read_migration_url)"
   umask 077
-  tmpdir="$(mktemp -d /tmp/mypaas-migration.XXXXXX)"
-  trap 'rm -rf -- "$tmpdir"' EXIT
-  archive="$tmpdir/mypaas-export.tar.gz"
+  MIGRATION_TMPDIR="$(mktemp -d /tmp/mypaas-migration.XXXXXX)"
+  trap cleanup EXIT
+  archive="$MIGRATION_TMPDIR/mypaas-export.tar.gz"
 
   log "Downloading migration package through protected curl configuration"
   curl_config_url "$migration_url" \
