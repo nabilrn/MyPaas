@@ -36,7 +36,7 @@ usage() {
     '' \
     'Environment overrides:' \
     '  MYPAAS_REPO_URL               Git repository URL' \
-    '  MYPAAS_REF                    Branch or tag to install (default: main)' \
+    '  MYPAAS_REF                    Branch, tag, or full 40-character commit SHA (default: main)' \
     '  MYPAAS_INSTALL_DIR            Checkout directory (default: $HOME/MyPaas)' \
     '  INSTALL_WIZARD                Start browser setup wizard (default: true)' \
     '  USE_PODMAN                    Fresh-install runtime choice (default: true; existing installs preserve their detected engine)' \
@@ -56,6 +56,24 @@ ensure_git() {
   log "Installing Git"
   run_root apt-get update
   run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
+}
+
+is_full_commit_sha() {
+  [[ "$1" =~ ^[0-9a-fA-F]{40}$ ]]
+}
+
+verify_fetched_ref() {
+  local fetched
+  fetched="$(git -C "$INSTALL_DIR" rev-parse 'FETCH_HEAD^{commit}')"
+  if is_full_commit_sha "$REF" && [[ "${fetched,,}" != "${REF,,}" ]]; then
+    die "fetched commit $fetched does not match requested immutable SHA $REF"
+  fi
+  printf '%s' "$fetched"
+}
+
+fetch_requested_ref() {
+  git -C "$INSTALL_DIR" fetch --depth 1 origin "$REF"
+  verify_fetched_ref >/dev/null
 }
 
 socket_has_mypaas_containers() {
@@ -124,7 +142,7 @@ checkout_repo() {
     [[ -z "$(git -C "$INSTALL_DIR" status --porcelain)" ]] || die "$INSTALL_DIR has local changes; preserve or remove them before rerunning"
     [[ "$(git -C "$INSTALL_DIR" remote get-url origin)" == "$REPO_URL" ]] || die "$INSTALL_DIR points to a different Git origin"
     log "Updating existing MyPaas checkout"
-    git -C "$INSTALL_DIR" fetch --depth 1 origin "$REF"
+    fetch_requested_ref
     # This checkout is installer-managed and local changes were rejected above.
     # Resetting to FETCH_HEAD is intentional: upstream may rewrite/squash main,
     # where an ff-only merge can fail with unrelated histories.
@@ -138,7 +156,17 @@ checkout_repo() {
 
   mkdir -p "$(dirname "$INSTALL_DIR")"
   log "Downloading MyPaas $REF"
-  git clone --depth 1 --branch "$REF" "$REPO_URL" "$INSTALL_DIR"
+  if is_full_commit_sha "$REF"; then
+    mkdir -p "$INSTALL_DIR"
+    git -C "$INSTALL_DIR" init
+    git -C "$INSTALL_DIR" remote add origin "$REPO_URL"
+    fetch_requested_ref
+    git -C "$INSTALL_DIR" checkout --detach FETCH_HEAD
+    [[ "${REF,,}" == "$(git -C "$INSTALL_DIR" rev-parse HEAD | tr '[:upper:]' '[:lower:]')" ]] \
+      || die "detached checkout does not match requested immutable SHA $REF"
+  else
+    git clone --depth 1 --branch "$REF" "$REPO_URL" "$INSTALL_DIR"
+  fi
 }
 
 main() {

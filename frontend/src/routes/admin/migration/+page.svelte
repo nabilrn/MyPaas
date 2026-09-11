@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { AlertTriangle, Check, Copy, Download, LoaderCircle, Package } from '@lucide/svelte';
 	import { api, type MigrationStatus } from '$api';
+	import type { UpdateSnapshot } from '$lib/system-update';
 	import { toast } from '$stores/toast';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
@@ -15,13 +16,45 @@
 	let confirmPrepare = false;
 	let pollingInterval: ReturnType<typeof setInterval> | undefined;
 	let copiedText: string | null = null;
+	let sourceBuildSha = '';
 
 	$: canPrepare = !migration || migration.status === 'failed' || migration.status === 'expired';
 	$: visualState = (preparingMigration ? 'preparing' : migration?.status || 'idle') as MigrationVisualState;
 	$: downloadUrl = migration?.downloadToken ? `/api/admin/migrate/${migration.id}/download?token=${migration.downloadToken}` : '#';
-	$: migrationCommand = migration?.downloadToken && typeof window !== 'undefined'
-		? `git clone https://github.com/nabilrn/MyPaas.git mypaas && cd mypaas && bash scripts/install-vm.sh --migrate-url "${window.location.origin}/api/admin/migrate/${migration.id}/download?token=${migration.downloadToken}"`
+	$: migrationUrl = migration?.downloadToken && typeof window !== 'undefined'
+		? `${window.location.origin}/api/admin/migrate/${migration.id}/download?token=${migration.downloadToken}`
 		: '';
+	$: migrationCommand = sourceBuildSha
+		? `install_dir="\${MYPAAS_INSTALL_DIR:-\$HOME/MyPaas}"
+if [[ -e "$install_dir" ]]; then printf '%s\\n' "Refusing to overwrite existing $install_dir" >&2; exit 1; fi
+mkdir -p "$install_dir"
+git -C "$install_dir" init
+git -C "$install_dir" remote add origin https://github.com/nabilrn/MyPaas.git
+git -C "$install_dir" fetch --depth 1 origin ${sourceBuildSha}
+test "$(git -C "$install_dir" rev-parse 'FETCH_HEAD^{commit}')" = "${sourceBuildSha}"
+git -C "$install_dir" checkout --detach FETCH_HEAD
+cd "$install_dir"
+bash scripts/install-migration.sh`
+		: '';
+
+	async function refreshInstalledRevision() {
+		try {
+			const response = await fetch('/internal/system-update', { cache: 'no-store' });
+			if (!response.ok) throw new Error(`system update status returned ${response.status}`);
+			const snapshot = await response.json() as UpdateSnapshot;
+			const candidate = (snapshot.status.currentSha || '').trim().toLowerCase();
+			sourceBuildSha = /^[0-9a-f]{40}$/.test(candidate) ? candidate : '';
+			return sourceBuildSha;
+		} catch (error) {
+			sourceBuildSha = '';
+			console.error('Failed to resolve current installed MyPaaS revision:', error);
+			return '';
+		}
+	}
+
+	onMount(() => {
+		void refreshInstalledRevision();
+	});
 
 	onDestroy(() => {
 		if (pollingInterval) clearInterval(pollingInterval);
@@ -30,12 +63,19 @@
 	async function startMigration() {
 		if (preparingMigration) return;
 		confirmPrepare = false;
+		if (!(await refreshInstalledRevision())) {
+			toast.error('Installed MyPaaS revision is unavailable');
+			return;
+		}
 		preparingMigration = true;
 		migration = null;
 		try {
 			migration = await api.admin.prepareMigration();
 			if (migration.status === 'preparing') startPolling();
-			else preparingMigration = false;
+			else {
+				preparingMigration = false;
+				if (migration.status === 'ready') await refreshInstalledRevision();
+			}
 		} catch (error) {
 			toast.error('Failed to prepare migration');
 			console.error(error);
@@ -55,7 +95,10 @@
 					pollingInterval = undefined;
 					preparingMigration = false;
 					if (status.status === 'failed') toast.error(status.error || 'Migration preparation failed');
-					else if (status.status === 'ready') toast.success('Migration package ready');
+					else if (status.status === 'ready') {
+						await refreshInstalledRevision();
+						toast.success('Migration package ready');
+					}
 				}
 			} catch (error) {
 				console.error('Error polling migration status:', error);
@@ -209,11 +252,19 @@
 			<div class="grid lg:grid-cols-[18rem_minmax(0,1fr)]">
 				<div class="px-4 py-3 lg:border-r lg:border-[color:var(--workspace-divider)]">
 					<h2 class="text-sm font-semibold text-gray-950 dark:text-white">Restore on the new server</h2>
-					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">Run the generated command on the destination VM. The download token is embedded in the migration URL.</p>
+					<p class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">The destination command is pinned to this installed MyPaaS revision and does not contain the migration token. Run it, then paste the copied migration URL only into the hidden installer prompt.</p>
 				</div>
 				<div class="min-w-0 px-4 py-3">
-					<pre class="console-surface max-h-52 overflow-auto p-3"><code class="whitespace-pre-wrap">{migrationCommand}</code></pre>
-					<ActionButton variant="secondary" size="sm" className="mt-2" on:click={() => copyToClipboard(migrationCommand, 'command')}>{#if copiedText === 'command'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}{copiedText === 'command' ? 'Copied' : 'Copy command'}</ActionButton>
+					{#if migrationCommand}
+						<pre class="console-surface max-h-52 overflow-auto p-3"><code class="whitespace-pre-wrap">{migrationCommand}</code></pre>
+						<div class="mt-2 flex flex-wrap gap-2">
+							<ActionButton variant="secondary" size="sm" on:click={() => copyToClipboard(migrationCommand, 'command')}>{#if copiedText === 'command'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}{copiedText === 'command' ? 'Copied command' : 'Copy command'}</ActionButton>
+							<ActionButton variant="secondary" size="sm" on:click={() => copyToClipboard(migrationUrl, 'url')}>{#if copiedText === 'url'}<Check slot="icon" class="h-4 w-4" />{:else}<Copy slot="icon" class="h-4 w-4" />{/if}{copiedText === 'url' ? 'Copied URL' : 'Copy migration URL'}</ActionButton>
+						</div>
+						<p class="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">The migration URL can download secret-bearing state until it expires. Treat the clipboard value as a credential and clear it after use.</p>
+					{:else}
+						<div class="alert-danger"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>Current installed revision is unavailable. Migration restore is blocked until MyPaaS reports a concrete 40-character platform SHA.</p></div>
+					{/if}
 				</div>
 			</div>
 		</section>
