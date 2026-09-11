@@ -2,7 +2,9 @@
 
 Date: 2026-07-03
 
-Status: Proposed for after-deploy
+Status: Deferred
+
+Resolution: Deferred from the current stable product contract. MyPaaS does not currently provide a historical p95 autosizing recommendation engine, and this ADR is not a commitment to add one. Reconsider only from measured workload/operator need.
 
 ## Context
 
@@ -10,20 +12,22 @@ Resource profiles give safe starting limits, but real memory and CPU usage can d
 
 ## Decision
 
-MyPaas will start with autosizing recommendations, not automatic enforcement.
+The earlier direction was to prefer autosizing **recommendations**, not automatic enforcement.
 
-The recommendation engine should:
+If reconsidered, a recommendation engine should:
 
-- Use historical Docker Stats samples per project and service.
-- Compute p95 memory and CPU over a rolling window.
+- Use historical runtime samples per project and service.
+- Compute a defensible percentile/window from persisted measurements.
 - Compare actual usage against configured limits.
 - Suggest lower or higher limits with a clear reason.
 - Require explicit user approval before applying changes.
 
 ## Consequences
 
-The owner stays in control of quota and deployment behavior. MyPaas can still guide projects toward tighter resource limits once real runtime data exists.
+Deferring this keeps the owner in control of quota and deployment behavior and avoids presenting live snapshots as a historical sizing model.
+
+Current resource profiles and explicit per-project overrides remain the stable configuration contract.
 
 ## Follow-up
 
-Add persistent metrics storage before implementing recommendations. Current live snapshots are enough for dashboard display but not enough for historical p95 calculation.
+No implementation is committed. A future proposal must first define persistent metrics semantics, evidence quality, and the concrete operator problem it solves.

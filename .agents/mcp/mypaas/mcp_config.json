@@ -2,7 +2,7 @@
   "mcpServers": {
     "mypaas-server": {
       "command": "go",
-      "args": ["run", "./backend/cmd/mcp"],
+      "args": ["-C", "<path-to-MyPaas>/backend", "run", "./cmd/mcp"],
       "env": {
         "MYPAAS_URL": "https://<your-domain>/api",
         "MYPAAS_API_TOKEN": "<your-token>"

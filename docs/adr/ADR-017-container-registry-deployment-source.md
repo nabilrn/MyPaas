@@ -4,6 +4,10 @@
 
 Accepted
 
+## Amendment
+
+The original public-image-only authentication boundary in this ADR was amended by [ADR-022](ADR-022-private-registry-auth.md). Current image-mode deployments may use one bounded installation-level credential scoped to a configured registry host. The rest of this ADR remains applicable; the historical text below is retained to show the original decision sequence.
+
 ## Context
 
 MyPaas originally models every project as source code from a Git repository. The deployment engine clones a branch, optionally detects a base directory, then builds a Dockerfile, starts a Compose application, or serves static output.
@@ -40,7 +44,9 @@ Rollback reuses the stored immutable digest when available. If the image is no l
 
 ## Security boundary
 
-This ADR intentionally supports **public images only**. Private registry credentials are not accepted, persisted, passed on the command line, or written into deployment logs in this change. Registry authentication requires a separate credential model and lifecycle because credentials are secrets and may need registry-specific scopes/rotation.
+This section records the original ADR-017 boundary. It was later amended by ADR-022 for bounded private-registry authentication.
+
+The original change intentionally supported **public images only**. Private registry credentials were not accepted, persisted, passed on the command line, or written into deployment logs in this change. Registry authentication required a separate credential model and lifecycle because credentials are secrets and may need registry-specific scopes/rotation.
 
 Image references are treated as data, not shell fragments. MyPaas invokes Docker with argument arrays and rejects whitespace, URL schemes, option-like references, NULs, and empty values before execution.
 
@@ -69,4 +75,4 @@ Project overview, control panel, and settings display source-aware labels. Git w
 - `repo_url` and `branch` remain populated with compatibility values for registry projects even though they are not semantically used.
 - Registry deployments do not have commit metadata.
 - Automatic redeploy on a registry tag change is not included; users trigger deployment manually.
-- Private registry authentication is deferred to a follow-up feature.
+- The original public-image-only authentication boundary was superseded by the bounded credential model in ADR-022.

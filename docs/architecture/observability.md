@@ -3,9 +3,8 @@
 > Runtime metrics, host telemetry, logs, health signals, and fallback behavior.
 
 **Status:** Current  
-**Applies to:** `main`  
-**Last verified:** 2026-08-28  
-**Verified against commit:** `e12f47dd3249e2fdd69df352852ff3c9c3489245`
+**Applies to:** current stable product contract  
+**Last reviewed:** 2026-09-11
 
 ---
 

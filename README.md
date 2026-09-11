@@ -21,6 +21,29 @@
 
 MyPaaS is built for an owner developer or a small trusted team. It manages deployment, routing, lifecycle, persistence, and common operations without pretending one server has unlimited capacity or multi-tenant isolation.
 
+## Quick start
+
+The supported production path targets a Linux VM. Fresh supported installs are Podman-first; Docker Engine is available as an explicit compatibility mode. The installer creates the production `.env` and can launch the browser setup wizard, so do **not** copy `.env.example` as a production recipe.
+
+For the current stable release (`v0.7.0`):
+
+```bash
+umask 077
+bootstrap_script="$(mktemp /tmp/mypaas-bootstrap.XXXXXX)"
+trap 'rm -f -- "$bootstrap_script"' EXIT
+curl -fL \
+  https://raw.githubusercontent.com/nabilrn/MyPaas/v0.7.0/scripts/bootstrap.sh \
+  -o "$bootstrap_script"
+[[ -f "$bootstrap_script" && -O "$bootstrap_script" ]] || exit 1
+MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
+```
+
+`v0.7.0` is the published stable release identifier used by the current bootstrap path. This command does not claim cryptographic verification of a mutable Git tag; release-identity hardening is tracked separately from this documentation-only change.
+
+Prepare the public domain, GitHub OAuth application credentials, the owner's GitHub primary email, and a Cloudflare Tunnel token before completing setup. See [Installation](docs/installation.md) for prerequisites, Docker compatibility mode, non-interactive settings, and post-install verification.
+
+After installation, use the stable release-aware updater rather than replacing the managed checkout manually. See [Updates](docs/operations/update.md).
+
 ## Current capabilities
 
 - deploy Git repositories with **Dockerfile**, **Docker Compose**, or **static output**;
@@ -56,6 +79,8 @@ Private GitHub repositories use the OAuth access token saved for the signed-in a
 | OCI registry | Image | Anonymous pull or one configured authenticated registry |
 
 Dockerfile and Compose are the explicit escape hatches for applications with custom deployment requirements. MyPaaS intentionally does not maintain a separate one-click application template catalog.
+
+Image-mode deployments can request MyPaaS-managed durable volumes through image `VOLUME` declarations or the bounded `io.mypaas.persistent-volumes` image label contract. See [ADR-025](docs/adr/ADR-025-persistent-image-storage.md).
 
 ## Container monitoring
 
@@ -104,7 +129,16 @@ On a single-host installation, builds, the MyPaaS control plane, databases, and 
 
 Repository CI covers source-level behavior such as backend tests, race detection, frontend checks/build, deployment-script syntax, production Compose rendering, and the Docker-compatible Podman contract. Real deployment and host-operation behavior is qualified directly on a VM when a feature requires it.
 
-See [`docs/engineering/runtime-verification.md`](docs/engineering/runtime-verification.md).
+For an installed VM, run the production verifier after installation or a manual recovery operation. Default rootful installations require host privileges for the engine/socket checks:
+
+```bash
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
+```
+
+See [Production verification](docs/operations/production-verification.md) and [`docs/engineering/runtime-verification.md`](docs/engineering/runtime-verification.md).
 
 ## Architecture
 
@@ -123,9 +157,25 @@ flowchart TB
 
 ## Documentation
 
+**Operate MyPaaS**
+
+- [Installation](docs/installation.md)
+- [Configuration](docs/configuration.md)
+- [Updates](docs/operations/update.md)
+- [Backup and restore](docs/operations/backup-restore.md)
+- [VM migration](docs/operations/migration.md)
+- [Production verification](docs/operations/production-verification.md)
+- [Uninstall](docs/operations/uninstall.md)
+
+**Use and extend MyPaaS**
+
+- [CLI](docs/cli.md)
+- [REST API](docs/api.md)
+- [MCP](docs/mcp.md)
+- [Development](docs/development.md)
 - [`PRODUCT.md`](PRODUCT.md) — current product scope and non-goals
 - [`ROADMAP.md`](ROADMAP.md) — current product direction
-- [`docs/README.md`](docs/README.md) — documentation index and source-of-truth rules
+- [`docs/README.md`](docs/README.md) — complete documentation index and source-of-truth rules
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — canonical architecture
 - [`docs/SECURITY_BOUNDARIES.md`](docs/SECURITY_BOUNDARIES.md) — trust and isolation boundaries
 - [`docs/STATD.md`](docs/STATD.md) — optional native telemetry integration
@@ -141,10 +191,12 @@ MyPaaS currently uses an **Issues-only public contribution workflow**. Unsolicit
 
 ## Development
 
+Start with [Development](docs/development.md). `make dev` starts development dependencies and migrations; the Go API and SvelteKit dev server are then run in separate terminals.
+
 ```bash
 make dev
-make test
-make build
+make backend-dev
+make frontend-dev
 ```
 
 Repository engineering conventions are documented in [`AGENTS.md`](AGENTS.md).

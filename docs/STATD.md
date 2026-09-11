@@ -29,7 +29,56 @@ STATD_RELEASE_BASE_URL=https://github.com/nabilrn/mypaas-statd/releases/download
 STATD_SOCKET=/run/mypaas/statd.sock
 ```
 
-Set `INSTALL_STATD=false` to skip statd.
+The current production installer defaults to statd release installation. Set `INSTALL_STATD=false` before installation to skip statd.
+
+The prebuilt release path used by the installer is currently `linux-amd64`; other architectures require an explicit supported source-install workflow or statd disabled.
+
+## Operations
+
+Check the host service:
+
+```bash
+systemctl status mypaas-statd
+```
+
+Inspect service logs:
+
+```bash
+journalctl -u mypaas-statd
+```
+
+Confirm the socket exists:
+
+```bash
+test -S /run/mypaas/statd.sock && echo "statd socket ready"
+```
+
+For checkout-backed operations, initialize the actual installation path first. Bootstrap defaults to `$HOME/MyPaas`; custom installations must set `MYPAAS_INSTALL_DIR` explicitly:
+
+```bash
+export MYPAAS_INSTALL_DIR="${MYPAAS_INSTALL_DIR:-$HOME/MyPaas}"
+cd "$MYPAAS_INSTALL_DIR"
+```
+
+Reconcile the host daemon against the current MyPaaS checkout/configuration:
+
+```bash
+ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/reconcile-statd.sh"
+```
+
+The platform updater performs this reconciliation automatically as part of its normal host dependency path.
+
+After installing, repairing, or reconciling statd, verify the complete production boundary. Default rootful installs require host privileges for the engine/socket checks:
+
+```bash
+sudo env ENV_FILE="$MYPAAS_INSTALL_DIR/.env" \
+  bash "$MYPAAS_INSTALL_DIR/scripts/verify-production.sh"
+```
+
+If `STATD_SOCKET` is configured, production verification requires the service to be active, the host socket to exist, and the socket to be visible inside the API container.
+
+Do not treat statd failure as proof that application runtimes are down. Runtime metrics can fall back to the Docker-compatible engine path; host telemetry has a separate diagnostic state.
 
 ## Protocol
 
@@ -83,4 +132,6 @@ The `mypaas-statd` repository contains local tooling for comparing implementatio
 
 - [Observability architecture](architecture/observability.md)
 - [Architecture overview](architecture/overview.md)
+- [Production verification](operations/production-verification.md)
+- [Updates](operations/update.md)
 - [Security boundaries](SECURITY_BOUNDARIES.md)

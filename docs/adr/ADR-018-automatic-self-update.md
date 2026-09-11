@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed
+Accepted / Implemented
+
+Implementation note: this decision is part of the current stable VM-install contract. Stable installations use the release-aware host updater described below; periodic polling remains opt-in.
 
 ## Context
 
@@ -58,6 +60,8 @@ MyPaas needs an updater that keeps source, migrations, Compose configuration, an
 - systemd is required for dashboard-triggered and scheduled updates; `scripts/update-vm.sh` can still be run manually on other Linux init systems.
 
 ## Operations
+
+The current operator runbook is [`../operations/update.md`](../operations/update.md). The commands below remain the underlying policy interface.
 
 Enable automatic stable-release checks on an installed VM:
 
