@@ -20,6 +20,25 @@ cleanup() {
   fi
 }
 
+run_root() {
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  command -v sudo >/dev/null 2>&1 || die "sudo is required to install curl"
+  sudo "$@"
+}
+
+ensure_curl() {
+  if command -v curl >/dev/null 2>&1; then
+    return
+  fi
+  command -v apt-get >/dev/null 2>&1 || die "curl is required; automatic installation supports Ubuntu/Debian"
+  log "Installing curl"
+  run_root apt-get update
+  run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl
+}
+
 read_migration_url() {
   local value=""
   if [[ -t 0 ]]; then
@@ -46,7 +65,7 @@ curl_config_url() {
 
 main() {
   [[ $# -eq 0 ]] || die "install-migration.sh does not accept the migration URL as an argument; provide it through stdin or the hidden prompt"
-  command -v curl >/dev/null 2>&1 || die "curl is required"
+  ensure_curl
   [[ -f "$INSTALL_VM_SCRIPT" ]] || die "install-vm script not found: $INSTALL_VM_SCRIPT"
 
   local migration_url archive
@@ -62,7 +81,7 @@ main() {
   chmod 0600 "$archive"
   unset migration_url
 
-  log "Starting MyPaas migration installer"
+  log "Starting MyPaaS migration installer"
   MIGRATE_URL="file://$archive" bash "$INSTALL_VM_SCRIPT"
 }
 
