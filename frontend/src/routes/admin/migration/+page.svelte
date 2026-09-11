@@ -37,16 +37,23 @@ cd "$install_dir"
 bash scripts/install-migration.sh`
 		: '';
 
-	onMount(async () => {
+	async function refreshInstalledRevision() {
 		try {
 			const response = await fetch('/internal/system-update', { cache: 'no-store' });
 			if (!response.ok) throw new Error(`system update status returned ${response.status}`);
 			const snapshot = await response.json() as UpdateSnapshot;
 			const candidate = (snapshot.status.currentSha || '').trim().toLowerCase();
-			if (/^[0-9a-f]{40}$/.test(candidate)) sourceBuildSha = candidate;
+			sourceBuildSha = /^[0-9a-f]{40}$/.test(candidate) ? candidate : '';
+			return sourceBuildSha;
 		} catch (error) {
+			sourceBuildSha = '';
 			console.error('Failed to resolve current installed MyPaaS revision:', error);
+			return '';
 		}
+	}
+
+	onMount(() => {
+		void refreshInstalledRevision();
 	});
 
 	onDestroy(() => {
@@ -56,12 +63,19 @@ bash scripts/install-migration.sh`
 	async function startMigration() {
 		if (preparingMigration) return;
 		confirmPrepare = false;
+		if (!(await refreshInstalledRevision())) {
+			toast.error('Installed MyPaaS revision is unavailable');
+			return;
+		}
 		preparingMigration = true;
 		migration = null;
 		try {
 			migration = await api.admin.prepareMigration();
 			if (migration.status === 'preparing') startPolling();
-			else preparingMigration = false;
+			else {
+				preparingMigration = false;
+				if (migration.status === 'ready') await refreshInstalledRevision();
+			}
 		} catch (error) {
 			toast.error('Failed to prepare migration');
 			console.error(error);
@@ -81,7 +95,10 @@ bash scripts/install-migration.sh`
 					pollingInterval = undefined;
 					preparingMigration = false;
 					if (status.status === 'failed') toast.error(status.error || 'Migration preparation failed');
-					else if (status.status === 'ready') toast.success('Migration package ready');
+					else if (status.status === 'ready') {
+						await refreshInstalledRevision();
+						toast.success('Migration package ready');
+					}
 				}
 			} catch (error) {
 				console.error('Error polling migration status:', error);
