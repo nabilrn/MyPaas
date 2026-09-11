@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full MyPaas backup/restore bundle tooling for controlled beta drills.
+"""Full MyPaas backup/restore bundle tooling for production disaster-recovery operations.
 
 The existing in-process backup scheduler remains the lightweight control-plane
 PostgreSQL backup. This tool creates a fuller disaster-recovery bundle that also
@@ -1045,7 +1045,7 @@ def restore(args: argparse.Namespace) -> int:
         "managedVolumesRestored": len(volume_records),
         "apiRecreatedAfterDatabaseRestore": api_recreated,
         "status": "PASS",
-        "nextStep": "run deploy-to-vm.sh, verify-production.sh, then execute the fresh-VM beta acceptance checks",
+        "nextStep": "run deploy-to-vm.sh, verify-production.sh, then execute workload-specific recovery checks",
     }
     report_path = pathlib.Path(args.report or bundle / "restore-report.json")
     write_json_private(report_path, report)
@@ -1067,8 +1067,8 @@ def plan(args: argparse.Namespace) -> int:
         "backupConsistency": "running managed-volume consumers require --quiesce-managed-containers",
         "restoreSafety": "restore requires --confirm-restore and verifies all manifest checksums before mutation",
         "runtimeAcceptance": "fresh-VM login/projects/env/routes/deployments/persistent-data/DB-Studio checks remain external evidence",
-        "qualifyingSourcePreflight": "run source-preflight with the drill fixture spec before creating a qualifying beta backup",
-        "qualifyingManifestPreflight": "run validate-fixture-manifest after backup creation before any fresh-VM restore",
+        "qualifyingSourcePreflight": "run source-preflight with the fixture spec before creating a fixture-qualified backup",
+        "qualifyingManifestPreflight": "run validate-fixture-manifest after backup creation before any fixture-driven restore",
     }
     print(json.dumps(output, indent=2))
     return 0
@@ -1104,7 +1104,7 @@ def build_parser() -> argparse.ArgumentParser:
     restore_parser.add_argument("--confirm-restore", action="store_true")
     restore_parser.set_defaults(func=restore)
 
-    preflight_parser = sub.add_parser("source-preflight", help="verify qualifying beta restore fixtures before backup")
+    preflight_parser = sub.add_parser("source-preflight", help="verify restore fixtures before backup")
     preflight_parser.add_argument("--spec", required=True, help="JSON file describing required source fixtures")
     preflight_parser.add_argument("--install-dir", default=os.getenv("MYPAAS_INSTALL_DIR", DEFAULT_INSTALL_DIR))
     preflight_parser.add_argument("--env-file", default="")
@@ -1113,7 +1113,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--report", default="")
     preflight_parser.set_defaults(func=preflight_source_fixtures)
 
-    manifest_parser = sub.add_parser("validate-fixture-manifest", help="verify backup manifest covers the qualifying fixture set")
+    manifest_parser = sub.add_parser("validate-fixture-manifest", help="verify backup manifest covers the declared fixture set")
     manifest_parser.add_argument("--bundle", required=True)
     manifest_parser.add_argument("--spec", required=True, help="same JSON fixture spec used for source-preflight")
     manifest_parser.add_argument("--report", default="")
