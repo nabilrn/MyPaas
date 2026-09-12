@@ -26,7 +26,7 @@
 			<div class="flex h-20 w-[250px] items-center justify-center sm:w-[270px]">
 				<BrandLogo imageClass="h-20 w-full object-contain object-center" />
 			</div>
-			<p class="mt-2 text-[0.9375rem] text-gray-500 dark:text-gray-400">Self-hosted Git-based deployments.</p>
+			<p class="mt-3 text-[0.9375rem] text-gray-500 dark:text-gray-400">Self-hosted Git-based deployments.</p>
 			<h1 class="sr-only">Sign in to MyPaas</h1>
 		</div>
 
