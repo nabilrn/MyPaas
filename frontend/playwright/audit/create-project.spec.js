@@ -3,6 +3,12 @@ import { runAudit } from './create-project-audit.mjs';
 
 test('Create Project UX audit harness', async () => {
 	const mode = process.env.MYPAAS_AUDIT_MODE || 'mock';
+	if (mode === 'production' && !process.env.MYPAAS_AUDIT_BASE_URL) {
+		throw new Error('MYPAAS_AUDIT_BASE_URL is required for production UI audits.');
+	}
+	if (mode === 'production' && !process.env.MYPAAS_AUDIT_REPO_URL) {
+		throw new Error('MYPAAS_AUDIT_REPO_URL is required for production Create Project audits.');
+	}
 	const summary = await runAudit({ mode });
 	if (mode !== 'mock') return;
 
