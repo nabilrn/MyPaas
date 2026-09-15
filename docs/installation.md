@@ -26,30 +26,32 @@ The default `mypaas-statd` release artifact currently supports `linux-amd64`. So
 
 ## Install the stable release
 
-Use the current published stable release identifier consistently for the bootstrap download and checkout request. For `v0.7.0`:
+Use the published stable release source SHA as the bootstrap authority. For `v0.7.0`, the release source is `1282c23314486a67605793730592447eb1f19923`:
 
 ```bash
+stable_sha="1282c23314486a67605793730592447eb1f19923"
 umask 077
 bootstrap_script="$(mktemp /tmp/mypaas-bootstrap.XXXXXX)"
 trap 'rm -f -- "$bootstrap_script"' EXIT
 curl -fL \
-  https://raw.githubusercontent.com/nabilrn/MyPaas/v0.7.0/scripts/bootstrap.sh \
+  "https://raw.githubusercontent.com/nabilrn/MyPaas/${stable_sha}/scripts/bootstrap.sh" \
   -o "$bootstrap_script"
 [[ -f "$bootstrap_script" && -O "$bootstrap_script" ]] || exit 1
-MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
+MYPAAS_REF="$stable_sha" bash "$bootstrap_script"
 ```
 
-This is the current release-tag bootstrap contract. A Git tag is a release identifier, not a cryptographic integrity proof; immutable release-identity verification requires a runtime/bootstrap change and is handled separately from this documentation-only update.
+The release tag is the human-facing release label. The command above pins both the downloaded bootstrap bytes and the installer-managed checkout to the release's full Git source SHA. `scripts/bootstrap.sh` verifies a requested full SHA before using a detached checkout. This protects release/source identity consistency inside the configured GitHub repository trust boundary; it is not an independent signing or attestation system.
 
 The bootstrap process:
 
 1. requires Linux;
 2. installs Git automatically on supported apt-based hosts when needed;
 3. creates or updates the installer-managed checkout at `$HOME/MyPaas` by default;
-4. preserves the detected Docker/Podman engine on an existing installation and refuses an implicit in-place engine switch;
-5. starts `scripts/install-vm.sh`;
-6. defaults to rootful Podman on a fresh host;
-7. starts the browser install wizard by default.
+4. verifies a requested full Git SHA before using it and creates a detached checkout for exact-revision installs;
+5. preserves the detected Docker/Podman engine on an existing installation and refuses an implicit in-place engine switch;
+6. starts `scripts/install-vm.sh`;
+7. defaults to rootful Podman on a fresh host;
+8. starts the browser install wizard by default.
 
 The installer creates the production `.env`. **Do not use `cp .env.example .env` as the production installation procedure.** `.env.example` is a development/configuration reference and contains defaults that intentionally differ from generated production values.
 
@@ -70,10 +72,10 @@ Secrets such as the PostgreSQL password, JWT secret, encryption key, and metrics
 
 ## Docker Engine compatibility mode
 
-To choose Docker Engine for a **fresh** installation, use the same private bootstrap file from the stable-install block:
+To choose Docker Engine for a **fresh** installation, use the same private bootstrap file and exact `stable_sha` from the stable-install block:
 
 ```bash
-USE_PODMAN=false MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
+USE_PODMAN=false MYPAAS_REF="$stable_sha" bash "$bootstrap_script"
 ```
 
 Do not use `USE_PODMAN` to switch an existing installation between Docker and Podman in place. The bootstrap intentionally refuses an engine mismatch when it detects existing MyPaaS runtime state. Engine changes belong to the VM migration boundary; see [VM migration](operations/migration.md) and [ADR-019](adr/ADR-019-migration-safety-boundaries.md).
@@ -85,7 +87,7 @@ The bootstrap forwards supported `install-vm.sh` environment settings. Common co
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `MYPAAS_INSTALL_DIR` | `$HOME/MyPaas` | Installer-managed checkout |
-| `MYPAAS_REF` | `main` | Branch/tag/ref to install; production currently uses the published stable release tag |
+| `MYPAAS_REF` | `main` | Branch/tag/ref or full 40-character commit SHA; stable production installs use the published release source SHA |
 | `INSTALL_WIZARD` | `true` in bootstrap | Start browser setup wizard |
 | `USE_PODMAN` | `true` | Fresh-install runtime choice |
 | `INSTALL_STATD` | `true` | Install optional host telemetry daemon |
