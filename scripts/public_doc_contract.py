@@ -140,15 +140,20 @@ def check_operator_commands() -> None:
 
 
 def check_audit_contract() -> None:
-    audit = read("frontend/playwright/audit/create-project-audit.mjs")
-    require(
-        "mode === 'production' && !process.env.MYPAAS_AUDIT_BASE_URL" in audit,
-        "create-project-audit.mjs: production mode must fail closed without MYPAAS_AUDIT_BASE_URL",
-    )
-    require(
-        "mode === 'production' && !process.env.MYPAAS_AUDIT_REPO_URL" in audit,
-        "create-project-audit.mjs: production mode must fail closed without MYPAAS_AUDIT_REPO_URL",
-    )
+    for relative in (
+        "frontend/playwright/audit/run-create-audit.mjs",
+        "frontend/playwright/audit/create-project.spec.js",
+    ):
+        text = read(relative)
+        require(
+            "mode === 'production' && !process.env.MYPAAS_AUDIT_BASE_URL" in text
+            or ("if (!process.env.MYPAAS_AUDIT_BASE_URL)" in text and "mode === 'production'" in text),
+            f"{relative}: production audit entry point must fail closed without MYPAAS_AUDIT_BASE_URL",
+        )
+        require(
+            "mode === 'production' && !process.env.MYPAAS_AUDIT_REPO_URL" in text,
+            f"{relative}: production audit entry point must fail closed without MYPAAS_AUDIT_REPO_URL",
+        )
 
 
 def check_personal_host_hygiene() -> None:
