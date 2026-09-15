@@ -25,20 +25,21 @@ MyPaaS is built for an owner developer or a small trusted team. It manages deplo
 
 The supported production path targets a Linux VM. Fresh supported installs are Podman-first; Docker Engine is available as an explicit compatibility mode. The installer creates the production `.env` and can launch the browser setup wizard, so do **not** copy `.env.example` as a production recipe.
 
-For the current stable release (`v0.7.0`):
+For the current stable release (`v0.7.0`, release source `1282c23314486a67605793730592447eb1f19923`):
 
 ```bash
+stable_sha="1282c23314486a67605793730592447eb1f19923"
 umask 077
 bootstrap_script="$(mktemp /tmp/mypaas-bootstrap.XXXXXX)"
 trap 'rm -f -- "$bootstrap_script"' EXIT
 curl -fL \
-  https://raw.githubusercontent.com/nabilrn/MyPaas/v0.7.0/scripts/bootstrap.sh \
+  "https://raw.githubusercontent.com/nabilrn/MyPaas/${stable_sha}/scripts/bootstrap.sh" \
   -o "$bootstrap_script"
 [[ -f "$bootstrap_script" && -O "$bootstrap_script" ]] || exit 1
-MYPAAS_REF=v0.7.0 bash "$bootstrap_script"
+MYPAAS_REF="$stable_sha" bash "$bootstrap_script"
 ```
 
-`v0.7.0` is the published stable release identifier used by the current bootstrap path. This command does not claim cryptographic verification of a mutable Git tag; release-identity hardening is tracked separately from this documentation-only change.
+`v0.7.0` is the published release label; the command above pins both the downloaded bootstrap script and the installer-managed checkout to that release's full Git source SHA. The bootstrap verifies a requested full SHA before using a detached checkout. This is release/source identity consistency inside the configured GitHub repository trust boundary, not an independent signed-source attestation system.
 
 Prepare the public domain, GitHub OAuth application credentials, the owner's GitHub primary email, and a Cloudflare Tunnel token before completing setup. See [Installation](docs/installation.md) for prerequisites, Docker compatibility mode, non-interactive settings, and post-install verification.
 
