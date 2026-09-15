@@ -110,3 +110,5 @@ When behavior changes:
 - do not convert benchmark or one-host observations into generic capacity claims.
 
 A command shown in current operator docs should map to an executable path/target in the repository or to an explicit dashboard workflow. If the product lacks a safe public workflow, document that limitation instead of inventing one.
+
+Repository CI runs `scripts/public_doc_contract.py` on every pull request and `main` push. The check deliberately covers a small set of high-risk current-facing contracts: exact-SHA stable bootstrap examples, MCP working-directory commands, public metrics/update/migration/verifier paths, production audit target guards, and personal-hostname hygiene. Historical evidence is exempt only through explicit allowlists so old records can remain accurate without becoming current operator guidance.

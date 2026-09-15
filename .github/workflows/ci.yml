@@ -63,6 +63,14 @@ jobs:
           printf '  %s\n' "${changed_files[@]}"
           echo "frontend_only=$frontend_only" >> "$GITHUB_OUTPUT"
 
+  public-contract:
+    name: Public/operator contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public and operator documentation contract
+        run: python3 scripts/public_doc_contract.py
+
   backend:
     name: Backend tests
     needs: changes
