@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+PERSONAL_PRODUCTION_HOST = "nabilrn" + ".space"
 HISTORICAL_PERSONAL_HOST_ALLOWLIST = {
     Path("docs/ux/create-project-production-audit-2026-08-13.md"),
 }
@@ -172,7 +173,7 @@ def check_personal_host_hygiene() -> None:
             content = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        if "nabilrn.space" in content:
+        if PERSONAL_PRODUCTION_HOST in content:
             errors.append(f"{relative}: personal production hostname is only allowed in explicit historical evidence")
 
 
