@@ -65,13 +65,17 @@ def check_stable_install_contract() -> None:
             'MYPAAS_REF="$stable_sha" bash "$bootstrap_script"' in text,
             f"{relative}: bootstrap checkout must use the same exact stable SHA",
         )
-        require("cp .env.example .env" not in text, f"{relative}: production install must not copy .env.example")
         require("MYPAAS_REF=v0.7.0" not in text, f"{relative}: release tag must not be used as bootstrap runtime authority")
         require(
             "release-identity hardening is tracked separately" not in text
             and "immutable release-identity verification requires a runtime/bootstrap change" not in text,
             f"{relative}: stale pre-hardening release-identity caveat remains",
         )
+
+    require(
+        "Do not use `cp .env.example .env`" in read("docs/installation.md"),
+        "docs/installation.md: production .env guidance must explicitly reject copying .env.example",
+    )
 
     bootstrap = read("scripts/bootstrap.sh")
     require("is_full_commit_sha()" in bootstrap, "scripts/bootstrap.sh: full-SHA bootstrap support is missing")
