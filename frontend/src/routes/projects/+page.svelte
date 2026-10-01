@@ -25,6 +25,8 @@
 
 	const pageSize = 20;
 	const telemetrySamples = 40;
+	const hostTelemetryPollMs = 3000;
+	const telemetryPauseThresholdMs = hostTelemetryPollMs * 2;
 
 	let projects: Project[] = [];
 	let hostStats: HostStats | null = null;
@@ -82,10 +84,13 @@
 			if (!document.hidden) void loadHostStats();
 		};
 		const handleVisibilityChange = () => {
-			if (!document.hidden) void refreshDashboardData(true);
+			if (!document.hidden) {
+				markTelemetryPause(Date.now());
+				void refreshDashboardData(true);
+			}
 		};
 		const projectRefresh = setInterval(refreshProjects, 5000);
-		const hostRefresh = setInterval(refreshHost, 3000);
+		const hostRefresh = setInterval(refreshHost, hostTelemetryPollMs);
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 		return () => {
 			clearInterval(projectRefresh);
@@ -130,11 +135,44 @@
 			hostStats = nextHostStats;
 			recordHostTelemetry(nextHostStats, Date.now());
 		} catch {
-			// Keep the last known sample during a telemetry failure.
+			// Keep the last known live summary, but record that history collection
+			// had no sample so the chart does not imply continuity through failure.
+			recordTelemetryGap(Date.now());
 		} finally {
 			hostStatsLoaded = true;
 			hostStatsInFlight = false;
 		}
+	}
+
+	function recordTelemetryGap(sampledAtMs: number) {
+		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
+		if (!lastSample) return;
+
+		const lastSampleHasTelemetry = lastSample.memoryPercent !== null
+			|| lastSample.cpuPercent !== null
+			|| lastSample.networkBytesPerSecond !== null;
+		if (lastSampleHasTelemetry) {
+			hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
+				sampledAtMs,
+				memoryPercent: null,
+				cpuPercent: null,
+				networkBytesPerSecond: null
+			}, telemetrySamples);
+		}
+
+		// CPU and network are cumulative counters. Reset their baselines after a
+		// known collection gap so the next rate is not averaged across time where
+		// the browser did not obtain a valid sample.
+		cpuBaseline = null;
+		currentCPUUsage = null;
+		networkBaseline = null;
+		currentNetworkRate = null;
+	}
+
+	function markTelemetryPause(sampledAtMs: number) {
+		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
+		if (!lastSample || sampledAtMs - lastSample.sampledAtMs <= telemetryPauseThresholdMs) return;
+		recordTelemetryGap(sampledAtMs);
 	}
 
 	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {

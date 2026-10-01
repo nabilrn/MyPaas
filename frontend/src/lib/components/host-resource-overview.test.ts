@@ -7,9 +7,9 @@ describe('host resource overview', () => {
 		expect(projectsPage).toContain('HostResourceOverview');
 		expect(projectsPage).toContain('samples={hostTelemetrySeries}');
 		expect(hostResourceOverview).toContain("type SeriesKey = 'memory' | 'cpu' | 'network'");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('memory', chartSamples, networkScale, chartCadenceMs)");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('cpu', chartSamples, networkScale, chartCadenceMs)");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('network', chartSamples, networkScale, chartCadenceMs)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('memory', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('cpu', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('network', chartSamples, networkScale)");
 	});
 
 	it('uses a chart-first desktop split with the metric summary in the right column', () => {
@@ -84,24 +84,38 @@ describe('host resource overview', () => {
 	});
 
 	it('renders isolated valid samples instead of dropping move-only SVG paths', () => {
-		expect(hostResourceOverview).toContain("isolatedPoints('memory', chartSamples, networkScale, chartCadenceMs)");
-		expect(hostResourceOverview).toContain("isolatedPoints('cpu', chartSamples, networkScale, chartCadenceMs)");
-		expect(hostResourceOverview).toContain("isolatedPoints('network', chartSamples, networkScale, chartCadenceMs)");
+		expect(hostResourceOverview).toContain("isolatedPoints('memory', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("isolatedPoints('cpu', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("isolatedPoints('network', chartSamples, networkScale)");
 		expect(hostResourceOverview).toContain('memoryIsolatedPoints as point');
 	});
 
-	it('keeps rolling samples evenly spaced and breaks real telemetry pauses', () => {
+	it('keeps rolling samples evenly spaced and breaks only on explicit missing values', () => {
 		expect(hostResourceOverview).toContain('alignedChartSamples(samples)');
 		expect(hostResourceOverview).toContain('activeSeries.every((series) => hasFiniteSeriesValue(sample, series))');
 		expect(hostResourceOverview).toContain('(index / (sourceSamples.length - 1)) * chartWidth');
-		expect(hostResourceOverview).toContain('deriveTelemetryCadenceMs(chartSamples)');
-		expect(hostResourceOverview).toContain('isTelemetryDiscontinuity(sourceSamples[index - 1], sample, cadenceMs)');
+		expect(hostResourceOverview).toContain('if (value === null || !Number.isFinite(value))');
+		expect(hostResourceOverview).not.toContain('deriveTelemetryCadenceMs');
+		expect(hostResourceOverview).not.toContain('isTelemetryDiscontinuity');
 		expect(hostResourceOverview).toContain('nearestSampleIndex(ratio, chartSamples)');
 	});
 
 	it('uses a bounded power scale for bursty network history', () => {
 		expect(hostResourceOverview).toContain('deriveAdaptiveRateScale(networkValues)');
 		expect(hostResourceOverview).toContain('linearRatio ** networkScale.exponent');
+	});
+
+	it('records browser collection pauses explicitly and resets cumulative baselines', () => {
+		expect(projectsPage).toContain('const hostTelemetryPollMs = 3000');
+		expect(projectsPage).toContain('const telemetryPauseThresholdMs = hostTelemetryPollMs * 2');
+		expect(projectsPage).toContain('markTelemetryPause(Date.now())');
+		expect(projectsPage).toContain('recordTelemetryGap(Date.now())');
+		expect(projectsPage).toContain('memoryPercent: null');
+		expect(projectsPage).toContain('cpuPercent: null');
+		expect(projectsPage).toContain('networkBytesPerSecond: null');
+		expect(projectsPage).toContain('cpuBaseline = null');
+		expect(projectsPage).toContain('networkBaseline = null');
+		expect(projectsPage).toContain('setInterval(refreshHost, hostTelemetryPollMs)');
 	});
 
 	it('records successful all-null polls as gaps once history exists', () => {

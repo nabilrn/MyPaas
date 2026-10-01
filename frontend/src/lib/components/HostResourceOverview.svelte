@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { deriveAdaptiveRateScale, deriveTelemetryCadenceMs, isTelemetryDiscontinuity, type AdaptiveRateScale, type HostTelemetrySample } from '$lib/utils/host-telemetry';
+	import { deriveAdaptiveRateScale, type AdaptiveRateScale, type HostTelemetrySample } from '$lib/utils/host-telemetry';
 
 	type SeriesKey = 'memory' | 'cpu' | 'network';
 	type ChartPoint = { x: number; y: number };
@@ -169,8 +169,7 @@
 	function buildSeriesPaths(
 		series: SeriesKey,
 		sourceSamples: HostTelemetrySample[],
-		networkScale: AdaptiveRateScale,
-		cadenceMs: number
+		networkScale: AdaptiveRateScale
 	) {
 		const paths: { line: string; area: string }[] = [];
 		let segment: ChartPoint[] = [];
@@ -189,9 +188,6 @@
 			if (value === null || !Number.isFinite(value)) {
 				flush();
 				return;
-			}
-			if (index > 0 && isTelemetryDiscontinuity(sourceSamples[index - 1], sample, cadenceMs)) {
-				flush();
 			}
 			const x = sampleX(index, sourceSamples);
 			segment.push({ x, y: seriesY(value, series, networkScale) });
@@ -212,8 +208,7 @@
 	function isolatedPoints(
 		series: SeriesKey,
 		sourceSamples: HostTelemetrySample[],
-		networkScale: AdaptiveRateScale,
-		cadenceMs: number
+		networkScale: AdaptiveRateScale
 	) {
 		return sourceSamples.flatMap((sample, index) => {
 			const value = seriesValue(sample, series);
@@ -222,12 +217,8 @@
 			const nextSample = index < sourceSamples.length - 1 ? sourceSamples[index + 1] : undefined;
 			const previous = previousSample ? seriesValue(previousSample, series) : null;
 			const next = nextSample ? seriesValue(nextSample, series) : null;
-			const hasPrevious = previous !== null
-				&& Number.isFinite(previous)
-				&& !isTelemetryDiscontinuity(previousSample, sample, cadenceMs);
-			const hasNext = next !== null
-				&& Number.isFinite(next)
-				&& !isTelemetryDiscontinuity(sample, nextSample, cadenceMs);
+			const hasPrevious = previous !== null && Number.isFinite(previous);
+			const hasNext = next !== null && Number.isFinite(next);
 			if (hasPrevious || hasNext) return [];
 			const x = sampleX(index, sourceSamples);
 			return [{ x, y: seriesY(value, series, networkScale) }];
@@ -257,13 +248,12 @@
 		.map((sample) => sample.networkBytesPerSecond)
 		.filter((value): value is number => value !== null && Number.isFinite(value));
 	$: networkScale = deriveAdaptiveRateScale(networkValues);
-	$: chartCadenceMs = deriveTelemetryCadenceMs(chartSamples);
-	$: memoryPaths = buildSeriesPaths('memory', chartSamples, networkScale, chartCadenceMs);
-	$: cpuPaths = buildSeriesPaths('cpu', chartSamples, networkScale, chartCadenceMs);
-	$: networkPaths = buildSeriesPaths('network', chartSamples, networkScale, chartCadenceMs);
-	$: memoryIsolatedPoints = isolatedPoints('memory', chartSamples, networkScale, chartCadenceMs);
-	$: cpuIsolatedPoints = isolatedPoints('cpu', chartSamples, networkScale, chartCadenceMs);
-	$: networkIsolatedPoints = isolatedPoints('network', chartSamples, networkScale, chartCadenceMs);
+	$: memoryPaths = buildSeriesPaths('memory', chartSamples, networkScale);
+	$: cpuPaths = buildSeriesPaths('cpu', chartSamples, networkScale);
+	$: networkPaths = buildSeriesPaths('network', chartSamples, networkScale);
+	$: memoryIsolatedPoints = isolatedPoints('memory', chartSamples, networkScale);
+	$: cpuIsolatedPoints = isolatedPoints('cpu', chartSamples, networkScale);
+	$: networkIsolatedPoints = isolatedPoints('network', chartSamples, networkScale);
 	$: hoveredSample = hoverIndex >= 0 && hoverIndex < chartSamples.length ? chartSamples[hoverIndex] : null;
 	$: hoveredX = hoverIndex >= 0 && chartSamples.length > 0 ? sampleX(hoverIndex, chartSamples) : null;
 	$: tooltipRatio = hoveredX === null ? 0.5 : hoveredX / chartWidth;
