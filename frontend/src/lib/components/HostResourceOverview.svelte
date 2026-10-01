@@ -98,17 +98,17 @@
 		return sample.networkBytesPerSecond;
 	}
 
-	function seriesY(value: number, series: SeriesKey) {
+	function seriesY(value: number, series: SeriesKey, networkScale: { min: number; max: number }) {
 		const usableHeight = chartHeight - chartPaddingY * 2;
 		if (series === 'network') {
-			const span = Math.max(0.0001, networkDomain.max - networkDomain.min);
-			const normalized = clamp((value - networkDomain.min) / span, 0, 1);
+			const span = Math.max(0.0001, networkScale.max - networkScale.min);
+			const normalized = clamp((value - networkScale.min) / span, 0, 1);
 			return chartPaddingY + (1 - normalized) * usableHeight;
 		}
 		return chartPaddingY + (1 - clamp(value, 0, 100) / 100) * usableHeight;
 	}
 
-	function buildSeriesPaths(series: SeriesKey) {
+	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
 		const paths: string[] = [];
 		let segment: ChartPoint[] = [];
 		const flush = () => {
@@ -116,26 +116,26 @@
 			segment = [];
 		};
 
-		samples.forEach((sample, index) => {
+		sourceSamples.forEach((sample, index) => {
 			const value = seriesValue(sample, series);
 			if (value === null || !Number.isFinite(value)) {
 				flush();
 				return;
 			}
-			const x = samples.length <= 1 ? chartWidth : (index / (samples.length - 1)) * chartWidth;
-			segment.push({ x, y: seriesY(value, series) });
+			const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+			segment.push({ x, y: seriesY(value, series, networkScale) });
 		});
 		flush();
 		return paths;
 	}
 
-	function pointFor(series: SeriesKey, index: number) {
-		const sample = samples[index];
+	function pointFor(series: SeriesKey, index: number, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
+		const sample = sourceSamples[index];
 		if (!sample) return null;
 		const value = seriesValue(sample, series);
 		if (value === null || !Number.isFinite(value)) return null;
-		const x = samples.length <= 1 ? chartWidth : (index / (samples.length - 1)) * chartWidth;
-		return { x, y: seriesY(value, series) };
+		const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+		return { x, y: seriesY(value, series, networkScale) };
 	}
 
 	function handleChartPointer(event: PointerEvent) {
@@ -156,17 +156,18 @@
 		.map((sample) => sample.networkBytesPerSecond)
 		.filter((value): value is number => value !== null && Number.isFinite(value));
 	$: networkDomain = deriveAdaptiveMetricDomain(networkValues, null);
-	$: memoryPaths = buildSeriesPaths('memory');
-	$: cpuPaths = buildSeriesPaths('cpu');
-	$: networkPaths = buildSeriesPaths('network');
+	$: memoryPaths = buildSeriesPaths('memory', samples, networkDomain);
+	$: cpuPaths = buildSeriesPaths('cpu', samples, networkDomain);
+	$: networkPaths = buildSeriesPaths('network', samples, networkDomain);
 	$: hoveredSample = hoverIndex >= 0 && hoverIndex < samples.length ? samples[hoverIndex] : null;
 	$: hoveredX = hoverIndex >= 0 && samples.length > 0
 		? (samples.length === 1 ? chartWidth : (hoverIndex / Math.max(1, samples.length - 1)) * chartWidth)
 		: null;
 	$: tooltipLeft = hoveredX === null ? 50 : clamp((hoveredX / chartWidth) * 100, 12, 88);
-	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex) : null;
-	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex) : null;
-	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex) : null;
+	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex, samples, networkDomain) : null;
+	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex, samples, networkDomain) : null;
+	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex, samples, networkDomain) : null;
+	$: storageAvailable = !/unavailable/i.test(`${storageValue} ${storageDetail}`);
 	$: usedStoragePercent = clamp(Number.isFinite(storagePercent) ? storagePercent : 0, 0, 100);
 	$: storageFillClass = usedStoragePercent >= 90
 		? 'bg-red-500 dark:bg-red-400'
@@ -231,7 +232,7 @@
 			<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-35={!visibleSeries.memory}
+				class:opacity-40={!visibleSeries.memory}
 				aria-pressed={visibleSeries.memory}
 				on:click={() => toggleSeries('memory')}
 			>
@@ -241,7 +242,7 @@
 			<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-35={!visibleSeries.cpu}
+				class:opacity-40={!visibleSeries.cpu}
 				aria-pressed={visibleSeries.cpu}
 				on:click={() => toggleSeries('cpu')}
 			>
@@ -251,7 +252,7 @@
 			<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-35={!visibleSeries.network}
+				class:opacity-40={!visibleSeries.network}
 				aria-pressed={visibleSeries.network}
 				on:click={() => toggleSeries('network')}
 				title="Network history uses an adaptive rate scale"
@@ -332,14 +333,14 @@
 		<div class="border-t border-gray-100 px-4 py-3 dark:border-neutral-800">
 			<div
 				class="h-3 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
-				role="progressbar"
-				aria-label="Storage used"
-				aria-valuemin="0"
-				aria-valuemax="100"
-				aria-valuenow={Math.round(usedStoragePercent)}
+				role={storageAvailable ? 'progressbar' : undefined}
+				aria-label={storageAvailable ? 'Storage used' : undefined}
+				aria-valuemin={storageAvailable ? 0 : undefined}
+				aria-valuemax={storageAvailable ? 100 : undefined}
+				aria-valuenow={storageAvailable ? Math.round(usedStoragePercent) : undefined}
 				data-storage-capacity
 			>
-				<div class={`h-full transition-[width] duration-300 motion-reduce:transition-none ${storageFillClass}`} style={`width: ${usedStoragePercent}%`}></div>
+				{#if storageAvailable}<div class={`h-full transition-[width] duration-300 motion-reduce:transition-none ${storageFillClass}`} style={`width: ${usedStoragePercent}%`}></div>{/if}
 			</div>
 		</div>
 	</div>
