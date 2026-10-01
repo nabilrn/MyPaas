@@ -28,8 +28,14 @@ EXPLICIT_IMAGE_TAG="${MYPAAS_IMAGE_TAG:-}"
 EXPLICIT_BUILD_SHA_SET="${MYPAAS_BUILD_SHA+x}"
 EXPLICIT_BUILD_SHA="${MYPAAS_BUILD_SHA:-}"
 RESTORED_CONTROL_PLANE_DB=false
+RESTORE_BACKUP_ENV_APPLIED="${RESTORE_BACKUP_ENV_APPLIED:-false}"
 
 cd "$ROOT_DIR"
+
+if [[ "$RESTORE_BACKUP_ENV_APPLIED" != "true" && "$RESTORE_BACKUP_ENV_APPLIED" != "false" ]]; then
+  echo "RESTORE_BACKUP_ENV_APPLIED must be true or false." >&2
+  exit 2
+fi
 
 if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
   echo "Extracting backup bundle..."
@@ -37,8 +43,12 @@ if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
   tar -xzf /tmp/mypaas-restore.tar.gz -C "$TMP_EXTRACT"
 
   if [[ -f "$TMP_EXTRACT/.env" ]]; then
-    cat "$TMP_EXTRACT/.env" >> "$ENV_FILE"
-    echo "Restored .env from backup (merged)."
+    if [[ "$RESTORE_BACKUP_ENV_APPLIED" == "true" ]]; then
+      echo "Production config was already restored by the install wizard."
+    else
+      cat "$TMP_EXTRACT/.env" >> "$ENV_FILE"
+      echo "Restored .env from backup (merged)."
+    fi
   fi
 
   if [[ -f "$TMP_EXTRACT/database.sql" ]]; then

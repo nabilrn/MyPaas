@@ -242,6 +242,28 @@ class InstallConfigTest(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(destination).st_mode), 0o600)
             WIZARD_SECURITY.validate_backup_archive(destination, max_expanded_bytes=1024 * 1024)
 
+    def test_backup_restore_stages_env_atomically_with_private_permissions(self) -> None:
+        payload = backup_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = os.path.join(directory, "restore.tar.gz")
+            env_path = os.path.join(directory, ".env")
+            WIZARD_SECURITY.receive_backup(
+                io.BytesIO(payload),
+                str(len(payload)),
+                archive_path,
+                max_bytes=len(payload) + 1,
+                max_expanded_bytes=1024 * 1024,
+            )
+
+            WIZARD_SECURITY.restore_backup_env(
+                archive_path,
+                env_path,
+                max_expanded_bytes=1024 * 1024,
+            )
+
+            self.assertEqual(Path(env_path).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\n")
+            self.assertEqual(stat.S_IMODE(os.stat(env_path).st_mode), 0o600)
+
     def test_backup_receiver_rejects_path_traversal_and_extra_members(self) -> None:
         for extra in ("../escape", "nested/database.sql", "other.txt"):
             with self.subTest(extra=extra), tempfile.TemporaryDirectory() as directory:
@@ -290,6 +312,47 @@ class InstallConfigTest(unittest.TestCase):
                     max_expanded_bytes=1024 * 1024,
                 )
 
+    def test_backup_upload_endpoint_restores_config_before_shutdown(self) -> None:
+        old_token = WIZARD.TOKEN
+        old_path = WIZARD.BACKUP_PATH
+        old_env = WIZARD.ENV_FILE
+        try:
+            WIZARD.TOKEN = "test-wizard-token"
+            with tempfile.TemporaryDirectory() as directory:
+                WIZARD.BACKUP_PATH = os.path.join(directory, "restore.tar.gz")
+                WIZARD.ENV_FILE = os.path.join(directory, ".env")
+                server = WIZARD.HTTPServer(("127.0.0.1", 0), WIZARD.Handler)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    payload = backup_bytes()
+                    connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+                    connection.request(
+                        "POST",
+                        "/upload-backup",
+                        body=payload,
+                        headers={
+                            "Content-Type": "application/octet-stream",
+                            "Content-Length": str(len(payload)),
+                            "X-Wizard-Token": WIZARD.TOKEN,
+                        },
+                    )
+                    response = connection.getresponse()
+                    body = response.read()
+                    connection.close()
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(b"Backup staged", body)
+                    self.assertEqual(Path(WIZARD.ENV_FILE).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\n")
+                    self.assertTrue(os.path.isfile(WIZARD.BACKUP_PATH))
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
+        finally:
+            WIZARD.TOKEN = old_token
+            WIZARD.BACKUP_PATH = old_path
+            WIZARD.ENV_FILE = old_env
+
     def test_backup_upload_endpoint_rejects_missing_wizard_token(self) -> None:
         old_token = WIZARD.TOKEN
         old_path = WIZARD.BACKUP_PATH
@@ -329,6 +392,19 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("setTimeout(() => {", html)
         self.assertIn("window.close();", html)
         self.assertIn("}, 4000);", html)
+
+    def test_installer_stages_restore_before_host_prep_and_waits_for_statd_readiness(self) -> None:
+        installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")
+        deployer = (ROOT_DIR / "scripts" / "deploy-to-vm.sh").read_text(encoding="utf-8")
+
+        self.assertIn('WIZARD_BACKUP_PATH="${WIZARD_BACKUP_PATH:-/tmp/mypaas-restore.tar.gz}"', installer)
+        self.assertIn("RESTORE_BACKUP_ENV_APPLIED=true", installer)
+        self.assertIn('RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED"', installer)
+        self.assertIn('STATD_READY_TIMEOUT_SECONDS="${STATD_READY_TIMEOUT_SECONDS:-15}"', installer)
+        self.assertIn("systemctl is-failed --quiet mypaas-statd", installer)
+        self.assertIn("journalctl -u mypaas-statd --no-pager -n 80", installer)
+        self.assertIn('RESTORE_BACKUP_ENV_APPLIED="${RESTORE_BACKUP_ENV_APPLIED:-false}"', deployer)
+        self.assertIn("Production config was already restored by the install wizard.", deployer)
 
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
         installer = (ROOT_DIR / "scripts" / "install-vm.sh").read_text(encoding="utf-8")

@@ -71,6 +71,57 @@ def validate_backup_archive(path: str, max_expanded_bytes: int = DEFAULT_MAX_EXP
         raise BackupUploadError("Backup is missing required members: " + ", ".join(missing))
 
 
+def restore_backup_env(
+    archive_path: str,
+    env_path: str,
+    *,
+    max_expanded_bytes: int = DEFAULT_MAX_EXPANDED_BACKUP_BYTES,
+) -> None:
+    """Atomically restore only the validated production .env from a control-plane backup."""
+    validate_backup_archive(archive_path, max_expanded_bytes=max_expanded_bytes)
+    directory = os.path.dirname(os.path.abspath(env_path)) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(prefix=".mypaas-env-", suffix=".tmp", dir=directory)
+
+    try:
+        try:
+            with tarfile.open(archive_path, mode="r:gz") as archive:
+                member = archive.getmember(".env")
+                source = archive.extractfile(member)
+                if source is None:
+                    raise BackupUploadError("Backup .env could not be read")
+                with source, os.fdopen(fd, "wb") as output:
+                    remaining = member.size
+                    while remaining:
+                        chunk = source.read(min(COPY_CHUNK_BYTES, remaining))
+                        if not chunk:
+                            raise BackupUploadError("Backup .env ended before the declared size")
+                        output.write(chunk)
+                        remaining -= len(chunk)
+                    if source.read(1):
+                        raise BackupUploadError("Backup .env exceeds the declared size")
+                    output.flush()
+                    os.fsync(output.fileno())
+        except BackupUploadError:
+            raise
+        except (KeyError, OSError, tarfile.TarError) as exc:
+            raise BackupUploadError("Backup .env could not be restored") from exc
+
+        os.chmod(temp_path, 0o600)
+        os.replace(temp_path, env_path)
+        temp_path = ""
+    finally:
+        if temp_path:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                os.remove(temp_path)
+            except FileNotFoundError:
+                pass
+
+
 def receive_backup(
     stream: BinaryIO,
     content_length: str | None,

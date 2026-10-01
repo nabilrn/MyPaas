@@ -20,6 +20,8 @@ INSTALL_WIZARD="${INSTALL_WIZARD:-false}"
 WIZARD_HOST="${WIZARD_HOST:-127.0.0.1}"
 WIZARD_PORT="${WIZARD_PORT:-8787}"
 WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
+WIZARD_BACKUP_PATH="${WIZARD_BACKUP_PATH:-/tmp/mypaas-restore.tar.gz}"
+RESTORE_BACKUP_ENV_APPLIED=false
 
 USE_PODMAN="${USE_PODMAN:-true}"
 MIGRATE_URL="${MIGRATE_URL:-}"
@@ -27,6 +29,7 @@ INSTALL_STATD="${INSTALL_STATD:-true}"
 STATD_ONLY="${STATD_ONLY:-false}"
 STATD_INSTALL_MODE="${STATD_INSTALL_MODE:-release}"
 STATD_VERSION="${STATD_VERSION:-v0.2.0}"
+STATD_READY_TIMEOUT_SECONDS="${STATD_READY_TIMEOUT_SECONDS:-15}"
 STATD_RELEASE_BASE_URL="${STATD_RELEASE_BASE_URL:-https://github.com/nabilrn/mypaas-statd/releases/download}"
 STATD_REPO_URL="${STATD_REPO_URL:-https://github.com/nabilrn/mypaas-statd.git}"
 STATD_REF="${STATD_REF:-main}"
@@ -391,14 +394,31 @@ install_statd() {
       ;;
   esac
 
+  [[ "$STATD_READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] \
+    || die "STATD_READY_TIMEOUT_SECONDS must be a positive integer"
+
   sudo_cmd systemctl daemon-reload
   sudo_cmd systemctl enable mypaas-statd >/dev/null
-  sudo_cmd systemctl restart mypaas-statd
-  for _ in {1..20}; do
+  if ! sudo_cmd systemctl restart mypaas-statd; then
+    sudo_cmd systemctl status mypaas-statd --no-pager -l >&2 || true
+    sudo_cmd journalctl -u mypaas-statd --no-pager -n 80 >&2 || true
+    die "mypaas-statd failed to start"
+  fi
+
+  local attempts attempt
+  attempts=$((STATD_READY_TIMEOUT_SECONDS * 10))
+  for ((attempt = 0; attempt < attempts; attempt++)); do
     [[ -S /run/mypaas/statd.sock ]] && break
+    if sudo_cmd systemctl is-failed --quiet mypaas-statd; then
+      break
+    fi
     sleep 0.1
   done
-  [[ -S /run/mypaas/statd.sock ]] || die "mypaas-statd started but /run/mypaas/statd.sock was not created"
+  if [[ ! -S /run/mypaas/statd.sock ]]; then
+    sudo_cmd systemctl status mypaas-statd --no-pager -l >&2 || true
+    sudo_cmd journalctl -u mypaas-statd --no-pager -n 80 >&2 || true
+    die "mypaas-statd did not create /run/mypaas/statd.sock within ${STATD_READY_TIMEOUT_SECONDS}s"
+  fi
   if [[ "$STATD_INSTALL_MODE" == "release" ]]; then
     [[ "$(sudo_cmd /usr/local/bin/mypaas-statd --version)" == "mypaas-statd ${STATD_VERSION#v}" ]] \
       || die "installed mypaas-statd version does not match $STATD_VERSION"
@@ -450,6 +470,7 @@ run_install_wizard() {
   log "Starting install wizard"
 
   WIZARD_ENV_FILE="$ENV_FILE" \
+  WIZARD_BACKUP_PATH="$WIZARD_BACKUP_PATH" \
   WIZARD_TOKEN="$wizard_token" \
   WIZARD_HOST="$WIZARD_HOST" \
   WIZARD_PORT="$WIZARD_PORT" \
@@ -470,6 +491,12 @@ run_install_wizard() {
   WIZARD_SCRIPT="$ROOT_DIR/scripts/install-wizard.py" \
   WIZARD_PUBLIC_TUNNEL="$WIZARD_PUBLIC_TUNNEL" \
   bash "$ROOT_DIR/scripts/run-install-wizard.sh"
+
+  if [[ -f "$WIZARD_BACKUP_PATH" ]]; then
+    [[ -s "$ENV_FILE" ]] || die "backup upload completed without restoring the production config"
+    RESTORE_BACKUP_ENV_APPLIED=true
+    log "Using production config restored from uploaded control-plane backup"
+  fi
 
   if ! grep -q '^CONTROL_NETWORK=' "$ENV_FILE"; then
     printf '\nCONTROL_NETWORK=%s\n' "$control_network" >> "$ENV_FILE"
@@ -660,7 +687,7 @@ main() {
     prepare_host
     local docker_cmd
     docker_cmd="$(docker_prefix)"
-    DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+    RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
     ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
     log "Migration successfully deployed on new VM!"
@@ -678,7 +705,7 @@ main() {
   local docker_cmd
   docker_cmd="$(docker_prefix)"
   log "Starting MyPaas production stack"
-  DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+  RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
   ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
   log "Install complete"
