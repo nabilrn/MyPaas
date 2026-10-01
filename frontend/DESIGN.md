@@ -319,6 +319,8 @@ Charts are data visualization, not decorative cards.
 
 Overview time-series charts should have meaningful vertical space, roughly **96–120px** when compact.
 
+The Projects host-resource overview is the compact exception: RAM, CPU, and network share one wider chart with independent visibility toggles. RAM/CPU remain percentage series, network keeps its rate semantics with an adaptive visual scale, and storage remains a persistent horizontal capacity bar beneath the chart. Do not duplicate these host metrics into separate card-like charts.
+
 Runtime CPU/memory usage shows:
 
 ```text

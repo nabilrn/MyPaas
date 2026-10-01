@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendRollingSample, boundedPercent, deriveAdaptiveMetricDomain, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
+import { appendHostTelemetrySample, appendRollingSample, boundedPercent, deriveAdaptiveMetricDomain, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
 
 describe('host telemetry helpers', () => {
 	it('bounds resource percentages', () => {
@@ -11,6 +11,29 @@ describe('host telemetry helpers', () => {
 
 	it('keeps only the newest rolling samples', () => {
 		expect(appendRollingSample([1, 2, 3], 4, 3)).toEqual([2, 3, 4]);
+	});
+
+	it('keeps host metrics aligned in one bounded telemetry history', () => {
+		const first = {
+			sampledAtMs: 1_000,
+			memoryPercent: 36,
+			cpuPercent: null,
+			networkBytesPerSecond: null
+		};
+		const second = {
+			sampledAtMs: 4_000,
+			memoryPercent: 37,
+			cpuPercent: 24.9,
+			networkBytesPerSecond: 34_900
+		};
+		const third = {
+			sampledAtMs: 7_000,
+			memoryPercent: null,
+			cpuPercent: 25.8,
+			networkBytesPerSecond: 3_640
+		};
+
+		expect(appendHostTelemetrySample([first, second], third, 2)).toEqual([second, third]);
 	});
 
 	it('zooms percentage domains enough to show small utilization movement', () => {
