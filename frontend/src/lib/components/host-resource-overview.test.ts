@@ -34,4 +34,11 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("hoveredSample.cpuPercent === null ? '—'");
 		expect(hostResourceOverview).toContain('formatRate(hoveredSample.networkBytesPerSecond)');
 	});
+
+	it('renders isolated valid samples instead of dropping move-only SVG paths', () => {
+		expect(hostResourceOverview).toContain("isolatedPoints('memory', samples, networkDomain)");
+		expect(hostResourceOverview).toContain("isolatedPoints('cpu', samples, networkDomain)");
+		expect(hostResourceOverview).toContain("isolatedPoints('network', samples, networkDomain)");
+		expect(hostResourceOverview).toContain('memoryIsolatedPoints as point');
+	});
 });
