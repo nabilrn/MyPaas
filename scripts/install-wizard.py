@@ -8,7 +8,13 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from install_wizard_security import BackupTooLargeError, BackupUploadError, receive_backup, token_matches
+from install_wizard_security import (
+    BackupTooLargeError,
+    BackupUploadError,
+    receive_backup,
+    restore_backup_env,
+    token_matches,
+)
 
 
 HOST = os.environ.get("WIZARD_HOST", "127.0.0.1")
@@ -866,16 +872,29 @@ class Handler(BaseHTTPRequestHandler):
                     max_bytes=MAX_BACKUP_BYTES,
                     max_expanded_bytes=MAX_EXPANDED_BACKUP_BYTES,
                 )
+                restore_backup_env(
+                    BACKUP_PATH,
+                    ENV_FILE,
+                    max_expanded_bytes=MAX_EXPANDED_BACKUP_BYTES,
+                )
             except BackupTooLargeError:
+                try:
+                    os.remove(BACKUP_PATH)
+                except FileNotFoundError:
+                    pass
                 self.send_html(b"Backup upload is too large.", 413)
                 return
             except BackupUploadError:
+                try:
+                    os.remove(BACKUP_PATH)
+                except FileNotFoundError:
+                    pass
                 self.send_html(b"Backup upload is invalid.", 400)
                 return
 
             self.send_html(success_html(
-                title="Backup uploaded",
-                message="Database backup and config were successfully uploaded."
+                title="Backup staged",
+                message="Production config was restored. The terminal installer will restore the control-plane database next."
             ))
 
             def delayed_shutdown():
