@@ -875,13 +875,13 @@ def render_form_html(base, error: str = "", values: dict[str, str] | None = None
         <section id="restore-panel" class="restore-panel" hidden>
           <div class="restore-content">
             <div class="restore-copy">
-              <strong>Restore an existing MyPaaS instance</strong>
-              <p>Upload a MyPaaS <span class="mono">.tar.gz</span> backup instead of creating a fresh configuration.</p>
+              <strong>Restore a control-plane backup</strong>
+              <p>Upload a MyPaaS <span class="mono">.tar.gz</span> backup containing the production config and control-plane database. Project volumes, static artifacts, and Compose workspaces are not included in this backup type.</p>
             </div>
             <input class="backup-file-input" type="file" id="backup-file" accept=".tar.gz,application/gzip">
             <div id="backup-dropzone" class="backup-dropzone" role="button" tabindex="0" aria-controls="backup-file" data-dragging="false">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>
-              <div><strong>Drop backup here or choose a file</strong><span>MyPaaS .tar.gz backups only</span></div>
+              <div><strong>Drop backup here or choose a file</strong><span>MyPaaS control-plane .tar.gz backups only</span></div>
             </div>
             <div id="backup-file-row" class="backup-file-row" hidden>
               <div class="backup-file-meta"><p id="backup-file-name" class="backup-file-name"></p><p id="backup-file-size" class="backup-file-size"></p></div>
