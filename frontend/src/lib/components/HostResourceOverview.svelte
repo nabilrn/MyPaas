@@ -101,6 +101,14 @@
 		return path;
 	}
 
+	function buildAreaPath(input: ChartPoint[]) {
+		if (input.length < 2) return '';
+		const linePath = buildSmoothPath(input);
+		const first = input[0];
+		const last = input[input.length - 1];
+		return `${linePath} L ${last.x.toFixed(2)},${chartHeight} L ${first.x.toFixed(2)},${chartHeight} Z`;
+	}
+
 	function seriesValue(sample: HostTelemetrySample, series: SeriesKey) {
 		if (series === 'memory') return sample.memoryPercent;
 		if (series === 'cpu') return sample.cpuPercent;
@@ -118,10 +126,15 @@
 	}
 
 	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
-		const paths: string[] = [];
+		const paths: { line: string; area: string }[] = [];
 		let segment: ChartPoint[] = [];
 		const flush = () => {
-			if (segment.length > 0) paths.push(buildSmoothPath(segment));
+			if (segment.length > 0) {
+				paths.push({
+					line: buildSmoothPath(segment),
+					area: buildAreaPath(segment)
+				});
+			}
 			segment = [];
 		};
 
@@ -190,7 +203,7 @@
 	$: hoveredX = hoverIndex >= 0 && samples.length > 0
 		? (samples.length === 1 ? chartWidth : (hoverIndex / Math.max(1, samples.length - 1)) * chartWidth)
 		: null;
-	$: tooltipLeft = hoveredX === null ? 50 : clamp((hoveredX / chartWidth) * 100, 12, 88);
+	$: tooltipRatio = hoveredX === null ? 0.5 : hoveredX / chartWidth;
 	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex, samples, networkDomain) : null;
 	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex, samples, networkDomain) : null;
 	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex, samples, networkDomain) : null;
@@ -260,7 +273,7 @@
 				<p class="font-medium text-gray-700 dark:text-gray-300">Resource history</p>
 				<p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">RAM and CPU use a 0–100% scale. Network uses its own adaptive rate scale.</p>
 			</div>
-			<div class="flex items-center gap-3" aria-label="Chart series visibility">
+			<div class="flex items-center gap-3" role="group" aria-label="Chart series visibility">
 				<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
@@ -325,6 +338,21 @@
 
 			<div class="pointer-events-none absolute bottom-4 left-10 right-10 top-1">
 			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+				<defs>
+					<linearGradient id="host-memory-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#34d399" stop-opacity="0.22" />
+						<stop offset="100%" stop-color="#34d399" stop-opacity="0.015" />
+					</linearGradient>
+					<linearGradient id="host-cpu-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.20" />
+						<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.015" />
+					</linearGradient>
+					<linearGradient id="host-network-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#a78bfa" stop-opacity="0.20" />
+						<stop offset="100%" stop-color="#a78bfa" stop-opacity="0.015" />
+					</linearGradient>
+				</defs>
+
 				<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
 					<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 					<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
@@ -337,19 +365,22 @@
 
 				{#if visibleSeries.memory}
 					{#each memoryPaths as path}
-						<path d={path} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-memory-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.memory.point} />{/each}
 				{/if}
 				{#if visibleSeries.cpu}
 					{#each cpuPaths as path}
-						<path d={path} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-cpu-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.cpu.point} />{/each}
 				{/if}
 				{#if visibleSeries.network}
 					{#each networkPaths as path}
-						<path d={path} fill="none" class={seriesClasses.network.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-network-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.network.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.network.point} />{/each}
 				{/if}
@@ -366,7 +397,7 @@
 			{#if hoveredSample}
 				<div
 					class="pointer-events-none absolute top-2 z-10 -translate-x-1/2 rounded-md border border-gray-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95"
-					style={`left: ${tooltipLeft}%`}
+					style={`left: clamp(64px, calc(${chartInsetX}px + (100% - ${chartInsetX * 2}px) * ${tooltipRatio}), calc(100% - 64px))`}
 				>
 					<div class="space-y-1 text-[11px] tabular-nums">
 						<div class="border-b border-gray-100 pb-1 text-[10px] text-gray-400 dark:border-neutral-800 dark:text-gray-500">{formatSampleTime(hoveredSample.sampledAtMs)}</div>
