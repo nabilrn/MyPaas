@@ -408,13 +408,15 @@ install_statd() {
   local attempts attempt
   attempts=$((STATD_READY_TIMEOUT_SECONDS * 10))
   for ((attempt = 0; attempt < attempts; attempt++)); do
-    [[ -S /run/mypaas/statd.sock ]] && break
+    if sudo_cmd test -S /run/mypaas/statd.sock; then
+      break
+    fi
     if sudo_cmd systemctl is-failed --quiet mypaas-statd; then
       break
     fi
     sleep 0.1
   done
-  if [[ ! -S /run/mypaas/statd.sock ]]; then
+  if ! sudo_cmd test -S /run/mypaas/statd.sock; then
     sudo_cmd systemctl status mypaas-statd --no-pager -l >&2 || true
     sudo_cmd journalctl -u mypaas-statd --no-pager -n 80 >&2 || true
     die "mypaas-statd did not create /run/mypaas/statd.sock within ${STATD_READY_TIMEOUT_SECONDS}s"
