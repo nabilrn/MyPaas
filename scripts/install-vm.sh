@@ -496,12 +496,6 @@ run_install_wizard() {
   WIZARD_PUBLIC_TUNNEL="$WIZARD_PUBLIC_TUNNEL" \
   bash "$ROOT_DIR/scripts/run-install-wizard.sh"
 
-  if [[ -f "$WIZARD_BACKUP_PATH" ]]; then
-    [[ -s "$ENV_FILE" ]] || die "backup upload completed without restoring the production config"
-    RESTORE_BACKUP_ENV_APPLIED=true
-    log "Using production config restored from uploaded control-plane backup"
-  fi
-
   if ! grep -q '^CONTROL_NETWORK=' "$ENV_FILE"; then
     printf '\nCONTROL_NETWORK=%s\n' "$control_network" >> "$ENV_FILE"
   fi
