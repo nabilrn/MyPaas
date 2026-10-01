@@ -48,40 +48,6 @@ export function appendHostTelemetrySample(series: HostTelemetrySample[], sample:
 	return [...series, sample].slice(-maxSamples);
 }
 
-export function deriveTelemetryCadenceMs(series: HostTelemetrySample[], fallbackMs = 3000) {
-	const deltas: number[] = [];
-	for (let index = 1; index < series.length; index += 1) {
-		const delta = series[index].sampledAtMs - series[index - 1].sampledAtMs;
-		if (Number.isFinite(delta) && delta > 0) deltas.push(delta);
-	}
-	if (deltas.length === 0) return fallbackMs;
-
-	// Ignore the slowest quartile so browser-background pauses and transient
-	// request stalls do not redefine the expected polling cadence.
-	const sorted = [...deltas].sort((a, b) => a - b);
-	const stableCount = Math.max(1, Math.ceil(sorted.length * 0.75));
-	const stable = sorted.slice(0, stableCount);
-	const middle = Math.floor(stable.length / 2);
-	const median = stable.length % 2 === 1
-		? stable[middle]
-		: (stable[middle - 1] + stable[middle]) / 2;
-
-	return Number.isFinite(median) && median > 0 ? median : fallbackMs;
-}
-
-export function isTelemetryDiscontinuity(
-	previous: HostTelemetrySample | undefined,
-	current: HostTelemetrySample | undefined,
-	cadenceMs: number,
-	multiplier = 2.5
-) {
-	if (!previous || !current) return false;
-	const delta = current.sampledAtMs - previous.sampledAtMs;
-	if (!Number.isFinite(delta) || delta <= 0) return false;
-	const safeCadence = Number.isFinite(cadenceMs) && cadenceMs > 0 ? cadenceMs : 3000;
-	return delta > safeCadence * multiplier;
-}
-
 export function deriveAdaptiveMetricDomain(series: number[], maxValue: number | null = 100): MetricDomain {
 	const clean = series.filter((sample) => Number.isFinite(sample) && sample >= 0);
 	const rawMin = clean.length > 0 ? Math.min(...clean) : 0;
