@@ -707,6 +707,7 @@ main() {
   fi
 
   write_env_file
+  detect_staged_restore_state
   prepare_host
 
   if [[ "$SKIP_DEPLOY" == "true" ]]; then
