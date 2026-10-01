@@ -29,6 +29,7 @@ EXPLICIT_BUILD_SHA_SET="${MYPAAS_BUILD_SHA+x}"
 EXPLICIT_BUILD_SHA="${MYPAAS_BUILD_SHA:-}"
 RESTORED_CONTROL_PLANE_DB=false
 RESTORE_BACKUP_ENV_APPLIED="${RESTORE_BACKUP_ENV_APPLIED:-false}"
+RESTORE_BACKUP_ENV_MARKER="${RESTORE_BACKUP_ENV_MARKER:-/tmp/mypaas-restore.tar.gz.env-applied}"
 
 cd "$ROOT_DIR"
 
@@ -38,6 +39,9 @@ if [[ "$RESTORE_BACKUP_ENV_APPLIED" != "true" && "$RESTORE_BACKUP_ENV_APPLIED" !
 fi
 
 if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
+  if [[ -f "$RESTORE_BACKUP_ENV_MARKER" ]]; then
+    RESTORE_BACKUP_ENV_APPLIED=true
+  fi
   echo "Extracting backup bundle..."
   TMP_EXTRACT=$(mktemp -d)
   tar -xzf /tmp/mypaas-restore.tar.gz -C "$TMP_EXTRACT"
@@ -56,7 +60,7 @@ if [[ -f "/tmp/mypaas-restore.tar.gz" ]]; then
   fi
 
   rm -rf "$TMP_EXTRACT"
-  rm -f /tmp/mypaas-restore.tar.gz
+  rm -f /tmp/mypaas-restore.tar.gz "$RESTORE_BACKUP_ENV_MARKER"
 fi
 
 if [[ ! -f "$ENV_FILE" ]]; then

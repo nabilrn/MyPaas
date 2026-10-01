@@ -22,6 +22,7 @@ PORT = int(os.environ.get("WIZARD_PORT", "8787"))
 TOKEN = os.environ.get("WIZARD_TOKEN", secrets.token_hex(16))
 ENV_FILE = os.environ.get("WIZARD_ENV_FILE", ".env")
 BACKUP_PATH = os.environ.get("WIZARD_BACKUP_PATH", "/tmp/mypaas-restore.tar.gz")
+BACKUP_ENV_MARKER = os.environ.get("WIZARD_BACKUP_ENV_MARKER", BACKUP_PATH + ".env-applied")
 MAX_BACKUP_BYTES = int(os.environ.get("WIZARD_MAX_BACKUP_BYTES", str(512 * 1024 * 1024)))
 MAX_EXPANDED_BACKUP_BYTES = int(
     os.environ.get("WIZARD_MAX_EXPANDED_BACKUP_BYTES", str(2 * 1024 * 1024 * 1024))
@@ -200,6 +201,26 @@ def write_env(content: str) -> None:
     fd = os.open(ENV_FILE, flags, stat.S_IRUSR | stat.S_IWUSR)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(content)
+
+def write_backup_env_marker() -> None:
+    directory = os.path.dirname(os.path.abspath(BACKUP_ENV_MARKER))
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(BACKUP_ENV_MARKER, flags, stat.S_IRUSR | stat.S_IWUSR)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write("env-restored\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def clear_staged_backup() -> None:
+    for path in (BACKUP_PATH, BACKUP_ENV_MARKER):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
 
 
 def form_html(error: str = "", values: dict[str, str] | None = None) -> bytes:
@@ -877,18 +898,13 @@ class Handler(BaseHTTPRequestHandler):
                     ENV_FILE,
                     max_expanded_bytes=MAX_EXPANDED_BACKUP_BYTES,
                 )
+                write_backup_env_marker()
             except BackupTooLargeError:
-                try:
-                    os.remove(BACKUP_PATH)
-                except FileNotFoundError:
-                    pass
+                clear_staged_backup()
                 self.send_html(b"Backup upload is too large.", 413)
                 return
             except BackupUploadError:
-                try:
-                    os.remove(BACKUP_PATH)
-                except FileNotFoundError:
-                    pass
+                clear_staged_backup()
                 self.send_html(b"Backup upload is invalid.", 400)
                 return
 

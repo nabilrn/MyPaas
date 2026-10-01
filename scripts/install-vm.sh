@@ -21,6 +21,7 @@ WIZARD_HOST="${WIZARD_HOST:-127.0.0.1}"
 WIZARD_PORT="${WIZARD_PORT:-8787}"
 WIZARD_PUBLIC_TUNNEL="${WIZARD_PUBLIC_TUNNEL:-true}"
 WIZARD_BACKUP_PATH="${WIZARD_BACKUP_PATH:-/tmp/mypaas-restore.tar.gz}"
+WIZARD_BACKUP_ENV_MARKER="${WIZARD_BACKUP_ENV_MARKER:-${WIZARD_BACKUP_PATH}.env-applied}"
 RESTORE_BACKUP_ENV_APPLIED=false
 
 USE_PODMAN="${USE_PODMAN:-true}"
@@ -473,6 +474,7 @@ run_install_wizard() {
 
   WIZARD_ENV_FILE="$ENV_FILE" \
   WIZARD_BACKUP_PATH="$WIZARD_BACKUP_PATH" \
+  WIZARD_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER" \
   WIZARD_TOKEN="$wizard_token" \
   WIZARD_HOST="$WIZARD_HOST" \
   WIZARD_PORT="$WIZARD_PORT" \
@@ -494,12 +496,6 @@ run_install_wizard() {
   WIZARD_PUBLIC_TUNNEL="$WIZARD_PUBLIC_TUNNEL" \
   bash "$ROOT_DIR/scripts/run-install-wizard.sh"
 
-  if [[ -f "$WIZARD_BACKUP_PATH" ]]; then
-    [[ -s "$ENV_FILE" ]] || die "backup upload completed without restoring the production config"
-    RESTORE_BACKUP_ENV_APPLIED=true
-    log "Using production config restored from uploaded control-plane backup"
-  fi
-
   if ! grep -q '^CONTROL_NETWORK=' "$ENV_FILE"; then
     printf '\nCONTROL_NETWORK=%s\n' "$control_network" >> "$ENV_FILE"
   fi
@@ -518,6 +514,20 @@ run_install_wizard() {
   else
     printf 'CADDY_UPSTREAM_HOST=runtime\n' >> "$ENV_FILE"
   fi
+}
+
+detect_staged_restore_state() {
+  RESTORE_BACKUP_ENV_APPLIED=false
+
+  if [[ ! -e "$WIZARD_BACKUP_ENV_MARKER" ]]; then
+    return
+  fi
+  [[ -f "$WIZARD_BACKUP_ENV_MARKER" ]] || die "staged backup marker is not a regular file: $WIZARD_BACKUP_ENV_MARKER"
+  [[ -f "$WIZARD_BACKUP_PATH" ]] || die "staged backup marker exists without archive: $WIZARD_BACKUP_PATH"
+  [[ -s "$ENV_FILE" ]] || die "staged backup marker exists without restored production config: $ENV_FILE"
+
+  RESTORE_BACKUP_ENV_APPLIED=true
+  log "Resuming control-plane restore with production config already applied"
 }
 
 write_env_file() {
@@ -689,7 +699,7 @@ main() {
     prepare_host
     local docker_cmd
     docker_cmd="$(docker_prefix)"
-    RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+    RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
     ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
     log "Migration successfully deployed on new VM!"
@@ -697,6 +707,7 @@ main() {
   fi
 
   write_env_file
+  detect_staged_restore_state
   prepare_host
 
   if [[ "$SKIP_DEPLOY" == "true" ]]; then
@@ -707,7 +718,7 @@ main() {
   local docker_cmd
   docker_cmd="$(docker_prefix)"
   log "Starting MyPaas production stack"
-  RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+  RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
   ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
   log "Install complete"

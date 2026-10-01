@@ -315,11 +315,13 @@ class InstallConfigTest(unittest.TestCase):
     def test_backup_upload_endpoint_restores_config_before_shutdown(self) -> None:
         old_token = WIZARD.TOKEN
         old_path = WIZARD.BACKUP_PATH
+        old_marker = WIZARD.BACKUP_ENV_MARKER
         old_env = WIZARD.ENV_FILE
         try:
             WIZARD.TOKEN = "test-wizard-token"
             with tempfile.TemporaryDirectory() as directory:
                 WIZARD.BACKUP_PATH = os.path.join(directory, "restore.tar.gz")
+                WIZARD.BACKUP_ENV_MARKER = os.path.join(directory, "restore.tar.gz.env-applied")
                 WIZARD.ENV_FILE = os.path.join(directory, ".env")
                 server = WIZARD.HTTPServer(("127.0.0.1", 0), WIZARD.Handler)
                 thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -344,6 +346,8 @@ class InstallConfigTest(unittest.TestCase):
                     self.assertIn(b"Backup staged", body)
                     self.assertEqual(Path(WIZARD.ENV_FILE).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\n")
                     self.assertTrue(os.path.isfile(WIZARD.BACKUP_PATH))
+                    self.assertTrue(os.path.isfile(WIZARD.BACKUP_ENV_MARKER))
+                    self.assertEqual(stat.S_IMODE(os.stat(WIZARD.BACKUP_ENV_MARKER).st_mode), 0o600)
                 finally:
                     server.shutdown()
                     server.server_close()
@@ -351,6 +355,7 @@ class InstallConfigTest(unittest.TestCase):
         finally:
             WIZARD.TOKEN = old_token
             WIZARD.BACKUP_PATH = old_path
+            WIZARD.BACKUP_ENV_MARKER = old_marker
             WIZARD.ENV_FILE = old_env
 
     def test_backup_upload_endpoint_rejects_missing_wizard_token(self) -> None:
@@ -398,6 +403,10 @@ class InstallConfigTest(unittest.TestCase):
         deployer = (ROOT_DIR / "scripts" / "deploy-to-vm.sh").read_text(encoding="utf-8")
 
         self.assertIn('WIZARD_BACKUP_PATH="${WIZARD_BACKUP_PATH:-/tmp/mypaas-restore.tar.gz}"', installer)
+        self.assertIn('WIZARD_BACKUP_ENV_MARKER="${WIZARD_BACKUP_ENV_MARKER:-${WIZARD_BACKUP_PATH}.env-applied}"', installer)
+        self.assertIn("detect_staged_restore_state", installer)
+        self.assertLess(installer.index("write_env_file\n  detect_staged_restore_state"), installer.index("detect_staged_restore_state\n  prepare_host"))
+        self.assertIn('RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER"', installer)
         self.assertIn("RESTORE_BACKUP_ENV_APPLIED=true", installer)
         self.assertIn('RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED"', installer)
         self.assertIn('STATD_READY_TIMEOUT_SECONDS="${STATD_READY_TIMEOUT_SECONDS:-15}"', installer)
@@ -405,6 +414,8 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn("sudo_cmd test -S /run/mypaas/statd.sock", installer)
         self.assertIn("journalctl -u mypaas-statd --no-pager -n 80", installer)
         self.assertIn('RESTORE_BACKUP_ENV_APPLIED="${RESTORE_BACKUP_ENV_APPLIED:-false}"', deployer)
+        self.assertIn('RESTORE_BACKUP_ENV_MARKER="${RESTORE_BACKUP_ENV_MARKER:-/tmp/mypaas-restore.tar.gz.env-applied}"', deployer)
+        self.assertIn('rm -f /tmp/mypaas-restore.tar.gz "$RESTORE_BACKUP_ENV_MARKER"', deployer)
         self.assertIn("Production config was already restored by the install wizard.", deployer)
 
     def test_installer_enables_temporary_public_wizard_by_default(self) -> None:
