@@ -21,6 +21,15 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("toggleSeries('network')");
 	});
 
+	it('warms up telemetry history before rendering the chart', () => {
+		expect(hostResourceOverview).toContain('const minimumChartSamples = 8');
+		expect(hostResourceOverview).toContain('chartReady = samples.length >= minimumChartSamples');
+		expect(hostResourceOverview).toContain('data-host-history-loading');
+		expect(hostResourceOverview).toContain('Collecting history');
+		expect(hostResourceOverview).toContain('aria-valuemax={minimumChartSamples}');
+		expect(hostResourceOverview).toContain('disabled={!chartReady}');
+	});
+
 	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
 		expect(hostResourceOverview).toContain('id="host-memory-fill"');
 		expect(hostResourceOverview).toContain('id="host-cpu-fill"');
@@ -40,7 +49,7 @@ describe('host resource overview', () => {
 
 	it('gives the merged chart explicit scale and time context', () => {
 		expect(hostResourceOverview).toContain('Resource history');
-		expect(hostResourceOverview).toContain('RAM and CPU use a 0–100% scale');
+		expect(hostResourceOverview).toContain('RAM/CPU 0–100% · Network adaptive scale');
 		expect(hostResourceOverview).toContain('formatRate(networkDomain.max)');
 		expect(hostResourceOverview).toContain('formatRate(networkDomain.min)');
 		expect(hostResourceOverview).toContain('<span>Earlier</span>');
