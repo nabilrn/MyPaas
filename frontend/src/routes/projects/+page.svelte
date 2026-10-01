@@ -371,6 +371,7 @@
 				storageIndicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''}
 				storageDetail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'}
 				{storagePercent}
+				telemetryAvailable={Boolean(hostStats.memory || hostStats.cpu || hostStats.network)}
 				samples={hostTelemetrySeries}
 			/>
 		{:else if hostStatsLoaded}<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>{/if}
