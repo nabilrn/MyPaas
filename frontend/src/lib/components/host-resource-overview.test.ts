@@ -21,6 +21,15 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("toggleSeries('network')");
 	});
 
+	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
+		expect(hostResourceOverview).toContain('id="host-memory-fill"');
+		expect(hostResourceOverview).toContain('id="host-cpu-fill"');
+		expect(hostResourceOverview).toContain('id="host-network-fill"');
+		expect(hostResourceOverview).toContain('fill="url(#host-memory-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-cpu-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-network-fill)"');
+	});
+
 	it('keeps storage as a persistent capacity strip with explicit context', () => {
 		expect(hostResourceOverview).toContain('data-storage-capacity');
 		expect(hostResourceOverview).toContain("role={storageAvailable ? 'progressbar' : undefined}");
@@ -37,6 +46,8 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain('<span>Earlier</span>');
 		expect(hostResourceOverview).toContain('<span>Now</span>');
 		expect(hostResourceOverview).toContain('formatSampleTime(hoveredSample.sampledAtMs)');
+		expect(hostResourceOverview).toContain('role="group" aria-label="Chart series visibility"');
+		expect(hostResourceOverview).toContain('chartInsetX}px + (100% - ${chartInsetX * 2}px) * ${tooltipRatio}');
 	});
 
 	it('preserves hover and keyboard inspection without fabricating missing samples', () => {
