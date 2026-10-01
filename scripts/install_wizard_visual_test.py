@@ -153,8 +153,8 @@ class InstallWizardVisualContractTest(unittest.TestCase):
 
         self.assertIn('id="backup-dropzone" class="backup-dropzone"', html)
         self.assertIn('class="backup-file-input" type="file"', html)
-        self.assertIn("Drop backup here or choose a file", html)
-        self.assertIn("MyPaaS .tar.gz backups only", html)
+        self.assertIn("Drop backup here or choose a file", html)\n        self.assertIn("Restore a control-plane backup", html)
+        self.assertIn("MyPaaS control-plane .tar.gz backups only", html)
         self.assertIn("dragenter", html)
         self.assertIn("dragover", html)
         self.assertIn("addEventListener('drop'", html)
