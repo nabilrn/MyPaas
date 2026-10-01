@@ -23,6 +23,7 @@
 	const chartWidth = 1000;
 	const chartHeight = 112;
 	const chartPaddingY = 8;
+	const chartInsetX = 40;
 	const curveTension = 0.68;
 
 	let hoverIndex = -1;
@@ -163,7 +164,8 @@
 	function handleChartPointer(event: PointerEvent) {
 		if (samples.length === 0) return;
 		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-		const ratio = clamp((event.clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+		const plotWidth = Math.max(1, bounds.width - chartInsetX * 2);
+		const ratio = clamp((event.clientX - bounds.left - chartInsetX) / plotWidth, 0, 1);
 		hoverIndex = samples.length === 1 ? 0 : Math.round(ratio * (samples.length - 1));
 	}
 
@@ -259,7 +261,7 @@
 				<p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">RAM and CPU use a 0–100% scale. Network uses its own adaptive rate scale.</p>
 			</div>
 			<div class="flex items-center gap-3" aria-label="Chart series visibility">
-			<button
+				<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
 				class:opacity-40={!visibleSeries.memory}
@@ -268,28 +270,28 @@
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.memory.dot}`}></span>
 				<span>Memory</span>
-			</button>
-			<button
-				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-40={!visibleSeries.cpu}
+				</button>
+				<button
+					type="button"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class:opacity-40={!visibleSeries.cpu}
 				aria-pressed={visibleSeries.cpu}
 				on:click={() => toggleSeries('cpu')}
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.cpu.dot}`}></span>
 				<span>CPU</span>
-			</button>
-			<button
-				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-40={!visibleSeries.network}
+				</button>
+				<button
+					type="button"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class:opacity-40={!visibleSeries.network}
 				aria-pressed={visibleSeries.network}
 				on:click={() => toggleSeries('network')}
 				title="Network history uses an adaptive rate scale"
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.network.dot}`}></span>
 				<span>Network</span>
-			</button>
+				</button>
 			</div>
 		</div>
 
@@ -321,7 +323,8 @@
 				<span>Now</span>
 			</div>
 
-			<svg class="h-full w-full px-10 pb-4 pt-1" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-4 left-10 right-10 top-1">
+			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
 				<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
 					<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 					<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
@@ -358,6 +361,7 @@
 					{#if visibleSeries.network && networkHoverPoint}<circle cx={networkHoverPoint.x} cy={networkHoverPoint.y} r="2.3" class={seriesClasses.network.point} />{/if}
 				{/if}
 			</svg>
+			</div>
 
 			{#if hoveredSample}
 				<div
