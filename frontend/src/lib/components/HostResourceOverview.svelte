@@ -138,6 +138,20 @@
 		return { x, y: seriesY(value, series, networkScale) };
 	}
 
+	function isolatedPoints(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
+		return sourceSamples.flatMap((sample, index) => {
+			const value = seriesValue(sample, series);
+			if (value === null || !Number.isFinite(value)) return [];
+			const previous = index > 0 ? seriesValue(sourceSamples[index - 1], series) : null;
+			const next = index < sourceSamples.length - 1 ? seriesValue(sourceSamples[index + 1], series) : null;
+			const hasPrevious = previous !== null && Number.isFinite(previous);
+			const hasNext = next !== null && Number.isFinite(next);
+			if (hasPrevious || hasNext) return [];
+			const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+			return [{ x, y: seriesY(value, series, networkScale) }];
+		});
+	}
+
 	function handleChartPointer(event: PointerEvent) {
 		if (samples.length === 0) return;
 		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -159,6 +173,9 @@
 	$: memoryPaths = buildSeriesPaths('memory', samples, networkDomain);
 	$: cpuPaths = buildSeriesPaths('cpu', samples, networkDomain);
 	$: networkPaths = buildSeriesPaths('network', samples, networkDomain);
+	$: memoryIsolatedPoints = isolatedPoints('memory', samples, networkDomain);
+	$: cpuIsolatedPoints = isolatedPoints('cpu', samples, networkDomain);
+	$: networkIsolatedPoints = isolatedPoints('network', samples, networkDomain);
 	$: hoveredSample = hoverIndex >= 0 && hoverIndex < samples.length ? samples[hoverIndex] : null;
 	$: hoveredX = hoverIndex >= 0 && samples.length > 0
 		? (samples.length === 1 ? chartWidth : (hoverIndex / Math.max(1, samples.length - 1)) * chartWidth)
@@ -290,16 +307,19 @@
 					{#each memoryPaths as path}
 						<path d={path} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
+					{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.memory.point} />{/each}
 				{/if}
 				{#if visibleSeries.cpu}
 					{#each cpuPaths as path}
 						<path d={path} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
+					{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.cpu.point} />{/each}
 				{/if}
 				{#if visibleSeries.network}
 					{#each networkPaths as path}
 						<path d={path} fill="none" class={seriesClasses.network.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
+					{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.network.point} />{/each}
 				{/if}
 
 				{#if hoveredX !== null}
