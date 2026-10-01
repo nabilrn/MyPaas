@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { deriveAdaptiveMetricDomain, type HostTelemetrySample } from '$lib/utils/host-telemetry';
+	import { deriveAdaptiveRateScale, type AdaptiveRateScale, type HostTelemetrySample } from '$lib/utils/host-telemetry';
 
 	type SeriesKey = 'memory' | 'cpu' | 'network';
 	type ChartPoint = { x: number; y: number };
@@ -27,6 +27,7 @@
 	const chartInsetX = 40;
 	const curveTension = 0.68;
 	const minimumChartSamples = 8;
+	const seriesKeys: SeriesKey[] = ['memory', 'cpu', 'network'];
 
 	let hoverIndex = -1;
 	let visibleSeries: Record<SeriesKey, boolean> = {
@@ -117,17 +118,66 @@
 		return sample.networkBytesPerSecond;
 	}
 
-	function seriesY(value: number, series: SeriesKey, networkScale: { min: number; max: number }) {
+	function hasFiniteSeriesValue(sample: HostTelemetrySample, series: SeriesKey) {
+		const value = seriesValue(sample, series);
+		return value !== null && Number.isFinite(value);
+	}
+
+	function alignedChartSamples(sourceSamples: HostTelemetrySample[]) {
+		const activeSeries = seriesKeys.filter((series) =>
+			sourceSamples.filter((sample) => hasFiniteSeriesValue(sample, series)).length >= 2
+		);
+		if (activeSeries.length === 0) return sourceSamples;
+
+		const alignedStart = sourceSamples.findIndex((sample) =>
+			activeSeries.every((series) => hasFiniteSeriesValue(sample, series))
+		);
+		return alignedStart > 0 ? sourceSamples.slice(alignedStart) : sourceSamples;
+	}
+
+	function sampleX(index: number, sourceSamples: HostTelemetrySample[]) {
+		if (sourceSamples.length <= 1) return chartWidth;
+		const firstTime = sourceSamples[0]?.sampledAtMs;
+		const lastTime = sourceSamples[sourceSamples.length - 1]?.sampledAtMs;
+		const sampleTime = sourceSamples[index]?.sampledAtMs;
+		if (
+			Number.isFinite(firstTime)
+			&& Number.isFinite(lastTime)
+			&& Number.isFinite(sampleTime)
+			&& lastTime > firstTime
+		) {
+			return clamp(((sampleTime - firstTime) / (lastTime - firstTime)) * chartWidth, 0, chartWidth);
+		}
+		return (index / (sourceSamples.length - 1)) * chartWidth;
+	}
+
+	function nearestSampleIndex(ratio: number, sourceSamples: HostTelemetrySample[]) {
+		if (sourceSamples.length <= 1) return 0;
+		const targetX = clamp(ratio, 0, 1) * chartWidth;
+		let nearestIndex = 0;
+		let nearestDistance = Number.POSITIVE_INFINITY;
+		sourceSamples.forEach((_, index) => {
+			const distance = Math.abs(sampleX(index, sourceSamples) - targetX);
+			if (distance < nearestDistance) {
+				nearestDistance = distance;
+				nearestIndex = index;
+			}
+		});
+		return nearestIndex;
+	}
+
+	function seriesY(value: number, series: SeriesKey, networkScale: AdaptiveRateScale) {
 		const usableHeight = chartHeight - chartPaddingY * 2;
 		if (series === 'network') {
 			const span = Math.max(0.0001, networkScale.max - networkScale.min);
-			const normalized = clamp((value - networkScale.min) / span, 0, 1);
+			const linearRatio = clamp((value - networkScale.min) / span, 0, 1);
+			const normalized = linearRatio === 0 ? 0 : linearRatio ** networkScale.exponent;
 			return chartPaddingY + (1 - normalized) * usableHeight;
 		}
 		return chartPaddingY + (1 - clamp(value, 0, 100) / 100) * usableHeight;
 	}
 
-	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
+	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: AdaptiveRateScale) {
 		const paths: { line: string; area: string }[] = [];
 		let segment: ChartPoint[] = [];
 		const flush = () => {
@@ -146,23 +196,23 @@
 				flush();
 				return;
 			}
-			const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+			const x = sampleX(index, sourceSamples);
 			segment.push({ x, y: seriesY(value, series, networkScale) });
 		});
 		flush();
 		return paths;
 	}
 
-	function pointFor(series: SeriesKey, index: number, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
+	function pointFor(series: SeriesKey, index: number, sourceSamples: HostTelemetrySample[], networkScale: AdaptiveRateScale) {
 		const sample = sourceSamples[index];
 		if (!sample) return null;
 		const value = seriesValue(sample, series);
 		if (value === null || !Number.isFinite(value)) return null;
-		const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+		const x = sampleX(index, sourceSamples);
 		return { x, y: seriesY(value, series, networkScale) };
 	}
 
-	function isolatedPoints(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
+	function isolatedPoints(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: AdaptiveRateScale) {
 		return sourceSamples.flatMap((sample, index) => {
 			const value = seriesValue(sample, series);
 			if (value === null || !Number.isFinite(value)) return [];
@@ -171,7 +221,7 @@
 			const hasPrevious = previous !== null && Number.isFinite(previous);
 			const hasNext = next !== null && Number.isFinite(next);
 			if (hasPrevious || hasNext) return [];
-			const x = sourceSamples.length <= 1 ? chartWidth : (index / (sourceSamples.length - 1)) * chartWidth;
+			const x = sampleX(index, sourceSamples);
 			return [{ x, y: seriesY(value, series, networkScale) }];
 		});
 	}
@@ -181,37 +231,36 @@
 		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
 		const plotWidth = Math.max(1, bounds.width - chartInsetX * 2);
 		const ratio = clamp((event.clientX - bounds.left - chartInsetX) / plotWidth, 0, 1);
-		hoverIndex = samples.length === 1 ? 0 : Math.round(ratio * (samples.length - 1));
+		hoverIndex = nearestSampleIndex(ratio, chartSamples);
 	}
 
 	function handleChartKeydown(event: KeyboardEvent) {
 		if (!chartReady || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
 		event.preventDefault();
-		const start = hoverIndex < 0 ? samples.length - 1 : hoverIndex;
-		hoverIndex = clamp(start + (event.key === 'ArrowRight' ? 1 : -1), 0, samples.length - 1);
+		const start = hoverIndex < 0 ? chartSamples.length - 1 : hoverIndex;
+		hoverIndex = clamp(start + (event.key === 'ArrowRight' ? 1 : -1), 0, chartSamples.length - 1);
 	}
 
-	$: chartSampleCount = Math.min(samples.length, minimumChartSamples);
-	$: chartReady = telemetryAvailable && samples.length >= minimumChartSamples;
+	$: chartSamples = alignedChartSamples(samples);
+	$: chartSampleCount = Math.min(chartSamples.length, minimumChartSamples);
+	$: chartReady = telemetryAvailable && chartSamples.length >= minimumChartSamples;
 	$: chartSampleProgress = (chartSampleCount / minimumChartSamples) * 100;
-	$: networkValues = samples
+	$: networkValues = chartSamples
 		.map((sample) => sample.networkBytesPerSecond)
 		.filter((value): value is number => value !== null && Number.isFinite(value));
-	$: networkDomain = deriveAdaptiveMetricDomain(networkValues, null);
-	$: memoryPaths = buildSeriesPaths('memory', samples, networkDomain);
-	$: cpuPaths = buildSeriesPaths('cpu', samples, networkDomain);
-	$: networkPaths = buildSeriesPaths('network', samples, networkDomain);
-	$: memoryIsolatedPoints = isolatedPoints('memory', samples, networkDomain);
-	$: cpuIsolatedPoints = isolatedPoints('cpu', samples, networkDomain);
-	$: networkIsolatedPoints = isolatedPoints('network', samples, networkDomain);
-	$: hoveredSample = hoverIndex >= 0 && hoverIndex < samples.length ? samples[hoverIndex] : null;
-	$: hoveredX = hoverIndex >= 0 && samples.length > 0
-		? (samples.length === 1 ? chartWidth : (hoverIndex / Math.max(1, samples.length - 1)) * chartWidth)
-		: null;
+	$: networkScale = deriveAdaptiveRateScale(networkValues);
+	$: memoryPaths = buildSeriesPaths('memory', chartSamples, networkScale);
+	$: cpuPaths = buildSeriesPaths('cpu', chartSamples, networkScale);
+	$: networkPaths = buildSeriesPaths('network', chartSamples, networkScale);
+	$: memoryIsolatedPoints = isolatedPoints('memory', chartSamples, networkScale);
+	$: cpuIsolatedPoints = isolatedPoints('cpu', chartSamples, networkScale);
+	$: networkIsolatedPoints = isolatedPoints('network', chartSamples, networkScale);
+	$: hoveredSample = hoverIndex >= 0 && hoverIndex < chartSamples.length ? chartSamples[hoverIndex] : null;
+	$: hoveredX = hoverIndex >= 0 && chartSamples.length > 0 ? sampleX(hoverIndex, chartSamples) : null;
 	$: tooltipRatio = hoveredX === null ? 0.5 : hoveredX / chartWidth;
-	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex, samples, networkDomain) : null;
-	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex, samples, networkDomain) : null;
-	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex, samples, networkDomain) : null;
+	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex, chartSamples, networkScale) : null;
+	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex, chartSamples, networkScale) : null;
+	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex, chartSamples, networkScale) : null;
 	$: storageAvailable = !/unavailable/i.test(`${storageValue} ${storageDetail}`);
 	$: usedStoragePercent = clamp(Number.isFinite(storagePercent) ? storagePercent : 0, 0, 100);
 	$: storageFillClass = usedStoragePercent >= 90
@@ -276,7 +325,7 @@
 					on:pointermove={handleChartPointer}
 					on:pointerleave={() => (hoverIndex = -1)}
 					on:focus={() => {
-						if (hoverIndex < 0) hoverIndex = samples.length - 1;
+						if (hoverIndex < 0) hoverIndex = chartSamples.length - 1;
 					}}
 					on:blur={() => (hoverIndex = -1)}
 					on:keydown={handleChartKeydown}
@@ -287,9 +336,9 @@
 						<span>0%</span>
 					</div>
 					<div class="pointer-events-none absolute bottom-5 right-2 top-2 z-[1] flex flex-col items-end justify-between text-[9px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
-						<span>{formatRate(networkDomain.max)}</span>
-						<span>Network</span>
-						<span>{formatRate(networkDomain.min)}</span>
+						<span>{formatRate(networkScale.max)}</span>
+						<span>{formatRate(networkScale.midpoint)}</span>
+						<span>{formatRate(networkScale.min)}</span>
 					</div>
 					<div class="pointer-events-none absolute bottom-1.5 left-10 right-10 z-[1] flex justify-between text-[9px] text-gray-400 dark:text-gray-500" aria-hidden="true">
 						<span>Earlier</span>

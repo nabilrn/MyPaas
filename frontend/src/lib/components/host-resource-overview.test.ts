@@ -7,9 +7,9 @@ describe('host resource overview', () => {
 		expect(projectsPage).toContain('HostResourceOverview');
 		expect(projectsPage).toContain('samples={hostTelemetrySeries}');
 		expect(hostResourceOverview).toContain("type SeriesKey = 'memory' | 'cpu' | 'network'");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('memory', samples, networkDomain)");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('cpu', samples, networkDomain)");
-		expect(hostResourceOverview).toContain("buildSeriesPaths('network', samples, networkDomain)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('memory', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('cpu', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("buildSeriesPaths('network', chartSamples, networkScale)");
 	});
 
 	it('uses a chart-first desktop split with the metric summary in the right column', () => {
@@ -30,7 +30,7 @@ describe('host resource overview', () => {
 
 	it('warms up telemetry history before rendering the chart', () => {
 		expect(hostResourceOverview).toContain('const minimumChartSamples = 8');
-		expect(hostResourceOverview).toContain('chartReady = telemetryAvailable && samples.length >= minimumChartSamples');
+		expect(hostResourceOverview).toContain('chartReady = telemetryAvailable && chartSamples.length >= minimumChartSamples');
 		expect(hostResourceOverview).toContain('data-host-history-loading');
 		expect(hostResourceOverview).toContain('Collecting history');
 		expect(hostResourceOverview).toContain('aria-valuemax={minimumChartSamples}');
@@ -65,8 +65,9 @@ describe('host resource overview', () => {
 	it('gives the merged chart explicit scale and time context', () => {
 		expect(hostResourceOverview).toContain('Resource history');
 		expect(hostResourceOverview).toContain('RAM/CPU 0–100% · Network adaptive scale');
-		expect(hostResourceOverview).toContain('formatRate(networkDomain.max)');
-		expect(hostResourceOverview).toContain('formatRate(networkDomain.min)');
+		expect(hostResourceOverview).toContain('formatRate(networkScale.max)');
+		expect(hostResourceOverview).toContain('formatRate(networkScale.midpoint)');
+		expect(hostResourceOverview).toContain('formatRate(networkScale.min)');
 		expect(hostResourceOverview).toContain('<span>Earlier</span>');
 		expect(hostResourceOverview).toContain('<span>Now</span>');
 		expect(hostResourceOverview).toContain('formatSampleTime(hoveredSample.sampledAtMs)');
@@ -83,10 +84,22 @@ describe('host resource overview', () => {
 	});
 
 	it('renders isolated valid samples instead of dropping move-only SVG paths', () => {
-		expect(hostResourceOverview).toContain("isolatedPoints('memory', samples, networkDomain)");
-		expect(hostResourceOverview).toContain("isolatedPoints('cpu', samples, networkDomain)");
-		expect(hostResourceOverview).toContain("isolatedPoints('network', samples, networkDomain)");
+		expect(hostResourceOverview).toContain("isolatedPoints('memory', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("isolatedPoints('cpu', chartSamples, networkScale)");
+		expect(hostResourceOverview).toContain("isolatedPoints('network', chartSamples, networkScale)");
 		expect(hostResourceOverview).toContain('memoryIsolatedPoints as point');
+	});
+
+	it('drops only leading bootstrap gaps and spaces rendered samples by timestamp', () => {
+		expect(hostResourceOverview).toContain('alignedChartSamples(samples)');
+		expect(hostResourceOverview).toContain('activeSeries.every((series) => hasFiniteSeriesValue(sample, series))');
+		expect(hostResourceOverview).toContain('((sampleTime - firstTime) / (lastTime - firstTime)) * chartWidth');
+		expect(hostResourceOverview).toContain('nearestSampleIndex(ratio, chartSamples)');
+	});
+
+	it('uses a bounded power scale for bursty network history', () => {
+		expect(hostResourceOverview).toContain('deriveAdaptiveRateScale(networkValues)');
+		expect(hostResourceOverview).toContain('linearRatio ** networkScale.exponent');
 	});
 
 	it('records successful all-null polls as gaps once history exists', () => {

@@ -21,6 +21,11 @@ export type MetricDomain = {
 	max: number;
 };
 
+export type AdaptiveRateScale = MetricDomain & {
+	exponent: number;
+	midpoint: number;
+};
+
 export type HostTelemetrySample = {
 	sampledAtMs: number;
 	memoryPercent: number | null;
@@ -86,6 +91,41 @@ export function deriveAdaptiveMetricDomain(series: number[], maxValue: number | 
 	}
 
 	return { min, max };
+}
+
+export function deriveAdaptiveRateScale(series: number[]): AdaptiveRateScale {
+	const clean = series.filter((sample) => Number.isFinite(sample) && sample >= 0);
+	const peak = clean.length > 0 ? Math.max(...clean) : 0;
+	if (peak <= 0) {
+		return { min: 0, max: 1, exponent: 1, midpoint: 0.5 };
+	}
+
+	// Keep the highest observed rate below the top edge while rounding the
+	// ceiling to a readable engineering-style value.
+	const paddedPeak = peak / 0.88;
+	const magnitude = 10 ** Math.floor(Math.log10(paddedPeak));
+	const normalizedPeak = paddedPeak / magnitude;
+	const niceSteps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+	const niceStep = niceSteps.find((step) => step >= normalizedPeak) ?? 10;
+	const max = niceStep * magnitude;
+
+	// Network traffic is often bursty. Choose a bounded power exponent so a
+	// representative non-zero rate remains readable without clipping peaks.
+	const positives = clean.filter((sample) => sample > 0).sort((a, b) => a - b);
+	const median = positives.length === 0
+		? 0
+		: positives.length % 2 === 1
+			? positives[(positives.length - 1) / 2]
+			: (positives[positives.length / 2 - 1] + positives[positives.length / 2]) / 2;
+	const medianRatio = median > 0 ? Math.min(1, median / max) : 0;
+	const targetMedianPosition = 0.35;
+	const rawExponent = medianRatio > 0 && medianRatio < targetMedianPosition
+		? Math.log(targetMedianPosition) / Math.log(medianRatio)
+		: 1;
+	const exponent = Math.max(0.5, Math.min(1, rawExponent));
+	const midpoint = max * 0.5 ** (1 / exponent);
+
+	return { min: 0, max, exponent, midpoint };
 }
 
 export function deriveCPUUsage(previous: CPUCounterSample | null, current: CPUCounterSample): number | null {
