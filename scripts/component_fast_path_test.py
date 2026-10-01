@@ -9,18 +9,19 @@ class ComponentFastPathTests(unittest.TestCase):
     def text(self, relative: str) -> str:
         return (ROOT / relative).read_text(encoding="utf-8")
 
-    def test_frontend_only_ci_skips_backend_and_deployment_but_keeps_podman(self):
+    def test_frontend_only_ci_runs_frontend_checks_without_platform_gates(self):
         workflow = self.text(".github/workflows/ci.yml")
         self.assertIn("name: Detect change scope", workflow)
-        self.assertIn("frontend_only: ${{ steps.scope.outputs.frontend_only }}", workflow)
-        self.assertEqual(
-            workflow.count("if: needs.changes.outputs.frontend_only != 'true'"),
-            2,
-        )
-        self.assertIn("name: Frontend checks", workflow)
-        self.assertIn("name: Podman compatibility gate", workflow)
-        podman_job = workflow.split("  podman:\n", 1)[1]
-        self.assertNotIn("frontend_only != 'true'", podman_job)
+        self.assertIn("frontend_required: ${{ steps.scope.outputs.frontend_required }}", workflow)
+        self.assertIn("backend_required: ${{ steps.scope.outputs.backend_required }}", workflow)
+        self.assertIn("deployment_required: ${{ steps.scope.outputs.deployment_required }}", workflow)
+        self.assertIn("podman_required: ${{ steps.scope.outputs.podman_required }}", workflow)
+        self.assertIn("public_contract_required: ${{ steps.scope.outputs.public_contract_required }}", workflow)
+        self.assertIn("if: needs.changes.outputs.frontend_required == 'true'", workflow)
+        self.assertIn("if: needs.changes.outputs.backend_required == 'true'", workflow)
+        self.assertIn("if: needs.changes.outputs.deployment_required == 'true'", workflow)
+        self.assertIn("if: needs.changes.outputs.podman_required == 'true'", workflow)
+        self.assertIn("if: needs.changes.outputs.public_contract_required == 'true'", workflow)
 
     def test_frontend_only_publish_skips_api_build(self):
         workflow = self.text(".github/workflows/docker-publish.yml")
