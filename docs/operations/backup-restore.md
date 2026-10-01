@@ -18,6 +18,8 @@ The browser install wizard accepts the normal control-plane `.tar.gz` backup con
 
 When this backup is uploaded during a fresh install, the wizard restores the production configuration **before** host preparation continues. The terminal installer then keeps the validated archive staged until `deploy-to-vm.sh` restores the control-plane PostgreSQL dump and runs the current migrations.
 
+If installation is interrupted after upload but before database restore, rerunning the installer preserves that staged restore state. It recognizes that the backup configuration was already applied, avoids appending the same `.env` again, and continues with the staged database restore.
+
 This restore path does **not** restore project persistent volumes, static project artifacts, or Compose workspaces. Use the full disaster-recovery bundle below when those resources must be recovered too.
 
 ## 2. Full disaster-recovery bundle
