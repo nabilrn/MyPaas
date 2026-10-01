@@ -21,7 +21,7 @@
 	export let samples: HostTelemetrySample[] = [];
 
 	const chartWidth = 1000;
-	const chartHeight = 160;
+	const chartHeight = 112;
 	const chartPaddingY = 8;
 	const curveTension = 0.68;
 
@@ -69,6 +69,14 @@
 		}
 		const digits = amount >= 100 || unitIndex === 0 ? 0 : amount >= 10 ? 1 : 2;
 		return `${amount.toFixed(digits)} ${units[unitIndex]}`;
+	}
+
+	function formatSampleTime(sampledAtMs: number) {
+		return new Date(sampledAtMs).toLocaleTimeString([], {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
 	}
 
 	function buildSmoothPath(input: ChartPoint[]) {
@@ -245,7 +253,12 @@
 	</div>
 
 	<div class="border-t border-gray-100 dark:border-neutral-800">
-		<div class="flex min-h-8 items-center justify-end gap-3 px-4 pt-2 text-xs text-gray-500 dark:text-gray-400" aria-label="Chart series visibility">
+		<div class="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+			<div class="min-w-0">
+				<p class="font-medium text-gray-700 dark:text-gray-300">Resource history</p>
+				<p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">RAM and CPU use a 0–100% scale. Network uses its own adaptive rate scale.</p>
+			</div>
+			<div class="flex items-center gap-3" aria-label="Chart series visibility">
 			<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
@@ -277,10 +290,11 @@
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.network.dot}`}></span>
 				<span>Network</span>
 			</button>
+			</div>
 		</div>
 
 		<div
-			class="app-focus relative h-40 overflow-hidden bg-gray-50/35 outline-none dark:bg-neutral-900/45"
+			class="app-focus relative h-28 overflow-hidden outline-none"
 			role="img"
 			aria-label="Host resource history. Memory and CPU use percentage scale; network uses an adaptive rate scale. Use the series controls to hide or show lines."
 			tabindex={samples.length > 0 ? 0 : undefined}
@@ -292,7 +306,22 @@
 			on:blur={() => (hoverIndex = -1)}
 			on:keydown={handleChartKeydown}
 		>
-			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+			<div class="pointer-events-none absolute inset-y-1 left-2 z-[1] flex flex-col justify-between text-[10px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
+				<span>100%</span>
+				<span>50%</span>
+				<span>0%</span>
+			</div>
+			<div class="pointer-events-none absolute inset-y-1 right-2 z-[1] flex flex-col items-end justify-between text-[10px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
+				<span>{formatRate(networkDomain.max)}</span>
+				<span>Network</span>
+				<span>{formatRate(networkDomain.min)}</span>
+			</div>
+			<div class="pointer-events-none absolute bottom-1 left-10 right-10 z-[1] flex justify-between text-[10px] text-gray-400 dark:text-gray-500" aria-hidden="true">
+				<span>Earlier</span>
+				<span>Now</span>
+			</div>
+
+			<svg class="h-full w-full px-10 pb-4 pt-1" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
 				<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
 					<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 					<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
@@ -305,19 +334,19 @@
 
 				{#if visibleSeries.memory}
 					{#each memoryPaths as path}
-						<path d={path} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						<path d={path} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.memory.point} />{/each}
 				{/if}
 				{#if visibleSeries.cpu}
 					{#each cpuPaths as path}
-						<path d={path} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						<path d={path} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.cpu.point} />{/each}
 				{/if}
 				{#if visibleSeries.network}
 					{#each networkPaths as path}
-						<path d={path} fill="none" class={seriesClasses.network.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						<path d={path} fill="none" class={seriesClasses.network.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.network.point} />{/each}
 				{/if}
@@ -336,6 +365,7 @@
 					style={`left: ${tooltipLeft}%`}
 				>
 					<div class="space-y-1 text-[11px] tabular-nums">
+						<div class="border-b border-gray-100 pb-1 text-[10px] text-gray-400 dark:border-neutral-800 dark:text-gray-500">{formatSampleTime(hoveredSample.sampledAtMs)}</div>
 						{#if visibleSeries.memory}
 							<div class="flex items-center justify-between gap-4"><span class="text-gray-500 dark:text-gray-400">Memory</span><span class="font-medium text-gray-950 dark:text-white">{hoveredSample.memoryPercent === null ? '—' : `${hoveredSample.memoryPercent.toFixed(1)}%`}</span></div>
 						{/if}
@@ -351,8 +381,18 @@
 		</div>
 
 		<div class="border-t border-gray-100 px-4 py-3 dark:border-neutral-800">
+			<div class="mb-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+				<div>
+					<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Storage capacity</p>
+					<p class="mt-0.5 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">{storageValue}</p>
+				</div>
+				<div class="text-right">
+					<p class="text-xs font-medium tabular-nums text-gray-700 dark:text-gray-300">{storageAvailable ? `${usedStoragePercent.toFixed(0)}% used` : 'Unavailable'}</p>
+					{#if storageDetail}<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{storageDetail}</p>{/if}
+				</div>
+			</div>
 			<div
-				class="h-3 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
+				class="h-2.5 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
 				role={storageAvailable ? 'progressbar' : undefined}
 				aria-label={storageAvailable ? 'Storage used' : undefined}
 				aria-valuemin={storageAvailable ? 0 : undefined}
