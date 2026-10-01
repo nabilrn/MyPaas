@@ -699,7 +699,7 @@ main() {
     prepare_host
     local docker_cmd
     docker_cmd="$(docker_prefix)"
-    RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+    RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
     ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
     log "Migration successfully deployed on new VM!"
@@ -718,7 +718,7 @@ main() {
   local docker_cmd
   docker_cmd="$(docker_prefix)"
   log "Starting MyPaas production stack"
-  RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
+  RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED" RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER" DOCKER_BIN="$docker_cmd" COMPOSE_BIN="$docker_cmd compose" COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/deploy-to-vm.sh"
   ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/configure-auto-update.sh"
 
   log "Install complete"
