@@ -18,6 +18,7 @@
 	export let storageIndicator = '';
 	export let storageDetail = '';
 	export let storagePercent = 0;
+	export let telemetryAvailable = true;
 	export let samples: HostTelemetrySample[] = [];
 
 	const chartWidth = 1000;
@@ -191,7 +192,7 @@
 	}
 
 	$: chartSampleCount = Math.min(samples.length, minimumChartSamples);
-	$: chartReady = samples.length >= minimumChartSamples;
+	$: chartReady = telemetryAvailable && samples.length >= minimumChartSamples;
 	$: chartSampleProgress = (chartSampleCount / minimumChartSamples) * 100;
 	$: networkValues = samples
 		.map((sample) => sample.networkBytesPerSecond)
@@ -373,11 +374,9 @@
 						</div>
 					{/if}
 				</div>
-			{:else}
+			{:else if telemetryAvailable}
 				<div
 					class="relative h-64 overflow-hidden"
-					role="status"
-					aria-live="polite"
 					data-host-history-loading
 				>
 					<div class="pointer-events-none absolute bottom-5 left-10 right-10 top-2" aria-hidden="true">
@@ -411,6 +410,13 @@
 							</div>
 							<p class="mt-1.5 text-[9px] leading-3.5 text-gray-400 dark:text-gray-500">Chart appears after enough samples are collected.</p>
 						</div>
+					</div>
+				</div>
+			{:else}
+				<div class="relative flex h-64 items-center justify-center px-6" data-host-history-unavailable>
+					<div class="max-w-xs text-center">
+						<p class="text-[11px] font-medium text-gray-600 dark:text-gray-300">History unavailable</p>
+						<p class="mt-1 text-[10px] leading-4 text-gray-400 dark:text-gray-500">Live CPU, memory, and network telemetry is not available from mypaas-statd.</p>
 					</div>
 				</div>
 			{/if}
