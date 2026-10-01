@@ -109,6 +109,7 @@ describe('host resource overview', () => {
 		expect(projectsPage).toContain('const hostTelemetryPollMs = 3000');
 		expect(projectsPage).toContain('const telemetryPauseThresholdMs = hostTelemetryPollMs * 2');
 		expect(projectsPage).toContain('markTelemetryPause(Date.now())');
+		expect(projectsPage).toContain('recordTelemetryGap(Date.now())');
 		expect(projectsPage).toContain('memoryPercent: null');
 		expect(projectsPage).toContain('cpuPercent: null');
 		expect(projectsPage).toContain('networkBytesPerSecond: null');
