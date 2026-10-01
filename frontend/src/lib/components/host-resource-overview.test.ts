@@ -30,11 +30,19 @@ describe('host resource overview', () => {
 
 	it('warms up telemetry history before rendering the chart', () => {
 		expect(hostResourceOverview).toContain('const minimumChartSamples = 8');
-		expect(hostResourceOverview).toContain('chartReady = samples.length >= minimumChartSamples');
+		expect(hostResourceOverview).toContain('chartReady = telemetryAvailable && samples.length >= minimumChartSamples');
 		expect(hostResourceOverview).toContain('data-host-history-loading');
 		expect(hostResourceOverview).toContain('Collecting history');
 		expect(hostResourceOverview).toContain('aria-valuemax={minimumChartSamples}');
 		expect(hostResourceOverview).toContain('disabled={!chartReady}');
+	});
+
+	it('shows a stable unavailable state instead of an impossible warmup', () => {
+		expect(projectsPage).toContain('telemetryAvailable={Boolean(hostStats.memory || hostStats.cpu || hostStats.network)}');
+		expect(hostResourceOverview).toContain('data-host-history-unavailable');
+		expect(hostResourceOverview).toContain('History unavailable');
+		expect(hostResourceOverview).not.toContain('role="status"');
+		expect(hostResourceOverview).not.toContain('aria-live="polite"');
 	});
 
 	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
