@@ -79,7 +79,7 @@ jobs:
                 deployment_required=true
                 podman_required=true
                 ;;
-              scripts/*|qualification/*|docker-compose.prod.yml|.env.example)
+              scripts/*|qualification/*|docker-compose.prod.yml|Caddyfile.prod|.env.example)
                 frontend_only=false
                 deployment_required=true
                 case "$path" in
@@ -88,7 +88,7 @@ jobs:
                     ;;
                 esac
                 case "$path" in
-                  scripts/bootstrap.sh|scripts/backup-restore.py|scripts/install-migration.sh|scripts/verify-production.sh)
+                  scripts/bootstrap.sh|scripts/backup-restore.py|scripts/install-migration.sh|scripts/verify-production.sh|scripts/public_doc_contract.py)
                     public_contract_required=true
                     ;;
                 esac
@@ -104,6 +104,10 @@ jobs:
                 deployment_required=true
                 podman_required=true
                 public_contract_required=true
+                ;;
+              .github/workflows/docker-publish.yml|.github/workflows/release-publish.yml)
+                frontend_only=false
+                deployment_required=true
                 ;;
               *)
                 frontend_only=false
