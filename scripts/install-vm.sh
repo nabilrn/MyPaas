@@ -516,6 +516,20 @@ run_install_wizard() {
   fi
 }
 
+detect_staged_restore_state() {
+  RESTORE_BACKUP_ENV_APPLIED=false
+
+  if [[ ! -e "$WIZARD_BACKUP_ENV_MARKER" ]]; then
+    return
+  fi
+  [[ -f "$WIZARD_BACKUP_ENV_MARKER" ]] || die "staged backup marker is not a regular file: $WIZARD_BACKUP_ENV_MARKER"
+  [[ -f "$WIZARD_BACKUP_PATH" ]] || die "staged backup marker exists without archive: $WIZARD_BACKUP_PATH"
+  [[ -s "$ENV_FILE" ]] || die "staged backup marker exists without restored production config: $ENV_FILE"
+
+  RESTORE_BACKUP_ENV_APPLIED=true
+  log "Resuming control-plane restore with production config already applied"
+}
+
 write_env_file() {
   if [[ -f "$ENV_FILE" && "$FORCE_ENV" != "true" ]]; then
     log "Using existing $ENV_FILE"
