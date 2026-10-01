@@ -21,6 +21,13 @@ export type MetricDomain = {
 	max: number;
 };
 
+export type HostTelemetrySample = {
+	sampledAtMs: number;
+	memoryPercent: number | null;
+	cpuPercent: number | null;
+	networkBytesPerSecond: number | null;
+};
+
 export function boundedPercent(used: number, total: number) {
 	if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return 0;
 	return Math.max(0, Math.min(100, (used / total) * 100));
@@ -29,6 +36,11 @@ export function boundedPercent(used: number, total: number) {
 export function appendRollingSample(series: number[], value: number, maxSamples = 24) {
 	if (!Number.isFinite(value) || maxSamples <= 0) return series.slice(-Math.max(0, maxSamples));
 	return [...series, value].slice(-maxSamples);
+}
+
+export function appendHostTelemetrySample(series: HostTelemetrySample[], sample: HostTelemetrySample, maxSamples = 24) {
+	if (!Number.isFinite(sample.sampledAtMs) || maxSamples <= 0) return series.slice(-Math.max(0, maxSamples));
+	return [...series, sample].slice(-maxSamples);
 }
 
 export function deriveAdaptiveMetricDomain(series: number[], maxValue: number | null = 100): MetricDomain {
