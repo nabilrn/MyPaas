@@ -41,4 +41,9 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("isolatedPoints('network', samples, networkDomain)");
 		expect(hostResourceOverview).toContain('memoryIsolatedPoints as point');
 	});
+
+	it('records successful all-null polls as gaps once history exists', () => {
+		expect(projectsPage).toContain('hasCurrentTelemetry || hostTelemetrySeries.length > 0');
+		expect(projectsPage).toContain('networkBytesPerSecond: currentNetworkRate?.totalBytesPerSecond ?? null');
+	});
 });
