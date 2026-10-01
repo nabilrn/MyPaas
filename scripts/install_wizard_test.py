@@ -403,8 +403,9 @@ class InstallConfigTest(unittest.TestCase):
         deployer = (ROOT_DIR / "scripts" / "deploy-to-vm.sh").read_text(encoding="utf-8")
 
         self.assertIn('WIZARD_BACKUP_PATH="${WIZARD_BACKUP_PATH:-/tmp/mypaas-restore.tar.gz}"', installer)
-        self.assertIn('WIZARD_BACKUP_ENV_MARKER="${WIZARD_BACKUP_ENV_MARKER:-/tmp/mypaas-restore.tar.gz.env-applied}"', installer)
+        self.assertIn('WIZARD_BACKUP_ENV_MARKER="${WIZARD_BACKUP_ENV_MARKER:-${WIZARD_BACKUP_PATH}.env-applied}"', installer)
         self.assertIn("detect_staged_restore_state", installer)
+        self.assertLess(installer.index("write_env_file\n  detect_staged_restore_state"), installer.index("detect_staged_restore_state\n  prepare_host"))
         self.assertIn('RESTORE_BACKUP_ENV_MARKER="$WIZARD_BACKUP_ENV_MARKER"', installer)
         self.assertIn("RESTORE_BACKUP_ENV_APPLIED=true", installer)
         self.assertIn('RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED"', installer)
