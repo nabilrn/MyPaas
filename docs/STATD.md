@@ -50,8 +50,12 @@ journalctl -u mypaas-statd
 Confirm the socket exists:
 
 ```bash
-test -S /run/mypaas/statd.sock && echo "statd socket ready"
+sudo test -S /run/mypaas/statd.sock && echo "statd socket ready"
 ```
+
+The systemd unit creates `/run/mypaas` as a root-owned runtime directory with mode `0750`.
+A normal administrative login therefore needs host privileges even to traverse the directory
+and inspect `statd.sock`. This is expected and does not mean the daemon is unhealthy.
 
 For checkout-backed operations, initialize the actual installation path first. Bootstrap defaults to `$HOME/MyPaas`; custom installations must set `MYPAAS_INSTALL_DIR` explicitly:
 
