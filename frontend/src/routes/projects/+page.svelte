@@ -4,7 +4,7 @@
 	import { page } from '$app/stores';
 	import ActionButton from '$components/ActionButton.svelte';
 	import ActionLink from '$components/ActionLink.svelte';
-	import CapacityMetricChart from '$components/CapacityMetricChart.svelte';
+	import HostResourceOverview from '$components/HostResourceOverview.svelte';
 	import GitHubMark from '$components/GitHubMark.svelte';
 	import Pagination from '$components/Pagination.svelte';
 	import ProjectDatabaseShortcut from '$components/ProjectDatabaseShortcut.svelte';
@@ -15,7 +15,7 @@
 	import TableShell from '$components/TableShell.svelte';
 	import { api, type HostStats } from '$api';
 	import { toast } from '$stores/toast';
-	import { appendRollingSample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
+	import { appendHostTelemetrySample, boundedPercent, deriveCPUUsage, deriveNetworkRate, type CPUCounterSample, type HostTelemetrySample, type NetworkCounterSample, type NetworkRate } from '$lib/utils/host-telemetry';
 	import { selectPrimaryProjectMetric } from '$lib/utils/project-dashboard';
 	import { deriveProjectInventoryAction, deriveProjectOperationalState, type ProjectOperationalState, type RuntimeEvidence } from '$lib/utils/project-operational-state';
 	import { compactRepositoryLabel, describeProjectSource, type RepositoryHost } from '$lib/utils/repository';
@@ -46,9 +46,7 @@
 	let uptimeRefreshToken = 0;
 	let projectsInFlight = false;
 	let hostStatsInFlight = false;
-	let ramSeries: number[] = [];
-	let cpuSeries: number[] = [];
-	let networkSeries: number[] = [];
+	let hostTelemetrySeries: HostTelemetrySample[] = [];
 	let cpuBaseline: CPUCounterSample | null = null;
 	let currentCPUUsage: number | null = null;
 	let networkBaseline: NetworkCounterSample | null = null;
@@ -140,31 +138,37 @@
 	}
 
 	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {
+		let memoryPercent: number | null = null;
 		if (stats.memory && stats.memory.total_bytes > 0) {
 			const used = Math.max(0, stats.memory.total_bytes - stats.memory.available_bytes);
-			ramSeries = appendRollingSample(ramSeries, boundedPercent(used, stats.memory.total_bytes), telemetrySamples);
-		} else ramSeries = [];
+			memoryPercent = boundedPercent(used, stats.memory.total_bytes);
+		}
 
 		if (stats.cpu) {
 			const current: CPUCounterSample = { totalTicks: stats.cpu.total_ticks, idleTicks: stats.cpu.idle_ticks };
 			currentCPUUsage = deriveCPUUsage(cpuBaseline, current);
 			cpuBaseline = current;
-			if (currentCPUUsage !== null) cpuSeries = appendRollingSample(cpuSeries, currentCPUUsage, telemetrySamples);
 		} else {
 			cpuBaseline = null;
 			currentCPUUsage = null;
-			cpuSeries = [];
 		}
 
 		if (stats.network) {
 			const current: NetworkCounterSample = { interface: stats.network.interface, rxBytes: stats.network.rx_bytes, txBytes: stats.network.tx_bytes, sampledAtMs };
 			currentNetworkRate = deriveNetworkRate(networkBaseline, current);
 			networkBaseline = current;
-			if (currentNetworkRate) networkSeries = appendRollingSample(networkSeries, currentNetworkRate.totalBytesPerSecond, telemetrySamples);
 		} else {
 			networkBaseline = null;
 			currentNetworkRate = null;
-			networkSeries = [];
+		}
+
+		if (memoryPercent !== null || currentCPUUsage !== null || currentNetworkRate !== null) {
+			hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
+				sampledAtMs,
+				memoryPercent,
+				cpuPercent: currentCPUUsage,
+				networkBytesPerSecond: currentNetworkRate?.totalBytesPerSecond ?? null
+			}, telemetrySamples);
 		}
 	}
 
@@ -351,12 +355,23 @@
 			</a>
 		</svelte:fragment>
 		{#if hostStats}
-			<div class="grid gap-px bg-gray-100 dark:bg-neutral-800 sm:grid-cols-2 xl:grid-cols-3">
-				<CapacityMetricChart label={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'} value={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`} indicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`} detail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'} series={hostStats.memory ? ramSeries : []} resource="memory" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label="CPU usage" value={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : 'Unavailable'} indicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : ''} detail={hostStats.cpu ? 'CPU is shared across projects; project limits are scheduler ceilings.' : 'Live host usage unavailable'} series={hostStats.cpu ? cpuSeries : []} resource="cpu" className="bg-white dark:bg-neutral-900" />
-				<CapacityMetricChart label="Network" value={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'} indicator={hostStats.network?.interface ?? ''} detail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'} series={networkSeries} resource="network" maxValue={null} rangeLabel="auto scale" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-1" />
-				<CapacityMetricChart label="Storage" value={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'} indicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''} detail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'} percent={storagePercent} resource="storage" className="bg-white dark:bg-neutral-900 sm:col-span-2 xl:col-span-3" />
-			</div>
+			<HostResourceOverview
+				memoryLabel={liveMemoryAvailable ? 'RAM usage' : 'RAM allocation'}
+				memoryValue={hostStats.memory ? `${formatBytes(hostMemoryUsedBytes)} / ${formatBytes(hostStats.memory.total_bytes)}` : `${hostStats.allocated_ram_mb.toFixed(0)} / ${hostRamMb.toFixed(0)} MB`}
+				memoryIndicator={hostStats.memory ? `${hostMemoryUsagePercent.toFixed(0)}%` : `${ramAllocationPercent.toFixed(0)}%`}
+				memoryDetail={hostStats.memory ? `Allocated ${formatBytes(hostStats.allocated_ram_mb * 1024 * 1024)}` : 'Live host usage unavailable'}
+				cpuValue={hostStats.cpu ? (currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : 'Collecting…') : 'Unavailable'}
+				cpuIndicator={hostStats.cpu && currentCPUUsage !== null ? `${currentCPUUsage.toFixed(1)}%` : ''}
+				cpuDetail={hostStats.cpu ? 'CPU is shared across projects; project limits are scheduler ceilings.' : 'Live host usage unavailable'}
+				networkValue={currentNetworkRate ? formatRate(currentNetworkRate.totalBytesPerSecond) : hostStats.network ? 'Collecting…' : 'Unavailable'}
+				networkIndicator={hostStats.network?.interface ?? ''}
+				networkDetail={currentNetworkRate ? `↓ ${formatRate(currentNetworkRate.rxBytesPerSecond)} · ↑ ${formatRate(currentNetworkRate.txBytesPerSecond)}` : hostStats.network ? 'Waiting for the next counter sample' : 'Host telemetry unavailable'}
+				storageValue={hostStats.storage ? `${formatBytes(storageUsedBytes)} / ${formatBytes(hostStats.storage.total_bytes)}` : 'Unavailable'}
+				storageIndicator={hostStats.storage ? `${storagePercent.toFixed(0)}%` : ''}
+				storageDetail={hostStats.storage ? `${formatBytes(hostStats.storage.available_bytes)} available` : 'Host telemetry unavailable'}
+				{storagePercent}
+				samples={hostTelemetrySeries}
+			/>
 		{:else if hostStatsLoaded}<div class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">Host telemetry unavailable.</div>{/if}
 	</SectionPanel>
 
