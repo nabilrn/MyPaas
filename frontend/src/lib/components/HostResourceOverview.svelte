@@ -21,10 +21,11 @@
 	export let samples: HostTelemetrySample[] = [];
 
 	const chartWidth = 1000;
-	const chartHeight = 112;
+	const chartHeight = 144;
 	const chartPaddingY = 0;
 	const chartInsetX = 40;
 	const curveTension = 0.68;
+	const minimumChartSamples = 8;
 
 	let hoverIndex = -1;
 	let visibleSeries: Record<SeriesKey, boolean> = {
@@ -175,7 +176,7 @@
 	}
 
 	function handleChartPointer(event: PointerEvent) {
-		if (samples.length === 0) return;
+		if (!chartReady) return;
 		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
 		const plotWidth = Math.max(1, bounds.width - chartInsetX * 2);
 		const ratio = clamp((event.clientX - bounds.left - chartInsetX) / plotWidth, 0, 1);
@@ -183,12 +184,15 @@
 	}
 
 	function handleChartKeydown(event: KeyboardEvent) {
-		if (samples.length === 0 || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+		if (!chartReady || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
 		event.preventDefault();
 		const start = hoverIndex < 0 ? samples.length - 1 : hoverIndex;
 		hoverIndex = clamp(start + (event.key === 'ArrowRight' ? 1 : -1), 0, samples.length - 1);
 	}
 
+	$: chartSampleCount = Math.min(samples.length, minimumChartSamples);
+	$: chartReady = samples.length >= minimumChartSamples;
+	$: chartSampleProgress = (chartSampleCount / minimumChartSamples) * 100;
 	$: networkValues = samples
 		.map((sample) => sample.networkBytesPerSecond)
 		.filter((value): value is number => value !== null && Number.isFinite(value));
@@ -268,16 +272,17 @@
 	</div>
 
 	<div class="border-t border-gray-100 dark:border-neutral-800">
-		<div class="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+		<div class="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-4 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">
 			<div class="min-w-0">
-				<p class="font-medium text-gray-700 dark:text-gray-300">Resource history</p>
-				<p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">RAM and CPU use a 0–100% scale. Network uses its own adaptive rate scale.</p>
+				<p class="text-[11px] font-medium leading-4 text-gray-700 dark:text-gray-300">Resource history</p>
+				<p class="text-[10px] leading-4 text-gray-400 dark:text-gray-500">RAM/CPU 0–100% · Network adaptive scale</p>
 			</div>
-			<div class="flex items-center gap-3" role="group" aria-label="Chart series visibility">
+			<div class="flex items-center gap-2.5" role="group" aria-label="Chart series visibility">
 				<button
 				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
 				class:opacity-40={!visibleSeries.memory}
+				disabled={!chartReady}
 				aria-pressed={visibleSeries.memory}
 				on:click={() => toggleSeries('memory')}
 			>
@@ -286,8 +291,9 @@
 				</button>
 				<button
 					type="button"
-					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
 					class:opacity-40={!visibleSeries.cpu}
+				disabled={!chartReady}
 				aria-pressed={visibleSeries.cpu}
 				on:click={() => toggleSeries('cpu')}
 			>
@@ -296,8 +302,9 @@
 				</button>
 				<button
 					type="button"
-					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
 					class:opacity-40={!visibleSeries.network}
+				disabled={!chartReady}
 				aria-pressed={visibleSeries.network}
 				on:click={() => toggleSeries('network')}
 				title="Network history uses an adaptive rate scale"
@@ -308,30 +315,31 @@
 			</div>
 		</div>
 
+		{#if chartReady}
 		<div
-			class="app-focus relative h-28 overflow-hidden outline-none"
+			class="app-focus relative h-36 overflow-hidden outline-none"
 			role="img"
 			aria-label="Host resource history. Memory and CPU use percentage scale; network uses an adaptive rate scale. Use the series controls to hide or show lines."
-			tabindex={samples.length > 0 ? 0 : undefined}
+			tabindex="0"
 			on:pointermove={handleChartPointer}
 			on:pointerleave={() => (hoverIndex = -1)}
 			on:focus={() => {
-				if (samples.length > 0 && hoverIndex < 0) hoverIndex = samples.length - 1;
+				if (hoverIndex < 0) hoverIndex = samples.length - 1;
 			}}
 			on:blur={() => (hoverIndex = -1)}
 			on:keydown={handleChartKeydown}
 		>
-			<div class="pointer-events-none absolute bottom-4 left-2 top-1 z-[1] flex flex-col justify-between text-[10px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-4 left-2 top-1 z-[1] flex flex-col justify-between text-[9px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
 				<span>100%</span>
 				<span>50%</span>
 				<span>0%</span>
 			</div>
-			<div class="pointer-events-none absolute bottom-4 right-2 top-1 z-[1] flex flex-col items-end justify-between text-[10px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-4 right-2 top-1 z-[1] flex flex-col items-end justify-between text-[9px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
 				<span>{formatRate(networkDomain.max)}</span>
 				<span>Network</span>
 				<span>{formatRate(networkDomain.min)}</span>
 			</div>
-			<div class="pointer-events-none absolute bottom-1 left-10 right-10 z-[1] flex justify-between text-[10px] text-gray-400 dark:text-gray-500" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-1 left-10 right-10 z-[1] flex justify-between text-[9px] text-gray-400 dark:text-gray-500" aria-hidden="true">
 				<span>Earlier</span>
 				<span>Now</span>
 			</div>
@@ -414,16 +422,57 @@
 				</div>
 			{/if}
 		</div>
+		{:else}
+		<div
+			class="relative h-36 overflow-hidden"
+			role="status"
+			aria-live="polite"
+			data-host-history-loading
+		>
+			<div class="pointer-events-none absolute bottom-4 left-10 right-10 top-1" aria-hidden="true">
+				<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
+					<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
+						<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
+						<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
+						<line x1={chartWidth * 0.6} x2={chartWidth * 0.6} y1="0" y2={chartHeight} />
+						<line x1={chartWidth * 0.8} x2={chartWidth * 0.8} y1="0" y2={chartHeight} />
+						<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
+						<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
+						<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
+					</g>
+				</svg>
+			</div>
+			<div class="absolute inset-0 flex items-center justify-center px-6">
+				<div class="w-full max-w-52 rounded-md border border-gray-200/80 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/90">
+					<div class="flex items-center justify-between gap-3 text-[10px] font-medium text-gray-600 dark:text-gray-300">
+						<span>Collecting history</span>
+						<span class="tabular-nums text-gray-400 dark:text-gray-500">{chartSampleCount}/{minimumChartSamples}</span>
+					</div>
+					<div
+						class="mt-2 h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-neutral-800"
+						role="progressbar"
+						aria-label="Telemetry history samples collected"
+						aria-valuemin="0"
+						aria-valuemax={minimumChartSamples}
+						aria-valuenow={chartSampleCount}
+					>
+						<div class="h-full bg-gray-400 transition-[width] duration-300 dark:bg-gray-500" style={`width: ${chartSampleProgress}%`}></div>
+					</div>
+					<p class="mt-1.5 text-[9px] leading-3.5 text-gray-400 dark:text-gray-500">Chart appears after enough samples are collected.</p>
+				</div>
+			</div>
+		</div>
+		{/if}
 
-		<div class="border-t border-gray-100 px-4 py-3 dark:border-neutral-800">
+		<div class="border-t border-gray-100 px-4 py-2.5 dark:border-neutral-800">
 			<div class="mb-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
 				<div>
-					<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Storage capacity</p>
-					<p class="mt-0.5 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">{storageValue}</p>
+					<p class="text-[11px] font-medium leading-4 text-gray-700 dark:text-gray-300">Storage capacity</p>
+					<p class="text-[10px] leading-4 tabular-nums text-gray-500 dark:text-gray-400">{storageValue}</p>
 				</div>
 				<div class="text-right">
-					<p class="text-xs font-medium tabular-nums text-gray-700 dark:text-gray-300">{storageAvailable ? `${usedStoragePercent.toFixed(0)}% used` : 'Unavailable'}</p>
-					{#if storageDetail}<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{storageDetail}</p>{/if}
+					<p class="text-[11px] font-medium leading-4 tabular-nums text-gray-700 dark:text-gray-300">{storageAvailable ? `${usedStoragePercent.toFixed(0)}% used` : 'Unavailable'}</p>
+					{#if storageDetail}<p class="text-[10px] leading-4 text-gray-500 dark:text-gray-400">{storageDetail}</p>{/if}
 				</div>
 			</div>
 			<div
