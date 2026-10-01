@@ -12,6 +12,13 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("buildSeriesPaths('network', samples, networkDomain)");
 	});
 
+	it('uses a chart-first desktop split with the metric summary in the right column', () => {
+		expect(hostResourceOverview).toContain('data-host-resource-layout');
+		expect(hostResourceOverview).toContain('xl:grid-cols-[minmax(0,3fr)_minmax(18rem,1fr)]');
+		expect(hostResourceOverview).toContain('data-host-resource-summary');
+		expect(hostResourceOverview).toContain('xl:border-l xl:border-t-0');
+	});
+
 	it('keeps compact visibility filters for all three time-series metrics', () => {
 		expect(hostResourceOverview).toContain('aria-pressed={visibleSeries.memory}');
 		expect(hostResourceOverview).toContain('aria-pressed={visibleSeries.cpu}');
@@ -19,6 +26,23 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("toggleSeries('memory')");
 		expect(hostResourceOverview).toContain("toggleSeries('cpu')");
 		expect(hostResourceOverview).toContain("toggleSeries('network')");
+	});
+
+	it('warms up telemetry history before rendering the chart', () => {
+		expect(hostResourceOverview).toContain('const minimumChartSamples = 8');
+		expect(hostResourceOverview).toContain('chartReady = telemetryAvailable && samples.length >= minimumChartSamples');
+		expect(hostResourceOverview).toContain('data-host-history-loading');
+		expect(hostResourceOverview).toContain('Collecting history');
+		expect(hostResourceOverview).toContain('aria-valuemax={minimumChartSamples}');
+		expect(hostResourceOverview).toContain('disabled={!chartReady}');
+	});
+
+	it('shows a stable unavailable state instead of an impossible warmup', () => {
+		expect(projectsPage).toContain('telemetryAvailable={Boolean(hostStats.memory || hostStats.cpu || hostStats.network)}');
+		expect(hostResourceOverview).toContain('data-host-history-unavailable');
+		expect(hostResourceOverview).toContain('History unavailable');
+		expect(hostResourceOverview).not.toContain('role="status"');
+		expect(hostResourceOverview).not.toContain('aria-live="polite"');
 	});
 
 	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
@@ -40,7 +64,7 @@ describe('host resource overview', () => {
 
 	it('gives the merged chart explicit scale and time context', () => {
 		expect(hostResourceOverview).toContain('Resource history');
-		expect(hostResourceOverview).toContain('RAM and CPU use a 0–100% scale');
+		expect(hostResourceOverview).toContain('RAM/CPU 0–100% · Network adaptive scale');
 		expect(hostResourceOverview).toContain('formatRate(networkDomain.max)');
 		expect(hostResourceOverview).toContain('formatRate(networkDomain.min)');
 		expect(hostResourceOverview).toContain('<span>Earlier</span>');
