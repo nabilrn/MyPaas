@@ -21,8 +21,9 @@
 	export let samples: HostTelemetrySample[] = [];
 
 	const chartWidth = 1000;
-	const chartHeight = 160;
-	const chartPaddingY = 8;
+	const chartHeight = 112;
+	const chartPaddingY = 0;
+	const chartInsetX = 40;
 	const curveTension = 0.68;
 
 	let hoverIndex = -1;
@@ -71,6 +72,14 @@
 		return `${amount.toFixed(digits)} ${units[unitIndex]}`;
 	}
 
+	function formatSampleTime(sampledAtMs: number) {
+		return new Date(sampledAtMs).toLocaleTimeString([], {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+	}
+
 	function buildSmoothPath(input: ChartPoint[]) {
 		if (input.length === 0) return '';
 		if (input.length === 1) return `M ${input[0].x.toFixed(2)},${input[0].y.toFixed(2)}`;
@@ -92,6 +101,14 @@
 		return path;
 	}
 
+	function buildAreaPath(input: ChartPoint[]) {
+		if (input.length < 2) return '';
+		const linePath = buildSmoothPath(input);
+		const first = input[0];
+		const last = input[input.length - 1];
+		return `${linePath} L ${last.x.toFixed(2)},${chartHeight} L ${first.x.toFixed(2)},${chartHeight} Z`;
+	}
+
 	function seriesValue(sample: HostTelemetrySample, series: SeriesKey) {
 		if (series === 'memory') return sample.memoryPercent;
 		if (series === 'cpu') return sample.cpuPercent;
@@ -109,10 +126,15 @@
 	}
 
 	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: { min: number; max: number }) {
-		const paths: string[] = [];
+		const paths: { line: string; area: string }[] = [];
 		let segment: ChartPoint[] = [];
 		const flush = () => {
-			if (segment.length > 0) paths.push(buildSmoothPath(segment));
+			if (segment.length > 0) {
+				paths.push({
+					line: buildSmoothPath(segment),
+					area: buildAreaPath(segment)
+				});
+			}
 			segment = [];
 		};
 
@@ -155,7 +177,8 @@
 	function handleChartPointer(event: PointerEvent) {
 		if (samples.length === 0) return;
 		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-		const ratio = clamp((event.clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
+		const plotWidth = Math.max(1, bounds.width - chartInsetX * 2);
+		const ratio = clamp((event.clientX - bounds.left - chartInsetX) / plotWidth, 0, 1);
 		hoverIndex = samples.length === 1 ? 0 : Math.round(ratio * (samples.length - 1));
 	}
 
@@ -180,7 +203,7 @@
 	$: hoveredX = hoverIndex >= 0 && samples.length > 0
 		? (samples.length === 1 ? chartWidth : (hoverIndex / Math.max(1, samples.length - 1)) * chartWidth)
 		: null;
-	$: tooltipLeft = hoveredX === null ? 50 : clamp((hoveredX / chartWidth) * 100, 12, 88);
+	$: tooltipRatio = hoveredX === null ? 0.5 : hoveredX / chartWidth;
 	$: memoryHoverPoint = hoverIndex >= 0 ? pointFor('memory', hoverIndex, samples, networkDomain) : null;
 	$: cpuHoverPoint = hoverIndex >= 0 ? pointFor('cpu', hoverIndex, samples, networkDomain) : null;
 	$: networkHoverPoint = hoverIndex >= 0 ? pointFor('network', hoverIndex, samples, networkDomain) : null;
@@ -245,8 +268,13 @@
 	</div>
 
 	<div class="border-t border-gray-100 dark:border-neutral-800">
-		<div class="flex min-h-8 items-center justify-end gap-3 px-4 pt-2 text-xs text-gray-500 dark:text-gray-400" aria-label="Chart series visibility">
-			<button
+		<div class="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+			<div class="min-w-0">
+				<p class="font-medium text-gray-700 dark:text-gray-300">Resource history</p>
+				<p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">RAM and CPU use a 0–100% scale. Network uses its own adaptive rate scale.</p>
+			</div>
+			<div class="flex items-center gap-3" role="group" aria-label="Chart series visibility">
+				<button
 				type="button"
 				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
 				class:opacity-40={!visibleSeries.memory}
@@ -255,32 +283,33 @@
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.memory.dot}`}></span>
 				<span>Memory</span>
-			</button>
-			<button
-				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-40={!visibleSeries.cpu}
+				</button>
+				<button
+					type="button"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class:opacity-40={!visibleSeries.cpu}
 				aria-pressed={visibleSeries.cpu}
 				on:click={() => toggleSeries('cpu')}
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.cpu.dot}`}></span>
 				<span>CPU</span>
-			</button>
-			<button
-				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
-				class:opacity-40={!visibleSeries.network}
+				</button>
+				<button
+					type="button"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity"
+					class:opacity-40={!visibleSeries.network}
 				aria-pressed={visibleSeries.network}
 				on:click={() => toggleSeries('network')}
 				title="Network history uses an adaptive rate scale"
 			>
 				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.network.dot}`}></span>
 				<span>Network</span>
-			</button>
+				</button>
+			</div>
 		</div>
 
 		<div
-			class="app-focus relative h-40 overflow-hidden bg-gray-50/35 outline-none dark:bg-neutral-900/45"
+			class="app-focus relative h-28 overflow-hidden outline-none"
 			role="img"
 			aria-label="Host resource history. Memory and CPU use percentage scale; network uses an adaptive rate scale. Use the series controls to hide or show lines."
 			tabindex={samples.length > 0 ? 0 : undefined}
@@ -292,7 +321,38 @@
 			on:blur={() => (hoverIndex = -1)}
 			on:keydown={handleChartKeydown}
 		>
+			<div class="pointer-events-none absolute bottom-4 left-2 top-1 z-[1] flex flex-col justify-between text-[10px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
+				<span>100%</span>
+				<span>50%</span>
+				<span>0%</span>
+			</div>
+			<div class="pointer-events-none absolute bottom-4 right-2 top-1 z-[1] flex flex-col items-end justify-between text-[10px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
+				<span>{formatRate(networkDomain.max)}</span>
+				<span>Network</span>
+				<span>{formatRate(networkDomain.min)}</span>
+			</div>
+			<div class="pointer-events-none absolute bottom-1 left-10 right-10 z-[1] flex justify-between text-[10px] text-gray-400 dark:text-gray-500" aria-hidden="true">
+				<span>Earlier</span>
+				<span>Now</span>
+			</div>
+
+			<div class="pointer-events-none absolute bottom-4 left-10 right-10 top-1">
 			<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
+				<defs>
+					<linearGradient id="host-memory-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#34d399" stop-opacity="0.22" />
+						<stop offset="100%" stop-color="#34d399" stop-opacity="0.015" />
+					</linearGradient>
+					<linearGradient id="host-cpu-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.20" />
+						<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.015" />
+					</linearGradient>
+					<linearGradient id="host-network-fill" x1="0" x2="0" y1="0" y2="1">
+						<stop offset="0%" stop-color="#a78bfa" stop-opacity="0.20" />
+						<stop offset="100%" stop-color="#a78bfa" stop-opacity="0.015" />
+					</linearGradient>
+				</defs>
+
 				<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
 					<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 					<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
@@ -305,19 +365,22 @@
 
 				{#if visibleSeries.memory}
 					{#each memoryPaths as path}
-						<path d={path} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-memory-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.memory.point} />{/each}
 				{/if}
 				{#if visibleSeries.cpu}
 					{#each cpuPaths as path}
-						<path d={path} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-cpu-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.cpu.point} />{/each}
 				{/if}
 				{#if visibleSeries.network}
 					{#each networkPaths as path}
-						<path d={path} fill="none" class={seriesClasses.network.stroke} stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+						{#if path.area}<path d={path.area} fill="url(#host-network-fill)" stroke="none" />{/if}
+						<path d={path.line} fill="none" class={seriesClasses.network.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 					{/each}
 					{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.network.point} />{/each}
 				{/if}
@@ -329,13 +392,15 @@
 					{#if visibleSeries.network && networkHoverPoint}<circle cx={networkHoverPoint.x} cy={networkHoverPoint.y} r="2.3" class={seriesClasses.network.point} />{/if}
 				{/if}
 			</svg>
+			</div>
 
 			{#if hoveredSample}
 				<div
 					class="pointer-events-none absolute top-2 z-10 -translate-x-1/2 rounded-md border border-gray-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95"
-					style={`left: ${tooltipLeft}%`}
+					style={`left: clamp(64px, calc(${chartInsetX}px + (100% - ${chartInsetX * 2}px) * ${tooltipRatio}), calc(100% - 64px))`}
 				>
 					<div class="space-y-1 text-[11px] tabular-nums">
+						<div class="border-b border-gray-100 pb-1 text-[10px] text-gray-400 dark:border-neutral-800 dark:text-gray-500">{formatSampleTime(hoveredSample.sampledAtMs)}</div>
 						{#if visibleSeries.memory}
 							<div class="flex items-center justify-between gap-4"><span class="text-gray-500 dark:text-gray-400">Memory</span><span class="font-medium text-gray-950 dark:text-white">{hoveredSample.memoryPercent === null ? '—' : `${hoveredSample.memoryPercent.toFixed(1)}%`}</span></div>
 						{/if}
@@ -351,8 +416,18 @@
 		</div>
 
 		<div class="border-t border-gray-100 px-4 py-3 dark:border-neutral-800">
+			<div class="mb-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+				<div>
+					<p class="text-xs font-medium text-gray-700 dark:text-gray-300">Storage capacity</p>
+					<p class="mt-0.5 text-[11px] tabular-nums text-gray-500 dark:text-gray-400">{storageValue}</p>
+				</div>
+				<div class="text-right">
+					<p class="text-xs font-medium tabular-nums text-gray-700 dark:text-gray-300">{storageAvailable ? `${usedStoragePercent.toFixed(0)}% used` : 'Unavailable'}</p>
+					{#if storageDetail}<p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">{storageDetail}</p>{/if}
+				</div>
+			</div>
 			<div
-				class="h-3 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
+				class="h-2.5 overflow-hidden rounded-sm border border-gray-300 bg-gray-100 dark:border-neutral-700 dark:bg-neutral-800"
 				role={storageAvailable ? 'progressbar' : undefined}
 				aria-label={storageAvailable ? 'Storage used' : undefined}
 				aria-valuemin={storageAvailable ? 0 : undefined}

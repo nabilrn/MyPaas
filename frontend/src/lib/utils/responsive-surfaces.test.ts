@@ -21,7 +21,7 @@ describe('responsive data surfaces', () => {
 		expect(hostResourceOverview).toContain('data-host-resource-overview');
 		expect(hostResourceOverview).toContain('grid-cols-2');
 		expect(hostResourceOverview).toContain('xl:grid-cols-4');
-		expect(hostResourceOverview).toContain('h-40 overflow-hidden');
+		expect(hostResourceOverview).toContain('h-28 overflow-hidden');
 		expect(hostResourceOverview).toContain('data-storage-capacity');
 	});
 });

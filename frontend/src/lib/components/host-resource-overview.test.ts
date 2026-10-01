@@ -21,10 +21,33 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("toggleSeries('network')");
 	});
 
-	it('keeps storage as a persistent horizontal capacity bar below the chart', () => {
+	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
+		expect(hostResourceOverview).toContain('id="host-memory-fill"');
+		expect(hostResourceOverview).toContain('id="host-cpu-fill"');
+		expect(hostResourceOverview).toContain('id="host-network-fill"');
+		expect(hostResourceOverview).toContain('fill="url(#host-memory-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-cpu-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-network-fill)"');
+	});
+
+	it('keeps storage as a persistent capacity strip with explicit context', () => {
 		expect(hostResourceOverview).toContain('data-storage-capacity');
 		expect(hostResourceOverview).toContain("role={storageAvailable ? 'progressbar' : undefined}");
-		expect(hostResourceOverview).toContain('h-3 overflow-hidden');
+		expect(hostResourceOverview).toContain('Storage capacity');
+		expect(hostResourceOverview).toContain('usedStoragePercent.toFixed(0)');
+		expect(hostResourceOverview).toContain('h-2.5 overflow-hidden');
+	});
+
+	it('gives the merged chart explicit scale and time context', () => {
+		expect(hostResourceOverview).toContain('Resource history');
+		expect(hostResourceOverview).toContain('RAM and CPU use a 0–100% scale');
+		expect(hostResourceOverview).toContain('formatRate(networkDomain.max)');
+		expect(hostResourceOverview).toContain('formatRate(networkDomain.min)');
+		expect(hostResourceOverview).toContain('<span>Earlier</span>');
+		expect(hostResourceOverview).toContain('<span>Now</span>');
+		expect(hostResourceOverview).toContain('formatSampleTime(hoveredSample.sampledAtMs)');
+		expect(hostResourceOverview).toContain('role="group" aria-label="Chart series visibility"');
+		expect(hostResourceOverview).toContain('chartInsetX}px + (100% - ${chartInsetX * 2}px) * ${tooltipRatio}');
 	});
 
 	it('preserves hover and keyboard inspection without fabricating missing samples', () => {
