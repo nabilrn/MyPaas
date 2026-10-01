@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { deriveAdaptiveRateScale, type AdaptiveRateScale, type HostTelemetrySample } from '$lib/utils/host-telemetry';
+	import { deriveAdaptiveRateScale, deriveTelemetryCadenceMs, isTelemetryDiscontinuity, type AdaptiveRateScale, type HostTelemetrySample } from '$lib/utils/host-telemetry';
 
 	type SeriesKey = 'memory' | 'cpu' | 'network';
 	type ChartPoint = { x: number; y: number };
@@ -137,17 +137,6 @@
 
 	function sampleX(index: number, sourceSamples: HostTelemetrySample[]) {
 		if (sourceSamples.length <= 1) return chartWidth;
-		const firstTime = sourceSamples[0]?.sampledAtMs;
-		const lastTime = sourceSamples[sourceSamples.length - 1]?.sampledAtMs;
-		const sampleTime = sourceSamples[index]?.sampledAtMs;
-		if (
-			Number.isFinite(firstTime)
-			&& Number.isFinite(lastTime)
-			&& Number.isFinite(sampleTime)
-			&& lastTime > firstTime
-		) {
-			return clamp(((sampleTime - firstTime) / (lastTime - firstTime)) * chartWidth, 0, chartWidth);
-		}
 		return (index / (sourceSamples.length - 1)) * chartWidth;
 	}
 
@@ -177,7 +166,12 @@
 		return chartPaddingY + (1 - clamp(value, 0, 100) / 100) * usableHeight;
 	}
 
-	function buildSeriesPaths(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: AdaptiveRateScale) {
+	function buildSeriesPaths(
+		series: SeriesKey,
+		sourceSamples: HostTelemetrySample[],
+		networkScale: AdaptiveRateScale,
+		cadenceMs: number
+	) {
 		const paths: { line: string; area: string }[] = [];
 		let segment: ChartPoint[] = [];
 		const flush = () => {
@@ -196,6 +190,9 @@
 				flush();
 				return;
 			}
+			if (index > 0 && isTelemetryDiscontinuity(sourceSamples[index - 1], sample, cadenceMs)) {
+				flush();
+			}
 			const x = sampleX(index, sourceSamples);
 			segment.push({ x, y: seriesY(value, series, networkScale) });
 		});
@@ -212,14 +209,25 @@
 		return { x, y: seriesY(value, series, networkScale) };
 	}
 
-	function isolatedPoints(series: SeriesKey, sourceSamples: HostTelemetrySample[], networkScale: AdaptiveRateScale) {
+	function isolatedPoints(
+		series: SeriesKey,
+		sourceSamples: HostTelemetrySample[],
+		networkScale: AdaptiveRateScale,
+		cadenceMs: number
+	) {
 		return sourceSamples.flatMap((sample, index) => {
 			const value = seriesValue(sample, series);
 			if (value === null || !Number.isFinite(value)) return [];
-			const previous = index > 0 ? seriesValue(sourceSamples[index - 1], series) : null;
-			const next = index < sourceSamples.length - 1 ? seriesValue(sourceSamples[index + 1], series) : null;
-			const hasPrevious = previous !== null && Number.isFinite(previous);
-			const hasNext = next !== null && Number.isFinite(next);
+			const previousSample = index > 0 ? sourceSamples[index - 1] : undefined;
+			const nextSample = index < sourceSamples.length - 1 ? sourceSamples[index + 1] : undefined;
+			const previous = previousSample ? seriesValue(previousSample, series) : null;
+			const next = nextSample ? seriesValue(nextSample, series) : null;
+			const hasPrevious = previous !== null
+				&& Number.isFinite(previous)
+				&& !isTelemetryDiscontinuity(previousSample, sample, cadenceMs);
+			const hasNext = next !== null
+				&& Number.isFinite(next)
+				&& !isTelemetryDiscontinuity(sample, nextSample, cadenceMs);
 			if (hasPrevious || hasNext) return [];
 			const x = sampleX(index, sourceSamples);
 			return [{ x, y: seriesY(value, series, networkScale) }];
@@ -249,12 +257,13 @@
 		.map((sample) => sample.networkBytesPerSecond)
 		.filter((value): value is number => value !== null && Number.isFinite(value));
 	$: networkScale = deriveAdaptiveRateScale(networkValues);
-	$: memoryPaths = buildSeriesPaths('memory', chartSamples, networkScale);
-	$: cpuPaths = buildSeriesPaths('cpu', chartSamples, networkScale);
-	$: networkPaths = buildSeriesPaths('network', chartSamples, networkScale);
-	$: memoryIsolatedPoints = isolatedPoints('memory', chartSamples, networkScale);
-	$: cpuIsolatedPoints = isolatedPoints('cpu', chartSamples, networkScale);
-	$: networkIsolatedPoints = isolatedPoints('network', chartSamples, networkScale);
+	$: chartCadenceMs = deriveTelemetryCadenceMs(chartSamples);
+	$: memoryPaths = buildSeriesPaths('memory', chartSamples, networkScale, chartCadenceMs);
+	$: cpuPaths = buildSeriesPaths('cpu', chartSamples, networkScale, chartCadenceMs);
+	$: networkPaths = buildSeriesPaths('network', chartSamples, networkScale, chartCadenceMs);
+	$: memoryIsolatedPoints = isolatedPoints('memory', chartSamples, networkScale, chartCadenceMs);
+	$: cpuIsolatedPoints = isolatedPoints('cpu', chartSamples, networkScale, chartCadenceMs);
+	$: networkIsolatedPoints = isolatedPoints('network', chartSamples, networkScale, chartCadenceMs);
 	$: hoveredSample = hoverIndex >= 0 && hoverIndex < chartSamples.length ? chartSamples[hoverIndex] : null;
 	$: hoveredX = hoverIndex >= 0 && chartSamples.length > 0 ? sampleX(hoverIndex, chartSamples) : null;
 	$: tooltipRatio = hoveredX === null ? 0.5 : hoveredX / chartWidth;
