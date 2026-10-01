@@ -261,7 +261,7 @@ class InstallConfigTest(unittest.TestCase):
                 max_expanded_bytes=1024 * 1024,
             )
 
-            self.assertEqual(Path(env_path).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\\n")
+            self.assertEqual(Path(env_path).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\n")
             self.assertEqual(stat.S_IMODE(os.stat(env_path).st_mode), 0o600)
 
     def test_backup_receiver_rejects_path_traversal_and_extra_members(self) -> None:
@@ -342,7 +342,7 @@ class InstallConfigTest(unittest.TestCase):
                     connection.close()
                     self.assertEqual(response.status, 200)
                     self.assertIn(b"Backup staged", body)
-                    self.assertEqual(Path(WIZARD.ENV_FILE).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\\n")
+                    self.assertEqual(Path(WIZARD.ENV_FILE).read_text(encoding="utf-8"), "PUBLIC_DOMAIN=example.com\n")
                     self.assertTrue(os.path.isfile(WIZARD.BACKUP_PATH))
                 finally:
                     server.shutdown()
