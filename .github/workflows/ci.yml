@@ -19,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       frontend_only: ${{ steps.scope.outputs.frontend_only }}
+      frontend_required: ${{ steps.scope.outputs.frontend_required }}
+      backend_required: ${{ steps.scope.outputs.backend_required }}
+      deployment_required: ${{ steps.scope.outputs.deployment_required }}
+      podman_required: ${{ steps.scope.outputs.podman_required }}
+      public_contract_required: ${{ steps.scope.outputs.public_contract_required }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,23 +53,79 @@ jobs:
           fi
 
           mapfile -t changed_files < <(git diff --name-only "$base_sha" "$head_sha")
+
           frontend_only=false
+          frontend_required=false
+          backend_required=false
+          deployment_required=false
+          podman_required=false
+          public_contract_required=false
+
           if (( ${#changed_files[@]} > 0 )); then
             frontend_only=true
-            for path in "${changed_files[@]}"; do
-              if [[ "$path" != frontend/* ]]; then
-                frontend_only=false
-                break
-              fi
-            done
           fi
+
+          for path in "${changed_files[@]}"; do
+            case "$path" in
+              frontend/*)
+                frontend_required=true
+                if [[ "$path" == frontend/playwright/audit/* ]]; then
+                  public_contract_required=true
+                fi
+                ;;
+              backend/*)
+                frontend_only=false
+                backend_required=true
+                deployment_required=true
+                podman_required=true
+                ;;
+              scripts/*|qualification/*|docker-compose.prod.yml|.env.example)
+                frontend_only=false
+                deployment_required=true
+                case "$path" in
+                  scripts/ci_podman_compat_isolated.sh|scripts/podman_compat_smoke.sh)
+                    podman_required=true
+                    ;;
+                esac
+                case "$path" in
+                  scripts/bootstrap.sh|scripts/backup-restore.py|scripts/install-migration.sh|scripts/verify-production.sh)
+                    public_contract_required=true
+                    ;;
+                esac
+                ;;
+              README.md|docs/*|.agents/mcp/mypaas/*)
+                frontend_only=false
+                public_contract_required=true
+                ;;
+              .github/workflows/ci.yml)
+                frontend_only=false
+                frontend_required=true
+                backend_required=true
+                deployment_required=true
+                podman_required=true
+                public_contract_required=true
+                ;;
+              *)
+                frontend_only=false
+                ;;
+            esac
+          done
 
           printf 'Changed files:\n'
           printf '  %s\n' "${changed_files[@]}"
-          echo "frontend_only=$frontend_only" >> "$GITHUB_OUTPUT"
+          {
+            echo "frontend_only=$frontend_only"
+            echo "frontend_required=$frontend_required"
+            echo "backend_required=$backend_required"
+            echo "deployment_required=$deployment_required"
+            echo "podman_required=$podman_required"
+            echo "public_contract_required=$public_contract_required"
+          } >> "$GITHUB_OUTPUT"
 
   public-contract:
     name: Public/operator contract
+    needs: changes
+    if: needs.changes.outputs.public_contract_required == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +135,7 @@ jobs:
   backend:
     name: Backend tests
     needs: changes
-    if: needs.changes.outputs.frontend_only != 'true'
+    if: needs.changes.outputs.backend_required == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -93,6 +154,7 @@ jobs:
   frontend:
     name: Frontend checks
     needs: changes
+    if: needs.changes.outputs.frontend_required == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -121,7 +183,7 @@ jobs:
   scripts:
     name: Deployment checks
     needs: changes
-    if: needs.changes.outputs.frontend_only != 'true'
+    if: needs.changes.outputs.deployment_required == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,6 +212,7 @@ jobs:
   podman:
     name: Podman compatibility gate
     needs: changes
+    if: needs.changes.outputs.podman_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
