@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendHostTelemetrySample, appendRollingSample, boundedPercent, deriveAdaptiveMetricDomain, deriveAdaptiveRateScale, deriveCPUUsage, deriveNetworkRate } from './host-telemetry';
+import { appendHostTelemetrySample, appendRollingSample, boundedPercent, deriveAdaptiveMetricDomain, deriveAdaptiveRateScale, deriveCPUUsage, deriveNetworkRate, deriveTelemetryCadenceMs, isTelemetryDiscontinuity } from './host-telemetry';
 
 describe('host telemetry helpers', () => {
 	it('bounds resource percentages', () => {
@@ -34,6 +34,27 @@ describe('host telemetry helpers', () => {
 		};
 
 		expect(appendHostTelemetrySample([first, second], third, 2)).toEqual([second, third]);
+	});
+
+	it('derives polling cadence without letting long browser pauses dominate', () => {
+		const makeSample = (sampledAtMs: number) => ({
+			sampledAtMs,
+			memoryPercent: 34,
+			cpuPercent: 20,
+			networkBytesPerSecond: 1024
+		});
+		const series = [
+			makeSample(0),
+			makeSample(3_000),
+			makeSample(6_100),
+			makeSample(9_000),
+			makeSample(129_000),
+			makeSample(132_100)
+		];
+
+		expect(deriveTelemetryCadenceMs(series)).toBeCloseTo(3_050, 0);
+		expect(isTelemetryDiscontinuity(series[3], series[4], deriveTelemetryCadenceMs(series))).toBe(true);
+		expect(isTelemetryDiscontinuity(series[4], series[5], deriveTelemetryCadenceMs(series))).toBe(false);
 	});
 
 	it('zooms percentage domains enough to show small utilization movement', () => {
