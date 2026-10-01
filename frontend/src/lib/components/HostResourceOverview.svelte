@@ -228,10 +228,10 @@
 					<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400/80 dark:bg-emerald-300/75"></span>
 					<p class="metric-label truncate">{memoryLabel}</p>
 				</div>
-				{#if memoryIndicator}<span class="metric-value shrink-0 text-[11px] font-medium text-gray-500 dark:text-gray-400">{memoryIndicator}</span>{/if}
+				{#if memoryIndicator}<span class="metric-value shrink-0 text-[10px] font-medium text-gray-500 dark:text-gray-400">{memoryIndicator}</span>{/if}
 			</div>
 			<p class="metric-value mt-1 truncate text-[15px] font-semibold tracking-tight text-gray-950 dark:text-white">{memoryValue}</p>
-			{#if memoryDetail}<p class="mt-1 truncate text-[11px] text-gray-500 dark:text-gray-400" title={memoryDetail}>{memoryDetail}</p>{/if}
+			{#if memoryDetail}<p class="mt-1 truncate text-[10px] text-gray-500 dark:text-gray-400" title={memoryDetail}>{memoryDetail}</p>{/if}
 		</div>
 
 		<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-900">
@@ -240,10 +240,10 @@
 					<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/80 dark:bg-sky-300/75"></span>
 					<p class="metric-label truncate">CPU usage</p>
 				</div>
-				{#if cpuIndicator}<span class="metric-value shrink-0 text-[11px] font-medium text-gray-500 dark:text-gray-400">{cpuIndicator}</span>{/if}
+				{#if cpuIndicator}<span class="metric-value shrink-0 text-[10px] font-medium text-gray-500 dark:text-gray-400">{cpuIndicator}</span>{/if}
 			</div>
 			<p class="metric-value mt-1 truncate text-[15px] font-semibold tracking-tight text-gray-950 dark:text-white">{cpuValue}</p>
-			{#if cpuDetail}<p class="mt-1 truncate text-[11px] text-gray-500 dark:text-gray-400" title={cpuDetail}>{cpuDetail}</p>{/if}
+			{#if cpuDetail}<p class="mt-1 truncate text-[10px] text-gray-500 dark:text-gray-400" title={cpuDetail}>{cpuDetail}</p>{/if}
 		</div>
 
 		<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-900">
@@ -252,10 +252,10 @@
 					<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400/80 dark:bg-violet-300/75"></span>
 					<p class="metric-label truncate">Network</p>
 				</div>
-				{#if networkIndicator}<span class="metric-value shrink-0 text-[11px] font-medium text-gray-500 dark:text-gray-400">{networkIndicator}</span>{/if}
+				{#if networkIndicator}<span class="metric-value shrink-0 text-[10px] font-medium text-gray-500 dark:text-gray-400">{networkIndicator}</span>{/if}
 			</div>
 			<p class="metric-value mt-1 truncate text-[15px] font-semibold tracking-tight text-gray-950 dark:text-white">{networkValue}</p>
-			{#if networkDetail}<p class="mt-1 truncate text-[11px] text-gray-500 dark:text-gray-400" title={networkDetail}>{networkDetail}</p>{/if}
+			{#if networkDetail}<p class="mt-1 truncate text-[10px] text-gray-500 dark:text-gray-400" title={networkDetail}>{networkDetail}</p>{/if}
 		</div>
 
 		<div class="min-w-0 bg-white px-4 py-3 dark:bg-neutral-900">
@@ -264,10 +264,10 @@
 					<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80 dark:bg-amber-300/75"></span>
 					<p class="metric-label truncate">Storage</p>
 				</div>
-				{#if storageIndicator}<span class="metric-value shrink-0 text-[11px] font-medium text-gray-500 dark:text-gray-400">{storageIndicator}</span>{/if}
+				{#if storageIndicator}<span class="metric-value shrink-0 text-[10px] font-medium text-gray-500 dark:text-gray-400">{storageIndicator}</span>{/if}
 			</div>
 			<p class="metric-value mt-1 truncate text-[15px] font-semibold tracking-tight text-gray-950 dark:text-white">{storageValue}</p>
-			{#if storageDetail}<p class="mt-1 truncate text-[11px] text-gray-500 dark:text-gray-400" title={storageDetail}>{storageDetail}</p>{/if}
+			{#if storageDetail}<p class="mt-1 truncate text-[10px] text-gray-500 dark:text-gray-400" title={storageDetail}>{storageDetail}</p>{/if}
 		</div>
 	</div>
 
@@ -279,38 +279,38 @@
 			</div>
 			<div class="flex items-center gap-2.5" role="group" aria-label="Chart series visibility">
 				<button
-				type="button"
-				class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
-				class:opacity-40={!visibleSeries.memory}
-				disabled={!chartReady}
-				aria-pressed={visibleSeries.memory}
-				on:click={() => toggleSeries('memory')}
-			>
-				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.memory.dot}`}></span>
-				<span>Memory</span>
+					type="button"
+					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
+					class:opacity-40={!visibleSeries.memory}
+					disabled={!chartReady}
+					aria-pressed={visibleSeries.memory}
+					on:click={() => toggleSeries('memory')}
+				>
+					<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.memory.dot}`}></span>
+					<span>Memory</span>
 				</button>
 				<button
 					type="button"
 					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
 					class:opacity-40={!visibleSeries.cpu}
-				disabled={!chartReady}
-				aria-pressed={visibleSeries.cpu}
-				on:click={() => toggleSeries('cpu')}
-			>
-				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.cpu.dot}`}></span>
-				<span>CPU</span>
+					disabled={!chartReady}
+					aria-pressed={visibleSeries.cpu}
+					on:click={() => toggleSeries('cpu')}
+				>
+					<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.cpu.dot}`}></span>
+					<span>CPU</span>
 				</button>
 				<button
 					type="button"
 					class="app-focus inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition-opacity disabled:cursor-default disabled:opacity-40"
 					class:opacity-40={!visibleSeries.network}
-				disabled={!chartReady}
-				aria-pressed={visibleSeries.network}
-				on:click={() => toggleSeries('network')}
-				title="Network history uses an adaptive rate scale"
-			>
-				<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.network.dot}`}></span>
-				<span>Network</span>
+					disabled={!chartReady}
+					aria-pressed={visibleSeries.network}
+					on:click={() => toggleSeries('network')}
+					title="Network history uses an adaptive rate scale"
+				>
+					<span class={`h-1.5 w-1.5 rounded-full ${seriesClasses.network.dot}`}></span>
+					<span>Network</span>
 				</button>
 			</div>
 		</div>
