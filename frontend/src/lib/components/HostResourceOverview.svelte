@@ -22,7 +22,7 @@
 
 	const chartWidth = 1000;
 	const chartHeight = 112;
-	const chartPaddingY = 8;
+	const chartPaddingY = 0;
 	const chartInsetX = 40;
 	const curveTension = 0.68;
 
@@ -308,12 +308,12 @@
 			on:blur={() => (hoverIndex = -1)}
 			on:keydown={handleChartKeydown}
 		>
-			<div class="pointer-events-none absolute inset-y-1 left-2 z-[1] flex flex-col justify-between text-[10px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-4 left-2 top-1 z-[1] flex flex-col justify-between text-[10px] tabular-nums text-gray-400 dark:text-gray-500" aria-hidden="true">
 				<span>100%</span>
 				<span>50%</span>
 				<span>0%</span>
 			</div>
-			<div class="pointer-events-none absolute inset-y-1 right-2 z-[1] flex flex-col items-end justify-between text-[10px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
+			<div class="pointer-events-none absolute bottom-4 right-2 top-1 z-[1] flex flex-col items-end justify-between text-[10px] tabular-nums text-violet-500/70 dark:text-violet-300/60" aria-hidden="true">
 				<span>{formatRate(networkDomain.max)}</span>
 				<span>Network</span>
 				<span>{formatRate(networkDomain.min)}</span>
