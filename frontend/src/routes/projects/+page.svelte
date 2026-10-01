@@ -162,7 +162,8 @@
 			currentNetworkRate = null;
 		}
 
-		if (memoryPercent !== null || currentCPUUsage !== null || currentNetworkRate !== null) {
+		const hasCurrentTelemetry = memoryPercent !== null || currentCPUUsage !== null || currentNetworkRate !== null;
+		if (hasCurrentTelemetry || hostTelemetrySeries.length > 0) {
 			hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
 				sampledAtMs,
 				memoryPercent,
