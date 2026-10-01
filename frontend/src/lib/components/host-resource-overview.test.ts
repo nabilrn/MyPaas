@@ -12,6 +12,13 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain("buildSeriesPaths('network', samples, networkDomain)");
 	});
 
+	it('uses a chart-first desktop split with the metric summary in the right column', () => {
+		expect(hostResourceOverview).toContain('data-host-resource-layout');
+		expect(hostResourceOverview).toContain('xl:grid-cols-[minmax(0,3fr)_minmax(18rem,1fr)]');
+		expect(hostResourceOverview).toContain('data-host-resource-summary');
+		expect(hostResourceOverview).toContain('xl:border-l xl:border-t-0');
+	});
+
 	it('keeps compact visibility filters for all three time-series metrics', () => {
 		expect(hostResourceOverview).toContain('aria-pressed={visibleSeries.memory}');
 		expect(hostResourceOverview).toContain('aria-pressed={visibleSeries.cpu}');
