@@ -12,6 +12,14 @@ mypaas backup
 
 Production can also schedule backups through the platform backup settings. This path is suitable for the control-plane backup contract but is not the full disaster-recovery bundle described below.
 
+### Restore a control-plane backup during fresh installation
+
+The browser install wizard accepts the normal control-plane `.tar.gz` backup containing exactly the production `.env` and `database.sql`.
+
+When this backup is uploaded during a fresh install, the wizard restores the production configuration **before** host preparation continues. The terminal installer then keeps the validated archive staged until `deploy-to-vm.sh` restores the control-plane PostgreSQL dump and runs the current migrations.
+
+This restore path does **not** restore project persistent volumes, static project artifacts, or Compose workspaces. Use the full disaster-recovery bundle below when those resources must be recovered too.
+
 ## 2. Full disaster-recovery bundle
 
 `scripts/backup-restore.py` creates a broader recovery bundle containing:
