@@ -135,16 +135,18 @@
 			hostStats = nextHostStats;
 			recordHostTelemetry(nextHostStats, Date.now());
 		} catch {
-			// Keep the last known sample during a telemetry failure.
+			// Keep the last known live summary, but record that history collection
+			// had no sample so the chart does not imply continuity through failure.
+			recordTelemetryGap(Date.now());
 		} finally {
 			hostStatsLoaded = true;
 			hostStatsInFlight = false;
 		}
 	}
 
-	function markTelemetryPause(sampledAtMs: number) {
+	function recordTelemetryGap(sampledAtMs: number) {
 		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
-		if (!lastSample || sampledAtMs - lastSample.sampledAtMs <= telemetryPauseThresholdMs) return;
+		if (!lastSample) return;
 
 		const lastSampleHasTelemetry = lastSample.memoryPercent !== null
 			|| lastSample.cpuPercent !== null
@@ -159,12 +161,18 @@
 		}
 
 		// CPU and network are cumulative counters. Reset their baselines after a
-		// known collection pause so the next rate is not averaged across time
-		// where the browser intentionally collected no samples.
+		// known collection gap so the next rate is not averaged across time where
+		// the browser did not obtain a valid sample.
 		cpuBaseline = null;
 		currentCPUUsage = null;
 		networkBaseline = null;
 		currentNetworkRate = null;
+	}
+
+	function markTelemetryPause(sampledAtMs: number) {
+		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
+		if (!lastSample || sampledAtMs - lastSample.sampledAtMs <= telemetryPauseThresholdMs) return;
+		recordTelemetryGap(sampledAtMs);
 	}
 
 	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {
