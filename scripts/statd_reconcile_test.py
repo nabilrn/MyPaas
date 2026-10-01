@@ -19,6 +19,8 @@ class StatdReconcileTest(unittest.TestCase):
         self.assertIn('scripts/install-vm.sh" --statd-only', reconcile)
         self.assertIn('STATD_VERSION="${STATD_VERSION:-v0.2.0}"', installer)
         self.assertIn('systemctl is-active --quiet mypaas-statd', reconcile)
+        self.assertIn('run_root test -S "$socket_path"', reconcile)
+        self.assertNotIn('[[ -S "$socket_path" ]]', reconcile)
 
     def test_updater_reconciles_host_dependency_even_when_checkout_is_current(self) -> None:
         updater = UPDATER.read_text(encoding="utf-8")

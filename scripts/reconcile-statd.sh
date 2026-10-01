@@ -48,7 +48,7 @@ statd_is_current() {
   [[ "$(/usr/local/bin/mypaas-statd --version 2>/dev/null || true)" == "mypaas-statd ${EXPECTED_STATD_VERSION#v}" ]] || return 1
   command -v systemctl >/dev/null 2>&1 || return 1
   systemctl is-active --quiet mypaas-statd || return 1
-  [[ -S "$socket_path" ]] || return 1
+  run_root test -S "$socket_path" || return 1
 }
 
 main() {
@@ -66,7 +66,7 @@ main() {
   [[ "$(run_root /usr/local/bin/mypaas-statd --version)" == "mypaas-statd ${EXPECTED_STATD_VERSION#v}" ]] \
     || die "installed mypaas-statd version does not match $EXPECTED_STATD_VERSION"
   run_root systemctl is-active --quiet mypaas-statd || die "mypaas-statd.service is not active"
-  [[ -S "$socket_path" ]] || die "mypaas-statd socket is missing: $socket_path"
+  run_root test -S "$socket_path" || die "mypaas-statd socket is missing: $socket_path"
 
   log "mypaas-statd host telemetry runtime is healthy"
 }

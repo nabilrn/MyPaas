@@ -402,6 +402,7 @@ class InstallConfigTest(unittest.TestCase):
         self.assertIn('RESTORE_BACKUP_ENV_APPLIED="$RESTORE_BACKUP_ENV_APPLIED"', installer)
         self.assertIn('STATD_READY_TIMEOUT_SECONDS="${STATD_READY_TIMEOUT_SECONDS:-15}"', installer)
         self.assertIn("systemctl is-failed --quiet mypaas-statd", installer)
+        self.assertIn("sudo_cmd test -S /run/mypaas/statd.sock", installer)
         self.assertIn("journalctl -u mypaas-statd --no-pager -n 80", installer)
         self.assertIn('RESTORE_BACKUP_ENV_APPLIED="${RESTORE_BACKUP_ENV_APPLIED:-false}"', deployer)
         self.assertIn("Production config was already restored by the install wizard.", deployer)
