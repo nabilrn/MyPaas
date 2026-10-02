@@ -100,6 +100,15 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain('nearestSampleIndex(ratio, chartSamples)');
 	});
 
+	it('keeps chart visual weight thin and minimal', () => {
+		expect(hostResourceOverview).toContain('stroke-width="1.35"');
+		expect(hostResourceOverview).toContain('stroke-width="0.5"');
+		expect(hostResourceOverview).toContain('stroke-width="0.6"');
+		expect(hostResourceOverview).toContain('r="1.5" class={seriesClasses.');
+		expect(hostResourceOverview).toContain('r="1.9" class={seriesClasses.');
+		expect(hostResourceOverview).not.toContain('stroke-width="1.85"');
+	});
+
 	it('keeps 0% and 100% strokes inside the SVG viewport', () => {
 		expect(hostResourceOverview).toContain('const chartPaddingY = 6');
 		expect(hostResourceOverview).toContain('chartHeight - chartPaddingY');

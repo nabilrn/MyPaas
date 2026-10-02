@@ -375,7 +375,7 @@
 								</linearGradient>
 							</defs>
 
-							<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
+							<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.5">
 								<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.6} x2={chartWidth * 0.6} y1="0" y2={chartHeight} />
@@ -388,30 +388,30 @@
 							{#if visibleSeries.memory}
 								{#each memoryPaths as path}
 									{#if path.area}<path d={path.area} fill="url(#host-memory-fill)" stroke="none" />{/if}
-									<path d={path.line} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+									<path d={path.line} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
-								{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.memory.point} />{/each}
+								{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.memory.point} />{/each}
 							{/if}
 							{#if visibleSeries.cpu}
 								{#each cpuPaths as path}
 									{#if path.area}<path d={path.area} fill="url(#host-cpu-fill)" stroke="none" />{/if}
-									<path d={path.line} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+									<path d={path.line} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
-								{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.cpu.point} />{/each}
+								{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.cpu.point} />{/each}
 							{/if}
 							{#if visibleSeries.network}
 								{#each networkPaths as path}
 									{#if path.area}<path d={path.area} fill="url(#host-network-fill)" stroke="none" />{/if}
-									<path d={path.line} fill="none" class={seriesClasses.network.stroke} stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+									<path d={path.line} fill="none" class={seriesClasses.network.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
-								{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.9" class={seriesClasses.network.point} />{/each}
+								{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.network.point} />{/each}
 							{/if}
 
 							{#if hoveredX !== null}
-								<line x1={hoveredX} x2={hoveredX} y1="0" y2={chartHeight} class="stroke-gray-500/30 dark:stroke-gray-400/30" stroke-width="0.8" vector-effect="non-scaling-stroke" />
-								{#if visibleSeries.memory && memoryHoverPoint}<circle cx={memoryHoverPoint.x} cy={memoryHoverPoint.y} r="2.3" class={seriesClasses.memory.point} />{/if}
-								{#if visibleSeries.cpu && cpuHoverPoint}<circle cx={cpuHoverPoint.x} cy={cpuHoverPoint.y} r="2.3" class={seriesClasses.cpu.point} />{/if}
-								{#if visibleSeries.network && networkHoverPoint}<circle cx={networkHoverPoint.x} cy={networkHoverPoint.y} r="2.3" class={seriesClasses.network.point} />{/if}
+								<line x1={hoveredX} x2={hoveredX} y1="0" y2={chartHeight} class="stroke-gray-500/30 dark:stroke-gray-400/30" stroke-width="0.6" vector-effect="non-scaling-stroke" />
+								{#if visibleSeries.memory && memoryHoverPoint}<circle cx={memoryHoverPoint.x} cy={memoryHoverPoint.y} r="1.9" class={seriesClasses.memory.point} />{/if}
+								{#if visibleSeries.cpu && cpuHoverPoint}<circle cx={cpuHoverPoint.x} cy={cpuHoverPoint.y} r="1.9" class={seriesClasses.cpu.point} />{/if}
+								{#if visibleSeries.network && networkHoverPoint}<circle cx={networkHoverPoint.x} cy={networkHoverPoint.y} r="1.9" class={seriesClasses.network.point} />{/if}
 							{/if}
 						</svg>
 					</div>
@@ -443,7 +443,7 @@
 				>
 					<div class="pointer-events-none absolute bottom-5 left-10 right-10 top-2" aria-hidden="true">
 						<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
-							<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.7">
+							<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.5">
 								<line x1={chartWidth * 0.2} x2={chartWidth * 0.2} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.6} x2={chartWidth * 0.6} y1="0" y2={chartHeight} />
