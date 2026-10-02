@@ -45,13 +45,23 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).not.toContain('aria-live="polite"');
 	});
 
-	it('uses subtle semantic area fills beneath the three telemetry lines', () => {
+	it('uses subtle semantic area fills with diagonal hatch beneath the telemetry lines', () => {
 		expect(hostResourceOverview).toContain('id="host-memory-fill"');
 		expect(hostResourceOverview).toContain('id="host-cpu-fill"');
 		expect(hostResourceOverview).toContain('id="host-network-fill"');
+		expect(hostResourceOverview).toContain('id="host-memory-hatch"');
+		expect(hostResourceOverview).toContain('id="host-cpu-hatch"');
+		expect(hostResourceOverview).toContain('id="host-network-hatch"');
+		expect(hostResourceOverview).toContain('patternUnits="userSpaceOnUse"');
+		expect(hostResourceOverview).toContain('stroke-opacity="0.10"');
 		expect(hostResourceOverview).toContain('fill="url(#host-memory-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-memory-hatch)"');
 		expect(hostResourceOverview).toContain('fill="url(#host-cpu-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-cpu-hatch)"');
 		expect(hostResourceOverview).toContain('fill="url(#host-network-fill)"');
+		expect(hostResourceOverview).toContain('fill="url(#host-network-hatch)"');
+		expect(hostResourceOverview).toContain('stop-opacity="0.12"');
+		expect(hostResourceOverview).toContain('stop-opacity="0.11"');
 	});
 
 	it('keeps storage as a persistent capacity strip with explicit context', () => {
