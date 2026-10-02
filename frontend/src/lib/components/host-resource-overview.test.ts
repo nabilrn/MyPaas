@@ -105,21 +105,23 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain('linearRatio ** networkScale.exponent');
 	});
 
-	it('records browser collection pauses explicitly and resets cumulative baselines', () => {
+	it('does not invent history gaps when the browser resumes or a poll fails', () => {
 		expect(projectsPage).toContain('const hostTelemetryPollMs = 3000');
-		expect(projectsPage).toContain('const telemetryPauseThresholdMs = hostTelemetryPollMs * 2');
-		expect(projectsPage).toContain('markTelemetryPause(Date.now())');
-		expect(projectsPage).toContain('recordTelemetryGap(Date.now())');
-		expect(projectsPage).toContain('memoryPercent: null');
-		expect(projectsPage).toContain('cpuPercent: null');
-		expect(projectsPage).toContain('networkBytesPerSecond: null');
-		expect(projectsPage).toContain('cpuBaseline = null');
-		expect(projectsPage).toContain('networkBaseline = null');
+		expect(projectsPage).toContain('if (!document.hidden) void refreshDashboardData(true)');
 		expect(projectsPage).toContain('setInterval(refreshHost, hostTelemetryPollMs)');
+		expect(projectsPage).not.toContain('telemetryPauseThresholdMs');
+		expect(projectsPage).not.toContain('markTelemetryPause');
+		expect(projectsPage).not.toContain('recordTelemetryGap');
 	});
 
-	it('records successful all-null polls as gaps once history exists', () => {
-		expect(projectsPage).toContain('hasCurrentTelemetry || hostTelemetrySeries.length > 0');
-		expect(projectsPage).toContain('networkBytesPerSecond: currentNetworkRate?.totalBytesPerSecond ?? null');
+	it('skips all-null host snapshots while preserving cumulative counter baselines', () => {
+		expect(projectsPage).toContain('if (!hasCurrentTelemetry) return');
+		expect(projectsPage).toContain('cpuPercent = deriveCPUUsage(cpuBaseline, current)');
+		expect(projectsPage).toContain('networkRate = deriveNetworkRate(networkBaseline, current)');
+		expect(projectsPage).toContain('currentCPUUsage = null');
+		expect(projectsPage).toContain('currentNetworkRate = null');
+		expect(projectsPage).not.toContain('hasCurrentTelemetry || hostTelemetrySeries.length > 0');
+		expect(projectsPage).not.toContain('\t\t\tcpuBaseline = null;');
+		expect(projectsPage).not.toContain('\t\t\tnetworkBaseline = null;');
 	});
 });

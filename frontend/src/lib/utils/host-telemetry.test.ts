@@ -111,6 +111,14 @@ describe('host telemetry helpers', () => {
 		expect(rate).toEqual({ rxBytesPerSecond: 1_000, txBytesPerSecond: 500, totalBytesPerSecond: 1_500 });
 	});
 
+	it('derives network rate across a long collection pause from real elapsed time', () => {
+		const rate = deriveNetworkRate(
+			{ interface: 'eth0', rxBytes: 10_000, txBytes: 20_000, sampledAtMs: 1_000 },
+			{ interface: 'eth0', rxBytes: 70_000, txBytes: 50_000, sampledAtMs: 61_000 }
+		);
+		expect(rate).toEqual({ rxBytesPerSecond: 1_000, txBytesPerSecond: 500, totalBytesPerSecond: 1_500 });
+	});
+
 	it('resets the network baseline on interface or counter changes', () => {
 		expect(deriveNetworkRate(
 			{ interface: 'eth0', rxBytes: 100, txBytes: 100, sampledAtMs: 1_000 },
