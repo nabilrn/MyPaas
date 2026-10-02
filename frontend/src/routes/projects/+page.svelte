@@ -26,7 +26,6 @@
 	const pageSize = 20;
 	const telemetrySamples = 40;
 	const hostTelemetryPollMs = 3000;
-	const telemetryPauseThresholdMs = hostTelemetryPollMs * 2;
 
 	let projects: Project[] = [];
 	let hostStats: HostStats | null = null;
@@ -84,10 +83,7 @@
 			if (!document.hidden) void loadHostStats();
 		};
 		const handleVisibilityChange = () => {
-			if (!document.hidden) {
-				markTelemetryPause(Date.now());
-				void refreshDashboardData(true);
-			}
+			if (!document.hidden) void refreshDashboardData(true);
 		};
 		const projectRefresh = setInterval(refreshProjects, 5000);
 		const hostRefresh = setInterval(refreshHost, hostTelemetryPollMs);
@@ -135,44 +131,12 @@
 			hostStats = nextHostStats;
 			recordHostTelemetry(nextHostStats, Date.now());
 		} catch {
-			// Keep the last known live summary, but record that history collection
-			// had no sample so the chart does not imply continuity through failure.
-			recordTelemetryGap(Date.now());
+			// No host sample was collected. Keep both the last known summary and
+			// rolling history unchanged instead of inventing an empty chart sample.
 		} finally {
 			hostStatsLoaded = true;
 			hostStatsInFlight = false;
 		}
-	}
-
-	function recordTelemetryGap(sampledAtMs: number) {
-		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
-		if (!lastSample) return;
-
-		const lastSampleHasTelemetry = lastSample.memoryPercent !== null
-			|| lastSample.cpuPercent !== null
-			|| lastSample.networkBytesPerSecond !== null;
-		if (lastSampleHasTelemetry) {
-			hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
-				sampledAtMs,
-				memoryPercent: null,
-				cpuPercent: null,
-				networkBytesPerSecond: null
-			}, telemetrySamples);
-		}
-
-		// CPU and network are cumulative counters. Reset their baselines after a
-		// known collection gap so the next rate is not averaged across time where
-		// the browser did not obtain a valid sample.
-		cpuBaseline = null;
-		currentCPUUsage = null;
-		networkBaseline = null;
-		currentNetworkRate = null;
-	}
-
-	function markTelemetryPause(sampledAtMs: number) {
-		const lastSample = hostTelemetrySeries[hostTelemetrySeries.length - 1];
-		if (!lastSample || sampledAtMs - lastSample.sampledAtMs <= telemetryPauseThresholdMs) return;
-		recordTelemetryGap(sampledAtMs);
 	}
 
 	function recordHostTelemetry(stats: HostStats, sampledAtMs: number) {
@@ -182,33 +146,41 @@
 			memoryPercent = boundedPercent(used, stats.memory.total_bytes);
 		}
 
+		let cpuPercent: number | null = null;
 		if (stats.cpu) {
 			const current: CPUCounterSample = { totalTicks: stats.cpu.total_ticks, idleTicks: stats.cpu.idle_ticks };
-			currentCPUUsage = deriveCPUUsage(cpuBaseline, current);
+			cpuPercent = deriveCPUUsage(cpuBaseline, current);
+			currentCPUUsage = cpuPercent;
 			cpuBaseline = current;
 		} else {
-			cpuBaseline = null;
+			// Missing snapshot is not a counter reset. Keep the cumulative baseline
+			// so the next successful sample can derive a valid average across the
+			// elapsed interval.
 			currentCPUUsage = null;
 		}
 
+		let networkRate: NetworkRate | null = null;
 		if (stats.network) {
 			const current: NetworkCounterSample = { interface: stats.network.interface, rxBytes: stats.network.rx_bytes, txBytes: stats.network.tx_bytes, sampledAtMs };
-			currentNetworkRate = deriveNetworkRate(networkBaseline, current);
+			networkRate = deriveNetworkRate(networkBaseline, current);
+			currentNetworkRate = networkRate;
 			networkBaseline = current;
 		} else {
-			networkBaseline = null;
+			// Preserve the cumulative baseline for the same reason as CPU. The
+			// rate helper already uses actual elapsed time and rejects interface or
+			// counter resets.
 			currentNetworkRate = null;
 		}
 
-		const hasCurrentTelemetry = memoryPercent !== null || currentCPUUsage !== null || currentNetworkRate !== null;
-		if (hasCurrentTelemetry || hostTelemetrySeries.length > 0) {
-			hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
-				sampledAtMs,
-				memoryPercent,
-				cpuPercent: currentCPUUsage,
-				networkBytesPerSecond: currentNetworkRate?.totalBytesPerSecond ?? null
-			}, telemetrySamples);
-		}
+		const hasCurrentTelemetry = memoryPercent !== null || cpuPercent !== null || networkRate !== null;
+		if (!hasCurrentTelemetry) return;
+
+		hostTelemetrySeries = appendHostTelemetrySample(hostTelemetrySeries, {
+			sampledAtMs,
+			memoryPercent,
+			cpuPercent,
+			networkBytesPerSecond: networkRate?.totalBytesPerSecond ?? null
+		}, telemetrySamples);
 	}
 
 	function operationalStateFor(project: Project): ProjectOperationalState {
