@@ -57,6 +57,8 @@ export interface HostStats {
 	host_cpu_cores: number;
 	allocated_ram_mb: number;
 	allocated_cpu: number;
+	telemetry_status: 'available' | 'unavailable' | 'disabled';
+	telemetry_error_code?: string;
 	memory: HostMemoryStats | null;
 	cpu: HostCPUStats | null;
 	storage: HostStorageStats | null;
