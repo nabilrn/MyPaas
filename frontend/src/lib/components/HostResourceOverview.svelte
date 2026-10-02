@@ -362,17 +362,26 @@
 						<svg class="h-full w-full" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" aria-hidden="true">
 							<defs>
 								<linearGradient id="host-memory-fill" x1="0" x2="0" y1="0" y2="1">
-									<stop offset="0%" stop-color="#34d399" stop-opacity="0.22" />
-									<stop offset="100%" stop-color="#34d399" stop-opacity="0.015" />
+									<stop offset="0%" stop-color="#34d399" stop-opacity="0.12" />
+									<stop offset="100%" stop-color="#34d399" stop-opacity="0.008" />
 								</linearGradient>
 								<linearGradient id="host-cpu-fill" x1="0" x2="0" y1="0" y2="1">
-									<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.20" />
-									<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.015" />
+									<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.11" />
+									<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.008" />
 								</linearGradient>
 								<linearGradient id="host-network-fill" x1="0" x2="0" y1="0" y2="1">
-									<stop offset="0%" stop-color="#a78bfa" stop-opacity="0.20" />
-									<stop offset="100%" stop-color="#a78bfa" stop-opacity="0.015" />
+									<stop offset="0%" stop-color="#a78bfa" stop-opacity="0.11" />
+									<stop offset="100%" stop-color="#a78bfa" stop-opacity="0.008" />
 								</linearGradient>
+								<pattern id="host-memory-hatch" width="9" height="9" patternUnits="userSpaceOnUse">
+									<path d="M-2 9 L9 -2 M0 11 L11 0" fill="none" stroke="#10b981" stroke-opacity="0.10" stroke-width="0.5" />
+								</pattern>
+								<pattern id="host-cpu-hatch" width="9" height="9" patternUnits="userSpaceOnUse">
+									<path d="M-2 9 L9 -2 M0 11 L11 0" fill="none" stroke="#0ea5e9" stroke-opacity="0.10" stroke-width="0.5" />
+								</pattern>
+								<pattern id="host-network-hatch" width="9" height="9" patternUnits="userSpaceOnUse">
+									<path d="M-2 9 L9 -2 M0 11 L11 0" fill="none" stroke="#8b5cf6" stroke-opacity="0.10" stroke-width="0.5" />
+								</pattern>
 							</defs>
 
 							<g class="stroke-gray-200/45 dark:stroke-neutral-700/40" stroke-width="0.5">
@@ -387,21 +396,30 @@
 
 							{#if visibleSeries.memory}
 								{#each memoryPaths as path}
-									{#if path.area}<path d={path.area} fill="url(#host-memory-fill)" stroke="none" />{/if}
+									{#if path.area}
+										<path d={path.area} fill="url(#host-memory-fill)" stroke="none" />
+										<path d={path.area} fill="url(#host-memory-hatch)" stroke="none" />
+									{/if}
 									<path d={path.line} fill="none" class={seriesClasses.memory.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
 								{#each memoryIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.memory.point} />{/each}
 							{/if}
 							{#if visibleSeries.cpu}
 								{#each cpuPaths as path}
-									{#if path.area}<path d={path.area} fill="url(#host-cpu-fill)" stroke="none" />{/if}
+									{#if path.area}
+										<path d={path.area} fill="url(#host-cpu-fill)" stroke="none" />
+										<path d={path.area} fill="url(#host-cpu-hatch)" stroke="none" />
+									{/if}
 									<path d={path.line} fill="none" class={seriesClasses.cpu.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
 								{#each cpuIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.cpu.point} />{/each}
 							{/if}
 							{#if visibleSeries.network}
 								{#each networkPaths as path}
-									{#if path.area}<path d={path.area} fill="url(#host-network-fill)" stroke="none" />{/if}
+									{#if path.area}
+										<path d={path.area} fill="url(#host-network-fill)" stroke="none" />
+										<path d={path.area} fill="url(#host-network-hatch)" stroke="none" />
+									{/if}
 									<path d={path.line} fill="none" class={seriesClasses.network.stroke} stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
 								{/each}
 								{#each networkIsolatedPoints as point}<circle cx={point.x} cy={point.y} r="1.5" class={seriesClasses.network.point} />{/each}
