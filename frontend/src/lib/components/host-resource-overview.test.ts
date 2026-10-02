@@ -100,6 +100,15 @@ describe('host resource overview', () => {
 		expect(hostResourceOverview).toContain('nearestSampleIndex(ratio, chartSamples)');
 	});
 
+	it('keeps 0% and 100% strokes inside the SVG viewport', () => {
+		expect(hostResourceOverview).toContain('const chartPaddingY = 6');
+		expect(hostResourceOverview).toContain('chartHeight - chartPaddingY');
+		expect(hostResourceOverview).toContain('return percentageY(value)');
+		expect(hostResourceOverview).toContain('y1={percentageY(75)}');
+		expect(hostResourceOverview).toContain('y1={percentageY(50)}');
+		expect(hostResourceOverview).toContain('y1={percentageY(25)}');
+	});
+
 	it('uses a bounded power scale for bursty network history', () => {
 		expect(hostResourceOverview).toContain('deriveAdaptiveRateScale(networkValues)');
 		expect(hostResourceOverview).toContain('linearRatio ** networkScale.exponent');
