@@ -23,7 +23,7 @@
 
 	const chartWidth = 1000;
 	const chartHeight = 220;
-	const chartPaddingY = 0;
+	const chartPaddingY = 6;
 	const chartInsetX = 40;
 	const curveTension = 0.68;
 	const minimumChartSamples = 8;
@@ -95,9 +95,17 @@
 			const p3 = input[index + 2] ?? p2;
 
 			const cp1x = clamp(p1.x + ((p2.x - p0.x) / 6) * curveTension, 0, chartWidth);
-			const cp1y = clamp(p1.y + ((p2.y - p0.y) / 6) * curveTension, 0, chartHeight);
+			const cp1y = clamp(
+				p1.y + ((p2.y - p0.y) / 6) * curveTension,
+				chartPaddingY,
+				chartHeight - chartPaddingY
+			);
 			const cp2x = clamp(p2.x - ((p3.x - p1.x) / 6) * curveTension, 0, chartWidth);
-			const cp2y = clamp(p2.y - ((p3.y - p1.y) / 6) * curveTension, 0, chartHeight);
+			const cp2y = clamp(
+				p2.y - ((p3.y - p1.y) / 6) * curveTension,
+				chartPaddingY,
+				chartHeight - chartPaddingY
+			);
 
 			path += ` C ${cp1x.toFixed(2)},${cp1y.toFixed(2)} ${cp2x.toFixed(2)},${cp2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
 		}
@@ -109,7 +117,8 @@
 		const linePath = buildSmoothPath(input);
 		const first = input[0];
 		const last = input[input.length - 1];
-		return `${linePath} L ${last.x.toFixed(2)},${chartHeight} L ${first.x.toFixed(2)},${chartHeight} Z`;
+		const baselineY = chartHeight - chartPaddingY;
+		return `${linePath} L ${last.x.toFixed(2)},${baselineY} L ${first.x.toFixed(2)},${baselineY} Z`;
 	}
 
 	function seriesValue(sample: HostTelemetrySample, series: SeriesKey) {
@@ -155,6 +164,11 @@
 		return nearestIndex;
 	}
 
+	function percentageY(value: number) {
+		const usableHeight = chartHeight - chartPaddingY * 2;
+		return chartPaddingY + (1 - clamp(value, 0, 100) / 100) * usableHeight;
+	}
+
 	function seriesY(value: number, series: SeriesKey, networkScale: AdaptiveRateScale) {
 		const usableHeight = chartHeight - chartPaddingY * 2;
 		if (series === 'network') {
@@ -163,7 +177,7 @@
 			const normalized = linearRatio === 0 ? 0 : linearRatio ** networkScale.exponent;
 			return chartPaddingY + (1 - normalized) * usableHeight;
 		}
-		return chartPaddingY + (1 - clamp(value, 0, 100) / 100) * usableHeight;
+		return percentageY(value);
 	}
 
 	function buildSeriesPaths(
@@ -366,9 +380,9 @@
 								<line x1={chartWidth * 0.4} x2={chartWidth * 0.4} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.6} x2={chartWidth * 0.6} y1="0" y2={chartHeight} />
 								<line x1={chartWidth * 0.8} x2={chartWidth * 0.8} y1="0" y2={chartHeight} />
-								<line x1="0" x2={chartWidth} y1={chartHeight * 0.25} y2={chartHeight * 0.25} />
-								<line x1="0" x2={chartWidth} y1={chartHeight * 0.5} y2={chartHeight * 0.5} />
-								<line x1="0" x2={chartWidth} y1={chartHeight * 0.75} y2={chartHeight * 0.75} />
+								<line x1="0" x2={chartWidth} y1={percentageY(75)} y2={percentageY(75)} />
+								<line x1="0" x2={chartWidth} y1={percentageY(50)} y2={percentageY(50)} />
+								<line x1="0" x2={chartWidth} y1={percentageY(25)} y2={percentageY(25)} />
 							</g>
 
 							{#if visibleSeries.memory}
